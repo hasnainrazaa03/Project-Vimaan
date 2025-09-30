@@ -1,12 +1,6 @@
-"""
-Author:         Aryan Shukla
-Plugin Name:    AI Co-Pilot
-Tools Used:     Python 3.13.3, XPPython3 4.5.0
-"""
-
+import os
 from XPPython3 import xp  # type: ignore
 import speech_recognition as sr
-import threading
 
 class PythonInterface:
     def __init__(self):
@@ -14,24 +8,22 @@ class PythonInterface:
         self.Sig = "plugin004.aicopilot.byaryanshukla"
         self.Desc = "Voice command interface for X-Plane"
 
-        self.parameters = {
-            "GSD": "sim/cockpit/switches/gear_handle_status"
-        }
-        self.datarefs_pointer = {}
-
         self.hotkeyPress = None
         self.hotkeyRelease = None
 
         self.recognizer = sr.Recognizer()
-        # self.microphone = sr.Microphone()
+        self.microphone = sr.Microphone()
         self.isRecording = False
         self.audioData = None
 
-    def XPluginStart(self):
-
-        self.datarefs_pointer = {
-            param: xp.findDataRef(dataref) for param, dataref in self.parameters.items()
+        self.command_map = {
+            "gear up": ("command", "sim/flight_controls/landing_gear_up"),
+            "gear down": ("command", "sim/flight_controls/landing_gear_down"),
+            "flaps down": ("command", "sim/flight_controls/flaps_down"),
+            "flaps up": ("command", "sim/flight_controls/flaps_up")
         }
+
+    def XPluginStart(self):
 
         self.hotkeyPress = xp.registerHotKey(
             xp.VK_Z,
@@ -39,89 +31,57 @@ class PythonInterface:
             "Push-to-Talk -> Press",
             self.OnPressCallback
         )
-        # self.hotkeyRelease = xp.registerHotKey(
-        #     xp.VK_Z,
-        #     xp.UpFlag,
-        #     "Push-to-Talk -> Release",
-        #     self.OnReleaseCallback
-        # )
+        self.hotkeyRelease = xp.registerHotKey(
+            xp.VK_Z,
+            xp.UpFlag,
+            "Push-to-Talk -> Release",
+            self.OnReleaseCallback
+        )
+
         return self.Name, self.Sig, self.Desc
-    
+
     def XPluginEnable(self): 
         return 1
-    
+
     def XPluginReceiveMessage(self, inFromWho, inMessage, inParam):
         pass
 
     def XPluginStop(self):
         xp.unregisterHotKey(self.hotkeyPress)
-        # xp.unregisterHotKey(self.hotkeyRelease)
+        xp.unregisterHotKey(self.hotkeyRelease)
 
     def XPluginDisable(self):
         pass
 
     def OnPressCallback(self, inRefcon):
-        self.StartRecording()
+        if not self.isRecording:
+            xp.speakString("Listening")
+            self.isRecording = True
+            self.source = self.microphone.__enter__()
+            self.recognizer.adjust_for_ambient_noise(self.source, duration=0.5)
+            self.audioData = self.recognizer.listen(self.source, timeout=None, phrase_time_limit=None)
 
     def OnReleaseCallback(self, inRefcon):
-        xp.log(f"Stop recording...")
-        # self.StopRecordingAndProcess()
+        if self.isRecording:
+            xp.speakString("Processing")
+            self.isRecording = False
+            self.microphone.__exit__(None, None, None)
 
-    def StartRecording(self):
-        def record():
             try:
-                with sr.Microphone() as source:
-                    xp.log("2Calibrating for ambient noise...")
-                    self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                    xp.log("2Mic ready, listening now...")
-                    audio = self.recognizer.listen(source, phrase_time_limit=5)
-                    xp.log(f"2Finished listening. Captured {len(audio.get_raw_data())} bytes")
+                text = self.recognizer.recognize_google(self.audioData).lower()
+                xp.log(f"[AI CoPilot] Recognized: {text}")
+                self.ExecuteCommand(text)
+            except sr.UnknownValueError:
+                xp.speakString("I could not understand you")
+            except sr.RequestError:
+                xp.speakString("Recognition service failed")
 
-                    self.audio_data = audio
+    def ExecuteCommand(self, text: str):
+        for phrase, action in self.command_map.items():
+            if phrase in text:
+                cmd_ref = xp.findCommand(action[1])
+                xp.commandOnce(cmd_ref)
+                xp.speakString(f"Executing {phrase}")
+                return
 
-            except Exception as e:
-                xp.log(f"Recording error: {e}")
-
-        threading.Thread(target=record, daemon=True).start()
-
-    # def StartRecording(self):
-    #     xp.log(f"Start recording...")
-    #     self.isRecording = True
-    #     with self.microphone as source:
-    #         xp.log("Calibrating for ambient noise...")
-    #         self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-    #         self._audio_source = source
-
-    #     def record():
-    #         xp.log(f"Opening microphone...")
-    #         xp.log(f"Mic ready, listening now...")
-    #         self.audioData = self.recognizer.listen(self._audio_source, phrase_time_limit=5)
-    #         xp.log(f"Finished listening. Captured {len(self.audioData.get_raw_data())} bytes")
-    #     threading.Thread(target=record, daemon=True).start()
-
-    # def StopRecordingAndProcess(self):
-    #     xp.log(f"Stop recording...")
-    #     self.isRecording = False
-    #     if not self.audioData:
-    #         xp.log(f"No audio captured.")
-    #         return
-
-    #     def process():
-    #         try:
-    #             command = self.recognizer.recognize_google(self.audioData).lower()
-    #             xp.log(f"Recognized command: {command}")
-
-    #             if "gear down" in command:
-    #                 xp.setDatai(self.datarefs_pointer['GSD'], 1)
-    #                 xp.speakString("Gear down")
-    #             elif "gear up" in command:
-    #                 xp.setDatai(self.datarefs_pointer['GSD'], 0)
-    #                 xp.speakString("Gear up")
-    #             else:
-    #                 xp.speakString("Command not recognized")
-
-    #         except Exception as e:
-    #             xp.log(f"Speech recognition error: {e}")
-    #             xp.speakString(f"Sorry, I did not understand")
-
-    #     threading.Thread(target=process, daemon=True).start()
+        xp.speakString("Command not recognized")
