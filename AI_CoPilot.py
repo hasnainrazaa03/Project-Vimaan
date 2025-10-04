@@ -1,6 +1,8 @@
 import os
+import joblib
 from XPPython3 import xp  # type: ignore
 import speech_recognition as sr
+from sentence_transformers import SentenceTransformer
 
 class PythonInterface:
     def __init__(self):
@@ -16,11 +18,31 @@ class PythonInterface:
         self.isRecording = False
         self.audioData = None
 
-        self.command_map = {
-            "gear up": ("command", "sim/flight_controls/landing_gear_up"),
-            "gear down": ("command", "sim/flight_controls/landing_gear_down"),
-            "flaps down": ("command", "sim/flight_controls/flaps_down"),
-            "flaps up": ("command", "sim/flight_controls/flaps_up")
+        model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ML", "ai_copilot.pkl")
+        xp.log(f"path - {model_path}")
+
+        self.classifier = joblib.load(model_path)
+        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+        self.intent_to_command = {
+            "GEAR_UP": "sim/flight_controls/landing_gear_up",               # verified
+            "GEAR_DOWN": "sim/flight_controls/landing_gear_down",           # verified
+            "FLAPS_UP": "sim/flight_controls/flaps_up",                     # verified
+            "FLAPS_DOWN": "sim/flight_controls/flaps_down",                 # verified
+            "AUTOPILOT_1_ON": "sim/autopilot/servos_on",                    # verified
+            "AUTOPILOT_1_OFF": "sim/autopilot/servos_toggle",               # verified
+            "AUTOPILOT_2_ON": "sim/autopilot/servos2_on",                   # verified
+            "AUTOPILOT_2_OFF": "sim/autopilot/servos2_toggle",              # verified
+            "FLIGHT_DIRECTOR_1_ON": "sim/autopilot/fdir_on",                # verified
+            "FLIGHT_DIRECTOR_1_OFF": "sim/autopilot/fdir_toggle",           # verified
+            "FLIGHT_DIRECTOR_2_ON": "sim/autopilot/fdir2_on",               # verified
+            "FLIGHT_DIRECTOR_2_OFF": "sim/autopilot/fdir2_toggle",          # verified
+            "PARKING_BRAKE_ON": "sim/flight_controls/park_brake_set",       # verified
+            "PARKING_BRAKE_OFF": "sim/flight_controls/park_brake_release",  # verified
+            "ENGINE_1_ON": "sim/starters/engage_starter_1",                 # verified
+            "ENGINE_1_OFF": "sim/starters/shut_down_1",                     # verified
+            "ENGINE_2_ON": "sim/starters/engage_starter_2",                 # verified
+            "ENGINE_2_OFF": "sim/starters/shut_down_2"                      # verified
         }
 
     def XPluginStart(self):
@@ -68,8 +90,7 @@ class PythonInterface:
             self.microphone.__exit__(None, None, None)
 
             try:
-                text = self.recognizer.recognize_google(self.audioData).lower()
-                xp.log(f"[AI CoPilot] Recognized: {text}")
+                text = self.recognizer.recognize_google(self.audioData).upper()
                 self.ExecuteCommand(text)
             except sr.UnknownValueError:
                 xp.speakString("I could not understand you")
@@ -77,11 +98,14 @@ class PythonInterface:
                 xp.speakString("Recognition service failed")
 
     def ExecuteCommand(self, text: str):
-        for phrase, action in self.command_map.items():
-            if phrase in text:
-                cmd_ref = xp.findCommand(action[1])
-                xp.commandOnce(cmd_ref)
-                xp.speakString(f"Executing {phrase}")
-                return
-
-        xp.speakString("Command not recognized")
+        embedding = self.embedding_model.encode([text])
+        intent_idx = self.classifier.predict(embedding)[0]
+        
+        command_ref_name = self.intent_to_command.get(intent_idx)
+        if command_ref_name:
+            cmd_ref = xp.findCommand(command_ref_name)
+            xp.commandOnce(cmd_ref)
+            xp.log(f"[AI CoPilot] Recognized: {text} | Executing: {intent_idx}")
+            xp.speakString(f"Executing {intent_idx}")
+        else:
+            xp.speakString("Command not recognized")
