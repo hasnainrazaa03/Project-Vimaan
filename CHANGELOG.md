@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+### Version: 0.3.0
+**ID:** 777f435
+**Date:** 2025-10-05
+**Module:** Machine Learning - Data Generation
+**Author:** Mohammad Hasnain Raza
+
+#### Description of Change:
+- **Upgraded Data Generation Pipeline**: This commit includes a series of major enhancements to the data generation process.
+- **Dynamic Frequency Generation**: Modified `generate_slot_dataset.py` to create a unique, random COM frequency for every example, significantly increasing data diversity.
+- **AI-Powered Augmentation**: Introduced a new script, `augment_with_paraphrasing.py`, which uses a pre-trained Pegasus model (`tuner007/pegasus_paraphrase`) to generate multiple linguistic variations of each command.
+- **Path-Aware Scripts**: Both scripts were updated to be path-aware, ensuring they can be run reliably regardless of the terminal's working directory.
+
+#### Enhancement Over Previous Version (v0.2.x):
+- **Greatly Increased Robustness**: The combination of dynamic slot generation and AI-powered paraphrasing creates a dataset that is vastly more diverse and representative of real-world language, which is critical for training a commercial-grade model.
+- **Improved Workflow**: The data pipeline is now more resilient to common path and dependency issues, making the development process smoother.
+
+---
+
 ### Version: 0.2.1
 **ID:** 2090c6f
 **Date:** 2025-10-04
