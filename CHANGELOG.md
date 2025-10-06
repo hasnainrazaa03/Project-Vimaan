@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+### Version: 0.4.0
+**ID:** a371380
+**Date:** 2025-10-06
+**Module:** Machine Learning - Data Generation
+**Author:** Mohammad Hasnain Raza
+
+#### Description of Change:
+- **Refactored Data Pipeline**: Overhauled the entire data generation workflow for better organization and scalability.
+- **Introduced Folder Structure**: All scripts now read from and write to a structured `datasets/` directory with subfolders for each stage of the pipeline (e.g., `01_base`, `02_augmented_...`, etc.).
+- **Implemented Auto-Versioning**: All data creation scripts now use a helper function in `utils.py` to automatically save outputs to new, versioned files (e.g., `..._v1.jsonl`, `..._v2.jsonl`).
+- **Enhanced Verification Logic**: Updated `verify_dataset.py` to intelligently check for both digits and their word equivalents (e.g., "20" or "twenty"), improving the accuracy of data quality checks.
+
+#### Enhancement Over Previous Version (v0.3.x):
+- **Organization & Scalability**: The new folder structure makes the project significantly cleaner and easier to manage as more experiments are added.
+- **Reproducibility & Experiment Tracking**: The versioning system prevents accidental data overwrites and creates a clear, traceable history of every dataset generated.
+- **Improved Data Quality**: The smarter verification ensures that semantically correct but differently formatted data is not incorrectly flagged as an error.
+
+---
 ### Version: 0.3.0
 **ID:** 777f435
 **Date:** 2025-10-05

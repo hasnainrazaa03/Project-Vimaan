@@ -1,5 +1,7 @@
+import os
 import json
 import random
+from utils import get_next_version_path
 
 #COMMAND SCHEMA WITH INTENTS AND SLOTS
 SCHEMA = {
@@ -125,8 +127,11 @@ def generate_dataset(schema, num_examples_per_intent=200):
 if __name__ == "__main__":
     generated_data = generate_dataset(SCHEMA, num_examples_per_intent=1500)
     random.shuffle(generated_data)
-    
-    output_filename = "aviation_cmds.jsonl"
+    OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "datasets", "01_base")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    base_output_filename = os.path.join(OUTPUT_DIR, "aviation_cmds.jsonl")
+    output_filename = get_next_version_path(base_output_filename)
+    print(f"Output will be saved to new version: {output_filename}")
     with open(output_filename, "w") as f:
         for entry in generated_data:
             f.write(json.dumps(entry) + "\n")
