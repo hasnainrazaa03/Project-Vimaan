@@ -22,12 +22,25 @@ SCHEMA = {
             "set altitude {altitude}",
             "climb to {altitude} feet",
             "descend to {altitude} feet",
-            "maintain flight level {altitude}"
+            "fly at {altitude}"
         ],
         "slots": {
             "altitude": {
                 "type": "numerical",
                 "values": [str(i) for i in range(100, 40001, 100)] #Altitudes from 100 to 40000
+            }
+        }
+    },
+    "set_flight_level": {
+        "templates": [
+            "climb to flight level {flight_level}",
+            "maintain flight level {flight_level}",
+            "request flight level {flight_level}"
+        ],
+        "slots": {
+            "flight_level": {
+                "type": "numerical",
+                "values": [str(i) for i in range(100, 401, 10)] # FL100, FL110 ...
             }
         }
     },
@@ -44,8 +57,8 @@ SCHEMA = {
             },
             "frequency": {
                 "type": "numerical",
-                #Generate sample COM frequencies
-                "values": [f"{random.randint(118, 136)}.{random.randint(0, 99):02d}" for _ in range(100)]
+                #value will now be generated dynamically in the loop
+                "values": ["<DYNAMIC>"]
             }
         }
     },
@@ -82,7 +95,13 @@ def generate_dataset(schema, num_examples_per_intent=200):
             filled_template = template
             slots_data = {}
             for slot_name, slot_details in details["slots"].items():
-                slot_value = random.choice(slot_details["values"])
+                if slot_details["values"] == ["<DYNAMIC>"]:
+                #COM frequency generation
+                    slot_value = f"{random.randint(118, 136)}.{random.randint(0, 99):02d}"
+                else:
+                #other slots
+                    slot_value = random.choice(slot_details["values"])
+
                 slots_data[slot_name] = slot_value
                 
                 #replace placeholder in the template string
