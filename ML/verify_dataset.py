@@ -54,15 +54,16 @@ def verify_dataset(filename):
     print("\n--- Verification Complete ---")
     print(f"Total entries checked: {total_entries}")
     if issues_found == 0:
-        print("No issues found. Your dataset looks great!")
+        print("No issues found. The dataset looks great!")
     else:
         print(f"Found {issues_found} potential issues. Please review the lines printed above.")
 
 if __name__ == "__main__":
     script_dir = os.path.dirname(__file__)
     
-    print(f"Selection: \n 1. Pegasus \n 2. Flan T5 \3 Merged")
-    selection = 1
+    print(f"Selection: \n 1. Pegasus \n 2. Flan T5 \n 3. Merged")
+    selection = 3
+    print("Selection: ", selection)
     if(selection == 1):
         INPUT_DIR = os.path.join(script_dir, "datasets", "02_augmented_pegasus")
         BASE_FILENAME_TO_VERIFY = os.path.join(INPUT_DIR, "aviation_cmds_augmented_pegasus.jsonl")
