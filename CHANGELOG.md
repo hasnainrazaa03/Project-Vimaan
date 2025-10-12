@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+### Version: 0.5.0
+**ID:** 961717b
+**Date:** 2025-10-12
+**Module:** Machine Learning - Model Training & Inference
+**Author:** Mohammad Hasnain Raza
+
+#### Description of Change:
+- **Added Model Training Pipeline**: Created the core `train_nlu_model.py` script to train a joint intent-and-slot NLU model using DistilBERT.
+- **Implemented Validation & Early Stopping**: Upgraded the training script to include a validation loop to monitor performance on unseen data and an early stopping mechanism to prevent overfitting and automatically save the best model.
+- **Created Inference Script**: Developed `predict.py` to load the trained model and provide an interactive command-line interface for real-time testing and performance evaluation.
+- **Automated Workflow**: Made the training and prediction scripts version-aware, enabling them to automatically find the latest dataset and model versions.
+
+#### Enhancement Over Previous Version (v0.4.x):
+- **Core AI Capability**: This update introduces the "brain" of Project Vimaan, transitioning the project from data preparation to a functional, trained NLU model.
+- **Professional Training Workflow**: The addition of a validation loop and early stopping represents a shift to a robust, industry-standard training process that produces more reliable models.
+- **Complete Feedback Loop**: With the `predict.py` script, a full development cycle is now in place: `Data Generation -> Training -> Interactive Testing`.
+
+---
+
 ### Version: 0.4.0
 **ID:** a371380
 **Date:** 2025-10-06
