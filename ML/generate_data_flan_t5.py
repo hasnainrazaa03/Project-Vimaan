@@ -4,8 +4,6 @@ import random
 import torch
 from tqdm import tqdm
 import huggingface_hub
-
-# --- Imports from your custom utils file ---
 from utils import get_next_version_path, find_latest_version_path
 
 #MODEL SETUP
@@ -15,10 +13,6 @@ def setup_model():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # For local execution, ensure you have logged in via the terminal:
-    # hf auth login
-    
-    # Import here to keep model-specific logic contained
     from transformers import T5ForConditionalGeneration, T5Tokenizer
     model_name = 'google/flan-t5-base'
     tokenizer = T5Tokenizer.from_pretrained(model_name)
@@ -47,18 +41,14 @@ def generate_variations(intent, slots, tokenizer, model, device, num_variations=
 
 #MAIN SCRIPT
 if __name__ == "__main__":
-    # --- 1. Define folder structure ---
     script_dir = os.path.dirname(__file__)
     INPUT_DIR = os.path.join(script_dir, "datasets", "01_base")
     OUTPUT_DIR = os.path.join(script_dir, "datasets", "03_augmented_flan_t5")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # --- 2. Find the latest input file to process ---
     latest_input_file = find_latest_version_path(os.path.join(INPUT_DIR, "aviation_cmds.jsonl"))
     
-    # --- 3. Run the main logic ONLY if an input file was found ---
     if latest_input_file:
-        # Determine the next available version for our output file
         BASE_OUTPUT_FILENAME = os.path.join(OUTPUT_DIR, "aviation_cmds_augmented_flan_t5.jsonl")
         OUTPUT_FILENAME = get_next_version_path(BASE_OUTPUT_FILENAME)
 

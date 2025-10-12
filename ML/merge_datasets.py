@@ -1,6 +1,7 @@
 import json
 from tqdm import tqdm
 import os
+import random
 from utils import get_next_version_path, find_latest_version_path
 
 def merge_datasets(file1, file2, output_file):
@@ -29,6 +30,8 @@ def merge_datasets(file1, file2, output_file):
         except FileNotFoundError:
             print(f"Warning: Input file not found: {filename}. Skipping.")
 
+    random.shuffle(merged_data)
+    
     print(f"\nWriting {len(merged_data)} unique entries to {output_file}...")
     with open(output_file, 'w') as f:
         for entry in merged_data:
