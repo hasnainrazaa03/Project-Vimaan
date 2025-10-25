@@ -44,12 +44,12 @@ if __name__ == "__main__":
     script_dir = os.path.dirname(__file__)
     
     PEGASUS_DIR = os.path.join(script_dir, "datasets", "04_clean_pegasus")
-    FLAN_T5_DIR = os.path.join(script_dir, "datasets", "03_augmented_flan_t5")
+    FLAN_T5_DIR = os.path.join(script_dir, "datasets", "06_clean_flan_t5")
     OUTPUT_DIR = os.path.join(script_dir, "datasets", "05_final_merged")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
     BASE_PEGASUS_FILE = os.path.join(PEGASUS_DIR, "aviation_cmds_clean_pegasus.jsonl")
-    BASE_FLAN_T5_FILE = os.path.join(FLAN_T5_DIR, "aviation_cmds_augmented_flan_t5.jsonl")
+    BASE_FLAN_T5_FILE = os.path.join(FLAN_T5_DIR, "aviation_cmds_clean_flan_t5.jsonl")
     BASE_OUTPUT_FILE = os.path.join(OUTPUT_DIR, "aviation_cmds_final_training_set.jsonl")
     
     print("Searching for latest input files...")

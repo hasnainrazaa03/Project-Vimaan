@@ -50,14 +50,14 @@ def clean_dataset(input_file, output_file):
                     if not any(word in text_lower for word in set(valid_words)):
                         is_valid = False
                         issues_found += 1
-                        #print(f"\nRemoving L{original_count}: '{entry['text']}' missing words for '{slot_value}'")
+                        print(f"\nRemoving L{original_count}: '{entry['text']}' missing words for '{slot_value}'")
                         break
                 if is_valid:
                     clean_data.append(entry)
                     
             except (json.JSONDecodeError, KeyError) as e:
                 issues_found += 1
-                print(f"Skipping malformed or incomplete line {original_count}: {line.strip()} | Error: {e}")
+                #print(f"Skipping malformed or incomplete line {original_count}: {line.strip()} | Error: {e}")
 
     print(f"\nWriting {len(clean_data)} valid entries to {output_file}...")
     with open(output_file, 'w') as f:
@@ -73,12 +73,12 @@ def clean_dataset(input_file, output_file):
 if __name__ == "__main__":
     script_dir = os.path.dirname(__file__)
     
-    INPUT_DIR = os.path.join(script_dir, "datasets", "02_augmented_pegasus")
-    OUTPUT_DIR = os.path.join(script_dir, "datasets", "04_clean_pegasus")
+    INPUT_DIR = os.path.join(script_dir, "datasets", "03_augmented_flan_t5")
+    OUTPUT_DIR = os.path.join(script_dir, "datasets", "06_clean_flan_t5")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
-    BASE_INPUT_FILENAME = os.path.join(INPUT_DIR, "aviation_cmds_augmented_pegasus.jsonl")
-    BASE_OUTPUT_FILENAME = os.path.join(OUTPUT_DIR, "aviation_cmds_clean_pegasus.jsonl")
+    BASE_INPUT_FILENAME = os.path.join(INPUT_DIR, "aviation_cmds_augmented_flan_t5.jsonl")
+    BASE_OUTPUT_FILENAME = os.path.join(OUTPUT_DIR, "aviation_cmds_clean_flan_t5.jsonl")
     
     print(f"Searching for the latest version in '{INPUT_DIR}'...")
     latest_input_file = find_latest_version_path(BASE_INPUT_FILENAME)

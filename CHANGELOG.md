@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+### Version: 0.6.0
+**ID:** b9d1df2
+**Date:** 2025-10-25
+**Module:** Machine Learning - Data Generation & Validation
+**Author:** Mohammad Hasnain Raza
+
+#### Description of Change:
+- **Centralized Schema**: Moved the `SCHEMA` definition to a dedicated `schema_config.py` file and updated all relevant scripts (`generate_slot_dataset.py`, `clean_*.py`, `verify_dataset.py`) to import it.
+- **Expanded Intent Coverage**: Updated `generate_slot_dataset.py` to include new intents:
+    - Boolean `toggle_` commands (e.g., `toggle_flaps`, `toggle_autopilot_1`) using a consistent `state` slot.
+    - A `None` intent for handling out-of-scope commands.
+    - Conversational intents (`ask_status_generic`, `ask_time`, `chit_chat_greeting`).
+- **Implemented Synonym Handling**:
+    - Added `synonyms` dictionary to relevant slots in the `SCHEMA` (`schema_config.py`).
+    - Updated generation logic (`generate_slot_dataset.py`) to randomly use synonyms in generated text while keeping the canonical slot value in the label.
+    - Upgraded `clean_pegasus_dataset.py` and `verify_dataset.py` to correctly validate text containing synonyms and number-words (`num2words`).
+- **Added FLAN-T5 Cleaning Script**: Created `clean_flan_t5_dataset.py` to apply the same validation logic to the FLAN-T5 generated data, ensuring consistency.
+- **Updated Folder Structure**: Added `datasets/06_clean_flan_t5/` folder and updated `merge_datasets.py` to use the correct cleaned input paths.
+
+#### Enhancement Over Previous Version (v0.5.0):
+- **Professional Workflow**: Centralizing the `SCHEMA` significantly improves maintainability and reduces redundancy.
+- **Increased Model Capability**: The NLU model trained on this data will be able to recognize a wider range of commands, handle simple chit-chat, and gracefully identify out-of-scope requests.
+- **Improved Data Realism & Robustness**: Generating commands with synonyms makes the training data better reflect natural language variations.
+- **Enhanced Data Quality Assurance**: The updated cleaning and verification scripts ensure high data quality by correctly handling synonyms and number representations across both data generation methods.
+
+---
+
 ### Version: 0.5.0
 **ID:** 961717b
 **Date:** 2025-10-12
@@ -16,7 +43,7 @@ All notable changes to this project will be documented in this file.
 - **Created Inference Script**: Developed `predict.py` to load the trained model and provide an interactive command-line interface for real-time testing and performance evaluation.
 - **Automated Workflow**: Made the training and prediction scripts version-aware, enabling them to automatically find the latest dataset and model versions.
 
-#### Enhancement Over Previous Version (v0.4.x):
+#### Enhancement Over Previous Version (v0.4.0):
 - **Core AI Capability**: This update introduces the "brain" of Project Vimaan, transitioning the project from data preparation to a functional, trained NLU model.
 - **Professional Training Workflow**: The addition of a validation loop and early stopping represents a shift to a robust, industry-standard training process that produces more reliable models.
 - **Complete Feedback Loop**: With the `predict.py` script, a full development cycle is now in place: `Data Generation -> Training -> Interactive Testing`.
@@ -35,7 +62,7 @@ All notable changes to this project will be documented in this file.
 - **Implemented Auto-Versioning**: All data creation scripts now use a helper function in `utils.py` to automatically save outputs to new, versioned files (e.g., `..._v1.jsonl`, `..._v2.jsonl`).
 - **Enhanced Verification Logic**: Updated `verify_dataset.py` to intelligently check for both digits and their word equivalents (e.g., "20" or "twenty"), improving the accuracy of data quality checks.
 
-#### Enhancement Over Previous Version (v0.3.x):
+#### Enhancement Over Previous Version (v0.3.0):
 - **Organization & Scalability**: The new folder structure makes the project significantly cleaner and easier to manage as more experiments are added.
 - **Reproducibility & Experiment Tracking**: The versioning system prevents accidental data overwrites and creates a clear, traceable history of every dataset generated.
 - **Improved Data Quality**: The smarter verification ensures that semantically correct but differently formatted data is not incorrectly flagged as an error.
@@ -53,7 +80,7 @@ All notable changes to this project will be documented in this file.
 - **AI-Powered Augmentation**: Introduced a new script, `augment_with_paraphrasing.py`, which uses a pre-trained Pegasus model (`tuner007/pegasus_paraphrase`) to generate multiple linguistic variations of each command.
 - **Path-Aware Scripts**: Both scripts were updated to be path-aware, ensuring they can be run reliably regardless of the terminal's working directory.
 
-#### Enhancement Over Previous Version (v0.2.x):
+#### Enhancement Over Previous Version (v0.2.0):
 - **Greatly Increased Robustness**: The combination of dynamic slot generation and AI-powered paraphrasing creates a dataset that is vastly more diverse and representative of real-world language, which is critical for training a commercial-grade model.
 - **Improved Workflow**: The data pipeline is now more resilient to common path and dependency issues, making the development process smoother.
 
