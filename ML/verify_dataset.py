@@ -2,6 +2,7 @@ import json
 from tqdm import tqdm
 import os
 from utils import find_latest_version_path
+from schema_config import SCHEMA
 
 try:
     from num2words import num2words
@@ -31,21 +32,26 @@ def verify_dataset(filename):
                     continue
                 
                 text_lower = entry['text'].lower()
-                for slot_value in entry['slots'].values():
+                for slot_name, slot_value in entry.get('slots', {}).items():
+                    valid_words = []
                     value_str = str(slot_value).lower()
                     
-                    is_present = False
+                    valid_words.append(value_str)
+
                     if value_str.isdigit():
-                        value_word = num2words(value_str)
-                        if value_str in text_lower or value_word in text_lower:
-                            is_present = True
-                    else:
-                        if value_str in text_lower:
-                            is_present = True
-                    
-                    if not is_present:
-                        print(f"\nL{i+1}: Slot value '{slot_value}' not found as digit or word in text: '{entry['text']}'")
+                         valid_words.append(num2words(value_str))
+
+                    intent_details = SCHEMA.get(entry.get('intent', 'None'))
+                    if intent_details:
+                        slot_details = intent_details.get("slots", {}).get(slot_name)
+                        if slot_details and 'synonyms' in slot_details:
+                            synonyms = slot_details['synonyms'].get(value_str, [])
+                            valid_words.extend(synonyms)
+                
+                    if not any(word in text_lower for word in set(valid_words)):
+                        # print(f"\nL{i+1}: Slot value '{slot_value}' or its synonym not found in text: '{entry['text']}'")
                         issues_found += 1
+                        break
 
             except json.JSONDecodeError:
                 print(f"\nL{i+1}: Invalid JSON format.")
@@ -61,15 +67,26 @@ def verify_dataset(filename):
 if __name__ == "__main__":
     script_dir = os.path.dirname(__file__)
     
-    print(f"Selection: \n 1. Pegasus \n 2. Flan T5 \n 3. Merged")
-    selection = 3
+    print(f"Select dataset to verify: \n 1. Augmented Pegasus \n 2. Clean Pegasus \n 3. Augmented Flan T5 \n 4. Clean Flan T5 \n 5. Final Merged")
+    try:
+        selection = int(input("Enter selection (1-5): ") or 5)
+    except ValueError:
+        selection = 5
+
     print("Selection: ", selection)
-    if(selection == 1):
+    
+    if selection == 1:
         INPUT_DIR = os.path.join(script_dir, "datasets", "02_augmented_pegasus")
         BASE_FILENAME_TO_VERIFY = os.path.join(INPUT_DIR, "aviation_cmds_augmented_pegasus.jsonl")
-    elif(selection == 2):
+    elif selection == 2:
+        INPUT_DIR = os.path.join(script_dir, "datasets", "04_clean_pegasus")
+        BASE_FILENAME_TO_VERIFY = os.path.join(INPUT_DIR, "aviation_cmds_clean_pegasus.jsonl")
+    elif selection == 3:
         INPUT_DIR = os.path.join(script_dir, "datasets", "03_augmented_flan_t5")
         BASE_FILENAME_TO_VERIFY = os.path.join(INPUT_DIR, "aviation_cmds_augmented_flan_t5.jsonl")
+    elif selection == 4:
+        INPUT_DIR = os.path.join(script_dir, "datasets", "06_clean_flan_t5")
+        BASE_FILENAME_TO_VERIFY = os.path.join(INPUT_DIR, "aviation_cmds_clean_flan_t5.jsonl")
     else:
         INPUT_DIR = os.path.join(script_dir, "datasets", "05_final_merged")
         BASE_FILENAME_TO_VERIFY = os.path.join(INPUT_DIR, "aviation_cmds_final_training_set.jsonl")
@@ -80,4 +97,4 @@ if __name__ == "__main__":
     if latest_file and os.path.exists(latest_file):
         verify_dataset(filename=latest_file)
     else:
-        print(f"Error: Could not find any version of the final dataset in '{INPUT_DIR}' to check.")
+        print(f"Error: Could not find any version of the selected dataset in '{INPUT_DIR}' to check.")

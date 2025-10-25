@@ -2,88 +2,14 @@ import os
 import json
 import random
 from utils import get_next_version_path
-
-#COMMAND SCHEMA WITH INTENTS AND SLOTS
-SCHEMA = {
-    "set_autopilot_heading": {
-        "templates": [
-            "set heading {degrees}",
-            "change heading to {degrees}",
-            "turn to {degrees} degrees",
-            "fly heading {degrees}"
-        ],
-        "slots": {
-            "degrees": {
-                "type": "numerical",
-                "values": [str(i) for i in range(0, 361, 1)] #Headings from 0 to 360
-            }
-        }
-    },
-    "set_autopilot_altitude": {
-        "templates": [
-            "set altitude {altitude}",
-            "climb to {altitude} feet",
-            "descend to {altitude} feet",
-            "fly at {altitude}"
-        ],
-        "slots": {
-            "altitude": {
-                "type": "numerical",
-                "values": [str(i) for i in range(100, 40001, 100)] #Altitudes from 100 to 40000
-            }
-        }
-    },
-    "set_flight_level": {
-        "templates": [
-            "climb to flight level {flight_level}",
-            "maintain flight level {flight_level}",
-            "request flight level {flight_level}"
-        ],
-        "slots": {
-            "flight_level": {
-                "type": "numerical",
-                "values": [str(i) for i in range(100, 401, 10)] # FL100, FL110 ...
-            }
-        }
-    },
-    "set_com_frequency": {
-        "templates": [
-            "set com {com_port} to {frequency}",
-            "tune com {com_port} {frequency}",
-            "frequency {frequency} on com {com_port}"
-        ],
-        "slots": {
-            "com_port": {
-                "type": "categorical",
-                "values": ["1", "2"]
-            },
-            "frequency": {
-                "type": "numerical",
-                #value will now be generated dynamically in the loop
-                "values": ["<DYNAMIC>"]
-            }
-        }
-    },
-    "toggle_landing_gear": {
-        "templates": [
-            "gear {state}",
-            "{state} landing gear",
-        ],
-        "slots": {
-            "state": {
-                "type": "categorical",
-                "values": ["up", "down"]
-            }
-        }
-    }
-}
+from schema_config import SCHEMA
 
 #PHRASE VARIATIONS (PREFIXES AND SUFFIXES)
-PREFIXES = ["", "please", "could you", "request", "confirm"]
-SUFFIXES = ["", "now", "immediately", "for me"]
+PREFIXES = ["", "please", "could you", "request", "confirm", "go ahead and"]
+SUFFIXES = ["", "now", "immediately", "for me", "if you would"]
 
 #GENERATION LOGIC
-def generate_dataset(schema, num_examples_per_intent=200):
+def generate_dataset(schema, num_examples_per_intent=1000):
     dataset = []
     
     for intent, details in schema.items():
@@ -91,24 +17,32 @@ def generate_dataset(schema, num_examples_per_intent=200):
         
         for i in range(num_examples_per_intent):
             #random template for the command
-            template = random.choice(details["templates"])
+            template = random.choice(details.get("templates", [""]))
             
             #slot fill in the template with random values
             filled_template = template
             slots_data = {}
-            for slot_name, slot_details in details["slots"].items():
-                if slot_details["values"] == ["<DYNAMIC>"]:
+            for slot_name, slot_details in details.get("slots", {}).items():
+                slot_value = ""
                 #COM frequency generation
-                    slot_value = f"{random.randint(118, 136)}.{random.randint(0, 99):02d}"
+                if slot_details["values"] == ["<DYNAMIC>"]:
+                    if slot_name == "frequency":
+                        slot_value = f"{random.randint(118, 136)}.{random.randint(0, 99):02d}"
+                    # Add more dynamic types here if needed in the future
                 else:
-                #other slots
                     slot_value = random.choice(slot_details["values"])
-
+                
                 slots_data[slot_name] = slot_value
                 
+                word_to_use_in_text = slot_value
+                if 'synonyms' in slot_details and random.random() > 0.5:
+                    synonyms = slot_details['synonyms'].get(slot_value, [])
+                    if synonyms:
+                        word_to_use_in_text = random.choice(synonyms)
+
                 #replace placeholder in the template string
                 placeholder = "{" + slot_name + "}"
-                filled_template = filled_template.replace(placeholder, slot_value)
+                filled_template = filled_template.replace(placeholder, word_to_use_in_text)
 
             #natural language variations
             text = f"{random.choice(PREFIXES)} {filled_template} {random.choice(SUFFIXES)}".strip()
@@ -125,7 +59,7 @@ def generate_dataset(schema, num_examples_per_intent=200):
     return dataset
 
 if __name__ == "__main__":
-    generated_data = generate_dataset(SCHEMA, num_examples_per_intent=1500)
+    generated_data = generate_dataset(SCHEMA, num_examples_per_intent=2500)
     random.shuffle(generated_data)
     OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "datasets", "01_base")
     os.makedirs(OUTPUT_DIR, exist_ok=True)

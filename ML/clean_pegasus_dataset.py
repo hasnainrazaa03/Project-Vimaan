@@ -2,6 +2,16 @@ import json
 from tqdm import tqdm
 import os
 from utils import get_next_version_path, find_latest_version_path
+from schema_config import SCHEMA
+
+try:
+    from num2words import num2words
+except ImportError:
+    print("Installing 'num2words' library...")
+    import subprocess
+    import sys
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "num2words"])
+    from num2words import num2words
 
 def clean_dataset(input_file, output_file):
     clean_data = []
@@ -15,16 +25,39 @@ def clean_dataset(input_file, output_file):
             original_count += 1
             try:
                 entry = json.loads(line)
-                is_valid = all(str(v).lower() in entry['text'].lower() for v in entry['slots'].values())
-                
+                if 'text' not in entry:
+                     issues_found += 1
+                     print(f"Skipping entry {original_count}: Missing 'text' key.")
+                     continue
+                     
+                is_valid = True
+                text_lower = entry['text'].lower()
+
+                for slot_name, slot_value in entry.get('slots', {}).items():
+                    valid_words = []
+                    value_str = str(slot_value).lower()
+                    valid_words.append(value_str)
+                    if value_str.isdigit():
+                         valid_words.append(num2words(value_str))
+
+                    intent_details = SCHEMA.get(entry.get('intent', 'None'))
+                    if intent_details:
+                        slot_details = intent_details.get("slots", {}).get(slot_name)
+                        if slot_details and 'synonyms' in slot_details:
+                            synonyms = slot_details['synonyms'].get(value_str, [])
+                            valid_words.extend(synonyms)
+                    
+                    if not any(word in text_lower for word in set(valid_words)):
+                        is_valid = False
+                        issues_found += 1
+                        #print(f"\nRemoving L{original_count}: '{entry['text']}' missing words for '{slot_value}'")
+                        break
                 if is_valid:
                     clean_data.append(entry)
-                else:
-                    issues_found += 1
                     
-            except (json.JSONDecodeError, KeyError):
+            except (json.JSONDecodeError, KeyError) as e:
                 issues_found += 1
-                print(f"Skipping malformed or incomplete line: {line.strip()}")
+                print(f"Skipping malformed or incomplete line {original_count}: {line.strip()} | Error: {e}")
 
     print(f"\nWriting {len(clean_data)} valid entries to {output_file}...")
     with open(output_file, 'w') as f:
