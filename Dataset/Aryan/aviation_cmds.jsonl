@@ -1,1824 +1,480 @@
-{"text": "engine 2 on now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "disengage autopilot 1 immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engage autopilot 2 now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Hey disable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Please autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "raise landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "start engine 1 immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "gear down now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please enable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Could you flight director 1 off immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "engine 1 off now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Please release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Hey disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "stop engine 2 now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "gear up now", "intent": "GEAR_UP", "slots": {}}
-{"text": "start engine 2 now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "disengage autopilot 2 now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Please autopilot 2 off now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "retract landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "parking brake off immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Hey disable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "flight director 1 off immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "stop engine 1 now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Could you disengage autopilot 2 now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please disengage autopilot 1 immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Hey parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Could you enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Could you autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please engage autopilot 1 immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Hey flaps up now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "autopilot 2 on now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Hey parking brake on now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "autopilot 1 on now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Please autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "flight director 2 on immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Please drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you engage parking brake now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "stop engine 2 immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "gear down now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you autopilot 2 on immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "engine 2 on now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "flight director 1 off now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "enable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Hey engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "disengage autopilot 2 immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Please flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Could you engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Hey autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "lower landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "start engine 2 immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Please engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "engine 1 on immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Could you disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Please flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Please parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "flaps up now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Please flight director 2 off immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Please raise landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "Hey gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "engine 1 off now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "engine 2 on immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Hey drop landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Hey autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "gear up now", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please flight director 2 on immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Hey flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "flight director 1 off immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Please flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Please engine 2 on immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Hey stop engine 1 now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Hey release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey disengage autopilot 1 now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Hey engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "start engine 1 now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Please flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "engine 2 off immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Hey autopilot 1 on now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "engine 2 off now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "parking brake on immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "engine 1 on now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "autopilot 2 on now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Hey flight director 1 on immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Please lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you enable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "flight director 2 on immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Please flight director 1 off immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "flaps down immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Could you retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Could you flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Please flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Please engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "parking brake off immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "engine 2 off immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "lower flaps immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "autopilot 1 off now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "parking brake off immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Please gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "disable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Could you autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "flaps down immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "flight director 1 on immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Could you flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "engage parking brake now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "gear up now", "intent": "GEAR_UP", "slots": {}}
-{"text": "Hey disengage autopilot 1 immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Could you lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "autopilot 1 on immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "enable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "release parking brake now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "release parking brake immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Hey gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Hey drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engine 1 on immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Hey autopilot 2 on immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "retract landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please flight director 2 off now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "disable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "raise landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please drop landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you engage parking brake immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Hey raise flaps now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Could you release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "engage autopilot 1 now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "autopilot 1 off now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Could you start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Could you gear up immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "autopilot 2 off immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Please flaps down immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "start engine 2 now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Hey release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Could you drop landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "parking brake on immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "lower landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please engine 1 off immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "lower flaps immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Hey retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Hey flight director 1 on now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Please engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "raise flaps now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Could you gear down immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "disable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "retract landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "raise landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "parking brake on now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "raise landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Could you engine 2 off immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey engage autopilot 2 now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "stop engine 2 immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Could you start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "flight director 1 off now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "disengage autopilot 2 immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Please lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey disengage autopilot 2 immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Hey flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Please engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please enable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "autopilot 2 off now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "lower flaps immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Could you flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Could you engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "gear down immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please stop engine 1 immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Hey flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Hey enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Could you flight director 1 on now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Hey gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "release parking brake now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "enable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "lower landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engage parking brake immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "flight director 2 off immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Hey stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Could you flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Hey raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Hey gear up now", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "enable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "parking brake off now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Could you disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Could you lower flaps immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Could you engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey autopilot 2 on now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "engage autopilot 1 now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Could you enable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Hey release parking brake immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Hey flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Hey flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Could you flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Please release parking brake now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Could you autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "enable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "start engine 1 immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "flight director 2 off now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Please autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Please lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Please engage autopilot 1 now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Please disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engage parking brake now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Please start engine 2 now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Hey drop landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey flight director 2 off immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Could you disable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "start engine 2 now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "stop engine 1 immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Hey disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Could you stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Please release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Could you engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "flaps down immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Could you release parking brake now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Hey raise flaps immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Please engage parking brake now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "autopilot 2 off immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "disengage autopilot 1 immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Hey parking brake on immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "autopilot 2 on now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Hey lower landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "disengage autopilot 2 immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Could you release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "disable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "disengage autopilot 2 immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "autopilot 1 off immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "gear up now", "intent": "GEAR_UP", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Please start engine 1 immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Hey stop engine 2 now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Please start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Could you flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Please lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey enable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Please engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "engage parking brake immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Could you raise flaps immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Hey parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "gear down now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "parking brake on immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Could you raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Hey engine 1 on immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you engage autopilot 1 now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "stop engine 2 now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Could you flaps up now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Hey disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "engine 1 off immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "raise flaps immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "autopilot 2 off now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Please flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Could you autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Hey enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "engage autopilot 2 immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "release parking brake immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Hey flight director 1 off immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "enable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Hey enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Hey engine 1 off now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Please gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Could you disengage autopilot 1 now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Please engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Hey flaps down now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Could you parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Please disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Please disable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Could you disengage autopilot 1 immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Hey disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Could you drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey raise landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "disable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Hey engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "start engine 2 immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "enable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Could you flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "autopilot 2 on immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Hey gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you flight director 2 off now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "raise flaps immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "gear up immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "engine 1 on immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you start engine 1 now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "raise flaps now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Please engage parking brake immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Please drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please drop landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Could you parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Please enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Could you gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "disengage autopilot 1 immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Hey lower flaps immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engine 2 on immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engage autopilot 1 immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "Hey engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Please engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Please disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Hey engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Could you engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Please raise flaps immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Hey raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Could you autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Please autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Hey flight director 1 off now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "flight director 2 on now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please stop engine 1 now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Could you lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engage parking brake now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Could you parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "disable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Please stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Please engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Please enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Hey stop engine 1 immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Hey flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Hey disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please enable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "enable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Could you autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "disable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Hey engine 1 on now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "stop engine 1 immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "parking brake off now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Hey engage parking brake now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "gear down immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Could you engage autopilot 1 immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Could you autopilot 1 on immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Please stop engine 2 now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "disengage autopilot 2 now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "flight director 2 off now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "engage autopilot 2 immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Hey gear down immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "autopilot 1 on now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Please flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Could you enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Hey disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Could you engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Could you disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "disengage autopilot 2 immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "disengage autopilot 1 now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Please disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Please enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "flight director 1 off now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "parking brake off now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Hey autopilot 2 off immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Hey engine 1 off immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engine 1 on now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you parking brake off now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "start engine 2 now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "enable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "raise flaps immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "flight director 1 on immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "disable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Please start engine 1 now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "raise landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Please disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "flaps up immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engage autopilot 2 now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "enable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Hey flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "drop landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "disable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "disable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Could you lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey engine 2 off now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Could you flight director 1 off now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Hey parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Hey engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Hey engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Please start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Please flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "raise landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "flaps up now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "release parking brake immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Hey gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Please parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "gear up immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "release parking brake now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Hey start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Please flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Please parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Could you enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Hey disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Could you flaps down now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Could you flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Could you start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "flaps up immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "enable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Please flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Hey enable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Could you flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Could you flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Hey raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "autopilot 1 off immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Please start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please retract landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "autopilot 2 on immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "enable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Hey autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "stop engine 1 immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Could you parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Please disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Hey flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Could you parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you engine 1 on now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "engine 1 on now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please engine 1 on immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Could you disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Hey raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "flight director 1 on immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Could you disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "start engine 2 immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Hey stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Hey retract landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Hey enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Please flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Could you engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "parking brake off immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Hey lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Could you gear up now", "intent": "GEAR_UP", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "engine 1 off now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "autopilot 1 off immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "disengage autopilot 2 now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Could you gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "lower flaps now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Hey release parking brake now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please flaps up now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Please parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Please engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Hey start engine 1 immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Hey retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Hey engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Please start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "disable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Hey engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "lower flaps now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Please flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Could you engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Hey lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Could you stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "flight director 2 on immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "flaps up immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "engage parking brake immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Please drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "engine 2 off now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Could you disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Please release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Could you stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Please engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Please start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey engage autopilot 2 immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "enable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "flight director 2 on now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Could you gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Could you engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "autopilot 1 on immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Could you raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "gear down now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "flight director 1 on immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey enable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Hey disable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Could you autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Please retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Could you enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Could you gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engage autopilot 1 immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Please disable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "engage autopilot 2 now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Could you enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "disengage autopilot 1 now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Could you autopilot 1 off now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "drop landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "flight director 1 off now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Could you raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Please engine 2 on now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "gear up immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "engage parking brake immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Hey autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Please disengage autopilot 2 immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engine 1 off immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey autopilot 1 off immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "lower landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "engine 1 on immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Please gear up immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Hey retract landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Hey engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Could you flight director 2 on immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Hey gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engine 1 off immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Could you start engine 2 now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Could you start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Could you stop engine 1 immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Hey gear down now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey lower flaps now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Please engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "start engine 1 now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Hey gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Please autopilot 1 on immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Hey disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "engage autopilot 1 now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you autopilot 1 on now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "disengage autopilot 2 now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "engine 2 on immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Please parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey disable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "stop engine 2 immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Please flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "flight director 2 off immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Hey parking brake off now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please gear up now", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "engage autopilot 1 immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you flight director 2 on now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Could you flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "retract landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "retract landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "gear down now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "lower flaps now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey flight director 2 on now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "lower landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "autopilot 2 off now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Could you engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Hey autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Could you disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Could you flaps up immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Please stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Please disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "flight director 2 off immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Hey lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Could you stop engine 2 immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Could you enable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "disable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "stop engine 1 now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "raise landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Please parking brake off immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please gear down now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "parking brake on now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Please flight director 1 on immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Could you lower landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "lower landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you autopilot 2 off now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "raise flaps immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Could you autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Hey stop engine 2 immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "engine 1 on immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Could you engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "flight director 2 off immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Could you gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Could you engine 1 on immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "autopilot 2 off immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Hey stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Please gear down immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey start engine 2 now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "gear down immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please flaps down now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Hey disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Hey flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Could you engine 2 on now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "gear up immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "stop engine 1 now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Please disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Could you engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Hey raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "disengage autopilot 1 now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Could you flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Please engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Could you parking brake on now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Hey lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "engine 1 off now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Could you lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "retract landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please enable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Hey flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "flight director 1 off immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "autopilot 2 off now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Could you flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Could you enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Please autopilot 2 off immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "engage autopilot 1 immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Could you engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Hey start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Please flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Could you drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Please disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "flaps down now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Could you autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "stop engine 1 now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Could you raise landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please flight director 1 on now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Please start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Please autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Hey start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "parking brake on immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Hey enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Please enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Hey parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Please engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "flight director 1 on now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "retract landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "autopilot 2 on now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "flight director 1 off immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Hey start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "flight director 1 on immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Please disable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "autopilot 2 on now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "enable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "start engine 1 immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "start engine 1 now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Please autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "lower flaps now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "engage autopilot 2 immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please lower flaps immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Please gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engine 2 off immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Please lower flaps now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "engine 2 off now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engine 1 off immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "flight director 1 on now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Hey engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Could you drop landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "autopilot 1 on immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "start engine 2 now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "drop landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "engine 1 off immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Please engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Hey flaps up immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "drop landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "autopilot 1 on immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Please raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "start engine 2 immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "enable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Hey stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "drop landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you raise flaps now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Hey disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "lower landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please flight director 1 off now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Hey engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Please engage autopilot 2 now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Could you autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "disable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Hey flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey engine 2 on now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Could you drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "gear down immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "flaps down now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Hey engage parking brake immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "autopilot 1 off now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Hey enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "raise landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "Hey disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "start engine 1 immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "gear down immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please engine 1 off now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey autopilot 1 off now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "flaps up immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Hey engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Could you engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "stop engine 2 immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Could you release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "autopilot 1 on now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "flaps down immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "disengage autopilot 1 now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "lower flaps immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Could you flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Please stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Please engine 2 off immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Please autopilot 1 off immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Could you raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Please autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "drop landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Could you retract landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "Hey flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey lower landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please parking brake off now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "engage autopilot 2 now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Hey start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "engage parking brake now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "stop engine 1 immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "engage autopilot 2 immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Hey lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "flight director 2 on now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Please start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Could you lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "engine 2 on now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "stop engine 2 now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "disengage autopilot 1 immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please lower landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "autopilot 2 off immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Please disengage autopilot 2 now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Hey gear up immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Could you gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "disable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Please gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "Hey engine 2 on immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Please raise flaps now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "flight director 2 off immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "flight director 2 on now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Could you autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "engage autopilot 1 immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Please flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "enable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "flight director 1 on now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "autopilot 1 off immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Please engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Please engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Could you flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "engine 2 on now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "engine 2 on immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "stop engine 2 now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "flaps up now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "flaps up now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Please flight director 2 on now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "engage parking brake immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Please raise landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "autopilot 1 on now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you flaps down immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Could you start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "stop engine 2 immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Could you flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "enable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Please engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "start engine 2 immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Could you disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Hey autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Could you stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "start engine 1 now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Please flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "retract landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Hey parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "parking brake off now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please engine 1 on now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Hey autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Could you disable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "disengage autopilot 1 immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Could you engine 1 off immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Hey autopilot 2 off now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Hey flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "autopilot 2 on immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Please stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "disable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Please stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Please autopilot 1 off now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Please retract landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "Hey parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Please gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you start engine 1 immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Hey stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Please parking brake on immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Hey disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engine 2 off immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "engine 1 on now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "autopilot 2 on immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "raise flaps now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Hey enable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Please flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "drop landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "parking brake on now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Hey engage autopilot 1 immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Could you engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Hey stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Hey parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Hey disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Please disengage autopilot 1 now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Hey flight director 2 off now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "enable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "flight director 1 off now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Hey engine 2 off immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "engage autopilot 1 now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Please autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "retract landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "stop engine 1 now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Please stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Could you start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Please lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "disable flight director 1 now", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "enable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you disable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "retract landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Hey start engine 2 immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Hey autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you autopilot 2 off immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Could you flight director 1 on", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Could you flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Could you disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Could you stop engine 2 now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please release parking brake immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "enable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Could you engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Could you release parking brake immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "parking brake on now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Could you engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engine 1 on now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "flight director 2 off now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Please parking brake off", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "engine 2 on now", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Hey flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Hey autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Could you drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "autopilot 1 off now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "autopilot 2 off immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Could you engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Could you retract landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "start engine 1 now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Please autopilot 2 on now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Hey disengage autopilot 2 now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "lower flaps immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Please engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "parking brake off now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "engine 2 off now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "engage parking brake now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "raise landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "Hey lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "flaps down now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "release parking brake now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Could you stop engine 1 now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "drop landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Hey raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "release parking brake immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Hey parking brake off immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "stop engine 1 immediately", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Please stop engine 2 immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Hey stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "disable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "autopilot 2 off now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "gear up immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "stop engine 2 now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Please engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you parking brake on immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Please raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "disengage autopilot 1 now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Could you disengage autopilot 2 immediately", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Hey flight director 2 on immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "engine 1 off now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Hey engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Hey engage autopilot 1 now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you flight director 2 off immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "parking brake off immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Please gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "flight director 1 on now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Please autopilot 1 on now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey flaps down immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please start engine 2 immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "disable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "disable flight director 2 immediately", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Could you raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "flaps down now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "raise flaps now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Hey engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "flight director 2 on immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Hey start engine 1 now", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you autopilot 2 on now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Hey enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Could you lower flaps now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Could you engine 2 off now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Could you release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Hey lower flaps", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "release parking brake immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Could you parking brake off immediately", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please engine 2 off now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Hey engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Could you engine 2 on immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "autopilot 1 on now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Could you flight director 1 on immediately", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please lower landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you lower landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "lower landing gear now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Please disable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "engine 2 on immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "flaps down immediately", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Please engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "Could you gear down now", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Please disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Could you autopilot 1 off immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "flight director 1 on now", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "autopilot 1 off immediately", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Please raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "drop landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Hey engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Please enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Please parking brake on now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Could you engage autopilot 2 now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Could you retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "raise flaps", "intent": "FLAPS_UP", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "Please lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you engage autopilot 2 immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Could you raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "parking brake on now", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Hey flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Hey disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "flaps down now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "autopilot 2 off", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "flaps up now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "engage autopilot 2 immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "raise flaps now", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Hey autopilot 1 on immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Hey enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Hey retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "engage parking brake", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "Please drop landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "parking brake on", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Could you disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Hey engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Could you enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Hey raise landing gear now", "intent": "GEAR_UP", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engage autopilot 1 now", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "raise landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you disable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "flaps down", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Please flaps up", "intent": "FLAPS_UP", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "lower flaps now", "intent": "FLAPS_DOWN", "slots": {}}
-{"text": "Could you engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "flight director 2 off", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Could you enable flight director 2 now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "engage autopilot 2", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "Hey release parking brake", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "Please enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "autopilot 2 on immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "Please engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "engine 2 off now", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "flight director 2 on", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "Could you engine 1 off now", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "flight director 2 off now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Hey autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "start engine 1 immediately", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "Hey gear up", "intent": "GEAR_UP", "slots": {}}
-{"text": "Could you start engine 2 immediately", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "raise flaps immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "flight director 1 off", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "flaps up immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "raise landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "flight director 2 on now", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "disengage autopilot 2 now", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "flight director 1 off immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Please engine 2 off", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Please flaps up immediately", "intent": "FLAPS_UP", "slots": {}}
-{"text": "Could you disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "enable flight director 1", "intent": "FLIGHT_DIRECTOR_1_ON", "slots": {}}
-{"text": "Please autopilot 2 on", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "parking brake on immediately", "intent": "PARKING_BRAKE_ON", "slots": {}}
-{"text": "Hey engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Please retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "engage autopilot 2 now", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Please retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "start engine 2", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "release parking brake now", "intent": "PARKING_BRAKE_OFF", "slots": {}}
-{"text": "disable flight director 2", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "disable flight director 1 immediately", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "Please engage autopilot 2 immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "stop engine 1", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "engine 2 off immediately", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "engine 1 off", "intent": "ENGINE_1_OFF", "slots": {}}
-{"text": "flight director 2 off now", "intent": "FLIGHT_DIRECTOR_2_OFF", "slots": {}}
-{"text": "Could you stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "start engine 1", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "lower landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Please gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Hey stop engine 2", "intent": "ENGINE_2_OFF", "slots": {}}
-{"text": "Please disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "autopilot 1 on immediately", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Please autopilot 2 on immediately", "intent": "AUTOPILOT_2_ON", "slots": {}}
-{"text": "Could you retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "disable flight director 1", "intent": "FLIGHT_DIRECTOR_1_OFF", "slots": {}}
-{"text": "autopilot 1 off", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "gear down", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "gear up now", "intent": "GEAR_UP", "slots": {}}
-{"text": "engine 1 on", "intent": "ENGINE_1_ON", "slots": {}}
-{"text": "drop landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "lower landing gear", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "Could you raise landing gear immediately", "intent": "GEAR_UP", "slots": {}}
-{"text": "Hey autopilot 1 on", "intent": "AUTOPILOT_1_ON", "slots": {}}
-{"text": "Could you disengage autopilot 2", "intent": "AUTOPILOT_2_OFF", "slots": {}}
-{"text": "lower landing gear immediately", "intent": "GEAR_DOWN", "slots": {}}
-{"text": "autopilot 1 off now", "intent": "AUTOPILOT_1_OFF", "slots": {}}
-{"text": "engine 2 on", "intent": "ENGINE_2_ON", "slots": {}}
-{"text": "enable flight director 2", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "retract landing gear", "intent": "GEAR_UP", "slots": {}}
-{"text": "flight director 2 on immediately", "intent": "FLIGHT_DIRECTOR_2_ON", "slots": {}}
-{"text": "engage autopilot 1", "intent": "AUTOPILOT_1_ON", "slots": {}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
