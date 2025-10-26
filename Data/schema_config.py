@@ -39,7 +39,7 @@ SCHEMA = {
         "slots": {
             "flight_level": {
                 "type": "numerical",
-                "values": [str(i) for i in range(100, 401, 10)] # FL100, FL110 ...
+                "values": [str(i) for i in range(100, 401, 10)]
             }
         }
     },
@@ -62,7 +62,7 @@ SCHEMA = {
         }
     },
     "LANDING_GEAR": {
-        "templates": [
+        "base_cmds": [
             "gear {state}",
             "{state} landing gear",
             "landing gear {state}"
@@ -79,7 +79,7 @@ SCHEMA = {
         }
     },
     "FLAPS": {
-        "templates": [
+        "base_cmds": [
             "flaps {state}", 
             "{state} flaps", 
             "set flaps {state}"
@@ -96,7 +96,7 @@ SCHEMA = {
         }
     },
     "AUTOPILOT_1": {
-        "templates": [
+        "base_cmds": [
             "autopilot 1 {state}", 
             "{state} autopilot 1", 
             "ap one {state}"
@@ -113,7 +113,7 @@ SCHEMA = {
         }
     },
     "AUTOPILOT_2": {
-        "templates": [
+        "base_cmds": [
             "autopilot 2 {state}", 
             "{state} autopilot 2", 
             "ap two {state}"
@@ -130,7 +130,7 @@ SCHEMA = {
         }
     },
     "FLIGHT_DIRECTOR_1": {
-        "templates": [
+        "base_cmds": [
             "flight director 1 {state}", 
             "{state} flight director 1", 
             "fd one {state}"
@@ -147,7 +147,7 @@ SCHEMA = {
         }
     },
     "FLIGHT_DIRECTOR_2": {
-        "templates": [
+        "base_cmds": [
             "flight director 2 {state}", 
             "{state} flight director 2", 
             "fd two {state}"
@@ -164,7 +164,7 @@ SCHEMA = {
         }
     },
     "PARKING_BRAKE": {
-        "templates": [
+        "base_cmds": [
             "parking brake {state}", 
             "{state} parking brake"
         ],
@@ -180,7 +180,7 @@ SCHEMA = {
         }
     },
     "ENGINE_1": {
-        "templates": [
+        "base_cmds": [
             "engine 1 {state}", 
             "{state} engine 1"
         ],
@@ -196,7 +196,7 @@ SCHEMA = {
         }
     },
     "ENGINE_2": {
-        "templates": [
+        "base_cmds": [
             "engine 2 {state}", 
             "{state} engine 2"
         ],
@@ -210,34 +210,5 @@ SCHEMA = {
                 }
             }
         }
-    },
-    # --- Out-of-Scope Intent ---
-    "None": {
-        "templates": [
-            "what's the weather like today", "how are you doing",
-            "tell me something interesting", "that's a beautiful sunset", 
-            "are we there yet", "what time is it", "i'm feeling hungry", 
-            "can you see the city lights"
-        ],
-        "slots": {}
-    },
-    # --- Conversational Intents ---
-    "ask_status_generic": {
-        "templates": [
-            "are we there yet", "how much longer until we arrive", "what's our current status"
-        ],
-        "slots": {}
-    },
-    "ask_time": {
-        "templates": [
-            "what time is it", "what is the current time", "do you have the time please"
-        ],
-        "slots": {}
-    },
-    "chit_chat_greeting": {
-        "templates": [
-            "hello vimaan", "good morning co-pilot", "are you there", "hey how are you"
-        ],
-        "slots": {}
     }
 }
