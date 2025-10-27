@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+### Version: 0.7.0
+**ID:** 5e7e493
+**Date:** 2025-10-26
+**Module:** Machine Learning - Code Refactoring & Model Optimization
+**Author:** Mohammad Hasnain Raza
+
+
+#### Description of Change:
+- **Modular Architecture Refactor**: Reorganized monolithic codebase into a professional, scalable module structure:
+    - Created `core/` package: Centralized all NLU logic (`model.py`, `normalization.py`, `postprocessor.py`) with unified `__init__.py` exports.
+    - Created `utils/` package: Extracted all utility functions (`file_utils.py`) for file versioning and model path management.
+    - Created `data/` package: Organized all data generation and cleaning scripts (`generate_*.py`, `clean_*.py`, `verify_dataset.py`).
+    - Created `config/` package: Isolated configuration (`schema_config.py`) for cleaner separation of concerns.
+- **Enhanced Normalization Pipeline**: Upgraded `core/normalization.py` with improved number-to-text handling:
+    - Fixed phonetic digit sequence conversion (e.g., "zero niner zero" → "090").
+    - Improved compound number parsing (e.g., "seven thousand five hundred" → "7500").
+    - Enhanced decimal point handling for frequencies (e.g., "one two three point four five" → "123.45").
+- **Improved Model Import Handling**: Fixed `core/model.py` to properly return all 3 values (loss, intent_logits, slot_logits) during forward pass, with updated `predict.py` to correctly unpack predictions.
+- **Centralized Model Versioning**: Updated `utils/file_utils.py` with new helper functions (`get_model_versions_dir()`, `get_latest_model_path()`) for automatic model version discovery and management.
+- **Cleaned Legacy Files**: Removed duplicate files from root directory:
+    - Deleted old `normalization.py`, `slot_postprocessor.py`, `utils.py` (now in their respective packages).
+    - Removed debug files (`debug.py`, `debug_new.py`).
+    - Kept only latest model version (`v9`), deleting `v1-v8` to reduce repository size.
+- **Updated All Main Scripts**: Refactored 5 main scripts to use new modular imports:
+    - `train_nlu_model.py`: Now imports from `core` and `utils` packages.
+    - `predict.py`: Updated with correct import paths and unpacking logic.
+    - `command_tester.py`: Now uses unified imports and latest model discovery.
+    - `merge_datasets.py`: Updated to work with new package structure.
+    - `augment_with_word_forms.py`: Refactored to use centralized utilities.
+
+
+#### Accuracy Improvements:
+- **Previous Accuracy**: 91.4% (32/35 tests passing).
+- **Current Accuracy**: 94.3% (33/35 tests passing).
+- **Improvements**: Fixed phonetic sequence handling and compound number parsing, with edge cases deferred for future optimization.
+
+---
+
 ### Version: 0.6.0
 **ID:** b9d1df2
 **Date:** 2025-10-25
