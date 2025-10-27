@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+### Version: 0.7.1
+**ID:** 839f50e
+**Date:** 2025-10-27
+**Module:** Machine Learning - Plug In
+**Author:** Mohammad Hasnain Raza
+
+#### Description of Change:
+- **Integration Of ML Model**: Integrated the ML model and generated the X-Plane Plug-In script. 
+
+---
+
 ### Version: 0.7.0
 **ID:** 5e7e493
 **Date:** 2025-10-26
