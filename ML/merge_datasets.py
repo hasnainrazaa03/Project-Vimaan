@@ -3,6 +3,7 @@ from tqdm import tqdm
 import os
 import random
 from utils import get_next_version_path, find_latest_version_path
+from core import normalize_dataset
 
 def merge_datasets(file1, file2, output_file):
 
@@ -12,7 +13,6 @@ def merge_datasets(file1, file2, output_file):
     files_to_process = [f for f in [file1, file2] if f is not None]
     
     print("Starting dataset merge...")
-    
     for filename in files_to_process:
         print(f"Processing {filename}...")
         try:
@@ -31,6 +31,9 @@ def merge_datasets(file1, file2, output_file):
             print(f"Warning: Input file not found: {filename}. Skipping.")
 
     random.shuffle(merged_data)
+
+    print("\nNormalizing slot values...")
+    merged_data = normalize_dataset(merged_data)
     
     print(f"\nWriting {len(merged_data)} unique entries to {output_file}...")
     with open(output_file, 'w') as f:
