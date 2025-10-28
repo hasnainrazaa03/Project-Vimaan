@@ -2,6 +2,8 @@ import os
 import torch
 import speech_recognition as sr
 from XPPython3 import xp
+import logging
+from datetime import datetime
 
 import sys
 ml_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ML")
@@ -10,7 +12,6 @@ sys.path.insert(0, ml_path)
 from core import normalize_aviation_input, JointIntentAndSlotModel, postprocess_slots
 from utils import get_latest_model_path
 
-
 class VimaaNCoPilot:
     
     def __init__(self):
@@ -18,6 +19,8 @@ class VimaaNCoPilot:
         self.Sig = "plugin.vimaan.aicopilot.bymhr"
         self.Desc = "Advanced Voice Command Interface with Intent & Slot Recognition for X-Plane"
 
+        self._setup_custom_logging()
+        
         self.hotkeyPress = None
         self.hotkeyRelease = None
 
@@ -27,13 +30,13 @@ class VimaaNCoPilot:
         self.audioData = None
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        xp.log(f"[Vimaan] Using device: {self.device}")
+        self.log(f"[Vimaan] Using device: {self.device}")
         
         try:
             self._load_model()
-            xp.log("[Vimaan] Model loaded successfully!")
+            self.log("[Vimaan] Model loaded successfully!")
         except Exception as e:
-            xp.log(f"[Vimaan] ERROR loading model: {str(e)}")
+            self.log(f"[Vimaan] ERROR loading model: {str(e)}")
             raise
 
         self.intent_to_command = {
@@ -54,9 +57,49 @@ class VimaaNCoPilot:
 
         self._load_label_maps()
 
+    def _setup_custom_logging(self):
+        try:
+            desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+            self.log_folder = os.path.join(desktop_path, "Vimaan_Logs")
+            
+            if not os.path.exists(self.log_folder):
+                os.makedirs(self.log_folder)
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.log_file = os.path.join(self.log_folder, f"vimaan_plugin_{timestamp}.log")
+            
+            logging.basicConfig(
+                level=logging.DEBUG,
+                format='%(asctime)s - %(levelname)s - %(message)s',
+                handlers=[
+                    logging.FileHandler(self.log_file, mode='w', encoding='utf-8'),
+                    logging.StreamHandler()
+                ]
+            )
+            
+            self.logger = logging.getLogger('VimaaNCoPilot')
+            self.logger.info(f"=== VIMAAN AI COPILOT LOG START ===")
+            self.logger.info(f"Log file: {self.log_file}")
+            self.logger.info(f"Plugin directory: {os.path.dirname(__file__)}")
+            self.log(f"[Vimaan] Custom log created: {self.log_file}")
+            
+        except Exception as e:
+            self.log_file = None
+            self.logger = None
+            self.log(f"[Vimaan] Failed to setup custom logging: {str(e)}")
+
+    def log(self, message):
+        formatted_msg = f"[Vimaan] {message}"
+        
+        self.log(formatted_msg)
+        
+        if self.logger:
+            self.logger.info(message)
+
+
     def _load_model(self):
         model_path = get_latest_model_path()
-        xp.log(f"[Vimaan] Loading model from: {model_path}")
+        self.log(f"[Vimaan] Loading model from: {model_path}")
         
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model not found at {model_path}")
@@ -70,7 +113,7 @@ class VimaaNCoPilot:
                                                map_location=self.device))
         self.model.to(self.device)
         self.model.eval()
-        xp.log("[Vimaan] Model loaded and set to eval mode")
+        self.log("[Vimaan] Model loaded and set to eval mode")
 
     def _load_label_maps(self):
         self.intent_map = {
@@ -142,7 +185,7 @@ class VimaaNCoPilot:
 
     def OnPressCallback(self, inRefcon):
         if not self.isRecording:
-            xp.log("[Vimaan] Recording started...")
+            self.log("[Vimaan] Recording started...")
             xp.speakString("Listening")
             self.isRecording = True
             try:
@@ -150,34 +193,34 @@ class VimaaNCoPilot:
                 self.recognizer.adjust_for_ambient_noise(self.source, duration=0.5)
                 self.audioData = self.recognizer.listen(self.source, timeout=None, phrase_time_limit=None)
             except Exception as e:
-                xp.log(f"[Vimaan] Error during recording: {str(e)}")
+                self.log(f"[Vimaan] Error during recording: {str(e)}")
                 xp.speakString("Microphone error")
 
     def OnReleaseCallback(self, inRefcon):
         if self.isRecording:
-            xp.log("[Vimaan] Recording stopped. Processing...")
+            self.log("[Vimaan] Recording stopped. Processing...")
             xp.speakString("Processing")
             self.isRecording = False
             self.microphone.__exit__(None, None, None)
 
             try:
                 text = self.recognizer.recognize_google(self.audioData)
-                xp.log(f"[Vimaan] Recognized text: {text}")
+                self.log(f"[Vimaan] Recognized text: {text}")
                 self.ExecuteCommand(text)
             except sr.UnknownValueError:
-                xp.log("[Vimaan] Speech not recognized")
+                self.log("[Vimaan] Speech not recognized")
                 xp.speakString("I could not understand you")
             except sr.RequestError as e:
-                xp.log(f"[Vimaan] Google Speech API error: {str(e)}")
+                self.log(f"[Vimaan] Google Speech API error: {str(e)}")
                 xp.speakString("Recognition service failed")
             except Exception as e:
-                xp.log(f"[Vimaan] Unexpected error: {str(e)}")
+                self.log(f"[Vimaan] Unexpected error: {str(e)}")
                 xp.speakString("An error occurred")
 
     def ExecuteCommand(self, text: str):
         try:
             normalized_text = normalize_aviation_input(text.lower())
-            xp.log(f"[Vimaan] Normalized text: {normalized_text}")
+            self.log(f"[Vimaan] Normalized text: {normalized_text}")
             
             with torch.no_grad():
                 from transformers import DistilBertTokenizerFast
@@ -193,25 +236,25 @@ class VimaaNCoPilot:
                 intent_idx = torch.argmax(intent_logits, dim=1).item()
                 intent_name = self.intent_map.get(intent_idx, "none")
                 
-                xp.log(f"[Vimaan] Predicted Intent: {intent_name} (confidence: {intent_logits[0, intent_idx].item():.2f})")
+                self.log(f"[Vimaan] Predicted Intent: {intent_name} (confidence: {intent_logits[0, intent_idx].item():.2f})")
                 
                 if slot_logits is not None:
                     slot_predictions = torch.argmax(slot_logits, dim=2)
                     slots = postprocess_slots(slot_predictions[0].cpu().numpy(), self.slot_map)
-                    xp.log(f"[Vimaan] Extracted Slots: {slots}")
+                    self.log(f"[Vimaan] Extracted Slots: {slots}")
                 else:
                     slots = {}
             
             if intent_name in self.intent_to_command and intent_name != "none":
                 handler = self.intent_to_command[intent_name]
                 handler(slots)
-                xp.log(f"[Vimaan] Command executed: {intent_name}")
+                self.log(f"[Vimaan] Command executed: {intent_name}")
             else:
-                xp.log(f"[Vimaan] Intent '{intent_name}' not recognized")
+                self.log(f"[Vimaan] Intent '{intent_name}' not recognized")
                 xp.speakString("Command not found")
                 
         except Exception as e:
-            xp.log(f"[Vimaan] Error executing command: {str(e)}")
+            self.log(f"[Vimaan] Error executing command: {str(e)}")
             xp.speakString("Command execution failed")
     
     def _set_heading(self, slots):
