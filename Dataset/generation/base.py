@@ -1,8 +1,14 @@
 import itertools
 import json
 import random
-from pathlib import Path
 from typing import Any, Dict, List
+
+import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
 
 from Dataset.input.config import SCHEMA
 
@@ -76,21 +82,19 @@ def save_dataset(dataset: List[Dict[str, Any]], output_path: Path) -> None:
         for entry in dataset:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
-    print(f"✅ Saved dataset → {output_path.resolve()}")
+    print(f"✅ Save Location → {output_path.resolve()}\n")
 
 
 # ---------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------
 def main() -> None:
-    print("🚀 Generating base dataset...")
+    print("\n🚀 Generating Base Dataset.....")
     base_data = generate_dataset(SCHEMA)
     unique_data = deduplicate_dataset(base_data)
-    print(f"✅ Base dataset: {len(unique_data)} unique commands")
+    print(f"✅ Base Dataset: {len(unique_data)} Unique Rule Based Commands.")
 
     save_dataset(unique_data, OUTPUT_FILE)
-    print(f"✅ Final dataset size (with paraphrases): {len(unique_data)}")
-
 
 if __name__ == "__main__":
     main()
