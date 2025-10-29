@@ -28,3 +28,6 @@ __all__ = [
     'extract_numbers_from_text',
     'JointIntentAndSlotModel'
 ]
+
+from core.model_loader import ModelLoader
+from core.inference import predict, extract_slots, reconstruct_slot_value
