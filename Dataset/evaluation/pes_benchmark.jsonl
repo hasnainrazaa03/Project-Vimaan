@@ -1,0 +1,12 @@
+{
+  "base": {
+    "Semantic_Similarity": 0.6034,
+    "Fluency": 0.0041,
+    "Lexical_Diversity": 0.0149
+  },
+  "augmented": {
+    "Semantic_Similarity": 0.5497,
+    "Fluency": 0.0077,
+    "Lexical_Diversity": 0.0383
+  }
+}
