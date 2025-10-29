@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+### Version: 0.9.0
+**ID:** 07c4937
+**Date:** 2025-10-28
+**Module:** Code Architecture - Modular Refactoring & Code Quality
+**Author:** Mohammad Hasnain Raza
+
+
+#### Description of Change:
+- **Modular Architecture Refactoring**: Extracted model loading and inference logic into separate, reusable modules for improved code maintainability and testability.
+    - Created `ML/core/model_loader.py` with `ModelLoader` class: Centralizes all model loading operations (maps, weights, tokenizer, device management).
+    - Created `ML/core/inference.py` with `predict()` function: Unified inference pipeline with slot extraction and post-processing.
+    - Refactored `PIxplanevimaancopilot.py`: Uses new modules instead of inline model loading, reducing plugin code by 40% (~100 lines removed).
+    - Updated `predict.py` and `command_tester.py`: Migrated to use `ModelLoader` and `predict()` function for consistency.
+    - Updated `ML/core/__init__.py`: Added exports for new modules ensuring unified import interface.
+- **Enhanced Diagnostics**: Added detailed logging of model path, device type, and model dimensions (intents/slots) across all scripts.
+- **Code Quality Improvements**: Separated concerns (model loading vs inference vs plugin logic) for easier debugging, testing, and future enhancements.
+
+
+#### Test Results:
+- **Plugin Testing**: 5/5 real-time voice commands executed successfully (toggle_landing_gear, toggle_flaps, set_autopilot_heading, set_autopilot_altitude, set_flight_level).
+- **Automated Testing** (command_tester.py): 34/35 tests passing (97% accuracy) with 100% confidence on supported intents.
+- **Interactive Testing** (predict.py): Fully functional command-line interface with all features working correctly.
+
+
+#### Files Modified:
+- `ML/core/model_loader.py` (NEW)
+- `ML/core/inference.py` (NEW)
+- `PIxplanevimaancopilot.py` (40% code reduction)
+- `predict.py` (refactored for new modules)
+- `command_tester.py` (refactored for new modules)
+- `ML/core/__init__.py` (updated imports)
+
+
+#### Enhancement Over Previous Version (v0.8.0):
+- **Professional Codebase**: Modular architecture follows industry best practices for scalability and maintainability.
+- **Improved Testability**: Model loading and inference logic can now be tested independently from X-Plane plugin context.
+- **Code Reusability**: Same model loading and prediction logic used across plugin, CLI tools, and test scripts (DRY principle).
+- **Easier Debugging**: Separated concerns make it simpler to identify and fix issues in specific components.
+- **Future-Ready**: New modules provide clean interfaces for adding new intents, improving model, or integrating with other systems.
+
+---
+
 ### Version: 0.8.0
 **ID:** 7d71565
 **Date:** 2025-10-28
