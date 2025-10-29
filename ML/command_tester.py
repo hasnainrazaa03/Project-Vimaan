@@ -62,7 +62,11 @@ def test_commands():
     print("Loading model...")
     loader = ModelLoader(device)
     results = loader.load_all()
+<<<<<<< HEAD
     print(f"Model loaded from: {results['model']['model_path']}")
+=======
+    print(f"Model loaded from: {results['model']['model_path']}")  # <-- Add this line!
+>>>>>>> f53ca7a4743943b893bab0fd55a25dbba1d880ee
     print(f"Intents: {results['maps']['intents']}, Slots: {results['maps']['slots']}\n")
     print("Model loaded!\n")
     
