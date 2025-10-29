@@ -4,16 +4,13 @@ import random
 from pathlib import Path
 from typing import Any, Dict, List
 
-from config import SCHEMA  # your schema.py file
-from parrot import Parrot
-import torch
+from Dataset.input.config import SCHEMA
 
 
 # ---------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------
-OUTPUT_FILE = Path("./Data/aviation_cmds.jsonl")
-RANDOM_SEED = 42
+OUTPUT_FILE = Path("./Dataset/output/base_cmds.jsonl")
 
 PREFIX_PHRASES = ["", "please", "hey", "could you"]
 SUFFIX_PHRASES = ["", "for me"]
@@ -28,7 +25,7 @@ TEMPLATE_PATTERNS = [
 # Dataset Generation
 # ---------------------------------------------------------------------
 def generate_dataset(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
-    random.seed(RANDOM_SEED)
+    random.seed(42)
     records: List[Dict[str, Any]] = []
 
     for intent_name, intent_data in schema.items():
@@ -71,30 +68,6 @@ def deduplicate_dataset(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------
-# Parrot Paraphrasing
-# ---------------------------------------------------------------------
-def augment_with_paraphrases(dataset: List[Dict[str, Any]], num_paraphrases: int = 2) -> List[Dict[str, Any]]:
-    """
-    Generate paraphrases for each dataset entry using the Parrot paraphraser.
-    """
-    parrot = Parrot(model_tag="prithivida/parrot_paraphraser_on_T5", use_gpu=torch.cuda.is_available())
-
-    augmented = []
-    for entry in dataset:
-        try:
-            results = parrot.augment(input_phrase=entry["text"], use_gpu=torch.cuda.is_available(), do_diverse=True)
-            if results:
-                for paraphrase, _ in results[:num_paraphrases]:
-                    augmented.append(
-                        {"text": paraphrase, "intent": entry["intent"], "slots": entry["slots"]}
-                    )
-        except Exception as e:
-            print(f"⚠️ Paraphrasing failed for: {entry['text']} ({e})")
-
-    return deduplicate_dataset(dataset + augmented)
-
-
-# ---------------------------------------------------------------------
 # Save to JSONL
 # ---------------------------------------------------------------------
 def save_dataset(dataset: List[Dict[str, Any]], output_path: Path) -> None:
@@ -115,12 +88,8 @@ def main() -> None:
     unique_data = deduplicate_dataset(base_data)
     print(f"✅ Base dataset: {len(unique_data)} unique commands")
 
-    print("✨ Generating paraphrases with Parrot...")
-    final_dataset = augment_with_paraphrases(unique_data, num_paraphrases=2)
-
-    print(f"✅ Final dataset size (with paraphrases): {len(final_dataset)}")
-
-    save_dataset(final_dataset, OUTPUT_FILE)
+    save_dataset(unique_data, OUTPUT_FILE)
+    print(f"✅ Final dataset size (with paraphrases): {len(unique_data)}")
 
 
 if __name__ == "__main__":
