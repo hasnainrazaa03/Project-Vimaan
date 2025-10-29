@@ -1,16 +1,18 @@
 import json
 import os
+import sys
 from collections import defaultdict, Counter
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
 from utils import find_latest_version_path
 
 def analyze_dataset(dataset_path):
-    """Analyze the dataset and print a comprehensive summary."""
     
     print("=" * 80)
     print("DATASET ANALYSIS SUMMARY")
     print("=" * 80)
     
-    # Load dataset
     print(f"\nLoading dataset from: {dataset_path}")
     with open(dataset_path, "r") as f:
         data = [json.loads(line) for line in f]
@@ -18,7 +20,6 @@ def analyze_dataset(dataset_path):
     total_examples = len(data)
     print(f"Total examples: {total_examples}\n")
     
-    # Intent analysis
     print("-" * 80)
     print("INTENT DISTRIBUTION")
     print("-" * 80)
@@ -32,7 +33,6 @@ def analyze_dataset(dataset_path):
         bar = "█" * bar_length
         print(f"{intent:40s} | {count:6d} ({percentage:5.1f}%) {bar}")
     
-    # Slot analysis
     print("\n" + "-" * 80)
     print("SLOT DISTRIBUTION")
     print("-" * 80)
@@ -43,7 +43,6 @@ def analyze_dataset(dataset_path):
     for item in data:
         for slot_name, slot_value in item.get('slots', {}).items():
             slot_counts[slot_name] += 1
-            # Store up to 3 examples for each slot
             if len(slot_examples[slot_name]) < 3:
                 slot_examples[slot_name].append(str(slot_value))
     
@@ -56,7 +55,6 @@ def analyze_dataset(dataset_path):
         print(f"  Occurrences: {count} ({percentage:.1f}%)")
         print(f"  Example values: {examples}")
     
-    # Intent-Slot combinations
     print("\n" + "-" * 80)
     print("INTENT-SLOT COMBINATIONS")
     print("-" * 80)
@@ -75,7 +73,6 @@ def analyze_dataset(dataset_path):
             count = intent_slot_combinations[intent][slot_name]
             print(f"  - {slot_name}: {count}")
     
-    # Command text analysis
     print("\n" + "-" * 80)
     print("TEXT STATISTICS")
     print("-" * 80)
@@ -89,7 +86,6 @@ def analyze_dataset(dataset_path):
     print(f"Min length: {min_length} words")
     print(f"Max length: {max_length} words")
     
-    # Slots per example
     print("\n" + "-" * 80)
     print("SLOTS PER EXAMPLE DISTRIBUTION")
     print("-" * 80)
@@ -100,7 +96,6 @@ def analyze_dataset(dataset_path):
         percentage = (count / total_examples) * 100
         print(f"  {num_slots} slots: {count:6d} examples ({percentage:5.1f}%)")
     
-    # Sample examples
     print("\n" + "-" * 80)
     print("SAMPLE EXAMPLES")
     print("-" * 80)
@@ -122,7 +117,7 @@ def analyze_dataset(dataset_path):
 
 if __name__ == "__main__":
     script_dir = os.path.dirname(__file__)
-    DATA_DIR = os.path.join(script_dir, "datasets", "05_final_merged")
+    DATA_DIR = os.path.join(script_dir, "..", "datasets", "05_final_merged")
     BASE_FILENAME = os.path.join(DATA_DIR, "aviation_cmds_final_training_set.jsonl")
     
     print(f"Searching for the latest dataset in '{DATA_DIR}'...")

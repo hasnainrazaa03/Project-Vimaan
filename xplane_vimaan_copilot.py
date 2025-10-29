@@ -4,6 +4,7 @@ import speech_recognition as sr
 from XPPython3 import xp
 import logging
 from datetime import datetime
+import json
 
 import sys
 ml_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ML")
@@ -12,7 +13,7 @@ sys.path.insert(0, ml_path)
 from core import normalize_aviation_input, JointIntentAndSlotModel, postprocess_slots
 from utils import get_latest_model_path
 
-class VimaaNCoPilot:
+class PythonInterface:
     
     def __init__(self):
         self.Name = "Vimaan AI CoPilot"
@@ -25,7 +26,13 @@ class VimaaNCoPilot:
         self.hotkeyRelease = None
 
         self.recognizer = sr.Recognizer()
-        self.microphone = sr.Microphone()
+        
+        try:
+            self.microphone = sr.Microphone()
+        except AttributeError:
+            self.microphone = None
+            self.log("WARNING: PyAudio not available - microphone may not work")
+
         self.isRecording = False
         self.audioData = None
         
@@ -37,6 +44,15 @@ class VimaaNCoPilot:
             self.log("[Vimaan] Model loaded successfully!")
         except Exception as e:
             self.log(f"[Vimaan] ERROR loading model: {str(e)}")
+            raise
+
+        try:
+            from transformers import DistilBertTokenizerFast
+            model_path = get_latest_model_path()
+            self.tokenizer = DistilBertTokenizerFast.from_pretrained(model_path)
+            self.log(f"[Vimaan] Tokenizer loaded successfully!")
+        except Exception as e:
+            self.log(f"[Vimaan] ERROR loading tokenizer: {str(e)}")
             raise
 
         self.intent_to_command = {
@@ -90,8 +106,10 @@ class VimaaNCoPilot:
 
     def log(self, message):
         formatted_msg = f"[Vimaan] {message}"
-        
-        self.log(formatted_msg)
+        try:
+            xp.log(formatted_msg)
+        except:
+            pass
         
         if self.logger:
             self.logger.info(message)
@@ -104,55 +122,42 @@ class VimaaNCoPilot:
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model not found at {model_path}")
         
-        self.model = JointIntentAndSlotModel(
-            num_intents=22,
-            num_slots=10,
-            device=self.device
-        )
-        self.model.load_state_dict(torch.load(os.path.join(model_path, "model.pt"), 
-                                               map_location=self.device))
-        self.model.to(self.device)
+        with open(f"{model_path}/intent_map.json", "r") as f:
+            self.intent_map = json.load(f)
+        
+        with open(f"{model_path}/slot_map.json", "r") as f:
+            self.slot_map = json.load(f)
+        
+        self.intent_map_rev = {v: k for k, v in self.intent_map.items()}
+        self.slot_map_rev = {v: k for k, v in self.slot_map.items()}
+        
+        num_intents = len(self.intent_map)
+        num_slots = len(self.slot_map)
+        
+        self.log(f"[Vimaan] Loaded intent map: {num_intents} intents")
+        self.log(f"[Vimaan] Loaded slot map: {num_slots} slots")
+        
+        self.model = JointIntentAndSlotModel(num_intents=num_intents, num_slots=num_slots)
+
+        from transformers import DistilBertForTokenClassification
+        self.model.bert_for_slots = DistilBertForTokenClassification.from_pretrained(model_path)
+        self.log(f"[Vimaan] Loaded bert_for_slots from pretrained")
+        
+        intent_classifier_path = os.path.join(model_path, "intent_classifier.bin")
+        if os.path.exists(intent_classifier_path):
+            self.log(f"[Vimaan] Loading intent classifier")
+            intent_classifier_state = torch.load(intent_classifier_path, map_location=self.device)
+            self.model.intent_classifier.load_state_dict(intent_classifier_state)
+            self.log(f"[Vimaan] Intent classifier loaded successfully")
+        else:
+            self.log(f"[Vimaan] WARNING: Intent classifier not found")
+        
+        self.model = self.model.to(self.device)
         self.model.eval()
-        self.log("[Vimaan] Model loaded and set to eval mode")
+        self.log("[Vimaan] Model moved to device and set to eval mode")
 
     def _load_label_maps(self):
-        self.intent_map = {
-            0: "set_autopilot_heading",
-            1: "set_autopilot_altitude",
-            2: "set_flight_level",
-            3: "toggle_landing_gear",
-            4: "toggle_flaps",
-            5: "toggle_autopilot_1",
-            6: "toggle_autopilot_2",
-            7: "toggle_flight_director_1",
-            8: "toggle_flight_director_2",
-            9: "toggle_parking_brake",
-            10: "toggle_engine_1",
-            11: "toggle_engine_2",
-            12: "set_com_frequency",
-            13: "ask_time",
-            14: "ask_status",
-            15: "chit_chat_greeting",
-            16: "none",
-            17: "none",
-            18: "none",
-            19: "none",
-            20: "none",
-            21: "none",
-        }
-        
-        self.slot_map = {
-            0: "degrees",
-            1: "altitude",
-            2: "flight_level",
-            3: "state",
-            4: "com_port",
-            5: "frequency",
-            6: "O",
-            7: "O",
-            8: "O",
-            9: "O",
-        }
+        self.log(f"[Vimaan] Label maps verified: {len(self.intent_map)} intents, {len(self.slot_map)} slots")
 
     def XPluginStart(self):
         self.hotkeyPress = xp.registerHotKey(
@@ -185,6 +190,11 @@ class VimaaNCoPilot:
 
     def OnPressCallback(self, inRefcon):
         if not self.isRecording:
+            if self.microphone is None:
+                self.log("[Vimaan] Microphone not available")
+                xp.speakString("Microphone not available")
+                return
+            
             self.log("[Vimaan] Recording started...")
             xp.speakString("Listening")
             self.isRecording = True
@@ -217,45 +227,102 @@ class VimaaNCoPilot:
                 self.log(f"[Vimaan] Unexpected error: {str(e)}")
                 xp.speakString("An error occurred")
 
+    def reconstruct_slot_value(self, tokens):
+        if not tokens:
+            return ""
+        
+        reconstructed = ""
+        
+        for i, token in enumerate(tokens):
+            clean_token = token.replace("##", "")
+            
+            if clean_token == ".":
+                reconstructed += clean_token
+            elif token.startswith("##"):
+                reconstructed += clean_token
+            else:
+                if i == 0:
+                    reconstructed = clean_token
+                else:
+                    reconstructed += " " + clean_token
+        
+        return reconstructed.strip()
+
     def ExecuteCommand(self, text: str):
         try:
-            normalized_text = normalize_aviation_input(text.lower())
-            self.log(f"[Vimaan] Normalized text: {normalized_text}")
+            text_normalized = normalize_aviation_input(text)
+            self.log(f"[Vimaan] Normalized text: {text_normalized}")
+            
+            encoding = self.tokenizer(
+                text_normalized,
+                padding='max_length',
+                truncation=True,
+                max_length=64,
+                return_tensors='pt'
+            )
+            input_ids = encoding['input_ids'].to(self.device)
+            attention_mask = encoding['attention_mask'].to(self.device)
             
             with torch.no_grad():
-                from transformers import DistilBertTokenizerFast
-                tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
-                
-                inputs = tokenizer(normalized_text, return_tensors="pt", padding=True, truncation=True, max_length=128)
-                
-                input_ids = inputs['input_ids'].to(self.device)
-                attention_mask = inputs['attention_mask'].to(self.device)
-                
                 _, intent_logits, slot_logits = self.model(input_ids, attention_mask)
-                
-                intent_idx = torch.argmax(intent_logits, dim=1).item()
-                intent_name = self.intent_map.get(intent_idx, "none")
-                
-                self.log(f"[Vimaan] Predicted Intent: {intent_name} (confidence: {intent_logits[0, intent_idx].item():.2f})")
-                
-                if slot_logits is not None:
-                    slot_predictions = torch.argmax(slot_logits, dim=2)
-                    slots = postprocess_slots(slot_predictions[0].cpu().numpy(), self.slot_map)
-                    self.log(f"[Vimaan] Extracted Slots: {slots}")
-                else:
-                    slots = {}
             
-            if intent_name in self.intent_to_command and intent_name != "none":
-                handler = self.intent_to_command[intent_name]
+            intent_pred_idx = torch.argmax(intent_logits, dim=1).item()
+            intent_pred = self.intent_map_rev[intent_pred_idx]
+            
+            slot_pred_indices = torch.argmax(slot_logits, dim=2)[0].cpu().numpy()
+            tokens = self.tokenizer.convert_ids_to_tokens(input_ids[0].cpu().numpy())
+            
+            extracted_slots = {}
+            current_slot_name = None
+            current_slot_tokens = []
+            
+            for token, slot_idx in zip(tokens, slot_pred_indices):
+                if token in ['[CLS]', '[SEP]', '[PAD]']:
+                    continue
+                
+                slot_name_bio = self.slot_map_rev.get(int(slot_idx), 'O')
+                
+                if slot_name_bio.startswith("B-"):
+                    if current_slot_name and current_slot_tokens:
+                        extracted_slots[current_slot_name] = self.reconstruct_slot_value(current_slot_tokens)
+                    
+                    current_slot_name = slot_name_bio[2:]
+                    current_slot_tokens = [token]
+                
+                elif slot_name_bio.startswith("I-") and current_slot_name:
+                    slot_name_from_tag = slot_name_bio[2:]
+                    if slot_name_from_tag == current_slot_name:
+                        current_slot_tokens.append(token)
+                
+                else:
+                    if current_slot_name and current_slot_tokens:
+                        extracted_slots[current_slot_name] = self.reconstruct_slot_value(current_slot_tokens)
+                        current_slot_name = None
+                        current_slot_tokens = []
+            
+            if current_slot_name and current_slot_tokens:
+                extracted_slots[current_slot_name] = self.reconstruct_slot_value(current_slot_tokens)
+            
+            slots = postprocess_slots(extracted_slots, text_normalized, intent_pred)
+            
+            self.log(f"[Vimaan] Predicted Intent: {intent_pred}")
+            self.log(f"[Vimaan] Extracted Slots: {slots}")
+            
+            if intent_pred in self.intent_to_command and intent_pred != "None":
+                handler = self.intent_to_command[intent_pred]
                 handler(slots)
-                self.log(f"[Vimaan] Command executed: {intent_name}")
+                self.log(f"[Vimaan] Command executed: {intent_pred}")
+                xp.speakString("Command executed")
             else:
-                self.log(f"[Vimaan] Intent '{intent_name}' not recognized")
+                self.log(f"[Vimaan] Intent '{intent_pred}' not recognized")
                 xp.speakString("Command not found")
                 
         except Exception as e:
             self.log(f"[Vimaan] Error executing command: {str(e)}")
+            import traceback
+            self.log(f"[Vimaan] Traceback: {traceback.format_exc()}")
             xp.speakString("Command execution failed")
+
     
     def _set_heading(self, slots):
         degrees = slots.get('degrees', None)
