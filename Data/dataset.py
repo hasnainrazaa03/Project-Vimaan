@@ -1,160 +1,127 @@
-import json
 import itertools
+import json
 import random
+from pathlib import Path
+from typing import Any, Dict, List
 
-# -----------------------------
-# 1. Seed commands per intent
-# -----------------------------
-# seed_commands = {
-#     "GEAR_UP": ["gear up", "raise landing gear", "retract landing gear"],
-#     "GEAR_DOWN": ["gear down", "lower landing gear", "drop landing gear", "extend landing gear"],
-#     "FLAPS_UP": ["flaps up", "raise flaps"],
-#     "FLAPS_DOWN": ["flaps down", "lower flaps"],
-#     "AUTOPILOT_1_ON": ["autopilot 1 on", "engage autopilot 1"],
-#     "AUTOPILOT_1_OFF": ["autopilot 1 off", "disengage autopilot 1"],
-#     "AUTOPILOT_2_ON": ["autopilot 2 on", "engage autopilot 2"],
-#     "AUTOPILOT_2_OFF": ["autopilot 2 off", "disengage autopilot 2"],
-#     "FLIGHT_DIRECTOR_1_ON": ["flight director 1 on", "enable flight director 1"],
-#     "FLIGHT_DIRECTOR_1_OFF": ["flight director 1 off", "disable flight director 1"],
-#     "FLIGHT_DIRECTOR_2_ON": ["flight director 2 on", "enable flight director 2"],
-#     "FLIGHT_DIRECTOR_2_OFF": ["flight director 2 off", "disable flight director 2"],
-#     "PARKING_BRAKE_ON": ["parking brake on", "engage parking brake"],
-#     "PARKING_BRAKE_OFF": ["parking brake off", "release parking brake"],
-#     "ENGINE_1_ON": ["engine 1 on", "start engine 1"],
-#     "ENGINE_1_OFF": ["engine 1 off", "stop engine 1"],
-#     "ENGINE_2_ON": ["engine 2 on", "start engine 2"],
-#     "ENGINE_2_OFF": ["engine 2 off", "stop engine 2"]
-# }
+from config import SCHEMA  # your schema.py file
+from parrot import Parrot
+import torch
 
-SCHEMA = {
-    "LANDING_GEAR": {
-        "base_cmds": [
-            "gear {state}",
-            "landing gear {state}",
-            "{state} gear",
-            "{state} landing gear",
-        ],
-        "slots": {
-            "state": {
-                "type": "categorical",
-                "values": {
-                    "UP": ["up", "raise", "retract"],
-                    "DOWN": ["down", "drop", "extend"]
-                }
-            }
-        }
-    },
-}
 
-# -----------------------------
-# 2. prefixes/suffixes
-# -----------------------------
-PREFIXES = ["", "please", "hey", "could you", "request"]
-SUFFIXES = ["", "now", "immediately", "for me"]
+# ---------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------
+OUTPUT_FILE = Path("./Data/aviation_cmds.jsonl")
+RANDOM_SEED = 42
 
-# -----------------------------
-# 3. Templates
-# -----------------------------
-templates = [
+PREFIX_PHRASES = ["", "please", "hey", "could you"]
+SUFFIX_PHRASES = ["", "for me"]
+TEMPLATE_PATTERNS = [
     "{prefix} {command} {suffix}",
     "{command} {suffix}",
     "{prefix} {command}",
-    "{command}"
+    "{command}",
 ]
 
-# -----------------------------
-# 4. Generate dataset
-# -----------------------------
-# dataset = []
-# for intent, commands in seed_commands.items():
-#     for cmd in commands:
-#         for tpl in templates:
-#             for prefix in prefixes:
-#                 for suffix in suffixes:
-#                     text = tpl.format(command=cmd, prefix=prefix, suffix=suffix)
-#                     text = " ".join(text.split())  # clean extra spaces
-#                     dataset.append({"text": text, "intent": intent, "slots": {}})
+# ---------------------------------------------------------------------
+# Dataset Generation
+# ---------------------------------------------------------------------
+def generate_dataset(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
+    random.seed(RANDOM_SEED)
+    records: List[Dict[str, Any]] = []
 
-dataset = []
+    for intent_name, intent_data in schema.items():
+        command_templates = intent_data["command_templates"]
+        slot_definitions = intent_data["slots"]
 
-for intent, data in SCHEMA.items():
-    base_cmds = data["base_cmds"]
-    slot_defs = data["slots"]
+        for slot_name, slot_info in slot_definitions.items():
+            for canonical_value, synonyms in slot_info["values"].items():
+                for synonym in synonyms:
+                    combinations = itertools.product(
+                        PREFIX_PHRASES, SUFFIX_PHRASES, TEMPLATE_PATTERNS, command_templates
+                    )
 
-    for slot_name, slot_info in slot_defs.items():
-        for canonical_value, synonyms in slot_info["values"].items():
-            for synonym in synonyms:
-                for tpl in base_cmds:
-                    for prefix in PREFIXES:
-                        for suffix in SUFFIXES:
-                            text = tpl.format(state=synonym, prefix=prefix, suffix=suffix)
-                            text = " ".join(text.split())
-                            dataset.append({
+                    for prefix, suffix, template, base_cmd in combinations:
+                        cmd_text = base_cmd.format(**{slot_name: synonym})
+                        text = template.format(prefix=prefix, command=cmd_text, suffix=suffix)
+                        text = " ".join(text.split())
+
+                        records.append(
+                            {
                                 "text": text,
-                                "intent": intent,
-                                "slots": {slot_name: canonical_value}
-                            })
+                                "intent": intent_name,
+                                "slots": {slot_name: canonical_value},
+                            }
+                        )
+    return records
 
-# dataset = set()
 
-# for intent, data in SCHEMA.items():
-#     base_cmds = data["base_cmds"]
-#     slot_defs = data["slots"]
+# ---------------------------------------------------------------------
+# Deduplication
+# ---------------------------------------------------------------------
+def deduplicate_dataset(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen = set()
+    unique = []
+    for r in records:
+        if r["text"] not in seen:
+            seen.add(r["text"])
+            unique.append(r)
+    return unique
 
-#     for slot_name, slot_info in slot_defs.items():
-#         for canonical_value, synonyms in slot_info["values"].items():
-#             for synonym, prefix, suffix, tpl in itertools.product(
-#                 synonyms, PREFIXES, SUFFIXES, base_cmds
-#             ):
-#                 text = tpl.format(
-#                     state=synonym,
-#                     prefix=prefix.strip(),
-#                     suffix=suffix.strip(),
-#                 )
-#                 text = " ".join(text.split())
-#                 dataset.add(json.dumps({
-#                     "text": text,
-#                     "intent": intent,
-#                     "slots": {slot_name: canonical_value}
-#                 }))
 
-# # convert back to list of dicts
-# dataset = [json.loads(item) for item in dataset]
+# ---------------------------------------------------------------------
+# Parrot Paraphrasing
+# ---------------------------------------------------------------------
+def augment_with_paraphrases(dataset: List[Dict[str, Any]], num_paraphrases: int = 2) -> List[Dict[str, Any]]:
+    """
+    Generate paraphrases for each dataset entry using the Parrot paraphraser.
+    """
+    parrot = Parrot(model_tag="prithivida/parrot_paraphraser_on_T5", use_gpu=torch.cuda.is_available())
 
-# for intent, details in SCHEMA.items():
-#     print(f"Generating examples for intent: {intent}...")
-    
-#     for i in range(200):
-#         template = random.choice(details["templates"])
-        
-#         filled_template = template
-#         slots_data = {}
-#         for slot_name, slot_details in details["slots"].items():
-#             slot_value = random.choice(slot_details["values"])
-
-#             slots_data[slot_name] = slot_value
-            
-#             placeholder = "{" + slot_name + "}"
-#             filled_template = filled_template.replace(placeholder, slot_value)
-
-#         text = f"{random.choice(PREFIXES)} {filled_template} {random.choice(SUFFIXES)}".strip()
-#         text = " ".join(text.split())
-
-#         dataset_entry = {
-#             "text": text,
-#             "intent": intent,
-#             "slots": slots_data
-#         }
-#         dataset.append(dataset_entry)
-            
-
-random.shuffle(dataset)
-
-# -----------------------------
-# 5. Write to JSONL
-# -----------------------------
-with open("./Dataset/Aryan/aviation_cmds.jsonl", "w") as f:
+    augmented = []
     for entry in dataset:
-        f.write(json.dumps(entry) + "\n")
+        try:
+            results = parrot.augment(input_phrase=entry["text"], use_gpu=torch.cuda.is_available(), do_diverse=True)
+            if results:
+                for paraphrase, _ in results[:num_paraphrases]:
+                    augmented.append(
+                        {"text": paraphrase, "intent": entry["intent"], "slots": entry["slots"]}
+                    )
+        except Exception as e:
+            print(f"⚠️ Paraphrasing failed for: {entry['text']} ({e})")
 
-print(f"Generated {len(dataset)} boolean command variations in boolean_commands_dataset.jsonl")
+    return deduplicate_dataset(dataset + augmented)
+
+
+# ---------------------------------------------------------------------
+# Save to JSONL
+# ---------------------------------------------------------------------
+def save_dataset(dataset: List[Dict[str, Any]], output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as f:
+        for entry in dataset:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    print(f"✅ Saved dataset → {output_path.resolve()}")
+
+
+# ---------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------
+def main() -> None:
+    print("🚀 Generating base dataset...")
+    base_data = generate_dataset(SCHEMA)
+    unique_data = deduplicate_dataset(base_data)
+    print(f"✅ Base dataset: {len(unique_data)} unique commands")
+
+    print("✨ Generating paraphrases with Parrot...")
+    final_dataset = augment_with_paraphrases(unique_data, num_paraphrases=2)
+
+    print(f"✅ Final dataset size (with paraphrases): {len(final_dataset)}")
+
+    save_dataset(final_dataset, OUTPUT_FILE)
+
+
+if __name__ == "__main__":
+    main()
