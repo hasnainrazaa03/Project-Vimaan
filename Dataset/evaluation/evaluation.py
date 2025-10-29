@@ -164,10 +164,80 @@ if __name__ == "__main__":
 
     print(tabulate(rows, headers=["Metric", "Base", "Augmented", "Change", "Status"], tablefmt="fancy_grid"))
 
-    # Save results
-    out_path = Path(r"D:\Project-Vimaan\Dataset\evaluation\pes_benchmark.jsonl")
+    # Save results JSON
+    out_path = Path(r"D:\Project-Vimaan\Dataset\evaluation\pes_benchmark.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump({"base": base_results, "augmented": aug_results}, f, indent=2)
 
     print(f"\n✅ Comparison complete → {out_path.resolve()}")
+
+    # ------------------------------------------------------------------
+    # HTML Report Generation
+    # ------------------------------------------------------------------
+    html_path = Path(r"D:\Project-Vimaan\Dataset\evaluation\pes_report.html")
+
+    html_content = f"""
+    <html>
+    <head>
+        <title>Project Vimaan - PES Benchmark Report</title>
+        <style>
+            body {{
+                font-family: 'Segoe UI', sans-serif;
+                background: #f8f9fa;
+                color: #333;
+                padding: 40px;
+            }}
+            h1 {{
+                color: #222;
+                margin-bottom: 10px;
+            }}
+            h3 {{
+                color: #444;
+                margin-top: 0;
+            }}
+            table {{
+                border-collapse: collapse;
+                width: 80%;
+                margin-top: 20px;
+                box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            }}
+            th, td {{
+                border: 1px solid #ddd;
+                padding: 10px;
+                text-align: center;
+            }}
+            th {{
+                background-color: #333;
+                color: white;
+            }}
+            tr:nth-child(even) {{
+                background-color: #f2f2f2;
+            }}
+            .positive {{ color: green; font-weight: bold; }}
+            .neutral {{ color: gray; font-weight: bold; }}
+            .negative {{ color: red; font-weight: bold; }}
+        </style>
+    </head>
+    <body>
+        <h1>🚀 Project Vimaan — PES Benchmark Report</h1>
+        <h3>Base vs Augmented Dataset Comparison</h3>
+        <table>
+            <tr><th>Metric</th><th>Base</th><th>Augmented</th><th>Change</th><th>Status</th></tr>
+    """
+
+    for metric, base, aug, diff, symbol in rows:
+        css_class = "positive" if diff > 0 else ("neutral" if diff == 0 else "negative")
+        html_content += f"<tr><td>{metric}</td><td>{base}</td><td>{aug}</td><td>{diff}</td><td class='{css_class}'>{symbol}</td></tr>"
+
+    html_content += """
+        </table>
+        <p style='margin-top:20px;'>✅ Report generated automatically by PES Evaluator.</p>
+    </body>
+    </html>
+    """
+
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
+    print(f"📝 HTML report generated → {html_path.resolve()}")
