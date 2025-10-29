@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+### Version: 0.8.0
+**ID:** 7d71565
+**Date:** 2025-10-28
+**Module:** X-Plane Integration - Model Loading & Plugin Deployment
+**Author:** Mohammad Hasnain Raza
+
+
+#### Description of Change:
+- **Fixed Critical Model Loading Bug**: Removed safetensors overwriting issue that caused random predictions (0.09 confidence). Model now correctly loads bert_for_slots fresh from pretrained, loads intent_classifier on proper device, and maintains trained weights.
+- **Deployed Working X-Plane Plugin**: Successfully integrated NLU model with X-Plane 12 for real-time voice command execution.
+    - Push-to-talk interface (Z-key), Google Speech API integration, 13 aircraft control handlers.
+    - Proper BIO slot extraction, comprehensive logging to Desktop\Vimaan_Logs\.
+- **Dataset Analysis**: Created `dataset_summary.py` revealing dataset imbalance (set_com_frequency: 27% vs others: 0.3-3.1%).
+
+
+#### Model Performance:
+- **Before**: 0.09-0.11 confidence (broken).
+- **After**: 95%+ confidence on all tested commands.
+- **Tested**: 15+ commands successfully (landing gear, flaps, autopilot, heading, altitude, flight level, engines, parking brake, COM frequency).
+
+
+#### Enhancement Over v0.7.1:
+- **Fully Functional**: Plugin now executes all 13 intents correctly in real-time X-Plane environment.
+- **Production Ready**: Comprehensive logging and error handling enables deployment.
+- **Identified Improvement Path**: Dataset rebalancing will improve accuracy further (v0.9.0).
+
+---
+
 ### Version: 0.7.1
 **ID:** 839f50e
 **Date:** 2025-10-27
