@@ -65,7 +65,7 @@ def test_commands():
 <<<<<<< HEAD
     print(f"Model loaded from: {results['model']['model_path']}")
 =======
-    print(f"Model loaded from: {results['model']['model_path']}")  # <-- Add this line!
+    print(f"Model loaded from: {results['model']['model_path']}") 
 >>>>>>> f53ca7a4743943b893bab0fd55a25dbba1d880ee
     print(f"Intents: {results['maps']['intents']}, Slots: {results['maps']['slots']}\n")
     print("Model loaded!\n")
