@@ -16,5 +16,22 @@ SCHEMA = {
                 }
             }
         }
+    },
+    "FLAPS": {
+        "description": "To Be Added",
+        "command_templates": [
+            "flaps {state}", 
+            "{state} flaps", 
+            "set flaps {state}"
+        ],
+        "slots": {
+            "state": {
+                "type": "categorical", 
+                "values": {
+                    "UP": ["up", "raise", "retract"],
+                    "DOWN": ["down", "lower", "extend", "drop"]
+                }
+            }
+        }
     }
 }

@@ -222,3 +222,171 @@
 {"text": "could you landing gear drop for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
 {"text": "could you drop gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
 {"text": "could you drop landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "flaps up", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "up flaps", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "set flaps up", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "flaps up for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "up flaps for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "set flaps up for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please flaps up", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please up flaps", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please set flaps up", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please flaps up for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please up flaps for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please set flaps up for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey flaps up", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey up flaps", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey set flaps up", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey flaps up for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey up flaps for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey set flaps up for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you flaps up", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you up flaps", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you set flaps up", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you flaps up for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you up flaps for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you set flaps up for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "flaps raise", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "raise flaps", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "set flaps raise", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "flaps raise for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "raise flaps for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "set flaps raise for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please flaps raise", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please raise flaps", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please set flaps raise", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please flaps raise for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please raise flaps for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please set flaps raise for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey flaps raise", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey raise flaps", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey set flaps raise", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey flaps raise for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey raise flaps for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey set flaps raise for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you flaps raise", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you raise flaps", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you set flaps raise", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you flaps raise for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you raise flaps for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you set flaps raise for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "flaps retract", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "retract flaps", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "set flaps retract", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "flaps retract for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "retract flaps for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "set flaps retract for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please flaps retract", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please retract flaps", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please set flaps retract", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please flaps retract for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please retract flaps for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "please set flaps retract for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey flaps retract", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey retract flaps", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey set flaps retract", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey flaps retract for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey retract flaps for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "hey set flaps retract for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you flaps retract", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you retract flaps", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you set flaps retract", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you flaps retract for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you retract flaps for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "could you set flaps retract for me", "intent": "FLAPS", "slots": {"state": "UP"}}
+{"text": "flaps down", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "down flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "set flaps down", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "flaps down for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "down flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "set flaps down for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please flaps down", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please down flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please set flaps down", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please flaps down for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please down flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please set flaps down for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey flaps down", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey down flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey set flaps down", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey flaps down for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey down flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey set flaps down for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you flaps down", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you down flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you set flaps down", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you flaps down for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you down flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you set flaps down for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "flaps lower", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "lower flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "set flaps lower", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "flaps lower for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "lower flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "set flaps lower for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please flaps lower", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please lower flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please set flaps lower", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please flaps lower for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please lower flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please set flaps lower for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey flaps lower", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey lower flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey set flaps lower", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey flaps lower for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey lower flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey set flaps lower for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you flaps lower", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you lower flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you set flaps lower", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you flaps lower for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you lower flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you set flaps lower for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "flaps extend", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "extend flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "set flaps extend", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "flaps extend for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "extend flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "set flaps extend for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please flaps extend", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please extend flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please set flaps extend", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please flaps extend for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please extend flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please set flaps extend for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey flaps extend", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey extend flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey set flaps extend", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey flaps extend for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey extend flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey set flaps extend for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you flaps extend", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you extend flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you set flaps extend", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you flaps extend for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you extend flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you set flaps extend for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "flaps drop", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "drop flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "set flaps drop", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "flaps drop for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "drop flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "set flaps drop for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please flaps drop", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please drop flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please set flaps drop", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please flaps drop for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please drop flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "please set flaps drop for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey flaps drop", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey drop flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey set flaps drop", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey flaps drop for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey drop flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "hey set flaps drop for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you flaps drop", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you drop flaps", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you set flaps drop", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you flaps drop for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you drop flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "could you set flaps drop for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
