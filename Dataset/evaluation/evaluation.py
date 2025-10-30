@@ -143,16 +143,6 @@ if __name__ == "__main__":
     print(tabulate(table, headers=headers, tablefmt="fancy_grid"))
 
     # ------------------------------------------------------------------
-    # Save JSON Summary
-    # ------------------------------------------------------------------
-    # eval_dir = Path(r"D:\Project-Vimaan\Dataset\evaluation")
-    # eval_dir.mkdir(parents=True, exist_ok=True)
-    # json_path = eval_dir / "pes_benchmark_all.json"
-    # with open(json_path, "w", encoding="utf-8") as f:
-    #     json.dump(results_summary, f, indent=2)
-    # print(f"✅ JSON report saved → {json_path.resolve()}")
-
-    # ------------------------------------------------------------------
     # Generate HTML Report
     # ------------------------------------------------------------------
 
