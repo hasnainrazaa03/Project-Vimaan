@@ -7,12 +7,7 @@ from tabulate import tabulate
 
 import torch
 from tqdm import tqdm
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    AutoModel,
-    AutoTokenizer,
-)
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from sentence_transformers import SentenceTransformer, util
 
 
@@ -27,16 +22,12 @@ class PES:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.data = self._load_dataset()
 
-        print(f"✅ Loaded dataset with {len(self.data)} entries.")
+        print(f"✅ Loaded dataset from {dataset_path.name} with {len(self.data)} entries.")
 
-        # Lazy initialization
         self._semantic_model = None
         self._fluency_model = None
         self._fluency_tokenizer = None
 
-    # ------------------------------------------------------------------
-    # Load dataset
-    # ------------------------------------------------------------------
     def _load_dataset(self) -> List[Dict[str, str]]:
         with open(self.dataset_path, "r", encoding="utf-8") as f:
             return [json.loads(line) for line in f]
@@ -45,38 +36,31 @@ class PES:
     # Semantic Similarity Evaluation
     # ------------------------------------------------------------------
     def evaluate_semantic(self, reference_texts: List[str]) -> float:
-        """
-        Compute average semantic similarity using Sentence-BERT.
-        """
         if not self._semantic_model:
             self._semantic_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2").to(self.device)
 
         scores = []
-        for entry in tqdm(self.data, desc="🔍 Evaluating Semantic Similarity"):
+        for entry in tqdm(self.data, desc=f"🔍 Semantic: {self.dataset_path.stem}"):
             paraphrase = entry["text"]
             ref = random.choice(reference_texts)
             emb1 = self._semantic_model.encode(paraphrase, convert_to_tensor=True)
             emb2 = self._semantic_model.encode(ref, convert_to_tensor=True)
             score = util.cos_sim(emb1, emb2).item()
             scores.append(score)
-
         return round(mean(scores), 4)
 
     # ------------------------------------------------------------------
     # Fluency Evaluation (GPT-2 Perplexity)
     # ------------------------------------------------------------------
     def evaluate_fluency(self) -> float:
-        """
-        Compute average fluency using perplexity (GPT-2).
-        """
         if not self._fluency_model:
             self._fluency_tokenizer = AutoTokenizer.from_pretrained("gpt2")
             self._fluency_model = AutoModelForCausalLM.from_pretrained("gpt2").to(self.device)
 
         perplexities = []
-        for entry in tqdm(self.data, desc="💬 Evaluating Fluency"):
+        for entry in tqdm(self.data, desc=f"💬 Fluency: {self.dataset_path.stem}"):
             text = entry["text"]
-            encodings = self._fluency_tokenizer(text, return_tensors="pt").to(self.device)
+            encodings = self._fluency_tokenizer(text, return_tensors="pt", truncation=True).to(self.device)
             with torch.no_grad():
                 outputs = self._fluency_model(**encodings, labels=encodings["input_ids"])
             loss = outputs.loss
@@ -84,20 +68,16 @@ class PES:
             perplexities.append(perplexity)
 
         avg_ppl = mean(perplexities)
-        normalized_score = max(0.0, min(1.0, 100 / (avg_ppl + 1)))  # normalize 0–1
+        normalized_score = max(0.0, min(1.0, 100 / (avg_ppl + 1)))
         return round(normalized_score, 4)
 
     # ------------------------------------------------------------------
-    # Lexical Diversity Evaluation
+    # Lexical Diversity
     # ------------------------------------------------------------------
     def evaluate_diversity(self) -> float:
-        """
-        Compute lexical diversity = unique tokens / total tokens.
-        """
         all_tokens = []
         for entry in self.data:
             all_tokens.extend(entry["text"].split())
-
         diversity = len(set(all_tokens)) / len(all_tokens)
         return round(diversity, 4)
 
@@ -105,24 +85,12 @@ class PES:
     # Run Benchmark
     # ------------------------------------------------------------------
     def run_benchmark(self, reference_texts: List[str]) -> Dict[str, float]:
-        """
-        Run all metrics and return combined results.
-        """
-        print("\n🚀 Running PES Benchmark...")
-        semantic = self.evaluate_semantic(reference_texts)
-        fluency = self.evaluate_fluency()
-        diversity = self.evaluate_diversity()
-
+        print(f"\n🚀 Running PES Benchmark for {self.dataset_path.stem} ...")
         results = {
-            "Semantic_Similarity": semantic,
-            "Fluency": fluency,
-            "Lexical_Diversity": diversity,
+            "Semantic_Similarity": self.evaluate_semantic(reference_texts),
+            "Fluency": self.evaluate_fluency(),
+            "Lexical_Diversity": self.evaluate_diversity(),
         }
-
-        print("\n📊 PES Results:")
-        for k, v in results.items():
-            print(f"  {k}: {v}")
-
         return results
 
 
@@ -130,114 +98,99 @@ class PES:
 # Entry Point
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
+    # Dataset paths
+    BASE_PATH = Path(r"D:\\Project-Vimaan\\Dataset\\output\\base_cmds.jsonl")
+    PARROT_PATH = Path(r"D:\\Project-Vimaan\\Dataset\\output\\parrot_cmds.jsonl")
+    PEGASUS_PATH = Path(r"D:\\Project-Vimaan\Dataset\\output\\pegasus_cmds.jsonl")
+    FLANT5_PATH = Path(r"D:\\Project-Vimaan\Dataset\\output\\flant5_cmds.jsonl")
 
-    BASE_PATH = Path(r"D:\Project-Vimaan\Dataset\output\base_cmds.jsonl")
-    AUG_PATH = Path(r"D:\Project-Vimaan\Dataset\output\parrot_cmds.jsonl")
-    REFERENCE_PATH = BASE_PATH  # reference remains the same
+    REFERENCE_PATH = BASE_PATH
 
-    if not BASE_PATH.exists() or not AUG_PATH.exists():
-        raise FileNotFoundError("❌ Base or augmented dataset not found!")
+    datasets = {
+        "Base": BASE_PATH,
+        "Parrot": PARROT_PATH,
+        "Pegasus": PEGASUS_PATH,
+        "FLAN-T5": FLANT5_PATH,
+    }
 
     # Load reference texts
     with open(REFERENCE_PATH, "r", encoding="utf-8") as f:
         refs = [json.loads(line)["text"] for line in f]
 
-    # Evaluate Base dataset
-    print("\n🏁 Evaluating BASE dataset...")
-    base_pes = PES(BASE_PATH)
-    base_results = base_pes.run_benchmark(refs)
-
-    # Evaluate Augmented dataset
-    print("\n⚙️ Evaluating AUGMENTED dataset...")
-    aug_pes = PES(AUG_PATH)
-    aug_results = aug_pes.run_benchmark(refs)
-
-    # Compare Results
-    print("\n📊 COMPARISON RESULTS:")
-    rows = []
-    for k in base_results.keys():
-        base = base_results[k]
-        aug = aug_results[k]
-        diff = round(aug - base, 4)
-        symbol = "✅" if diff > 0 else ("⚠️" if diff == 0 else "❌")
-        rows.append([k, base, aug, diff, symbol])
-
-    print(tabulate(rows, headers=["Metric", "Base", "Augmented", "Change", "Status"], tablefmt="fancy_grid"))
-
-    # Save results JSON
-    out_path = Path(r"D:\Project-Vimaan\Dataset\evaluation\pes_benchmark.json")
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump({"base": base_results, "augmented": aug_results}, f, indent=2)
-
-    print(f"\n✅ Comparison complete → {out_path.resolve()}")
+    # Run PES for each dataset
+    results_summary = {}
+    for name, path in datasets.items():
+        if not path.exists():
+            print(f"⚠️ Skipping {name}: file not found ({path})")
+            continue
+        pes = PES(path)
+        results_summary[name] = pes.run_benchmark(refs)
 
     # ------------------------------------------------------------------
-    # HTML Report Generation
+    # Print Comparison Table
     # ------------------------------------------------------------------
-    html_path = Path(r"D:\Project-Vimaan\Dataset\evaluation\pes_report.html")
+    print("\n📊 OVERALL COMPARISON RESULTS:")
+    metrics = ["Semantic_Similarity", "Fluency", "Lexical_Diversity"]
+    table = []
+    headers = ["Metric"] + list(results_summary.keys())
 
-    html_content = f"""
+    for metric in metrics:
+        row = [metric]
+        for ds_name in results_summary.keys():
+            row.append(results_summary[ds_name].get(metric, "—"))
+        table.append(row)
+
+    print(tabulate(table, headers=headers, tablefmt="fancy_grid"))
+
+    # ------------------------------------------------------------------
+    # Save JSON Summary
+    # ------------------------------------------------------------------
+    # eval_dir = Path(r"D:\Project-Vimaan\Dataset\evaluation")
+    # eval_dir.mkdir(parents=True, exist_ok=True)
+    # json_path = eval_dir / "pes_benchmark_all.json"
+    # with open(json_path, "w", encoding="utf-8") as f:
+    #     json.dump(results_summary, f, indent=2)
+    # print(f"✅ JSON report saved → {json_path.resolve()}")
+
+    # ------------------------------------------------------------------
+    # Generate HTML Report
+    # ------------------------------------------------------------------
+
+    html = """
     <html>
     <head>
         <title>Project Vimaan - PES Benchmark Report</title>
         <style>
-            body {{
-                font-family: 'Segoe UI', sans-serif;
-                background: #f8f9fa;
-                color: #333;
-                padding: 40px;
-            }}
-            h1 {{
-                color: #222;
-                margin-bottom: 10px;
-            }}
-            h3 {{
-                color: #444;
-                margin-top: 0;
-            }}
-            table {{
-                border-collapse: collapse;
-                width: 80%;
-                margin-top: 20px;
-                box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            }}
-            th, td {{
-                border: 1px solid #ddd;
-                padding: 10px;
-                text-align: center;
-            }}
-            th {{
-                background-color: #333;
-                color: white;
-            }}
-            tr:nth-child(even) {{
-                background-color: #f2f2f2;
-            }}
-            .positive {{ color: green; font-weight: bold; }}
-            .neutral {{ color: gray; font-weight: bold; }}
-            .negative {{ color: red; font-weight: bold; }}
+            body { font-family: 'Segoe UI', sans-serif; background: #f8f9fa; padding: 40px; }
+            h1 { color: #222; }
+            table { border-collapse: collapse; width: 80%; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+            th { background-color: #333; color: white; }
+            tr:nth-child(even) { background-color: #f2f2f2; }
         </style>
     </head>
     <body>
         <h1>🚀 Project Vimaan — PES Benchmark Report</h1>
-        <h3>Base vs Augmented Dataset Comparison</h3>
         <table>
-            <tr><th>Metric</th><th>Base</th><th>Augmented</th><th>Change</th><th>Status</th></tr>
-    """
+            <tr>
+                <th>Metric</th>""" + "".join(f"<th>{name}</th>" for name in results_summary.keys()) + "</tr>"
 
-    for metric, base, aug, diff, symbol in rows:
-        css_class = "positive" if diff > 0 else ("neutral" if diff == 0 else "negative")
-        html_content += f"<tr><td>{metric}</td><td>{base}</td><td>{aug}</td><td>{diff}</td><td class='{css_class}'>{symbol}</td></tr>"
+    for metric in metrics:
+        html += f"<tr><td>{metric}</td>"
+        for name in results_summary.keys():
+            val = results_summary[name].get(metric, "—")
+            html += f"<td>{val}</td>"
+        html += "</tr>"
 
-    html_content += """
+    html += """
         </table>
-        <p style='margin-top:20px;'>✅ Report generated automatically by PES Evaluator.</p>
+        <p style='margin-top:20px;'>✅ Generated automatically by Project Vimaan PES Evaluator.</p>
     </body>
     </html>
     """
 
+    html_path = Path(r"D:\\Project-Vimaan\\Dataset\\evaluation") / "pes_report.html"
     with open(html_path, "w", encoding="utf-8") as f:
-        f.write(html_content)
+        f.write(html)
 
     print(f"📝 HTML report generated → {html_path.resolve()}")

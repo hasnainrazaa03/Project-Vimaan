@@ -1,0 +1,601 @@
+{"text": "gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "up landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please gear up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please landing gear up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please up gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please up landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey gear up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey landing gear up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey up gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey up landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you gear up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you landing gear up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you up gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you up landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear raise for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear raise for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please gear raise for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please landing gear raise for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please raise gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please raise landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey gear raise for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey landing gear raise for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey raise gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey raise landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you landing gear raise", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you gear raise for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you landing gear raise for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear retract for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "landing gear retract for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please gear retract for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please landing gear retract for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please retract gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please retract landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey gear retract for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey landing gear retract for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey retract gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey retract landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you landing gear retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retract gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you gear retract for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you landing gear retract for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retract gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retract landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear down for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear down for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please gear down for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please landing gear down for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please down gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please down landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey gear down for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey landing gear down for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey down gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey down landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you down landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you gear down for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you landing gear down for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you down gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you down landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear lower", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear lower", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "lower gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "lower landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear lower for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear lower for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "lower gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "lower landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please gear lower", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please landing gear lower", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please gear lower for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please landing gear lower for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey gear lower", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey landing gear lower", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey lower gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey lower landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey gear lower for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey landing gear lower for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey lower gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey lower landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you gear lower", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you landing gear lower", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you gear lower for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you landing gear lower for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear extend for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear extend for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please gear extend for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please landing gear extend for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please extend gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please extend landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey gear extend for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey landing gear extend for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey extend gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey extend landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you landing gear extend", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you gear extend for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you landing gear extend for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "gear drop for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "landing gear drop for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please gear drop for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please landing gear drop for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please drop gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please drop landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey gear drop for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey landing gear drop for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey drop gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey drop landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you landing gear drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you gear drop for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you landing gear drop for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "'gear up'", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "'gear up '", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "\"gear up\"", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "land gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "make landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "'up gear'", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "'up gear '", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "'up landing gear'", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "go up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "get ready for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i want to get ready for a flight", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i want to get ready for my flight", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "land up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "'up gear for me '", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "'up gear for me'", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "'up landing gear for me '", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "'up landing gear for me'", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i want you to gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i want you to gear up i want you to gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please land gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please put your landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i want my landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please raise your gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please up the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i want you to gear up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i want you to get ready for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please land gear up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i want my landing gear up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please up your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please raise the landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "yea gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "yelp", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey, landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "the landing gear is up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey, up gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey, up landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey, up your landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i 'm ready for you", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i 'm ready to go", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "get the landing gear up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "get your landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey, up gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey, up landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you gear up ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you gear up for flight", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you land gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you put your landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you put your landing gear up ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you up your gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you up gear ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you up the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you up your landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you put the landing gear up", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you gear up for me ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "can you gear up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you land gear up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you land gear me up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you land gear up for me ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you up gear for me ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you put up your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you put up landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you put the landing gear up for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you put up my landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "lift gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise the gears", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "lift landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "how to raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise your gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise your landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "'gear raise for me'", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "'gear raise for me '", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise my gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "how do you raise your landing gear?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "how do i raise my landing gear?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "'raise gear for me '", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "raise your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "'raise gear for me'", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "'raise landing gear for me '", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "'raise landing gear for me'", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please raise your gears", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please raise the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please raise your landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please raise my gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please raise your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please raise the gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please raise my landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey, raise the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey, raise your landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey, raise landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey, raise your gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "lift my gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey, raise my landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey, raise the landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i want my landing gear raised for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey raise your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey, raise landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise your gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise your gear?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise the gear ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise your landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise your landing gear ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise your gear ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise the gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise landing gear ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise my gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise my gear for me ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise my landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise the landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "can you raise my landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you raise landing gear for me ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "can you raise landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "how do you retract an airplane?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "how do you retract an aircraft?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "how do you retract an airplane's landing gear?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "how do you retract a landing gear on a plane?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "how do you retract the landing gear on a plane?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "how do you retract a landing gear?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retracting gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retracting the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retrace landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "pull back landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retrace for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "rewind for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "how do you pull a plane to a halt?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "the landing gear retracts for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retrace landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retract your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retrace gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i want my gear to retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please retract the gears", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retraction of landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please retract the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please retract the gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please retract your gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retracted landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i want my gear to retract for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please retract the gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i want my landing gear to retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i want my landing gear to retract for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "please retract your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i want you to retract my landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey gear retrace", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey gear retraction", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "the landing gear is retracting", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey landing gear retracted", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey retraction gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retrace gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "hey, retract landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "how do i retract my gear?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "how do i retract my gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "i need my landing gear to retract", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "my landing gear is retracting for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retracted gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retraction gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "retracted landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you gear retrace", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you gear retrace ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you gear retrace a plane", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retract your landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retrace the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retract your landing gear ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retract the gear ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retrace your gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retract your gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retract landing gear ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retrace landing gear", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you gear retract for me ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retract my landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retrace my landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retract the landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retract the gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retract the gear for me ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "could you retract landing gear for me ?", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "can you retract landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "UP"}}
+{"text": "'gear down'", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "'gear down '", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "the landing gear is down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear on a plane", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down gear in a plane", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "press down on landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "'gear down for me '", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "'gear down for me'", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "down the landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "i need my landing gear down for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "i need my landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "'down gear for me '", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "turn down landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please gear down .", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please put the landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please put down the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower your gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please down the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please gear down for me .", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please put the landing gear down for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please turn down the landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower the gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please down the landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hi gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, down gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, down the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey down the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, gear down for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey gear down for me !", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "get the landing gear down for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, down gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, down the landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you gear down ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you gear down?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you put your landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you put the landing gear down", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you put your landing gear down ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you down gear ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you down your gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you down the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you down the landing gear ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you gear down for me ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "can you gear down for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you put the landing gear down for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you take my landing gear down for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower the landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "can you down gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you down gear for me ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "how to lower the gears on a plane", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "how to lower the gears on an airplane", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "how to lower the gears on an aircraft", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "lowering landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "how do you lower your landing gear?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "how do you lower the landing gear?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "lower the plane's gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "lower gear on a plane", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "lower the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "'gear lower for me '", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "'gear lower for me'", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "lowering landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "lowering the landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "lower your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "lower the gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "ask me to lower my landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower the gears", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower your gears", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower your landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower the gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower the gears for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower your gears for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower the landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please lower my landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "how do you lower your gear on a plane?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "how do you lower your gear?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, lower the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, lower your gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, lower landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "lower your gears for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "lower my gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "i need to lower my landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "i want my landing gear to lower for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "i want my landing gear to lower", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "tell me to lower my landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "tell me to lower landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you gear lower ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower your gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower your landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower the landing gear ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower your gear ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower the gear ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower my gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower the gears for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower my landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower my landing gear for me ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you lower landing gear for me ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend the gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend the gears", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "the landing gear extends", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend your landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extension of landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "'gear extend for me'", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "'gear extend for me '", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend the gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "for me to extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "extend my gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "i want my landing gear extended", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please extend your gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please extend the gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please extend the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please extend your landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please extend my gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please extend your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please extend my gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please extend my landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please extend the landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please extend the gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "i want to extend my landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "how do you extend your landing gear?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "how do you extend your gear?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "your landing gear is extended", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey landing gear extended", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey extend your gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, extend your gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, extend landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "your gear extend for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "i need my landing gear extended", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, extend my gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, extend your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, extend landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend your gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend your gear ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend your gear?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend your landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend your landing gear ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend landing gear ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend my gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend my gear for me ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend my landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend your landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend my landing gear for me ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you extend landing gear for me ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "can you extend landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop of gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop gear on aircraft", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop the gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop gear in a plane", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop landing gear on plane", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "'gear drop for me'", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "'gear drop for me '", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop the gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop the landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop my landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "'drop gear for me '", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "'drop gear for me'", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "'drop landing gear for me '", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "'drop landing gear for me'", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please drop the gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please drop your gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please drop the gears", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please drop the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "i want my landing gear to drop", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "i want you to drop your gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please drop your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please drop my gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please drop the gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please drop the landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "please drop my landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, drop gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, drop the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "drop your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, drop my gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, drop your landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, drop my landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, drop gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "hey, drop landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop your landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop the landing gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop the landing gear ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop gear ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop your gear", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you gear drop for me ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop your landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop my landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop your landing gear for me ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop your gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop gear for me ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop the landing gear for me", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
+{"text": "could you drop landing gear for me ?", "intent": "LANDING_GEAR", "slots": {"state": "DOWN"}}
