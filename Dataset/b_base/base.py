@@ -10,7 +10,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
-from Dataset.01_input.config import SCHEMA
+from Dataset.a_input.config import SCHEMA
 
 
 # ---------------------------------------------------------------------
