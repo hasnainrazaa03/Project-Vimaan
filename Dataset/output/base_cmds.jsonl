@@ -390,3 +390,611 @@
 {"text": "could you flaps drop for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
 {"text": "could you drop flaps for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
 {"text": "could you set flaps drop for me", "intent": "FLAPS", "slots": {"state": "DOWN"}}
+{"text": "autopilot 1 engage", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "engage autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "ap one engage", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "autopilot 1 engage for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "engage autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "ap one engage for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "please autopilot 1 engage", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "please engage autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "please ap one engage", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "please autopilot 1 engage for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "please engage autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "please ap one engage for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "hey autopilot 1 engage", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "hey engage autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "hey ap one engage", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "hey autopilot 1 engage for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "hey engage autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "hey ap one engage for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "could you autopilot 1 engage", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "could you engage autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "could you ap one engage", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "could you autopilot 1 engage for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "could you engage autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "could you ap one engage for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "autopilot 1 activate", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "activate autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "ap one activate", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "autopilot 1 activate for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "activate autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "ap one activate for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "please autopilot 1 activate", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "please activate autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "please ap one activate", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "please autopilot 1 activate for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "please activate autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "please ap one activate for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "hey autopilot 1 activate", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "hey activate autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "hey ap one activate", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "hey autopilot 1 activate for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "hey activate autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "hey ap one activate for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "could you autopilot 1 activate", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "could you activate autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "could you ap one activate", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "could you autopilot 1 activate for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "could you activate autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "could you ap one activate for me", "intent": "AUTOPILOT_1", "slots": {"state": "ON"}}
+{"text": "autopilot 1 disengage", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "disengage autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "ap one disengage", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "autopilot 1 disengage for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "disengage autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "ap one disengage for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "please autopilot 1 disengage", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "please disengage autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "please ap one disengage", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "please autopilot 1 disengage for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "please disengage autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "please ap one disengage for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "hey autopilot 1 disengage", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "hey disengage autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "hey ap one disengage", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "hey autopilot 1 disengage for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "hey disengage autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "hey ap one disengage for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "could you autopilot 1 disengage", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "could you disengage autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "could you ap one disengage", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "could you autopilot 1 disengage for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "could you disengage autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "could you ap one disengage for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "autopilot 1 deactivate", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "deactivate autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "ap one deactivate", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "autopilot 1 deactivate for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "deactivate autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "ap one deactivate for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "please autopilot 1 deactivate", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "please deactivate autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "please ap one deactivate", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "please autopilot 1 deactivate for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "please deactivate autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "please ap one deactivate for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "hey autopilot 1 deactivate", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "hey deactivate autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "hey ap one deactivate", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "hey autopilot 1 deactivate for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "hey deactivate autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "hey ap one deactivate for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "could you autopilot 1 deactivate", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "could you deactivate autopilot 1", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "could you ap one deactivate", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "could you autopilot 1 deactivate for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "could you deactivate autopilot 1 for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "could you ap one deactivate for me", "intent": "AUTOPILOT_1", "slots": {"state": "OFF"}}
+{"text": "autopilot 2 engage", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "engage autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "ap two engage", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "autopilot 2 engage for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "engage autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "ap two engage for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "please autopilot 2 engage", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "please engage autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "please ap two engage", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "please autopilot 2 engage for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "please engage autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "please ap two engage for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "hey autopilot 2 engage", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "hey engage autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "hey ap two engage", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "hey autopilot 2 engage for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "hey engage autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "hey ap two engage for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "could you autopilot 2 engage", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "could you engage autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "could you ap two engage", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "could you autopilot 2 engage for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "could you engage autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "could you ap two engage for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "autopilot 2 activate", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "activate autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "ap two activate", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "autopilot 2 activate for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "activate autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "ap two activate for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "please autopilot 2 activate", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "please activate autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "please ap two activate", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "please autopilot 2 activate for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "please activate autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "please ap two activate for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "hey autopilot 2 activate", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "hey activate autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "hey ap two activate", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "hey autopilot 2 activate for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "hey activate autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "hey ap two activate for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "could you autopilot 2 activate", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "could you activate autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "could you ap two activate", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "could you autopilot 2 activate for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "could you activate autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "could you ap two activate for me", "intent": "AUTOPILOT_2", "slots": {"state": "ON"}}
+{"text": "autopilot 2 disengage", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "disengage autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "ap two disengage", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "autopilot 2 disengage for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "disengage autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "ap two disengage for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "please autopilot 2 disengage", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "please disengage autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "please ap two disengage", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "please autopilot 2 disengage for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "please disengage autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "please ap two disengage for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "hey autopilot 2 disengage", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "hey disengage autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "hey ap two disengage", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "hey autopilot 2 disengage for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "hey disengage autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "hey ap two disengage for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "could you autopilot 2 disengage", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "could you disengage autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "could you ap two disengage", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "could you autopilot 2 disengage for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "could you disengage autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "could you ap two disengage for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "autopilot 2 deactivate", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "deactivate autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "ap two deactivate", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "autopilot 2 deactivate for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "deactivate autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "ap two deactivate for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "please autopilot 2 deactivate", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "please deactivate autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "please ap two deactivate", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "please autopilot 2 deactivate for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "please deactivate autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "please ap two deactivate for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "hey autopilot 2 deactivate", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "hey deactivate autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "hey ap two deactivate", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "hey autopilot 2 deactivate for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "hey deactivate autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "hey ap two deactivate for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "could you autopilot 2 deactivate", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "could you deactivate autopilot 2", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "could you ap two deactivate", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "could you autopilot 2 deactivate for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "could you deactivate autopilot 2 for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "could you ap two deactivate for me", "intent": "AUTOPILOT_2", "slots": {"state": "OFF"}}
+{"text": "flight director 1 enable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "enable flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "fd one enable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "flight director 1 enable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "enable flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "fd one enable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "please flight director 1 enable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "please enable flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "please fd one enable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "please flight director 1 enable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "please enable flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "please fd one enable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "hey flight director 1 enable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "hey enable flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "hey fd one enable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "hey flight director 1 enable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "hey enable flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "hey fd one enable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "could you flight director 1 enable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "could you enable flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "could you fd one enable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "could you flight director 1 enable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "could you enable flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "could you fd one enable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "flight director 1 activate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "activate flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "fd one activate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "flight director 1 activate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "activate flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "fd one activate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "please flight director 1 activate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "please activate flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "please fd one activate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "please flight director 1 activate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "please activate flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "please fd one activate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "hey flight director 1 activate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "hey activate flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "hey fd one activate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "hey flight director 1 activate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "hey activate flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "hey fd one activate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "could you flight director 1 activate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "could you activate flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "could you fd one activate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "could you flight director 1 activate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "could you activate flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "could you fd one activate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "ON"}}
+{"text": "flight director 1 disable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "disable flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "fd one disable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "flight director 1 disable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "disable flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "fd one disable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "please flight director 1 disable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "please disable flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "please fd one disable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "please flight director 1 disable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "please disable flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "please fd one disable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "hey flight director 1 disable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "hey disable flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "hey fd one disable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "hey flight director 1 disable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "hey disable flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "hey fd one disable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "could you flight director 1 disable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "could you disable flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "could you fd one disable", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "could you flight director 1 disable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "could you disable flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "could you fd one disable for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "flight director 1 deactivate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "deactivate flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "fd one deactivate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "flight director 1 deactivate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "deactivate flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "fd one deactivate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "please flight director 1 deactivate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "please deactivate flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "please fd one deactivate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "please flight director 1 deactivate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "please deactivate flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "please fd one deactivate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "hey flight director 1 deactivate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "hey deactivate flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "hey fd one deactivate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "hey flight director 1 deactivate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "hey deactivate flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "hey fd one deactivate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "could you flight director 1 deactivate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "could you deactivate flight director 1", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "could you fd one deactivate", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "could you flight director 1 deactivate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "could you deactivate flight director 1 for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "could you fd one deactivate for me", "intent": "FLIGHTDIRECTOR_1", "slots": {"state": "OFF"}}
+{"text": "flight director 2 enable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "enable flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "fd two enable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "flight director 2 enable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "enable flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "fd two enable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "please flight director 2 enable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "please enable flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "please fd two enable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "please flight director 2 enable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "please enable flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "please fd two enable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "hey flight director 2 enable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "hey enable flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "hey fd two enable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "hey flight director 2 enable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "hey enable flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "hey fd two enable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "could you flight director 2 enable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "could you enable flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "could you fd two enable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "could you flight director 2 enable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "could you enable flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "could you fd two enable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "flight director 2 activate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "activate flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "fd two activate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "flight director 2 activate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "activate flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "fd two activate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "please flight director 2 activate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "please activate flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "please fd two activate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "please flight director 2 activate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "please activate flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "please fd two activate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "hey flight director 2 activate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "hey activate flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "hey fd two activate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "hey flight director 2 activate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "hey activate flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "hey fd two activate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "could you flight director 2 activate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "could you activate flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "could you fd two activate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "could you flight director 2 activate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "could you activate flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "could you fd two activate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "ON"}}
+{"text": "flight director 2 disable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "disable flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "fd two disable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "flight director 2 disable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "disable flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "fd two disable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "please flight director 2 disable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "please disable flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "please fd two disable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "please flight director 2 disable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "please disable flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "please fd two disable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "hey flight director 2 disable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "hey disable flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "hey fd two disable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "hey flight director 2 disable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "hey disable flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "hey fd two disable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "could you flight director 2 disable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "could you disable flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "could you fd two disable", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "could you flight director 2 disable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "could you disable flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "could you fd two disable for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "flight director 2 deactivate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "deactivate flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "fd two deactivate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "flight director 2 deactivate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "deactivate flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "fd two deactivate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "please flight director 2 deactivate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "please deactivate flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "please fd two deactivate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "please flight director 2 deactivate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "please deactivate flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "please fd two deactivate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "hey flight director 2 deactivate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "hey deactivate flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "hey fd two deactivate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "hey flight director 2 deactivate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "hey deactivate flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "hey fd two deactivate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "could you flight director 2 deactivate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "could you deactivate flight director 2", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "could you fd two deactivate", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "could you flight director 2 deactivate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "could you deactivate flight director 2 for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "could you fd two deactivate for me", "intent": "FLIGHTDIRECTOR_2", "slots": {"state": "OFF"}}
+{"text": "parking brake engage", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "engage parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "parking brake engage for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "engage parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "please parking brake engage", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "please engage parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "please parking brake engage for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "please engage parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "hey parking brake engage", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "hey engage parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "hey parking brake engage for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "hey engage parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "could you parking brake engage", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "could you engage parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "could you parking brake engage for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "could you engage parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "parking brake set", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "set parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "parking brake set for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "set parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "please parking brake set", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "please set parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "please parking brake set for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "please set parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "hey parking brake set", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "hey set parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "hey parking brake set for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "hey set parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "could you parking brake set", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "could you set parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "could you parking brake set for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "could you set parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "ON"}}
+{"text": "parking brake release", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "release parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "parking brake release for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "release parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "please parking brake release", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "please release parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "please parking brake release for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "please release parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "hey parking brake release", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "hey release parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "hey parking brake release for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "hey release parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "could you parking brake release", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "could you release parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "could you parking brake release for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "could you release parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "parking brake disengage", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "disengage parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "parking brake disengage for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "disengage parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "please parking brake disengage", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "please disengage parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "please parking brake disengage for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "please disengage parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "hey parking brake disengage", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "hey disengage parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "hey parking brake disengage for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "hey disengage parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "could you parking brake disengage", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "could you disengage parking brake", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "could you parking brake disengage for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "could you disengage parking brake for me", "intent": "PARKING_BRAKE", "slots": {"state": "OFF"}}
+{"text": "engine 1 start", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "start engine 1", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "engine 1 start for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "start engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "please engine 1 start", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "please start engine 1", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "please engine 1 start for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "please start engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "hey engine 1 start", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "hey start engine 1", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "hey engine 1 start for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "hey start engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "could you engine 1 start", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "could you start engine 1", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "could you engine 1 start for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "could you start engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "engine 1 ignite", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "ignite engine 1", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "engine 1 ignite for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "ignite engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "please engine 1 ignite", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "please ignite engine 1", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "please engine 1 ignite for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "please ignite engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "hey engine 1 ignite", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "hey ignite engine 1", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "hey engine 1 ignite for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "hey ignite engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "could you engine 1 ignite", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "could you ignite engine 1", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "could you engine 1 ignite for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "could you ignite engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "ON"}}
+{"text": "engine 1 stop", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "stop engine 1", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "engine 1 stop for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "stop engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "please engine 1 stop", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "please stop engine 1", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "please engine 1 stop for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "please stop engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "hey engine 1 stop", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "hey stop engine 1", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "hey engine 1 stop for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "hey stop engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "could you engine 1 stop", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "could you stop engine 1", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "could you engine 1 stop for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "could you stop engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "engine 1 shut down", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "shut down engine 1", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "engine 1 shut down for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "shut down engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "please engine 1 shut down", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "please shut down engine 1", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "please engine 1 shut down for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "please shut down engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "hey engine 1 shut down", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "hey shut down engine 1", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "hey engine 1 shut down for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "hey shut down engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "could you engine 1 shut down", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "could you shut down engine 1", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "could you engine 1 shut down for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "could you shut down engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "engine 1 kill", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "kill engine 1", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "engine 1 kill for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "kill engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "please engine 1 kill", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "please kill engine 1", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "please engine 1 kill for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "please kill engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "hey engine 1 kill", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "hey kill engine 1", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "hey engine 1 kill for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "hey kill engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "could you engine 1 kill", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "could you kill engine 1", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "could you engine 1 kill for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "could you kill engine 1 for me", "intent": "ENGINE_1", "slots": {"state": "OFF"}}
+{"text": "engine 2 start", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "start engine 2", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "engine 2 start for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "start engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "please engine 2 start", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "please start engine 2", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "please engine 2 start for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "please start engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "hey engine 2 start", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "hey start engine 2", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "hey engine 2 start for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "hey start engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "could you engine 2 start", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "could you start engine 2", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "could you engine 2 start for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "could you start engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "engine 2 ignite", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "ignite engine 2", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "engine 2 ignite for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "ignite engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "please engine 2 ignite", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "please ignite engine 2", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "please engine 2 ignite for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "please ignite engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "hey engine 2 ignite", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "hey ignite engine 2", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "hey engine 2 ignite for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "hey ignite engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "could you engine 2 ignite", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "could you ignite engine 2", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "could you engine 2 ignite for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "could you ignite engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "ON"}}
+{"text": "engine 2 stop", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "stop engine 2", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "engine 2 stop for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "stop engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "please engine 2 stop", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "please stop engine 2", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "please engine 2 stop for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "please stop engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "hey engine 2 stop", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "hey stop engine 2", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "hey engine 2 stop for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "hey stop engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "could you engine 2 stop", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "could you stop engine 2", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "could you engine 2 stop for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "could you stop engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "engine 2 shut down", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "shut down engine 2", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "engine 2 shut down for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "shut down engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "please engine 2 shut down", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "please shut down engine 2", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "please engine 2 shut down for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "please shut down engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "hey engine 2 shut down", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "hey shut down engine 2", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "hey engine 2 shut down for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "hey shut down engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "could you engine 2 shut down", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "could you shut down engine 2", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "could you engine 2 shut down for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "could you shut down engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "engine 2 kill", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "kill engine 2", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "engine 2 kill for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "kill engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "please engine 2 kill", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "please kill engine 2", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "please engine 2 kill for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "please kill engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "hey engine 2 kill", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "hey kill engine 2", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "hey engine 2 kill for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "hey kill engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "could you engine 2 kill", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "could you kill engine 2", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "could you engine 2 kill for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}
+{"text": "could you kill engine 2 for me", "intent": "ENGINE_2", "slots": {"state": "OFF"}}

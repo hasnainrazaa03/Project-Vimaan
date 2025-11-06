@@ -39,6 +39,7 @@ def generate_dataset(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
         slot_definitions = intent_data["slots"]
 
         for slot_name, slot_info in slot_definitions.items():
+            print(slot_info["values"])
             for canonical_value, synonyms in slot_info["values"].items():
                 for synonym in synonyms:
                     combinations = itertools.product(
