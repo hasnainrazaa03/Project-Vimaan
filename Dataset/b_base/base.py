@@ -30,23 +30,70 @@ TEMPLATE_PATTERNS = [
 # ---------------------------------------------------------------------
 # Dataset Generation
 # ---------------------------------------------------------------------
+# def generate_dataset(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
+#     random.seed(42)
+#     records: List[Dict[str, Any]] = []
+
+#     for intent_name, intent_data in schema.items():
+#         command_templates = intent_data["command_templates"]
+#         slot_definitions = intent_data["slots"]
+
+#         for slot_name, slot_info in slot_definitions.items():
+#             print(slot_info["values"])
+#             for canonical_value, synonyms in slot_info["values"].items():
+#                 for synonym in synonyms:
+#                     combinations = itertools.product(
+#                         PREFIX_PHRASES, SUFFIX_PHRASES, TEMPLATE_PATTERNS, command_templates
+#                     )
+
+#                     for prefix, suffix, template, base_cmd in combinations:
+#                         cmd_text = base_cmd.format(**{slot_name: synonym})
+#                         text = template.format(prefix=prefix, command=cmd_text, suffix=suffix)
+#                         text = " ".join(text.split())
+
+#                         records.append(
+#                             {
+#                                 "text": text,
+#                                 "intent": intent_name,
+#                                 "slots": {slot_name: canonical_value},
+#                             }
+#                         )
+#     return records
+
 def generate_dataset(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
     random.seed(42)
     records: List[Dict[str, Any]] = []
 
     for intent_name, intent_data in schema.items():
         command_templates = intent_data["command_templates"]
-        slot_definitions = intent_data["slots"]
+        slot_definitions = intent_data.get("slots", {})
 
         for slot_name, slot_info in slot_definitions.items():
-            print(slot_info["values"])
-            for canonical_value, synonyms in slot_info["values"].items():
+            slot_type = slot_info.get("type", "categorical")
+            slot_values = slot_info.get("values", {})
+
+            normalized_pairs = []
+
+            if isinstance(slot_values, dict):
+                for canonical_value in sorted(slot_values.keys()):
+                    synonyms = slot_values[canonical_value]
+                    normalized_pairs.append((canonical_value, list(synonyms)))
+
+            elif isinstance(slot_values, (set, list, tuple)):
+                for val in sorted(slot_values, key=lambda x: (str(x))):
+                    normalized_pairs.append((str(val), [str(val)]))
+
+            else:
+                normalized_pairs.append((str(slot_values), [str(slot_values)]))
+
+            for canonical_value, synonyms in normalized_pairs:
                 for synonym in synonyms:
                     combinations = itertools.product(
                         PREFIX_PHRASES, SUFFIX_PHRASES, TEMPLATE_PATTERNS, command_templates
                     )
 
                     for prefix, suffix, template, base_cmd in combinations:
+                        # substitute slot placeholder in base command with synonym
                         cmd_text = base_cmd.format(**{slot_name: synonym})
                         text = template.format(prefix=prefix, command=cmd_text, suffix=suffix)
                         text = " ".join(text.split())
@@ -58,7 +105,9 @@ def generate_dataset(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
                                 "slots": {slot_name: canonical_value},
                             }
                         )
+
     return records
+
 
 
 # ---------------------------------------------------------------------
