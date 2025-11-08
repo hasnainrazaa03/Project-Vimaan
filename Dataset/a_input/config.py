@@ -145,15 +145,16 @@ SCHEMA = {
     },
     "HEADING": {
         "command_templates": [
+            # "heading {state}",
             "set heading {state}",
-            "change heading to {state}",
+            # "change heading to {state}",
             "turn to {state} degrees",
             "fly heading {state}"
         ],
         "slots": {
             "state": {
                 "type": "numerical",
-                "values": {str(i) for i in range(0, 361, 1)}
+                "values": {str(i) for i in range(0, 91, 1)}
             }
         }
     },
@@ -162,25 +163,26 @@ SCHEMA = {
             "set altitude {state}",
             "climb to {state} feet",
             "descend to {state} feet",
-            "fly at {state}"
+            # "fly at {state}"
         ],
         "slots": {
             "state": {
                 "type": "numerical",
-                "values": {str(i) for i in range(100, 40001, 100)}
+                "values": {str(i) for i in range(100, 10001, 100)}
             }
         }
     },
     "FLIGHT_LEVEL": {
         "command_templates": [
             "climb to flight level {state}",
+            "descend to flight level {state}",
             "maintain flight level {state}",
-            "request flight level {state}"
+            # "request flight level {state}"
         ],
         "slots": {
             "state": {
                 "type": "numerical",
-                "values": {str(i) for i in range(100, 401, 10)}
+                "values": {str(i) for i in range(100, 101, 10)}
             }
         }
     }
