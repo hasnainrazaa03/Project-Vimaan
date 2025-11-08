@@ -34,38 +34,38 @@ SCHEMA = {
             }
         }
     },
-    "AUTOPILOT_1": {
-        "command_templates": [
-            "autopilot 1 {state}", 
-            "{state} autopilot 1", 
-            "ap one {state}"
-        ],
-        "slots": {
-            "state": {
-                "type": "categorical", 
-                "values": {
-                    "ON": ["engage", "activate"], 
-                    "OFF": ["disengage", "deactivate"]
-                }
-            }
-        }
-    },
-    "AUTOPILOT_2": {
-        "command_templates": [
-            "autopilot 2 {state}", 
-            "{state} autopilot 2", 
-            "ap two {state}"
-        ],
-        "slots": {
-            "state": {
-                "type": "categorical", 
-                "values": {
-                    "ON": ["engage", "activate"], 
-                    "OFF": ["disengage", "deactivate"]
-                }
-            }
-        }
-    },
+    # "AUTOPILOT_1": {
+    #     "command_templates": [
+    #         "autopilot 1 {state}", 
+    #         "{state} autopilot 1", 
+    #         "ap one {state}"
+    #     ],
+    #     "slots": {
+    #         "state": {
+    #             "type": "categorical", 
+    #             "values": {
+    #                 "ON": ["engage", "activate"], 
+    #                 "OFF": ["disengage", "deactivate"]
+    #             }
+    #         }
+    #     }
+    # },
+    # "AUTOPILOT_2": {
+    #     "command_templates": [
+    #         "autopilot 2 {state}", 
+    #         "{state} autopilot 2", 
+    #         "ap two {state}"
+    #     ],
+    #     "slots": {
+    #         "state": {
+    #             "type": "categorical", 
+    #             "values": {
+    #                 "ON": ["engage", "activate"], 
+    #                 "OFF": ["disengage", "deactivate"]
+    #             }
+    #         }
+    #     }
+    # },
     # "FLIGHTDIRECTOR_1": {
     #     "command_templates": [
     #         "flight director 1 {state}", 
@@ -113,36 +113,36 @@ SCHEMA = {
     #         }
     #     }
     # },
-    "ENGINE_1": {
-        "command_templates": [
-            "engine 1 {state}", 
-            "{state} engine 1"
-        ],
-        "slots": {
-            "state": {
-                "type": "categorical", 
-                "values": {
-                    "ON": ["start", "ignite"], 
-                    "OFF": ["stop", "shut down", "kill"]
-                }
-            }
-        }
-    },
-    "ENGINE_2": {
-        "command_templates": [
-            "engine 2 {state}", 
-            "{state} engine 2"
-        ],
-        "slots": {
-            "state": {
-                "type": "categorical", 
-                "values": {
-                    "ON": ["start", "ignite"], 
-                    "OFF": ["stop", "shut down", "kill"]
-                }
-            }
-        }
-    },
+    # "ENGINE_1": {
+    #     "command_templates": [
+    #         "engine 1 {state}", 
+    #         "{state} engine 1"
+    #     ],
+    #     "slots": {
+    #         "state": {
+    #             "type": "categorical", 
+    #             "values": {
+    #                 "ON": ["start", "ignite"], 
+    #                 "OFF": ["stop", "shut down", "kill"]
+    #             }
+    #         }
+    #     }
+    # },
+    # "ENGINE_2": {
+    #     "command_templates": [
+    #         "engine 2 {state}", 
+    #         "{state} engine 2"
+    #     ],
+    #     "slots": {
+    #         "state": {
+    #             "type": "categorical", 
+    #             "values": {
+    #                 "ON": ["start", "ignite"], 
+    #                 "OFF": ["stop", "shut down", "kill"]
+    #             }
+    #         }
+    #     }
+    # },
     "HEADING": {
         "command_templates": [
             "set heading {state}",

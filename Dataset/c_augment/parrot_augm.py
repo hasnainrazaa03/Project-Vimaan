@@ -7,8 +7,8 @@ from parrot import Parrot
 # ---------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------
-INPUT_FILE = Path(r"D:\Project-Vimaan\Dataset\output\base_cmds.jsonl")
-OUTPUT_FILE = Path(r"D:\Project-Vimaan\Dataset\output\parrot_cmds.jsonl")
+INPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\output\\base_cmds.jsonl")
+OUTPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\output\\parrot_cmds.jsonl")
 NUM_PARAPHRASES = 3
 
 
