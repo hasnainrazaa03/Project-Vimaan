@@ -16,7 +16,7 @@ from Dataset.a_input.config import SCHEMA
 # ---------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------
-OUTPUT_FILE = Path("./Dataset/output/base_cmds.jsonl")
+OUTPUT_FILE = Path("./Dataset/e_output/base_cmds.jsonl")
 
 PREFIX_PHRASES = ["", "please", "hey", "could you"]
 SUFFIX_PHRASES = ["", "for me"]
@@ -30,35 +30,6 @@ TEMPLATE_PATTERNS = [
 # ---------------------------------------------------------------------
 # Dataset Generation
 # ---------------------------------------------------------------------
-# def generate_dataset(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
-#     random.seed(42)
-#     records: List[Dict[str, Any]] = []
-
-#     for intent_name, intent_data in schema.items():
-#         command_templates = intent_data["command_templates"]
-#         slot_definitions = intent_data["slots"]
-
-#         for slot_name, slot_info in slot_definitions.items():
-#             print(slot_info["values"])
-#             for canonical_value, synonyms in slot_info["values"].items():
-#                 for synonym in synonyms:
-#                     combinations = itertools.product(
-#                         PREFIX_PHRASES, SUFFIX_PHRASES, TEMPLATE_PATTERNS, command_templates
-#                     )
-
-#                     for prefix, suffix, template, base_cmd in combinations:
-#                         cmd_text = base_cmd.format(**{slot_name: synonym})
-#                         text = template.format(prefix=prefix, command=cmd_text, suffix=suffix)
-#                         text = " ".join(text.split())
-
-#                         records.append(
-#                             {
-#                                 "text": text,
-#                                 "intent": intent_name,
-#                                 "slots": {slot_name: canonical_value},
-#                             }
-#                         )
-#     return records
 
 def generate_dataset(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
     random.seed(42)
@@ -107,8 +78,6 @@ def generate_dataset(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
                         )
 
     return records
-
-
 
 # ---------------------------------------------------------------------
 # Deduplication

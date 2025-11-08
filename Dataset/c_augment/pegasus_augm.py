@@ -9,8 +9,8 @@ from transformers import PegasusForConditionalGeneration, PegasusTokenizer
 # CONFIGURATION
 # ------------------------------------------------------------
 MODEL_NAME = "tuner007/pegasus_paraphrase"
-INPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\output\\base_cmds.jsonl")
-OUTPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\output\\pegasus_cmds.jsonl")
+INPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\e_output\\base_cmds.jsonl")
+OUTPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\e_output\\pegasus_cmds.jsonl")
 
 
 # ------------------------------------------------------------

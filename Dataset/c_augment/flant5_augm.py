@@ -5,8 +5,8 @@ import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 # Input and output paths
-INPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\output\\base_cmds.jsonl")
-OUTPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\output\\flant5_cmds.jsonl")
+INPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\e_output\\base_cmds.jsonl")
+OUTPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\e_output\\flant5_cmds.jsonl")
 
 def load_base():
     """Load the base dataset"""

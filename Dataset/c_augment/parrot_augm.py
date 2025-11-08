@@ -7,8 +7,8 @@ from parrot import Parrot
 # ---------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------
-INPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\output\\base_cmds.jsonl")
-OUTPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\output\\parrot_cmds.jsonl")
+INPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\e_output\\base_cmds.jsonl")
+OUTPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\e_output\\parrot_cmds.jsonl")
 NUM_PARAPHRASES = 3
 
 
@@ -65,7 +65,6 @@ def main():
     unique = list({d["text"]: d for d in all_data}.values())
 
     save_dataset(unique, OUTPUT_FILE)
-
 
 # ---------------------------------------------------------------------
 # Entry Point
