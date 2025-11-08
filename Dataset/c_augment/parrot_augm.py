@@ -9,7 +9,7 @@ from parrot import Parrot
 # ---------------------------------------------------------------------
 INPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\e_output\\base_cmds.jsonl")
 OUTPUT_FILE = Path(r"D:\\Project-Vimaan\\Dataset\\e_output\\parrot_cmds.jsonl")
-NUM_PARAPHRASES = 3
+NUM_PARAPHRASES = 1
 
 
 # ---------------------------------------------------------------------
