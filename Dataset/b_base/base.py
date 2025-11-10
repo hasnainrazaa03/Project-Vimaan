@@ -16,7 +16,7 @@ from Dataset.a_input.config import SCHEMA
 # ---------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------
-OUTPUT_FILE = Path("./Dataset/e_output/base_cmds.jsonl")
+OUTPUT_FILE = Path("./Dataset/f_output/base_cmds.jsonl")
 
 PREFIX_PHRASES = ["", "please", "hey", "could you"]
 SUFFIX_PHRASES = ["", "for me"]

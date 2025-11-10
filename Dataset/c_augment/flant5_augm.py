@@ -37,7 +37,7 @@ def main(batch_size=24):
     prompts = [
         (
             entry,
-            f"Paraphrase the following aviation command: {entry['text']}"
+            f"You are a pilot in an aircraft. Paraphrase the following aviation command: {entry['text']}"
         )
         for entry in dataset
     ]
