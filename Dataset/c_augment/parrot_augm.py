@@ -35,8 +35,10 @@ def save_dataset(dataset, output_path):
 # ---------------------------------------------------------------------
 def main():
     print("🚀 Loading Parrot model...")
-    parrot = Parrot(model_tag="prithivida/parrot_paraphraser_on_T5",
-                    use_gpu=torch.cuda.is_available())
+    parrot = Parrot(
+        model_tag="prithivida/parrot_paraphraser_on_T5",
+        use_gpu=torch.cuda.is_available()
+    )
 
     dataset = load_base()
     augmented = []
@@ -48,7 +50,7 @@ def main():
             results = parrot.augment(
                 input_phrase=entry["text"],
                 use_gpu=torch.cuda.is_available(),
-                do_diverse=True
+                do_diverse=False
             )
 
             if results:
