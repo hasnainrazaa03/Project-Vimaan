@@ -9,6 +9,7 @@ No license or rights are granted except as expressly stated below.
 
 ## 1. Permitted Use
 You may:
+
 • Access and view the Code in its unmodified form.  
 • Use the Code for personal study, analysis, or review.
 
