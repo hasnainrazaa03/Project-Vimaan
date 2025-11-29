@@ -16,6 +16,7 @@ You may:
 
 ## 2. Prohibited Use
 You are expressly prohibited from:
+
 • Using the Code in any software, product, tool, or service.  
 • Copying, modifying, adapting, or creating derivative works.  
 • Distributing, sublicensing, or making the Code available to third parties.  
