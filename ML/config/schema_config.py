@@ -1,60 +1,41 @@
 # -----------------
-# Clean Schema Configuration for Project Vimaan NLU Dataset Generation
+# Schema Configuration for Project Vimaan
 # -----------------
-
 
 # ============================================================================
 # SYNONYMS
 # ============================================================================
 
-
-# Push/Pull actions for mode switching
 SYN_PUSH_ACTIONS = ["push", "push to", "engage", "activate managed"]
 SYN_PULL_ACTIONS = ["pull", "pull to", "disengage", "activate selected"]
 
-
-# Mode activation verbs
 SYN_MANAGE_ACTIONS = ["manage", "managed mode", "put in managed"]
 SYN_SELECT_ACTIONS = ["select", "selected mode", "put in selected"]
 
-
-# Control synonyms
 SYN_SPD = ["SPD", "speed", "speed knob", "speed control"]
 SYN_HDG = ["heading", "HDG", "heading knob", "heading control"]
 SYN_ALT = ["altitude", "ALT", "altitude knob", "altitude control"]
 SYN_VS = ["vertical speed", "VS", "VS knob", "V/S", "climb rate"]
 
-
-# Brake control
 SYN_BRAKE_ON = ["on", "engage", "set", "apply", "activate"]
 SYN_BRAKE_OFF = ["off", "release", "disengage", "deactivate"]
 SYN_PARKING_BRAKE = ["parking brake", "park brake", "brake", "park"]
 
-
-# Flap positions
 SYN_FLAP_ZERO = ["0", "zero", "up", "retracted"]
 SYN_FLAP_ONE = ["1", "one"]
 SYN_FLAP_TWO = ["2", "two"]
 SYN_FLAP_THREE = ["3", "three"]
 SYN_FLAP_FULL = ["full", "full flaps", "all the way"]
 
-
-# Speed/heading values
 SYN_SET = ["set", "change", "go to", "adjust to", "maintain"]
 SYN_KNOTS = ["knots", "kts", "K", "knot"]
-SYN_DEGREES = ["degrees", "degree" "degs", "deg"]
-
+SYN_DEGREES = ["degrees", "degree", "degs", "deg"]
 
 # ============================================================================
 # SCHEMA
 # ============================================================================
 
-
 SCHEMA = {
-    # ========================================================================
-    # BOOLEAN MODES (push=managed, pull=selected)
-    # ========================================================================
-    
     "spd_mode": {
         "intent": "SPD_MODE",
         "type": "boolean_mode",
@@ -219,10 +200,6 @@ SCHEMA = {
         }
     },
     
-    # ========================================================================
-    # BINARY STATE (on/off)
-    # ========================================================================
-    
     "park_brake": {
         "intent": "PARK_BRAKE",
         "type": "binary_state",
@@ -264,10 +241,6 @@ SCHEMA = {
         }
     },
     
-    # ========================================================================
-    # DISCRETE VALUE (specific positions)
-    # ========================================================================
-    
     "sflp": {
         "intent": "SFLP",
         "type": "discrete_value",
@@ -307,10 +280,6 @@ SCHEMA = {
             }
         }
     },
-    
-    # ========================================================================
-    # NUMERIC VALUES (ranges)
-    # ========================================================================
     
     "spd_value": {
         "intent": "SPD_VALUE",
@@ -373,4 +342,59 @@ SCHEMA = {
             }
         }
     },
+}
+
+# ============================================================================
+# PREFIX/SUFFIX CONFIGURATION
+# ============================================================================
+
+PREFIX_SUFFIX_CONFIG = {
+    "general": {
+        "prefix_probability": 0.25,
+        "apply_prefix_only": 0.40,
+        "apply_suffix_only": 0.40,
+        "apply_both": 0.20
+    },
+    "intent_rules": {
+        "SPD_MODE": {
+            "applicable": True,
+            "prefixes": ["please", "could you", "request"],
+            "suffixes": ["now", "immediately"]
+        },
+        "HDG_MODE": {
+            "applicable": True,
+            "prefixes": ["please", "could you", "request"],
+            "suffixes": ["now", "immediately"]
+        },
+        "ALT_MODE": {
+            "applicable": True,
+            "prefixes": ["please", "could you", "request"],
+            "suffixes": ["now", "immediately"]
+        },
+        "VS_MODE": {
+            "applicable": True,
+            "prefixes": ["please", "could you", "request"],
+            "suffixes": ["now", "immediately"]
+        },
+        "PARK_BRAKE": {
+            "applicable": True,
+            "prefixes": ["please", "request"],
+            "suffixes": ["now", "immediately"]
+        },
+        "SFLP": {
+            "applicable": True,
+            "prefixes": ["set", "configure"],
+            "suffixes": ["now", "please"]
+        },
+        "SPD_VALUE": {
+            "applicable": True,
+            "prefixes": ["set", "maintain"],
+            "suffixes": ["now", "please"]
+        },
+        "HDG_VALUE": {
+            "applicable": True,
+            "prefixes": ["set", "maintain"],
+            "suffixes": ["now", "please"]
+        },
+    }
 }
