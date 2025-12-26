@@ -1,0 +1,13 @@
+git checkout dev
+git pull origin dev
+git checkout -b feature/branch-name
+git add .
+git commit -m "describe your changes"
+git push -u origin feature/branch-name
+git checkout dev
+git pull origin dev
+git merge feature/branch-name
+git push origin dev
+git branch -d feature/branch-name
+git push origin --delete feature/branch-name
+git fetch -p
