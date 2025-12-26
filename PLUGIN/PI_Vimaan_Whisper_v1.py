@@ -5,7 +5,7 @@ import whisper
 import time
 from scipy.signal import resample
 
-# test comment
+# test terminal commands
 
 
 class PythonInterface:
