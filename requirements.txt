@@ -1,0 +1,32 @@
+# Core deep-learning stack
+torch>=2.0
+transformers>=4.35
+
+# Tokenizers / utilities that ship with HF but are nice to pin
+tokenizers>=0.14
+huggingface_hub>=0.19
+
+# Numerics & evaluation
+numpy
+scipy
+scikit-learn
+matplotlib
+tqdm
+
+# Numeric / phonetic text normalization
+word2number
+num2words
+
+# Speech I/O
+SpeechRecognition
+sounddevice
+openai-whisper          # optional; required by legacy Whisper plugin
+
+# Legacy plugin (plugin/legacy/AI_CoPilot.py)
+joblib
+sentence-transformers
+
+# NOTE:
+# XPPython3 is provided by the X-Plane installation and MUST NOT be installed via pip.
+# PyAudio is required by SpeechRecognition's Microphone() backend; install via OS package
+# manager (e.g., `brew install portaudio && pip install pyaudio` on macOS).

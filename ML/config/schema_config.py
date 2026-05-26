@@ -1,400 +1,241 @@
-# -----------------
-# Schema Configuration for Project Vimaan
-# -----------------
-
-# ============================================================================
-# SYNONYMS
-# ============================================================================
-
-SYN_PUSH_ACTIONS = ["push", "push to", "engage", "activate managed"]
-SYN_PULL_ACTIONS = ["pull", "pull to", "disengage", "activate selected"]
-
-SYN_MANAGE_ACTIONS = ["manage", "managed mode", "put in managed"]
-SYN_SELECT_ACTIONS = ["select", "selected mode", "put in selected"]
-
-SYN_SPD = ["SPD", "speed", "speed knob", "speed control"]
-SYN_HDG = ["heading", "HDG", "heading knob", "heading control"]
-SYN_ALT = ["altitude", "ALT", "altitude knob", "altitude control"]
-SYN_VS = ["vertical speed", "VS", "VS knob", "V/S", "climb rate"]
-
-SYN_BRAKE_ON = ["on", "engage", "set", "apply", "activate"]
-SYN_BRAKE_OFF = ["off", "release", "disengage", "deactivate"]
-SYN_PARKING_BRAKE = ["parking brake", "park brake", "brake", "park"]
-
-SYN_FLAP_ZERO = ["0", "zero", "up", "retracted"]
-SYN_FLAP_ONE = ["1", "one"]
-SYN_FLAP_TWO = ["2", "two"]
-SYN_FLAP_THREE = ["3", "three"]
-SYN_FLAP_FULL = ["full", "full flaps", "all the way"]
-
-SYN_SET = ["set", "change", "go to", "adjust to", "maintain"]
-SYN_KNOTS = ["knots", "kts", "K", "knot"]
-SYN_DEGREES = ["degrees", "degree", "degs", "deg"]
-
-# ============================================================================
-# SCHEMA
-# ============================================================================
-
+#COMMAND SCHEMA WITH INTENTS AND SLOTS
 SCHEMA = {
-    "spd_mode": {
-        "intent": "SPD_MODE",
-        "type": "boolean_mode",
-        "control": "SPD",
+    "set_autopilot_heading": {
         "templates": [
-            "{action} {control}",
-            "{state} {control}",
-            "{action} the {control}",
-            "{control} {state}",
+            "set heading {degrees}",
+            "change heading to {degrees}",
+            "turn to {degrees} degrees",
+            "fly heading {degrees}"
+        ],
+        "slots": {
+            "degrees": {
+                "type": "numerical",
+                "values": [str(i) for i in range(0, 361, 1)] #Headings from 0 to 360
+            }
+        }
+    },
+    "set_autopilot_altitude": {
+        "templates": [
+            "set altitude {altitude}",
+            "climb to {altitude} feet",
+            "descend to {altitude} feet",
+            "fly at {altitude}"
+        ],
+        "slots": {
+            "altitude": {
+                "type": "numerical",
+                "values": [str(i) for i in range(100, 40001, 100)] #Altitudes from 100 to 40000
+            }
+        }
+    },
+    "set_flight_level": {
+        "templates": [
+            "climb to flight level {flight_level}",
+            "maintain flight level {flight_level}",
+            "request flight level {flight_level}"
+        ],
+        "slots": {
+            "flight_level": {
+                "type": "numerical",
+                "values": [str(i) for i in range(100, 401, 10)] # FL100, FL110 ...
+            }
+        }
+    },
+    "set_com_frequency": {
+        "templates": [
+            "set com {com_port} to {frequency}",
+            "tune com {com_port} {frequency}",
+            "frequency {frequency} on com {com_port}"
+        ],
+        "slots": {
+            "com_port": {
+                "type": "categorical",
+                "values": ["1", "2"]
+            },
+            "frequency": {
+                "type": "numerical",
+                #value will now be generated dynamically in the loop
+                "values": ["<DYNAMIC>"]
+            }
+        }
+    },
+    "toggle_landing_gear": {
+        "templates": [
+            "gear {state}",
+            "{state} landing gear",
+            "landing gear {state}"
         ],
         "slots": {
             "state": {
                 "type": "categorical",
-                "values": ["managed", "selected"]
-            }
-        },
-        "placeholder_mapping": {
-            "action": {
-                "push": {
-                    "synonyms": SYN_PUSH_ACTIONS,
-                    "state": "managed"
-                },
-                "pull": {
-                    "synonyms": SYN_PULL_ACTIONS,
-                    "state": "selected"
-                }
-            },
-            "control": {
-                "synonyms": SYN_SPD
-            },
-            "state": {
-                "managed": {
-                    "synonyms": SYN_MANAGE_ACTIONS
-                },
-                "selected": {
-                    "synonyms": SYN_SELECT_ACTIONS
+                "values": ["up", "down"],
+                "synonyms": {
+                    "up": ["raise", "retract"], 
+                    "down": ["lower", "extend", "deploy"]
                 }
             }
         }
     },
-    
-    "hdg_mode": {
-        "intent": "HDG_MODE",
-        "type": "boolean_mode",
-        "control": "HDG",
+    "toggle_flaps": {
         "templates": [
-            "{action} {control}",
-            "{state} {control}",
-            "{action} the {control}",
-            "{control} {state}",
+            "flaps {state}", 
+            "{state} flaps", 
+            "set flaps {state}"
         ],
         "slots": {
             "state": {
-                "type": "categorical",
-                "values": ["managed", "selected"]
-            }
-        },
-        "placeholder_mapping": {
-            "action": {
-                "push": {
-                    "synonyms": SYN_PUSH_ACTIONS,
-                    "state": "managed"
-                },
-                "pull": {
-                    "synonyms": SYN_PULL_ACTIONS,
-                    "state": "selected"
-                }
-            },
-            "control": {
-                "synonyms": SYN_HDG
-            },
-            "state": {
-                "managed": {
-                    "synonyms": SYN_MANAGE_ACTIONS
-                },
-                "selected": {
-                    "synonyms": SYN_SELECT_ACTIONS
+                "type": "categorical", 
+                "values": ["up", "down"],
+                "synonyms": {
+                    "up": ["retract", "raise"], 
+                    "down": ["extend", "lower", "deploy"]
                 }
             }
         }
     },
-    
-    "alt_knob_mode": {
-        "intent": "ALT_MODE",
-        "type": "boolean_mode",
-        "control": "ALT",
+    "toggle_autopilot_1": {
         "templates": [
-            "{action} {control}",
-            "{state} {control}",
-            "{action} the {control}",
-            "{control} {state}",
+            "autopilot 1 {state}", 
+            "{state} autopilot 1", 
+            "ap one {state}"
         ],
         "slots": {
             "state": {
-                "type": "categorical",
-                "values": ["managed", "selected"]
-            }
-        },
-        "placeholder_mapping": {
-            "action": {
-                "push": {
-                    "synonyms": SYN_PUSH_ACTIONS,
-                    "state": "managed"
-                },
-                "pull": {
-                    "synonyms": SYN_PULL_ACTIONS,
-                    "state": "selected"
-                }
-            },
-            "control": {
-                "synonyms": SYN_ALT
-            },
-            "state": {
-                "managed": {
-                    "synonyms": SYN_MANAGE_ACTIONS
-                },
-                "selected": {
-                    "synonyms": SYN_SELECT_ACTIONS
+                "type": "categorical", 
+                "values": ["on", "off"],
+                "synonyms": {
+                    "on": ["engage", "activate"], 
+                    "off": ["disengage", "deactivate"]
                 }
             }
         }
     },
-    
-    "vs_mode": {
-        "intent": "VS_MODE",
-        "type": "boolean_mode",
-        "control": "VS",
+    "toggle_autopilot_2": {
         "templates": [
-            "{action} {control}",
-            "{state} {control}",
-            "{action} the {control}",
-            "{control} {state}",
+            "autopilot 2 {state}", 
+            "{state} autopilot 2", 
+            "ap two {state}"
         ],
         "slots": {
             "state": {
-                "type": "categorical",
-                "values": ["managed", "selected"]
-            }
-        },
-        "placeholder_mapping": {
-            "action": {
-                "push": {
-                    "synonyms": SYN_PUSH_ACTIONS,
-                    "state": "managed"
-                },
-                "pull": {
-                    "synonyms": SYN_PULL_ACTIONS,
-                    "state": "selected"
-                }
-            },
-            "control": {
-                "synonyms": SYN_VS
-            },
-            "state": {
-                "managed": {
-                    "synonyms": SYN_MANAGE_ACTIONS
-                },
-                "selected": {
-                    "synonyms": SYN_SELECT_ACTIONS
+                "type": "categorical", 
+                "values": ["on", "off"],
+                "synonyms": {
+                    "on": ["engage", "activate"], 
+                    "off": ["disengage", "deactivate"]
                 }
             }
         }
     },
-    
-    "park_brake": {
-        "intent": "PARK_BRAKE",
-        "type": "binary_state",
-        "control": "PARK_BRAKE",
+    "toggle_flight_director_1": {
         "templates": [
-            "{action} {control}",
-            "{control} {state}",
-            "{state} {control}",
-            "{action} the {control}",
+            "flight director 1 {state}", 
+            "{state} flight director 1", 
+            "fd one {state}"
         ],
         "slots": {
             "state": {
-                "type": "categorical",
-                "values": ["on", "off"]
-            }
-        },
-        "placeholder_mapping": {
-            "action": {
-                "on": {
-                    "synonyms": SYN_BRAKE_ON,
-                    "state": "on"
-                },
-                "off": {
-                    "synonyms": SYN_BRAKE_OFF,
-                    "state": "off"
+                "type": "categorical", 
+                "values": ["on", "off"],
+                "synonyms": {
+                    "on": ["enable", "activate"], 
+                    "off": ["disable", "deactivate"]
                 }
-            },
-            "control": {
-                "synonyms": SYN_PARKING_BRAKE
-            },
+            }
+        }
+    },
+    "toggle_flight_director_2": {
+        "templates": [
+            "flight director 2 {state}", 
+            "{state} flight director 2", 
+            "fd two {state}"
+        ],
+        "slots": {
             "state": {
-                "on": {
-                    "synonyms": ["on", "engaged"]
-                },
-                "off": {
-                    "synonyms": ["off", "released"]
+                "type": "categorical", 
+                "values": ["on", "off"],
+                "synonyms": {
+                    "on": ["enable", "activate"], 
+                    "off": ["disable", "deactivate"]
                 }
             }
         }
     },
-    
-    "sflp": {
-        "intent": "SFLP",
-        "type": "discrete_value",
-        "control": "flaps",
+    "toggle_parking_brake": {
         "templates": [
-            "{control} {position}",
-            "set {control} to {position}",
-            "{control} position {position}",
-            "{position} {control}",
+            "parking brake {state}", 
+            "{state} parking brake"
         ],
         "slots": {
-            "position": {
-                "type": "categorical",
-                "values": ["0", "1", "2", "3", "full"]
-            }
-        },
-        "placeholder_mapping": {
-            "control": {
-                "synonyms": ["flaps", "flap setting", "flap position", "flap"]
-            },
-            "position": {
-                "0": {
-                    "synonyms": SYN_FLAP_ZERO
-                },
-                "1": {
-                    "synonyms": SYN_FLAP_ONE
-                },
-                "2": {
-                    "synonyms": SYN_FLAP_TWO
-                },
-                "3": {
-                    "synonyms": SYN_FLAP_THREE
-                },
-                "full": {
-                    "synonyms": SYN_FLAP_FULL
+            "state": {
+                "type": "categorical", 
+                "values": ["on", "off"],
+                "synonyms": {
+                    "on": ["engage", "set"], 
+                    "off": ["release", "disengage"]
                 }
             }
         }
     },
-    
-    "spd_value": {
-        "intent": "SPD_VALUE",
-        "type": "numeric_value",
-        "control": "speed",
+    "toggle_engine_1": {
         "templates": [
-            "{action} {control} {value} {unit}",
-            "{control} {value} {unit}",
-            "{value} {unit} {control}",
-            "{action} {value}",
+            "engine 1 {state}", 
+            "{state} engine 1"
         ],
         "slots": {
-            "value": {
-                "type": "numeric",
-                "min": 100,
-                "max": 350,
-                "unit": "knots"
-            }
-        },
-        "placeholder_mapping": {
-            "action": {
-                "synonyms": SYN_SET
-            },
-            "control": {
-                "synonyms": SYN_SPD
-            },
-            "unit": {
-                "synonyms": SYN_KNOTS
+            "state": {
+                "type": "categorical", 
+                "values": ["on", "off"],
+                "synonyms": {
+                    "on": ["start", "ignite"], 
+                    "off": ["stop", "shut down", "kill"]
+                }
             }
         }
     },
-    
-    "hdg_value": {
-        "intent": "HDG_VALUE",
-        "type": "numeric_value",
-        "control": "heading",
+    "toggle_engine_2": {
         "templates": [
-            "{action} {control} {value} {unit}",
-            "{control} {value} {unit}",
-            "{value} {unit} {control}",
-            "{action} {value}",
+            "engine 2 {state}", 
+            "{state} engine 2"
         ],
         "slots": {
-            "value": {
-                "type": "numeric",
-                "min": 0,
-                "max": 359,
-                "unit": "degrees"
-            }
-        },
-        "placeholder_mapping": {
-            "action": {
-                "synonyms": SYN_SET
-            },
-            "control": {
-                "synonyms": SYN_HDG
-            },
-            "unit": {
-                "synonyms": SYN_DEGREES
+            "state": {
+                "type": "categorical", 
+                "values": ["on", "off"],
+                "synonyms": {
+                    "on": ["start", "ignite"], 
+                    "off": ["stop", "shut down", "kill"]
+                }
             }
         }
     },
-}
-
-# ============================================================================
-# PREFIX/SUFFIX CONFIGURATION
-# ============================================================================
-
-PREFIX_SUFFIX_CONFIG = {
-    "general": {
-        "prefix_probability": 0.25,
-        "apply_prefix_only": 0.40,
-        "apply_suffix_only": 0.40,
-        "apply_both": 0.20
+    # --- Out-of-Scope Intent ---
+    "None": {
+        "templates": [
+            "what's the weather like today", "how are you doing",
+            "tell me something interesting", "that's a beautiful sunset", 
+            "are we there yet", "what time is it", "i'm feeling hungry", 
+            "can you see the city lights"
+        ],
+        "slots": {}
     },
-    "intent_rules": {
-        "SPD_MODE": {
-            "applicable": True,
-            "prefixes": ["please", "could you", "request"],
-            "suffixes": ["now", "immediately"]
-        },
-        "HDG_MODE": {
-            "applicable": True,
-            "prefixes": ["please", "could you", "request"],
-            "suffixes": ["now", "immediately"]
-        },
-        "ALT_MODE": {
-            "applicable": True,
-            "prefixes": ["please", "could you", "request"],
-            "suffixes": ["now", "immediately"]
-        },
-        "VS_MODE": {
-            "applicable": True,
-            "prefixes": ["please", "could you", "request"],
-            "suffixes": ["now", "immediately"]
-        },
-        "PARK_BRAKE": {
-            "applicable": True,
-            "prefixes": ["please", "request"],
-            "suffixes": ["now", "immediately"]
-        },
-        "SFLP": {
-            "applicable": True,
-            "prefixes": ["set", "configure"],
-            "suffixes": ["now", "please"]
-        },
-        "SPD_VALUE": {
-            "applicable": True,
-            "prefixes": ["set", "maintain"],
-            "suffixes": ["now", "please"]
-        },
-        "HDG_VALUE": {
-            "applicable": True,
-            "prefixes": ["set", "maintain"],
-            "suffixes": ["now", "please"]
-        },
+    # --- Conversational Intents ---
+    "ask_status_generic": {
+        "templates": [
+            "are we there yet", "how much longer until we arrive", "what's our current status"
+        ],
+        "slots": {}
+    },
+    "ask_time": {
+        "templates": [
+            "what time is it", "what is the current time", "do you have the time please"
+        ],
+        "slots": {}
+    },
+    "chit_chat_greeting": {
+        "templates": [
+            "hello vimaan", "good morning co-pilot", "are you there", "hey how are you"
+        ],
+        "slots": {}
     }
 }
