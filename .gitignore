@@ -1,0 +1,105 @@
+# ============================================================
+# Project Vimaan — .gitignore
+# ============================================================
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+
+# ---- Virtual environments ----
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# ---- IDE / Editor ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---- OS noise ----
+ehthumbs.db
+desktop.ini
+
+# ---- Secrets & credentials ----
+# Never commit tokens, API keys, or credentials.
+*.token
+.env
+.env.*
+!.env.example
+secrets/
+**/token*.txt
+**/*HF*token*
+**/*hf_token*
+**/credentials.json
+**/credentials.yaml
+
+# ---- Large ML artifacts (kept locally only) ----
+# Trained model checkpoints and weights — too large for git.
+ML/models/vimaan_nlu_model_best/
+ML/models/**/*.bin
+ML/models/**/*.safetensors
+ML/models/**/*.pt
+ML/models/**/*.pth
+ML/models/**/*.pkl
+ML/models/**/vocab.txt
+ML/models/**/tokenizer*.json
+ML/models/**/special_tokens_map.json
+ML/models/**/config.json
+ML/models/**/intent_map.json
+ML/models/**/slot_map.json
+
+# ---- Datasets ----
+# Generated / large dataset artifacts.
+ML/datasets/01_base/*.jsonl
+ML/datasets/02_augmented_pegasus/
+ML/datasets/03_augmented_flan_t5/
+ML/datasets/04_clean_pegasus/
+ML/datasets/05_final_merged/
+ML/datasets/06_clean_flan_t5/
+ML/datasets/**/generation_metadata.json
+
+# ---- Evaluation outputs ----
+ML/evaluation/results/
+
+# ---- Logs ----
+*.log
+logs/
+Vimaan_Logs/
+
+# ---- Scratch / personal notes (not for the repo) ----
+scratch/
+
+# ---- Backups ----
+*.bak
+*.backup
+*_backup.*
+*_old.*
+
+# ---- Build / dist ----
+build/
+dist/
+*.whl
+
+# ---- Misc ----
+.ipynb_checkpoints/
+*.ipynb
