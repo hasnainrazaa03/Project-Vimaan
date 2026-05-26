@@ -37,7 +37,7 @@ A snapshot of what Project Vimaan currently does. For what's *planned*, see [doc
 ### Project hygiene
 - Comprehensive `.gitignore` (models, datasets, secrets, OS noise).
 - Documentation in `docs/`: architecture, bugs, roadmap, structure, version control, production checklist.
-- Upstream/origin remote topology documented in [CONTRIBUTING.md](CONTRIBUTING.md).
+- Main-only workflow documented in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Out of scope (today)
 

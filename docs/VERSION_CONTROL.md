@@ -4,20 +4,17 @@
 
 Use this setup:
 
-- `origin`: your repository (push target for day-to-day work)
-- `upstream`: source repository (read/sync source)
+- `origin`: your repository (single source of truth)
 
 Current intended values:
 
 - `origin`: `https://github.com/hasnainrazaa03/Project-Vimaan.git`
-- `upstream`: `https://github.com/The-Aryan/PROJECT-VIMAAN.git`
 
 ## One-Time Setup
 
-If repository is cloned from upstream directly:
+If `origin` is missing or incorrect:
 
 ```bash
-git remote rename origin upstream
 git remote add origin https://github.com/hasnainrazaa03/Project-Vimaan.git
 ```
 
@@ -26,7 +23,6 @@ If old `origin` must be removed first:
 ```bash
 git remote remove origin
 git remote add origin https://github.com/hasnainrazaa03/Project-Vimaan.git
-git remote add upstream https://github.com/The-Aryan/PROJECT-VIMAAN.git
 ```
 
 ## Verify Remotes
@@ -37,36 +33,14 @@ git remote -v
 
 Expected pattern:
 
-- origin fetch/push -> personal repository
-- upstream fetch/push -> source repository
+- origin fetch/push -> source-of-truth repository
 
-## Sync from Upstream
-
-For repositories whose base branch is `dev`:
-
-```bash
-git checkout dev
-git fetch upstream
-git merge --ff-only upstream/dev
-git push origin dev
-```
-
-For repositories using `main`:
+## Sync Main
 
 ```bash
 git checkout main
-git fetch upstream
-git merge --ff-only upstream/main
+git pull --ff-only origin main
 git push origin main
-```
-
-For repositories using `master`:
-
-```bash
-git checkout master
-git fetch upstream
-git merge --ff-only upstream/master
-git push origin master
 ```
 
 ## Safe Reset Procedure (When Replacing Local State)
@@ -74,9 +48,9 @@ git push origin master
 Use only when intentionally discarding local working tree history/state.
 
 ```bash
-git fetch upstream
-git checkout <base-branch>
-git reset --hard upstream/<base-branch>
+git fetch origin
+git checkout main
+git reset --hard origin/main
 ```
 
 Before this operation, always create backup snapshot of local files and ensure no uncommitted work is needed.

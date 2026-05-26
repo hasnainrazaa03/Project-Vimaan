@@ -26,7 +26,6 @@
 - [Contributing](#contributing)
 - [Security](#security)
 - [Credits](#credits)
-- [License](#license)
 
 ---
 
@@ -300,38 +299,22 @@ Outputs land in `ML/evaluation/results/` (gitignored): per-version JSON metrics 
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for branch strategy, commit conventions, and PR expectations.
 
-**Remote topology**
-- `origin` → `https://github.com/hasnainrazaa03/Project-Vimaan.git` (this fork)
-- `upstream` → `https://github.com/The-Aryan/PROJECT-VIMAAN.git` (source of truth)
+**Source of truth**
+- `origin` → `https://github.com/hasnainrazaa03/Project-Vimaan.git`
 
 ```bash
-# Sync from upstream
-git fetch upstream
-git checkout dev
-git merge --ff-only upstream/dev
-git push origin dev
+git checkout main
+git pull --ff-only origin main
 ```
 
 ---
 
 ## Security
 
-> ⚠️ **Never commit secrets.** This repo has a `.gitignore` that blocks `*.token`, `.env`, and any file matching `**/token*.txt`. If you discover a leaked secret in history, rotate it immediately and follow [GitHub's token-removal guide](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository).
-
-Use environment variables instead:
-
-```bash
-export HUGGINGFACE_HUB_TOKEN="hf_..."
-```
+> ⚠️ **Never commit secrets.** If you discover a leaked secret in history, rotate it immediately and follow [GitHub's sensitive data removal guide](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository).
 
 ---
 
 ## Credits
 
-Project Vimaan is developed by **The Aryan**, **Vyom Shukla**, **Hasnain Raza**, and contributors. The aircraft datarefs and command refs are courtesy of Laminar Research / X-Plane.
-
----
-
-## License
-
-No license file is currently present. Add one (MIT, Apache-2.0, etc.) before public distribution.
+Project Vimaan is developed and maintained by **Hasnain Raza**.

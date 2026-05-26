@@ -1,9 +1,9 @@
-# make sure dev is up to date
-git checkout dev
-git pull origin dev
+# make sure main is up to date
+git checkout main
+git pull origin main
 
 
-# create feature branch from dev
+# create feature branch from main
 git checkout -b feature/branch-name
 
 # work on code (edit files, add new files/folders)
@@ -21,17 +21,17 @@ git commit -m "describe your changes"
 git push -u origin feature/branch-name
 
 
-# switch back to dev and sync
-git checkout dev
-git pull origin dev
+# switch back to main and sync
+git checkout main
+git pull origin main
 
 
-# merge feature branch into dev
+# merge feature branch into main
 git merge feature/branch-name
 
 
-# push merged dev to GitHub
-git push origin dev
+# push merged main to GitHub
+git push origin main
 
 
 # delete feature branch locally

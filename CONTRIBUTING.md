@@ -2,35 +2,32 @@
 
 ## Branch Strategy
 
-Current upstream default branch is `dev`.
+The default and only long-lived branch is `main`.
 
 Use this branch model:
 
-1. Sync base branch (`dev`) from `upstream`.
-2. Create feature branch from updated `dev`.
+1. Sync base branch (`main`) from `origin`.
+2. Create feature branch from updated `main`.
 3. Commit logically grouped changes.
 4. Push to `origin` and open PR.
 5. Merge after review and validation.
 
 ## Remote Roles
 
-- `origin`: personal/fork repository (`hasnainrazaa03/Project-Vimaan`).
-- `upstream`: source repository (`The-Aryan/PROJECT-VIMAAN`).
+- `origin`: source-of-truth repository (`hasnainrazaa03/Project-Vimaan`).
 
 ## Local Sync Workflow
 
 ```bash
-git checkout dev
-git fetch upstream
-git merge --ff-only upstream/dev
-git push origin dev
+git checkout main
+git pull --ff-only origin main
 ```
 
 ## Feature Workflow
 
 ```bash
-git checkout dev
-git pull --ff-only origin dev
+git checkout main
+git pull --ff-only origin main
 git checkout -b feature/short-description
 
 # work
