@@ -2,12 +2,11 @@ import re
 
 try:
     from word2number import w2n
-except ImportError:
-    print("Installing word2number...")
-    import subprocess
-    import sys
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "word2number"])
-    from word2number import w2n
+except ImportError as _w2n_err:
+    raise ImportError(
+        "The 'word2number' package is required for ML/core/normalization.py. "
+        "Install it from the project requirements: pip install -r requirements.txt"
+    ) from _w2n_err
 
 
 PHONETIC_MAP = {
