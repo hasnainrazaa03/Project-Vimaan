@@ -198,7 +198,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-> **Tip:** Set `HUGGINGFACE_HUB_TOKEN` as an environment variable if you plan to fetch private models. **Never commit a token file.**
+> **Tip:** Keep local environment configuration outside version control.
 
 ---
 
