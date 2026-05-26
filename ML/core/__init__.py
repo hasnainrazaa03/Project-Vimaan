@@ -26,8 +26,12 @@ __all__ = [
     'add_implicit_state',
     'extract_digit_sequence_frequency',
     'extract_numbers_from_text',
-    'JointIntentAndSlotModel'
+    'JointIntentAndSlotModel',
 ]
 
-from core.model_loader import ModelLoader
-from core.inference import predict, extract_slots, reconstruct_slot_value
+# Note: ModelLoader / predict are NOT re-exported here. Importing them
+# eagerly would pull torch + transformers on every `import core`, which is
+# unnecessary for lightweight consumers (normalization-only callers, tests).
+# Import them explicitly from their submodules when needed:
+#   from core.model_loader import ModelLoader
+#   from core.inference import predict

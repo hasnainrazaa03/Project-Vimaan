@@ -8,18 +8,8 @@ from tqdm import tqdm
 import numpy as np
 import os
 from core import normalize_dataset, JointIntentAndSlotModel
-from core.postprocessor import add_implicit_state, extract_digit_sequence_frequency
-from utils import find_latest_version_path, get_next_version_path, get_model_versions_dir
+from utils import find_latest_version_path, get_model_versions_dir
 
-
-try:
-    from num2words import num2words
-except ImportError:
-    print("Installing 'num2words' library...")
-    import subprocess
-    import sys
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "num2words"])
-    from num2words import num2words
 
 #DATASET PREPARATION
 class AviationCommandDataset(Dataset):

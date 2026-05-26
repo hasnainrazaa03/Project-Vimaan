@@ -85,18 +85,18 @@
 
 | ID | Severity | Area | Owner | Status |
 | --- | --- | --- | --- | --- |
-| B-001 | 🔴 | Legacy plugin | — | open |
-| B-002 | 🔴 | Security | — | needs revoke |
-| B-003 | 🟠 | ML core | — | open |
-| B-004 | 🟠 | Training | — | open |
-| B-005 | 🟠 | Plugin handlers | — | open |
-| B-006 | 🟠 | Plugin audio | — | open |
-| B-007 | 🟠 | Packaging | — | open |
-| B-008 | 🟡 | Tests | — | open |
-| B-009 | 🟡 | ML core | — | open |
+| B-001 | 🔴 | Legacy plugin | — | **done** (deprecation banner added) |
+| B-002 | 🔴 | Security | — | **needs revoke** (user action) |
+| B-003 | 🟠 | ML core | — | **done** |
+| B-004 | 🟠 | Training | — | **done** (unused import removed) |
+| B-005 | 🟠 | Plugin handlers | — | **done** (state-aware toggles) |
+| B-006 | 🟠 | Plugin audio | — | **done** (threaded worker + queue) |
+| B-007 | 🟠 | Packaging | — | deferred (rename to `vimaan_nlu` next pass) |
+| B-008 | 🟡 | Tests | — | **done** |
+| B-009 | 🟡 | ML core | — | **done** |
 | B-010 | 🟡 | Hygiene | — | **done** |
 | B-011 | 🟡 | Hygiene | — | **done** |
 | B-012 | 🟡 | Repo size | — | **done** |
 | B-013 | ⚪ | Hygiene | — | **done** |
-| B-014 | ⚪ | Plugin | — | open |
-| B-015 | ⚪ | Tooling | — | open |
+| B-014 | ⚪ | Plugin | — | **done** |
+| B-015 | ⚪ | Tooling | — | deferred (separate CI pass) |

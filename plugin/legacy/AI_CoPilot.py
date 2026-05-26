@@ -1,3 +1,14 @@
+# ============================================================
+# DEPRECATED — v1 prototype plugin.
+#
+# This file references `ML/ai_copilot.pkl`, a sentence-embedding model that
+# is NOT shipped in this repository. It cannot run as-is and is preserved
+# only for historical reference. Use plugin/PI_VimaanCoPilot.py instead,
+# which uses the joint DistilBERT NLU pipeline.
+#
+# Tracked as BUGS B-001.
+# ============================================================
+
 import os
 import joblib
 from XPPython3 import xp  # type: ignore
