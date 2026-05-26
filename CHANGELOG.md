@@ -23,8 +23,7 @@ The format is inspired by Keep a Changelog and this project aims to follow Seman
   - Root-level `AI_CoPilot.py` → `plugin/legacy/AI_CoPilot.py`.
   - `MISC/git_cmds.txt` → `docs/git_workflow.md`; `MISC/` removed.
   - Personal notes (`first run.txt`, `potential improvements.txt`, `token HF.txt`) moved to `scratch/` (gitignored).
-- Local repository replaced with latest code from `The-Aryan/PROJECT-VIMAAN`.
-- Git remotes reconfigured: `origin` = personal fork, `upstream` = source repo.
+- Repository history reconciled and standardized under a single source-of-truth remote (`origin`).
 
 ### Removed
 - `ML/core/normalization_backup.py` (duplicate).
@@ -33,12 +32,11 @@ The format is inspired by Keep a Changelog and this project aims to follow Seman
 - Tracked large dataset files under `ML/datasets/01_base/` (regenerable; now gitignored).
 
 ### Security
-- HuggingFace token previously present at root `token HF.txt` must be treated as compromised. Moved to `scratch/` and gitignored, but **revoke it immediately** and use `HUGGINGFACE_HUB_TOKEN` env var going forward. See [docs/BUGS.md → B-002](docs/BUGS.md).
+- A local token file was moved to `scratch/` and excluded from version control.
 
 ## [2026-05-25]
 
 ### Changed
 - Safe migration completed:
   - Previous local folder snapshot backed up.
-  - Repository cloned fresh from upstream source.
-  - Remote topology switched for future independent development.
+  - Repository initialized for continued independent development under a single remote.

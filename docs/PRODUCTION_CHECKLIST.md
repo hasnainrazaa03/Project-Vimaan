@@ -4,8 +4,8 @@ Use this checklist before release or handoff.
 
 ## Version Control and Release Hygiene
 
-- [ ] Remote setup verified (`origin` personal, `upstream` source).
-- [ ] Base branch synced from upstream.
+- [ ] Remote setup verified (`origin` is source of truth).
+- [ ] Base branch (`main`) synced from origin.
 - [ ] No unreviewed local-only commits on release branch.
 - [ ] `CHANGELOG.md` updated with release notes.
 - [ ] Release tag planned (`vMAJOR.MINOR.PATCH`).
