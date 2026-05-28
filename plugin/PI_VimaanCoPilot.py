@@ -36,8 +36,8 @@ _ML_PATH = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__
 if _ML_PATH not in sys.path:
     sys.path.insert(0, _ML_PATH)
 
-from core.model_loader import ModelLoader  # noqa: E402
-from core.inference import predict  # noqa: E402
+from vimaan_nlu.model_loader import ModelLoader  # noqa: E402
+from vimaan_nlu.inference import predict  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

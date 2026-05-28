@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 import numpy as np
 import os
-from core import normalize_dataset, JointIntentAndSlotModel
+from vimaan_nlu import normalize_dataset, JointIntentAndSlotModel
 from utils import find_latest_version_path, get_model_versions_dir
 
 

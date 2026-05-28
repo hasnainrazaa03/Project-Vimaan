@@ -16,8 +16,8 @@ from sklearn.metrics import (
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from core.model_loader import ModelLoader
-from core.inference import predict
+from vimaan_nlu.model_loader import ModelLoader
+from vimaan_nlu.inference import predict
 from utils import get_latest_model_path
 
 

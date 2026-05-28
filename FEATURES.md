@@ -31,7 +31,7 @@ A snapshot of what Project Vimaan currently does. For what's *planned*, see [doc
 ### Plugin
 - X-Plane 12 + XPPython3 integration.
 - Auto-loads the latest model version on plugin start.
-- Per-session log file under `~/Desktop/Vimaan_Logs/`.
+- Per-session log file under `~/Vimaan_Logs/`.
 - Spoken acknowledgement via `xp.speakString`.
 
 ### Project hygiene

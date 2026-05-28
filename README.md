@@ -73,7 +73,7 @@ flowchart LR
 | 5. Merge | `ML/merge_datasets.py` | Dedup + shuffle + normalize → `datasets/05_final_merged/` |
 | 6. Word-form aug | `ML/augment_with_word_forms.py` | Add "two" ↔ "2" variants |
 | 7. Training | `ML/train_nlu_model.py` | Train joint DistilBERT model, save versioned → `models/vimaan_nlu_model_best/vN/` |
-| 8. Inference | `ML/predict.py`, `ML/core/inference.py` | Load latest model and predict |
+| 8. Inference | `ML/predict.py`, `ML/vimaan_nlu/inference.py` | Load latest model and predict |
 | 9. Evaluation | `ML/evaluation/` | Metrics, confusion matrices, visualizations |
 | 10. Plugin | `plugin/PI_VimaanCoPilot.py` | XPPython3 entry point |
 
@@ -95,9 +95,8 @@ ProjectVimaan/
 │   ├── BUGS.md                  ← known bugs & footguns
 │   ├── ROADMAP.md               ← planned features
 │   ├── PROJECT_STRUCTURE.md     ← directory ownership map
-│   ├── VERSION_CONTROL.md       ← git / remote workflow
-│   ├── PRODUCTION_CHECKLIST.md  ← pre-release checklist
-│   └── git_workflow.md          ← quick git command reference
+│   ├── VERSION_CONTROL.md       ← git / remote workflow + quick command reference
+│   └── PRODUCTION_CHECKLIST.md  ← pre-release checklist
 │
 ├── plugin/
 │   ├── PI_VimaanCoPilot.py      ← active X-Plane plugin (DistilBERT NLU)
@@ -107,7 +106,7 @@ ProjectVimaan/
 │       └── Plugin_Ref.py        ← reference snippets
 │
 ├── ML/
-│   ├── core/                    ← model, inference, normalization, postprocessing
+│   ├── vimaan_nlu/               ← model, inference, normalization, postprocessing
 │   ├── data/                    ← dataset generation / paraphrasing / cleaning
 │   ├── evaluation/              ← evaluator, visualizer, batch runner
 │   ├── utils/                   ← file/versioning helpers
@@ -256,7 +255,7 @@ Versioning: every script appends `_vN` to outputs and the trainer writes the nex
 
 3. Start X-Plane. You should see `[Vimaan] Model loaded ...` in the Log.txt.
 4. In the sim, **hold `Z`** to talk, release to execute.
-5. Logs are written to `~/Desktop/Vimaan_Logs/vimaan_plugin_<timestamp>.log`.
+5. Logs are written to `~/Vimaan_Logs/vimaan_plugin_<timestamp>.log`.
 
 Default hotkey: `Z` (down → start recording, up → process).
 
@@ -279,8 +278,8 @@ Outputs land in `ML/evaluation/results/` (gitignored): per-version JSON metrics 
 
 - **Imports**: scripts that need to be runnable from `ML/` rely on `script_dir/...` and add `ML/` to `sys.path`. Do not break this without updating call sites.
 - **File versioning**: never overwrite — use `get_next_version_path()` from `ML/utils/file_utils.py`.
-- **Normalization**: any new training data must pass through `core.normalization.normalize_dataset()` so phonetic numbers and decimals are unified.
-- **Slot postprocessing**: numeric guards live in `core/postprocessor.py`; extend there, not in the plugin.
+- **Normalization**: any new training data must pass through `vimaan_nlu.normalization.normalize_dataset()` so phonetic numbers and decimals are unified.
+- **Slot postprocessing**: numeric guards live in `vimaan_nlu/postprocessor.py`; extend there, not in the plugin.
 - **Datasets & models are never committed.** See `.gitignore`.
 
 ---
@@ -317,4 +316,4 @@ git pull --ff-only origin main
 
 ## Credits
 
-Project Vimaan is developed and maintained by **Hasnain Raza**.
+Project Vimaan is developed and maintained by **Hasnain Raza**, **Aryan Shukla**, and **Vyom Shukla**.
