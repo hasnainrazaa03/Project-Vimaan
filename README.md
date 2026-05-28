@@ -2,6 +2,7 @@
 
 > AI Co-Pilot for X-Plane — voice-controlled aviation assistant powered by joint intent recognition and slot filling.
 
+[![CI](https://github.com/hasnainrazaa03/Project-Vimaan/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hasnainrazaa03/Project-Vimaan/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/status-active%20development-blue)]()
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)]()
 [![X-Plane](https://img.shields.io/badge/X--Plane-12%20%2B%20XPPython3-orange)]()

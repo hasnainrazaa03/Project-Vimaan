@@ -73,7 +73,7 @@ class PythonInterface:
 
         return self.Name, self.Sig, self.Desc
 
-    def XPluginEnable(self): 
+    def XPluginEnable(self):
         return 1
 
     def XPluginReceiveMessage(self, inFromWho, inMessage, inParam):
@@ -111,7 +111,7 @@ class PythonInterface:
     def ExecuteCommand(self, text: str):
         embedding = self.embedding_model.encode([text])
         intent_idx = self.classifier.predict(embedding)[0]
-        
+
         command_ref_name = self.intent_to_command.get(intent_idx)
         if command_ref_name:
             cmd_ref = xp.findCommand(command_ref_name)

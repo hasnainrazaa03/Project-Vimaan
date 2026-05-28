@@ -1,17 +1,16 @@
 import os
 import re
-from pathlib import Path
 
 
 def find_latest_version_path(base_path):
     directory, full_filename = os.path.split(base_path)
     if not directory:
-        directory = '.'
+        directory = "."
     filename, extension = os.path.splitext(full_filename)
     latest_version = -1
     latest_file_path = None
     regex = re.compile(f"{re.escape(filename)}_v(\\d+){re.escape(extension)}")
-    
+
     try:
         for f in os.listdir(directory):
             match = regex.match(f)
@@ -22,7 +21,7 @@ def find_latest_version_path(base_path):
                     latest_file_path = os.path.join(directory, f)
     except FileNotFoundError:
         return None
-    
+
     if not latest_file_path and os.path.exists(base_path):
         return base_path
     return latest_file_path
@@ -56,11 +55,11 @@ def get_latest_model_path():
     versions = []
     if os.path.exists(models_dir):
         for item in os.listdir(models_dir):
-            if item.startswith('v') and item[1:].isdigit():
+            if item.startswith("v") and item[1:].isdigit():
                 versions.append(int(item[1:]))
-    
+
     if not versions:
         return None
-    
+
     latest_version = max(versions)
     return os.path.join(models_dir, f"v{latest_version}")

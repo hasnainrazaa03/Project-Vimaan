@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install minimal dev deps
+        # We DO NOT install torch / transformers / speechrecognition in CI.
+        # Tests marked `requires_torch` are auto-skipped via conftest.
+        # This keeps CI fast and the runner image small.
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov ruff word2number num2words
+
+      - name: Ruff lint
+        run: ruff check ML plugin tests
+
+      - name: Ruff format check
+        run: ruff format --check ML plugin tests
+
+      - name: Compileall (syntax sanity)
+        run: python -m compileall -q ML plugin
+
+      - name: Pytest (skips torch-only tests)
+        run: pytest -q --cov=ML/vimaan_nlu --cov=ML/utils --cov-report=term-missing
