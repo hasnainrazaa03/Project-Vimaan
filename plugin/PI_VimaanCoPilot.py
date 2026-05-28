@@ -19,16 +19,16 @@ relevant dataref before acting so that "off" never accidentally turns the
 system on when it was already off, and vice-versa.
 """
 
-import os
-import sys
-import queue
 import logging
+import os
+import queue
+import sys
 import threading
 from datetime import datetime
 from pathlib import Path
 
-import torch
 import speech_recognition as sr
+import torch
 from XPPython3 import xp
 
 # Plugin lives in <repo>/plugin/, ML package is at <repo>/ML/
@@ -36,15 +36,14 @@ _ML_PATH = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__
 if _ML_PATH not in sys.path:
     sys.path.insert(0, _ML_PATH)
 
-from vimaan_nlu.model_loader import ModelLoader  # noqa: E402
 from vimaan_nlu.inference import predict  # noqa: E402
-
+from vimaan_nlu.model_loader import ModelLoader  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Listening parameters
 # ---------------------------------------------------------------------------
-LISTEN_TIMEOUT_SEC = 8       # max seconds to wait for speech to start
-PHRASE_TIME_LIMIT_SEC = 12   # max seconds of recorded speech per press
+LISTEN_TIMEOUT_SEC = 8  # max seconds to wait for speech to start
+PHRASE_TIME_LIMIT_SEC = 12  # max seconds of recorded speech per press
 QUEUE_POLL_INTERVAL_SEC = 0.2
 
 # ---------------------------------------------------------------------------
@@ -55,61 +54,60 @@ QUEUE_POLL_INTERVAL_SEC = 0.2
 TOGGLE_BINDINGS = {
     "toggle_autopilot_1": {
         "dataref": "sim/cockpit2/autopilot/servos_on",
-        "on_cmd":  "sim/autopilot/servos_on",
+        "on_cmd": "sim/autopilot/servos_on",
         "off_cmd": "sim/autopilot/servos_off",
-        "toggle":  "sim/autopilot/servos_toggle",
-        "label":   "Autopilot 1",
+        "toggle": "sim/autopilot/servos_toggle",
+        "label": "Autopilot 1",
     },
     "toggle_autopilot_2": {
         "dataref": "sim/cockpit2/autopilot/servos2_on",
-        "on_cmd":  "sim/autopilot/servos2_on",
+        "on_cmd": "sim/autopilot/servos2_on",
         "off_cmd": "sim/autopilot/servos2_off",
-        "toggle":  "sim/autopilot/servos2_toggle",
-        "label":   "Autopilot 2",
+        "toggle": "sim/autopilot/servos2_toggle",
+        "label": "Autopilot 2",
     },
     "toggle_flight_director_1": {
         "dataref": "sim/cockpit2/autopilot/flight_director_mode",
-        "on_cmd":  "sim/autopilot/fdir_on",
+        "on_cmd": "sim/autopilot/fdir_on",
         "off_cmd": "sim/autopilot/fdir_off",
-        "toggle":  "sim/autopilot/fdir_toggle",
-        "label":   "Flight Director 1",
+        "toggle": "sim/autopilot/fdir_toggle",
+        "label": "Flight Director 1",
     },
     "toggle_flight_director_2": {
         "dataref": "sim/cockpit2/autopilot/flight_director2_mode",
-        "on_cmd":  "sim/autopilot/fdir2_on",
+        "on_cmd": "sim/autopilot/fdir2_on",
         "off_cmd": "sim/autopilot/fdir2_off",
-        "toggle":  "sim/autopilot/fdir2_toggle",
-        "label":   "Flight Director 2",
+        "toggle": "sim/autopilot/fdir2_toggle",
+        "label": "Flight Director 2",
     },
     "toggle_parking_brake": {
         "dataref": "sim/cockpit2/controls/parking_brake_ratio",
-        "on_cmd":  "sim/flight_controls/brakes_toggle_max",  # not ideal; see set below
+        "on_cmd": "sim/flight_controls/brakes_toggle_max",  # not ideal; see set below
         "off_cmd": "sim/flight_controls/brakes_toggle_max",
-        "toggle":  "sim/flight_controls/brakes_toggle_max",
-        "label":   "Parking brake",
+        "toggle": "sim/flight_controls/brakes_toggle_max",
+        "label": "Parking brake",
         "is_float_dataref": True,
     },
     "toggle_engine_1": {
         "dataref": "sim/cockpit2/engine/actuators/starter_hit[0]",
-        "on_cmd":  "sim/starters/engage_starter_1",
+        "on_cmd": "sim/starters/engage_starter_1",
         "off_cmd": "sim/starters/shut_down_1",
-        "toggle":  None,
-        "label":   "Engine 1",
+        "toggle": None,
+        "label": "Engine 1",
         "stateless": True,  # momentary; always fire on/off cmd directly
     },
     "toggle_engine_2": {
         "dataref": "sim/cockpit2/engine/actuators/starter_hit[1]",
-        "on_cmd":  "sim/starters/engage_starter_2",
+        "on_cmd": "sim/starters/engage_starter_2",
         "off_cmd": "sim/starters/shut_down_2",
-        "toggle":  None,
-        "label":   "Engine 2",
+        "toggle": None,
+        "label": "Engine 2",
         "stateless": True,
     },
 }
 
 
 class PythonInterface:
-
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -183,8 +181,7 @@ class PythonInterface:
             self.log(f"[Vimaan] Model loaded from: {results['model']['model_path']}")
             self.log(f"[Vimaan] Device: {results['model']['device']}")
             self.log(
-                "[Vimaan] Intents: "
-                f"{results['maps']['intents']}, Slots: {results['maps']['slots']}"
+                f"[Vimaan] Intents: {results['maps']['intents']}, Slots: {results['maps']['slots']}"
             )
         except Exception as exc:
             self.log(f"[Vimaan] ERROR loading model: {exc}")
@@ -192,19 +189,19 @@ class PythonInterface:
 
     def _setup_intent_handlers(self):
         return {
-            "set_autopilot_heading":    self._set_heading,
-            "set_autopilot_altitude":   self._set_altitude,
-            "set_flight_level":         self._set_flight_level,
-            "set_com_frequency":        self._set_com_frequency,
-            "toggle_landing_gear":      self._toggle_landing_gear,
-            "toggle_flaps":             self._toggle_flaps,
-            "toggle_autopilot_1":       self._toggle_binary,
-            "toggle_autopilot_2":       self._toggle_binary,
+            "set_autopilot_heading": self._set_heading,
+            "set_autopilot_altitude": self._set_altitude,
+            "set_flight_level": self._set_flight_level,
+            "set_com_frequency": self._set_com_frequency,
+            "toggle_landing_gear": self._toggle_landing_gear,
+            "toggle_flaps": self._toggle_flaps,
+            "toggle_autopilot_1": self._toggle_binary,
+            "toggle_autopilot_2": self._toggle_binary,
             "toggle_flight_director_1": self._toggle_binary,
             "toggle_flight_director_2": self._toggle_binary,
-            "toggle_parking_brake":     self._toggle_parking_brake,
-            "toggle_engine_1":          self._toggle_binary,
-            "toggle_engine_2":          self._toggle_binary,
+            "toggle_parking_brake": self._toggle_parking_brake,
+            "toggle_engine_1": self._toggle_binary,
+            "toggle_engine_2": self._toggle_binary,
         }
 
     # ------------------------------------------------------------------
@@ -212,12 +209,14 @@ class PythonInterface:
     # ------------------------------------------------------------------
     def XPluginStart(self):
         self.hotkeyPress = xp.registerHotKey(
-            xp.VK_Z, xp.DownFlag,
+            xp.VK_Z,
+            xp.DownFlag,
             "Vimaan Push-to-Talk -> Press",
             self.OnPressCallback,
         )
         self.hotkeyRelease = xp.registerHotKey(
-            xp.VK_Z, xp.UpFlag,
+            xp.VK_Z,
+            xp.UpFlag,
             "Vimaan Push-to-Talk -> Release",
             self.OnReleaseCallback,
         )
@@ -336,7 +335,9 @@ class PythonInterface:
             intent_pred = result["intent"]
             slots = result["slots"]
 
-            self.log(f"[Vimaan] Intent: {intent_pred}  Slots: {slots}  Conf: {result['confidence']:.2f}")
+            self.log(
+                f"[Vimaan] Intent: {intent_pred}  Slots: {slots}  Conf: {result['confidence']:.2f}"
+            )
 
             handler = self.intent_to_command.get(intent_pred)
             if handler is None or intent_pred == "None":
@@ -348,6 +349,7 @@ class PythonInterface:
             handler(slots, intent_pred)
         except Exception as exc:
             import traceback
+
             self.log(f"[Vimaan] Error executing command: {exc}\n{traceback.format_exc()}")
             xp.speakString("Command execution failed")
 
@@ -396,15 +398,17 @@ class PythonInterface:
         )
         if current is None:
             # Best effort: fire the dedicated cmd; otherwise toggle.
-            ok = (self._fire_command(binding["on_cmd"] if target else binding["off_cmd"])
-                  or self._fire_command(binding["toggle"]))
+            ok = self._fire_command(
+                binding["on_cmd"] if target else binding["off_cmd"]
+            ) or self._fire_command(binding["toggle"])
         elif current == target:
             self.log(f"[Vimaan] {binding['label']} already {desired}; no action")
             xp.speakString(f"{binding['label']} already {desired}")
             return
         else:
-            ok = (self._fire_command(binding["on_cmd"] if target else binding["off_cmd"])
-                  or self._fire_command(binding["toggle"]))
+            ok = self._fire_command(
+                binding["on_cmd"] if target else binding["off_cmd"]
+            ) or self._fire_command(binding["toggle"])
 
         if ok:
             xp.speakString(f"{binding['label']} {desired}")
@@ -464,8 +468,11 @@ class PythonInterface:
             return
         try:
             freq_hz = int(round(float(frequency) * 1_000_000))
-            dref_name = "sim/cockpit/radios/com1_freq_hz" if com_port == "1" \
+            dref_name = (
+                "sim/cockpit/radios/com1_freq_hz"
+                if com_port == "1"
                 else "sim/cockpit/radios/com2_freq_hz"
+            )
             dref = xp.findDataRef(dref_name)
             if dref:
                 xp.setDatai(dref, freq_hz)

@@ -33,7 +33,7 @@ class PythonInterface:
 
         return self.Name, self.Sig, self.Desc
 
-    def XPluginEnable(self): 
+    def XPluginEnable(self):
         return 1
 
     def XPluginReceiveMessage(self, inFromWho, inMessage, inParam):

@@ -261,4 +261,3 @@ class PythonInterface:
                 return
 
         xp.speakString("Command not recognized")
- 

@@ -1,0 +1,17 @@
+# Dev / CI tooling.
+# Runtime deps live in requirements.txt — this file extends that for tests + linting.
+
+-r requirements.txt
+
+# Test runner
+pytest>=8.0
+pytest-cov>=5.0
+
+# Lint + format
+ruff>=0.5
+
+# Secret scanner used by pre-commit
+detect-secrets>=1.5
+
+# Pre-commit framework
+pre-commit>=3.7

@@ -1,0 +1,39 @@
+# Ruff configuration for Project Vimaan.
+# Kept minimal — we don't want to fight churn during active development.
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+    "ML/models",
+    "ML/datasets",
+    "ML/evaluation/results",
+    "plugin/legacy",
+    "planning",
+    "scratch",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "B",   # bugbear (likely bugs)
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line length handled by formatter; we don't enforce hard wrap
+    "E402",  # module-level import not at top of file (plugin uses sys.path hack)
+    "B008",  # function call in default argument — torch/transformers patterns trip this
+    # --- Tech debt: relaxed for legacy training/eval scripts. Clean up in a
+    # dedicated pass; not blocking Phase 2 CI gating. ---
+    "E722",  # bare except — legacy try/except in normalization & inference loops
+    "E701",  # multiple statements on one line with colon
+    "B905",  # zip() without strict=  — touched dataset/evaluator scripts
+    "B007",  # unused loop control variable
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]  # assert False / assert True are fine in tests
+"plugin/PI_VimaanCoPilot.py" = ["E402"]  # sys.path adjusted before package imports
