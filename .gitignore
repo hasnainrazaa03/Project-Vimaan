@@ -89,6 +89,9 @@ Vimaan_Logs/
 # ---- Scratch / personal notes (not for the repo) ----
 scratch/
 
+# ---- Planning / local working docs (not for the repo) ----
+planning/
+
 # ---- Backups ----
 *.bak
 *.backup
