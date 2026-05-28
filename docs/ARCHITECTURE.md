@@ -53,7 +53,7 @@ flowchart TB
 
 ### 2.1 Architecture
 
-`JointIntentAndSlotModel` (see `ML/core/model.py`):
+`JointIntentAndSlotModel` (see `ML/vimaan_nlu/model.py`):
 
 ```
                     ┌──────────────────────────────┐
@@ -165,10 +165,10 @@ Adding a new intent therefore touches:
 ## 6. Path & import conventions
 
 - `ML/` is structured to be importable as a package when its root is on `sys.path`.
-- The plugin lives at `plugin/PI_VimaanCoPilot.py` and adds `<repo>/ML` to `sys.path` so `from core.model_loader import ModelLoader` works.
+- The plugin lives at `plugin/PI_VimaanCoPilot.py` and adds `<repo>/ML` to `sys.path` so `from vimaan_nlu.model_loader import ModelLoader` works.
 - Inside `ML/`, every script computes `script_dir = os.path.dirname(os.path.abspath(__file__))` and resolves data paths relative to it. **Do not change a script's location without updating these.**
 
-Planned refactor (see [ROADMAP R-04](ROADMAP.md#-r-04--rename-core--vimaan_nlu)): rename `core` → `vimaan_nlu`, ship a proper package, drop the `sys.path` hack.
+Done as of 2026-05-27 (Phase 1 of `planning/MASTER_PLAN.md`): the package was renamed `core` → `vimaan_nlu`. The `sys.path` insertion remains for now (the plugin is loaded by XPPython3, not pip-installed); turning the package into a proper installable distribution is tracked separately.
 
 ---
 

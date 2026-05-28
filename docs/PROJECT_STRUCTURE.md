@@ -25,7 +25,7 @@ NLU package. Importable as a package when `ML/` is on `sys.path` (the plugin ins
 
 ```
 ML/
-├── core/
+├── vimaan_nlu/
 │   ├── __init__.py
 │   ├── model.py             ← JointIntentAndSlotModel (DistilBERT + 2 heads)
 │   ├── model_loader.py      ← ModelLoader.load_all(): tokenizer + body + heads + maps
@@ -80,7 +80,7 @@ plugin/
     └── Plugin_Ref.py        ← reference snippets
 ```
 
-The active plugin imports `from core.model_loader import ModelLoader` after inserting `<repo>/ML` (resolved as `../ML` relative to the plugin file) on `sys.path`. When installing into X-Plane, copy both `PI_VimaanCoPilot.py` **and** the `ML/` tree into `PythonPlugins/`.
+The active plugin imports `from vimaan_nlu.model_loader import ModelLoader` after inserting `<repo>/ML` (resolved as `../ML` relative to the plugin file) on `sys.path`. When installing into X-Plane, copy both `PI_VimaanCoPilot.py` **and** the `ML/` tree into `PythonPlugins/`.
 
 ## `docs/`
 
@@ -90,9 +90,8 @@ docs/
 ├── BUGS.md                  ← known issues with severity & triage table
 ├── ROADMAP.md               ← planned features
 ├── PROJECT_STRUCTURE.md     ← this file
-├── VERSION_CONTROL.md       ← branch/remote workflow
-├── PRODUCTION_CHECKLIST.md  ← pre-release gates
-└── git_workflow.md          ← quick git command reference (moved from MISC/)
+├── VERSION_CONTROL.md       ← branch/remote workflow + quick git command reference
+└── PRODUCTION_CHECKLIST.md  ← pre-release gates
 ```
 
 ## `scratch/`

@@ -3,7 +3,7 @@ import json
 import torch
 from transformers import DistilBertForTokenClassification, DistilBertTokenizerFast
 
-from core import JointIntentAndSlotModel
+from vimaan_nlu import JointIntentAndSlotModel
 from utils import get_latest_model_path
 
 

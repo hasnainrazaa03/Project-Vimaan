@@ -2,7 +2,7 @@ import json
 import os
 from tqdm import tqdm
 from utils import find_latest_version_path, get_next_version_path
-from core import normalize_dataset
+from vimaan_nlu import normalize_dataset
 
 
 def add_word_form_variants(dataset_path):

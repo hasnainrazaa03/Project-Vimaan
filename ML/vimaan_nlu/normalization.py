@@ -4,7 +4,7 @@ try:
     from word2number import w2n
 except ImportError as _w2n_err:
     raise ImportError(
-        "The 'word2number' package is required for ML/core/normalization.py. "
+        "The 'word2number' package is required for vimaan_nlu.normalization. "
         "Install it from the project requirements: pip install -r requirements.txt"
     ) from _w2n_err
 

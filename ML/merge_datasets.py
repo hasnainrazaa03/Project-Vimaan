@@ -3,7 +3,7 @@ from tqdm import tqdm
 import os
 import random
 from utils import get_next_version_path, find_latest_version_path
-from core import normalize_dataset
+from vimaan_nlu import normalize_dataset
 
 def merge_datasets(file1, file2, output_file):
 

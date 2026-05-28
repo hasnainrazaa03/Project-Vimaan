@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from core import normalize_aviation_input, postprocess_slots
+from vimaan_nlu import normalize_aviation_input, postprocess_slots
 
 
 def reconstruct_slot_value(tokens):

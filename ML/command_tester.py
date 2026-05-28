@@ -6,8 +6,8 @@ import sys
 ml_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".")
 sys.path.insert(0, ml_path)
 
-from core.model_loader import ModelLoader
-from core.inference import predict
+from vimaan_nlu.model_loader import ModelLoader
+from vimaan_nlu.inference import predict
 
 def test_commands():
     test_commands = [
