@@ -91,7 +91,17 @@ class AviationCommandDataset(Dataset):
 
 
 # THE TRAINING PROCESS
-def train_model(dataset_path):
+def train_model(
+    dataset_path,
+    *,
+    num_epochs=10,
+    lr=5e-5,
+    batch_size=16,
+    base_model="distilbert-base-uncased",
+    max_length=64,
+    patience=2,
+    model_save_dir=None,
+):
     print("Loading final dataset...")
     with open(dataset_path) as f:
         data = [json.loads(line) for line in f]
@@ -109,21 +119,20 @@ def train_model(dataset_path):
             slots.add(f"I-{slot_name}")
     slot_map = {name: i for i, name in enumerate(sorted(list(slots)))}
 
-    tokenizer = DistilBertTokenizerFast.from_pretrained("distilbert-base-uncased")
+    tokenizer = DistilBertTokenizerFast.from_pretrained(base_model)
     train_dataset = AviationCommandDataset(train_data, tokenizer, intent_map, slot_map)
     val_dataset = AviationCommandDataset(val_data, tokenizer, intent_map, slot_map)
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=16)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = JointIntentAndSlotModel(num_intents=len(intent_map), num_slots=len(slot_map)).to(device)
-    optimizer = AdamW(model.parameters(), lr=5e-5)
+    optimizer = AdamW(model.parameters(), lr=lr)
 
     best_val_loss = float("inf")
     epochs_no_improve = 0
-    patience = 2
 
-    models_dir = get_model_versions_dir()
+    models_dir = model_save_dir or get_model_versions_dir()
     latest_version = 0
     if os.path.exists(models_dir):
         for item in os.listdir(models_dir):
@@ -138,7 +147,7 @@ def train_model(dataset_path):
     model_save_path = os.path.join(models_dir, next_version)
 
     print("\nStarting training...")
-    numOfEpochs = 10
+    numOfEpochs = num_epochs
     for epoch in range(numOfEpochs):
         model.train()
         total_train_loss = 0
@@ -196,15 +205,15 @@ def train_model(dataset_path):
                 dataset_path=dataset_path,
                 dataset_rows=data,
                 hyperparams={
-                    "max_length": 64,
+                    "max_length": max_length,
                     "epochs": numOfEpochs,
-                    "lr": 5e-5,
-                    "batch_size": 16,
+                    "lr": lr,
+                    "batch_size": batch_size,
                     "optimizer": "AdamW",
                     "early_stopping_patience": patience,
                     "train_val_split": 0.85,
                     "random_state": 42,
-                    "base_model": "distilbert-base-uncased",
+                    "base_model": base_model,
                     "best_val_loss": float(best_val_loss),
                     "best_epoch": epoch + 1,
                 },
@@ -219,16 +228,55 @@ def train_model(dataset_path):
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Train the joint NLU model.")
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default=None,
+        help="Path to a .jsonl training set. Defaults to the "
+        "latest under ML/datasets/05_final_merged/.",
+    )
+    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--lr", type=float, default=5e-5)
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--base-model", type=str, default="distilbert-base-uncased")
+    parser.add_argument("--max-length", type=int, default=64)
+    parser.add_argument("--patience", type=int, default=2)
+    parser.add_argument(
+        "--model-save-dir",
+        type=str,
+        default=None,
+        help="Override the parent dir for the new v<N> checkpoint.",
+    )
+    args = parser.parse_args()
+
     script_dir = os.path.dirname(__file__)
     DATA_DIR = os.path.join(script_dir, "datasets", "05_final_merged")
     BASE_FILENAME = os.path.join(DATA_DIR, "aviation_cmds_final_training_set.jsonl")
 
-    print(f"Searching for the latest training dataset in '{DATA_DIR}'...")
-    latest_dataset = find_latest_version_path(BASE_FILENAME)
-
-    if latest_dataset and os.path.exists(latest_dataset):
-        print(f"Found dataset: {os.path.basename(latest_dataset)}")
-        train_model(latest_dataset)
+    if args.dataset:
+        chosen = args.dataset
+        if not os.path.exists(chosen):
+            print(f"Error: dataset not found: {chosen}")
+            raise SystemExit(2)
     else:
-        print(f"Error: Dataset not found in '{DATA_DIR}'.")
-        print("Please ensure your merged dataset exists and the path is correct.")
+        print(f"Searching for the latest training dataset in '{DATA_DIR}'...")
+        chosen = find_latest_version_path(BASE_FILENAME)
+        if not (chosen and os.path.exists(chosen)):
+            print(f"Error: Dataset not found in '{DATA_DIR}'.")
+            print("Please ensure your merged dataset exists and the path is correct.")
+            raise SystemExit(2)
+
+    print(f"Found dataset: {os.path.basename(chosen)}")
+    train_model(
+        chosen,
+        num_epochs=args.epochs,
+        lr=args.lr,
+        batch_size=args.batch_size,
+        base_model=args.base_model,
+        max_length=args.max_length,
+        patience=args.patience,
+        model_save_dir=args.model_save_dir,
+    )

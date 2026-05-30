@@ -10,6 +10,8 @@ Regression target: B-009 (eager torch import via core/__init__.py).
 import subprocess
 import sys
 
+import pytest
+
 
 def _python_oneliner(snippet: str) -> str:
     """Run `snippet` in a clean python subprocess with ML/ on sys.path."""
@@ -60,6 +62,7 @@ def test_postprocessor_module_does_not_pull_torch():
 
 def test_top_level_symbols_exported():
     """The vimaan_nlu package must publicly re-export the legacy symbols."""
+    pytest.importorskip("torch")
     result = _python_oneliner(
         "import sys; sys.path.insert(0, '.');"
         "from vimaan_nlu import ("

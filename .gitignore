@@ -106,3 +106,6 @@ dist/
 # ---- Misc ----
 .ipynb_checkpoints/
 *.ipynb
+
+# Dashboard upload area (user-uploaded datasets, not part of repo)
+ML/datasets/dashboard_uploads/
