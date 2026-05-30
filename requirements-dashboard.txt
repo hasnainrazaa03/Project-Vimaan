@@ -1,0 +1,6 @@
+# Dashboard runtime extras. Install on top of requirements-dev.txt
+# and (for predict/train) the main requirements.txt (torch, transformers).
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+pydantic>=2.6

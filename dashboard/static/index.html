@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Project Vimaan — Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">✈</span>
+      <div>
+        <h1>Project Vimaan</h1>
+        <p>NLU training &amp; inference dashboard</p>
+      </div>
+    </div>
+    <div class="status-pill" id="train-status-pill">idle</div>
+  </header>
+
+  <main class="grid">
+    <!-- INFERENCE -->
+    <section class="card span-2">
+      <header><h2>Inference</h2><span class="subtle" id="model-meta">no model selected</span></header>
+      <div class="row">
+        <label class="grow">
+          <span>Model checkpoint</span>
+          <select id="model-select"></select>
+        </label>
+        <button class="ghost" id="refresh-models" title="Reload model list">↻</button>
+      </div>
+      <div class="row">
+        <label class="grow">
+          <span>Command</span>
+          <input id="predict-input" type="text"
+                 placeholder="e.g. set heading to two seven zero" />
+        </label>
+        <button class="primary" id="predict-btn">Predict</button>
+      </div>
+      <div class="result" id="predict-result"></div>
+    </section>
+
+    <!-- TRAINING CONTROL -->
+    <section class="card">
+      <header><h2>Train a model</h2></header>
+      <div class="row">
+        <label class="grow">
+          <span>Dataset</span>
+          <select id="dataset-select"></select>
+        </label>
+        <button class="ghost" id="refresh-datasets" title="Reload">↻</button>
+      </div>
+      <div class="row">
+        <label class="grow">
+          <span>Upload .jsonl</span>
+          <input type="file" id="dataset-upload" accept=".jsonl" />
+        </label>
+      </div>
+      <div class="row grid-2">
+        <label><span>Base model</span>
+          <input id="hp-base" type="text" value="distilbert-base-uncased" />
+        </label>
+        <label><span>Epochs</span><input id="hp-epochs" type="number" min="1" max="100" value="10" /></label>
+        <label><span>Learning rate</span><input id="hp-lr" type="number" step="0.00001" value="0.00005" /></label>
+        <label><span>Batch size</span><input id="hp-bs" type="number" min="1" max="512" value="16" /></label>
+        <label><span>Max length</span><input id="hp-ml" type="number" min="8" max="512" value="64" /></label>
+        <label><span>Patience</span><input id="hp-pat" type="number" min="0" max="20" value="2" /></label>
+      </div>
+      <div class="row">
+        <button class="primary grow" id="train-start">Start training</button>
+        <button class="danger" id="train-stop" disabled>Stop</button>
+      </div>
+      <div class="subtle" id="upload-msg"></div>
+    </section>
+
+    <!-- LOSS CHART -->
+    <section class="card span-2">
+      <header><h2>Loss curve</h2><span class="subtle" id="train-summary"></span></header>
+      <canvas id="loss-chart" height="120"></canvas>
+    </section>
+
+    <!-- LOG -->
+    <section class="card span-3">
+      <header><h2>Training log</h2><span class="subtle" id="train-pid"></span></header>
+      <pre id="train-log" class="log"></pre>
+    </section>
+  </main>
+</body>
+</html>
