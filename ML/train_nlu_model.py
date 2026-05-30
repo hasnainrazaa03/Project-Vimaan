@@ -9,7 +9,12 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from transformers import DistilBertTokenizerFast
 from utils import find_latest_version_path, get_model_versions_dir
-from vimaan_nlu import JointIntentAndSlotModel, normalize_dataset
+from vimaan_nlu import (
+    JointIntentAndSlotModel,
+    build_manifest,
+    normalize_dataset,
+    write_manifest,
+)
 
 
 # DATASET PREPARATION
@@ -183,6 +188,28 @@ def train_model(dataset_path):
                 json.dump(intent_map, f)
             with open(f"{model_save_path}/slot_map.json", "w") as f:
                 json.dump(slot_map, f)
+
+            # Provenance sidecar (Phase 3 / B-015 manifest). Written every time
+            # the "best" model is overwritten so it always reflects the actually
+            # checkpointed weights.
+            manifest = build_manifest(
+                dataset_path=dataset_path,
+                dataset_rows=data,
+                hyperparams={
+                    "max_length": 64,
+                    "epochs": numOfEpochs,
+                    "lr": 5e-5,
+                    "batch_size": 16,
+                    "optimizer": "AdamW",
+                    "early_stopping_patience": patience,
+                    "train_val_split": 0.85,
+                    "random_state": 42,
+                    "base_model": "distilbert-base-uncased",
+                    "best_val_loss": float(best_val_loss),
+                    "best_epoch": epoch + 1,
+                },
+            )
+            write_manifest(model_save_path, manifest)
         else:
             epochs_no_improve += 1
             print(f"Validation loss did not improve. Count: {epochs_no_improve}/{patience}")
