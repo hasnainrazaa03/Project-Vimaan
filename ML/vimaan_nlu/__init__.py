@@ -12,6 +12,13 @@ This lets tests, dataset scripts, and the plugin's normalization-only paths
 load without pulling a ~600 MB torch wheel.
 """
 
+from .manifest import (
+    MANIFEST_FILENAME,
+    MANIFEST_SCHEMA_VERSION,
+    build_manifest,
+    load_manifest,
+    write_manifest,
+)
 from .normalization import (
     PHONETIC_MAP,
     normalize_aviation_input,
@@ -38,6 +45,11 @@ __all__ = [
     "add_implicit_state",
     "extract_digit_sequence_frequency",
     "extract_numbers_from_text",
+    "MANIFEST_FILENAME",
+    "MANIFEST_SCHEMA_VERSION",
+    "build_manifest",
+    "write_manifest",
+    "load_manifest",
     # The following are lazy-loaded via __getattr__ below — they pull torch.
     "JointIntentAndSlotModel",
     "ModelLoader",
