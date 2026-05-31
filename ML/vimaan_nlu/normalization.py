@@ -30,22 +30,6 @@ PHONETIC_MAP = {
 def normalize_aviation_input(text):
     text_lower = text.lower()
 
-    def convert_phonetic_sequence(match):
-        """Convert phonetic digit sequence like 'zero niner zero' to '090'"""
-        phrase = match.group(0)
-        digits = []
-        for word in phrase.split():
-            if word in PHONETIC_MAP:
-                digit = PHONETIC_MAP[word]
-                if digit != ".":
-                    digits.append(digit)
-        return "".join(digits)
-
-    phonetic_sequence_pattern = r"\b((?:zero|oh|one|two|three|four|five|six|seven|eight|niner|nine)(?:\s+(?:zero|oh|one|two|three|four|five|six|seven|eight|niner|nine))+)\b"
-    text_lower = re.sub(
-        phonetic_sequence_pattern, convert_phonetic_sequence, text_lower, flags=re.IGNORECASE
-    )
-
     def convert_digit_sequence_with_decimal(match):
         phrase = match.group(0)
 
@@ -71,12 +55,32 @@ def normalize_aviation_input(text):
 
         return phrase
 
+    # NOTE: the decimal pass must run BEFORE the phonetic-sequence pass. The
+    # phonetic pass collapses runs like "one two one" into "121", which would
+    # otherwise leave "121 decimal 5" that the decimal pass can no longer merge
+    # (its operands must be phonetic words, not digits).
     decimal_sequence_pattern = r"\b(?:(?:zero|oh|one|two|three|four|five|six|seven|eight|niner|nine)[\s-]*)+(?:\s+(?:point|decimal)\s+)(?:(?:zero|oh|one|two|three|four|five|six|seven|eight|niner|nine)[\s-]*)+\b"
     text_lower = re.sub(
         decimal_sequence_pattern,
         convert_digit_sequence_with_decimal,
         text_lower,
         flags=re.IGNORECASE,
+    )
+
+    def convert_phonetic_sequence(match):
+        """Convert phonetic digit sequence like 'zero niner zero' to '090'"""
+        phrase = match.group(0)
+        digits = []
+        for word in phrase.split():
+            if word in PHONETIC_MAP:
+                digit = PHONETIC_MAP[word]
+                if digit != ".":
+                    digits.append(digit)
+        return "".join(digits)
+
+    phonetic_sequence_pattern = r"\b((?:zero|oh|one|two|three|four|five|six|seven|eight|niner|nine)(?:\s+(?:zero|oh|one|two|three|four|five|six|seven|eight|niner|nine))+)\b"
+    text_lower = re.sub(
+        phonetic_sequence_pattern, convert_phonetic_sequence, text_lower, flags=re.IGNORECASE
     )
 
     def convert_compound_numbers(match):

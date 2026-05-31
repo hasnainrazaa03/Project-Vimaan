@@ -45,14 +45,18 @@ class TestNormalizeAviationInput:
         assert "090" in out
 
     def test_com_frequency_with_decimal(self):
-        # NOTE: normalize_aviation_input converts plain phonetic digit runs
-        # first ("one two one" → "121"), which breaks the subsequent
-        # "phonetic point phonetic" decimal pattern. The decimal join is
-        # therefore handled later by `extract_digit_sequence_frequency` in
-        # the postprocessor on the raw text. Here we only assert the
-        # leading integer part is converted.
+        # The decimal pass runs before the phonetic-run pass, so a full
+        # "phonetic ... point/decimal ... phonetic" sequence is joined into a
+        # single decimal number at the text level.
         out = normalize_aviation_input("tune com one two one decimal niner")
-        assert "121" in out
+        assert "121.9" in out
+
+    def test_com_frequency_decimal_five(self):
+        # Regression: "one two one decimal five" must become "121.5", not
+        # "121 decimal 5" (the phonetic-run pass used to eat the integer part
+        # before the decimal pass could join it).
+        assert "121.5" in normalize_aviation_input("tune comm one to one two one decimal five")
+        assert "118.1" in normalize_aviation_input("contact tower one one eight point one")
 
     def test_compound_thousand(self):
         # "fifteen thousand" -> "15000"
