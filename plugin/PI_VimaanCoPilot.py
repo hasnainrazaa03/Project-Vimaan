@@ -114,8 +114,15 @@ class PythonInterface:
 
     # Load the model as dynamic-int8 (Phase 4B). ~halves model RAM/disk with no
     # measured intent-F1 change. Falls back to fp32 if the runtime has no
-    # quantized backend. Set False to force fp32.
+    # quantized backend. Set False to force fp32. Ignored when BACKEND="onnx".
     USE_QUANTIZED_MODEL = True
+
+    # Inference backend (Phase 4C): "torch" (default) or "onnx". Override at
+    # runtime with the VIMAAN_BACKEND env var. The ONNX backend requires
+    # onnxruntime and a prior `python3 ML/export_onnx.py` to produce
+    # <model>/onnx/model.onnx; it duck-types the torch model so handlers are
+    # unchanged.
+    BACKEND = os.environ.get("VIMAAN_BACKEND", "torch").lower()
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -186,10 +193,17 @@ class PythonInterface:
 
     def _init_model(self):
         try:
-            results = self.loader.load_all(quantize=self.USE_QUANTIZED_MODEL)
+            use_onnx = self.BACKEND == "onnx"
+            results = self.loader.load_all(
+                quantize=self.USE_QUANTIZED_MODEL and not use_onnx,
+                backend=self.BACKEND,
+            )
             self.log(f"[Vimaan] Model loaded from: {results['model']['model_path']}")
+            self.log(f"[Vimaan] Backend: {self.BACKEND}")
             self.log(f"[Vimaan] Device: {results['model']['device']}")
-            if self.USE_QUANTIZED_MODEL:
+            if use_onnx:
+                self.log(f"[Vimaan] ONNX graph: {results['model']['onnx_path']}")
+            elif self.USE_QUANTIZED_MODEL:
                 self.log(
                     "[Vimaan] int8 quantization: "
                     + ("applied" if results.get("quantized") else "unavailable, using fp32")

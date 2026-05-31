@@ -19,11 +19,12 @@ from vimaan_nlu import (
 
 # DATASET PREPARATION
 class AviationCommandDataset(Dataset):
-    def __init__(self, data, tokenizer, intent_map, slot_map):
+    def __init__(self, data, tokenizer, intent_map, slot_map, max_length=64):
         self.data = data
         self.tokenizer = tokenizer
         self.intent_map = intent_map
         self.slot_map = slot_map
+        self.max_length = max_length
         self.slot_map_rev = {v: k for k, v in self.slot_map.items()}
 
     def __len__(self):
@@ -35,7 +36,11 @@ class AviationCommandDataset(Dataset):
         intent_label = self.intent_map[item["intent"]]
 
         encoding = self.tokenizer(
-            text, padding="max_length", truncation=True, max_length=64, return_tensors="pt"
+            text,
+            padding="max_length",
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="pt",
         )
 
         input_ids = encoding["input_ids"][0]
@@ -120,8 +125,12 @@ def train_model(
     slot_map = {name: i for i, name in enumerate(sorted(list(slots)))}
 
     tokenizer = DistilBertTokenizerFast.from_pretrained(base_model)
-    train_dataset = AviationCommandDataset(train_data, tokenizer, intent_map, slot_map)
-    val_dataset = AviationCommandDataset(val_data, tokenizer, intent_map, slot_map)
+    train_dataset = AviationCommandDataset(
+        train_data, tokenizer, intent_map, slot_map, max_length=max_length
+    )
+    val_dataset = AviationCommandDataset(
+        val_data, tokenizer, intent_map, slot_map, max_length=max_length
+    )
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size)
 

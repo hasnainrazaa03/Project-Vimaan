@@ -17,6 +17,11 @@ tqdm
 word2number
 num2words
 
+# Optional ONNX inference backend (Phase 4C); CPU runtime.
+# The plugin only needs these when VIMAAN_BACKEND=onnx.
+onnx>=1.16
+onnxruntime>=1.18
+
 # Speech I/O
 SpeechRecognition
 sounddevice

@@ -87,12 +87,42 @@ class ModelLoader:
         self.tokenizer = DistilBertTokenizerFast.from_pretrained(model_path)
         return {"tokenizer_loaded": True}
 
-    def load_all(self, model_path=None, quantize=False):
+    def load_onnx_backend(self, model_path):
+        """Load maps + tokenizer and wrap the exported ONNX graph as the model.
+
+        The returned backend duck-types ``JointIntentAndSlotModel`` so every
+        ``predict()`` call works unchanged. Run ``ML/export_onnx.py`` first to
+        produce ``<model_path>/onnx/model.onnx``.
+        """
+        from vimaan_nlu.onnx_backend import OnnxBackend, onnx_model_path
+
+        dims = self.load_maps(model_path)
+        onnx_path = onnx_model_path(model_path)
+        self.model = OnnxBackend(onnx_path)
+        self.device = torch.device("cpu")
+        return {
+            "model_path": model_path,
+            "backend": "onnx",
+            "onnx_path": onnx_path,
+            "device": str(self.device),
+            "intents_loaded": dims["intents"],
+            "slots_loaded": dims["slots"],
+        }
+
+    def load_all(self, model_path=None, quantize=False, backend="torch"):
         if model_path is None:
             model_path = get_latest_model_path()
 
         if not model_path:
             raise FileNotFoundError("No model path provided and no latest model found")
+
+        if backend == "onnx":
+            results = {
+                "model": self.load_onnx_backend(model_path),
+                "tokenizer": self.load_tokenizer(model_path),
+                "maps": {"intents": len(self.intent_map), "slots": len(self.slot_map)},
+            }
+            return results
 
         results = {
             "model": self.load_model(model_path),
