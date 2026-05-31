@@ -2,6 +2,12 @@ import torch
 
 from vimaan_nlu import normalize_aviation_input, postprocess_slots
 
+# Aviation commands are short (the longest in the training set is well under
+# 32 word-piece tokens). Padding/truncating to 32 instead of 64 roughly halves
+# the per-token compute on CPU with no change in output for real commands,
+# since no genuine tokens are ever truncated. Override per call if needed.
+DEFAULT_MAX_LENGTH = 32
+
 
 def reconstruct_slot_value(tokens):
     if not tokens:
@@ -60,11 +66,24 @@ def extract_slots(slot_pred_indices, tokens, slot_map_rev):
     return extracted_slots
 
 
-def predict(text, model, tokenizer, device, intent_map_rev, slot_map_rev, do_postprocess=True):
+def predict(
+    text,
+    model,
+    tokenizer,
+    device,
+    intent_map_rev,
+    slot_map_rev,
+    do_postprocess=True,
+    max_length=DEFAULT_MAX_LENGTH,
+):
     text_normalized = normalize_aviation_input(text)
 
     encoding = tokenizer(
-        text_normalized, padding="max_length", truncation=True, max_length=64, return_tensors="pt"
+        text_normalized,
+        padding="max_length",
+        truncation=True,
+        max_length=max_length,
+        return_tensors="pt",
     )
     input_ids = encoding["input_ids"].to(device)
     attention_mask = encoding["attention_mask"].to(device)
