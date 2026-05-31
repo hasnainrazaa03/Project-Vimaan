@@ -108,6 +108,15 @@ TOGGLE_BINDINGS = {
 
 
 class PythonInterface:
+    # Intents predicted below this confidence are not dispatched; the copilot
+    # asks the pilot to repeat instead of acting on a low-certainty guess.
+    CONFIDENCE_FLOOR = 0.55
+
+    # Load the model as dynamic-int8 (Phase 4B). ~halves model RAM/disk with no
+    # measured intent-F1 change. Falls back to fp32 if the runtime has no
+    # quantized backend. Set False to force fp32.
+    USE_QUANTIZED_MODEL = True
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -177,9 +186,14 @@ class PythonInterface:
 
     def _init_model(self):
         try:
-            results = self.loader.load_all()
+            results = self.loader.load_all(quantize=self.USE_QUANTIZED_MODEL)
             self.log(f"[Vimaan] Model loaded from: {results['model']['model_path']}")
             self.log(f"[Vimaan] Device: {results['model']['device']}")
+            if self.USE_QUANTIZED_MODEL:
+                self.log(
+                    "[Vimaan] int8 quantization: "
+                    + ("applied" if results.get("quantized") else "unavailable, using fp32")
+                )
             self.log(
                 f"[Vimaan] Intents: {results['maps']['intents']}, Slots: {results['maps']['slots']}"
             )
@@ -338,6 +352,14 @@ class PythonInterface:
             self.log(
                 f"[Vimaan] Intent: {intent_pred}  Slots: {slots}  Conf: {result['confidence']:.2f}"
             )
+
+            if result["confidence"] < self.CONFIDENCE_FLOOR:
+                self.log(
+                    f"[Vimaan] Confidence {result['confidence']:.2f} below floor "
+                    f"{self.CONFIDENCE_FLOOR:.2f}; not dispatching"
+                )
+                xp.speakString("Please repeat that")
+                return
 
             handler = self.intent_to_command.get(intent_pred)
             if handler is None or intent_pred == "None":
