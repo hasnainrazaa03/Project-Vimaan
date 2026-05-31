@@ -1,91 +1,196 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Project Vimaan — Dashboard</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <title>Project Vimaan — NLU Dashboard</title>
+  <meta name="description" content="Train and run the Project Vimaan aviation NLU model from your browser." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%88%EF%B8%8F%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/static/style.css?v=2" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
-  <script src="/static/app.js" defer></script>
+  <script src="/static/app.js?v=2" defer></script>
 </head>
 <body>
+  <!-- animated aurora backdrop -->
+  <div class="aurora" aria-hidden="true">
+    <span class="blob b1"></span>
+    <span class="blob b2"></span>
+    <span class="blob b3"></span>
+  </div>
+
+  <!-- top navigation -->
   <header class="topbar">
     <div class="brand">
       <span class="logo">✈</span>
-      <div>
-        <h1>Project Vimaan</h1>
-        <p>NLU training &amp; inference dashboard</p>
+      <div class="brand-text">
+        <h1>Project&nbsp;Vimaan</h1>
+        <p>Aviation NLU &middot; train &amp; infer</p>
       </div>
     </div>
-    <div class="status-pill" id="train-status-pill">idle</div>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab is-active" data-tab="inference" role="tab">Inference</button>
+      <button class="tab" data-tab="training" role="tab">Training</button>
+    </nav>
+
+    <div class="top-actions">
+      <div class="status-pill" id="train-status-pill" title="Training engine status">
+        <span class="dot"></span><span class="label">idle</span>
+      </div>
+      <button class="icon-btn" id="theme-toggle" title="Toggle light / dark">◐</button>
+    </div>
   </header>
 
-  <main class="grid">
-    <!-- INFERENCE -->
-    <section class="card span-2">
-      <header><h2>Inference</h2><span class="subtle" id="model-meta">no model selected</span></header>
-      <div class="row">
-        <label class="grow">
-          <span>Model checkpoint</span>
-          <select id="model-select"></select>
-        </label>
-        <button class="ghost" id="refresh-models" title="Reload model list">↻</button>
-      </div>
-      <div class="row">
-        <label class="grow">
-          <span>Command</span>
-          <input id="predict-input" type="text"
-                 placeholder="e.g. set heading to two seven zero" />
-        </label>
-        <button class="primary" id="predict-btn">Predict</button>
-      </div>
-      <div class="result" id="predict-result"></div>
-    </section>
+  <!-- at-a-glance stats -->
+  <section class="stats" id="stat-row">
+    <div class="stat">
+      <span class="stat-icon">🧠</span>
+      <div><strong id="stat-models">—</strong><small>Checkpoints</small></div>
+    </div>
+    <div class="stat">
+      <span class="stat-icon">🏷️</span>
+      <div><strong id="stat-latest">—</strong><small>Latest model</small></div>
+    </div>
+    <div class="stat">
+      <span class="stat-icon">🎯</span>
+      <div><strong id="stat-intents">—</strong><small>Intents</small></div>
+    </div>
+    <div class="stat">
+      <span class="stat-icon">📚</span>
+      <div><strong id="stat-rows">—</strong><small>Training rows</small></div>
+    </div>
+  </section>
 
-    <!-- TRAINING CONTROL -->
-    <section class="card">
-      <header><h2>Train a model</h2></header>
-      <div class="row">
-        <label class="grow">
-          <span>Dataset</span>
-          <select id="dataset-select"></select>
-        </label>
-        <button class="ghost" id="refresh-datasets" title="Reload">↻</button>
-      </div>
-      <div class="row">
-        <label class="grow">
-          <span>Upload .jsonl</span>
-          <input type="file" id="dataset-upload" accept=".jsonl" />
-        </label>
-      </div>
-      <div class="row grid-2">
-        <label><span>Base model</span>
-          <input id="hp-base" type="text" value="distilbert-base-uncased" />
-        </label>
-        <label><span>Epochs</span><input id="hp-epochs" type="number" min="1" max="100" value="10" /></label>
-        <label><span>Learning rate</span><input id="hp-lr" type="number" step="0.00001" value="0.00005" /></label>
-        <label><span>Batch size</span><input id="hp-bs" type="number" min="1" max="512" value="16" /></label>
-        <label><span>Max length</span><input id="hp-ml" type="number" min="8" max="512" value="64" /></label>
-        <label><span>Patience</span><input id="hp-pat" type="number" min="0" max="20" value="2" /></label>
-      </div>
-      <div class="row">
-        <button class="primary grow" id="train-start">Start training</button>
-        <button class="danger" id="train-stop" disabled>Stop</button>
-      </div>
-      <div class="subtle" id="upload-msg"></div>
-    </section>
+  <main class="wrap">
+    <!-- ============================= INFERENCE ============================= -->
+    <div class="panel is-active" id="panel-inference" role="tabpanel">
+      <div class="cols">
+        <!-- predict -->
+        <section class="card glass">
+          <header class="card-head">
+            <h2>Run a prediction</h2>
+            <span class="badge" id="model-meta">no model selected</span>
+          </header>
 
-    <!-- LOSS CHART -->
-    <section class="card span-2">
-      <header><h2>Loss curve</h2><span class="subtle" id="train-summary"></span></header>
-      <canvas id="loss-chart" height="120"></canvas>
-    </section>
+          <div class="field">
+            <label for="model-select">Model checkpoint</label>
+            <div class="inline">
+              <select id="model-select"></select>
+              <button class="icon-btn" id="refresh-models" title="Reload models">↻</button>
+            </div>
+          </div>
 
-    <!-- LOG -->
-    <section class="card span-3">
-      <header><h2>Training log</h2><span class="subtle" id="train-pid"></span></header>
-      <pre id="train-log" class="log"></pre>
-    </section>
+          <div class="field">
+            <label for="predict-input">Command</label>
+            <div class="inline">
+              <input id="predict-input" type="text" autocomplete="off"
+                     placeholder="e.g. tune comm one to one two one decimal five" />
+              <button class="btn primary" id="predict-btn">
+                <span class="btn-label">Predict</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="examples" id="example-chips">
+            <span class="examples-label">Try:</span>
+          </div>
+
+          <div class="result empty" id="predict-result">
+            <span class="result-hint">Pick a model, type a command, and hit Predict.</span>
+          </div>
+        </section>
+
+        <!-- model details -->
+        <section class="card glass">
+          <header class="card-head">
+            <h2>Model details</h2>
+            <span class="badge ghost" id="model-detail-version">—</span>
+          </header>
+          <div id="model-detail" class="model-detail">
+            <p class="muted">Select a model to see its training provenance.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ============================= TRAINING ============================= -->
+    <div class="panel" id="panel-training" role="tabpanel">
+      <div class="cols">
+        <!-- config -->
+        <section class="card glass">
+          <header class="card-head"><h2>Configure training</h2></header>
+
+          <div class="field">
+            <label for="dataset-select">Dataset</label>
+            <div class="inline">
+              <select id="dataset-select"></select>
+              <button class="icon-btn" id="refresh-datasets" title="Reload datasets">↻</button>
+            </div>
+          </div>
+
+          <label class="dropzone" id="dropzone" for="dataset-upload">
+            <input type="file" id="dataset-upload" accept=".jsonl" hidden />
+            <span class="dz-icon">⬆</span>
+            <span class="dz-text">Drop a <code>.jsonl</code> here or <u>browse</u></span>
+            <span class="subtle" id="upload-msg"></span>
+          </label>
+
+          <div class="hp-grid">
+            <label>Base model<input id="hp-base" type="text" value="distilbert-base-uncased" /></label>
+            <label>Epochs<input id="hp-epochs" type="number" min="1" max="100" value="10" /></label>
+            <label>Learning rate<input id="hp-lr" type="number" step="0.00001" value="0.00005" /></label>
+            <label>Batch size<input id="hp-bs" type="number" min="1" max="512" value="16" /></label>
+            <label>Max length<input id="hp-ml" type="number" min="8" max="512" value="64" /></label>
+            <label>Patience<input id="hp-pat" type="number" min="0" max="20" value="2" /></label>
+          </div>
+
+          <div class="train-controls">
+            <button class="btn primary grow" id="train-start">Start training</button>
+            <button class="btn danger" id="train-stop" disabled>Stop</button>
+          </div>
+
+          <div class="progress-wrap" id="progress-wrap" hidden>
+            <div class="progress"><div class="progress-bar" id="progress-bar"></div></div>
+            <div class="progress-meta">
+              <span id="progress-text">epoch 0</span>
+              <span id="elapsed">0:00</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- loss chart -->
+        <section class="card glass">
+          <header class="card-head">
+            <h2>Loss curve</h2>
+            <span class="badge ghost" id="train-summary">no data yet</span>
+          </header>
+          <canvas id="loss-chart" height="150"></canvas>
+        </section>
+      </div>
+
+      <!-- log -->
+      <section class="card glass">
+        <header class="card-head">
+          <h2>Training log</h2>
+          <div class="head-actions">
+            <span class="badge ghost" id="train-pid"></span>
+            <button class="icon-btn" id="copy-log" title="Copy log">⧉</button>
+          </div>
+        </header>
+        <pre id="train-log" class="log"></pre>
+      </section>
+    </div>
   </main>
+
+  <footer class="foot">
+    <span>Project Vimaan &middot; localhost dashboard</span>
+    <span class="muted" id="conn-state">● connected</span>
+  </footer>
+
+  <!-- toast container -->
+  <div class="toasts" id="toasts" aria-live="polite"></div>
 </body>
 </html>
