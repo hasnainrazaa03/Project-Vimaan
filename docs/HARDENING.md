@@ -18,14 +18,18 @@ Full-codebase audit + remediation. 145 tests pass (11 new), ruff + format clean.
 | **Security** | `model_loader.py` now passes `torch.load(..., weights_only=True)` explicitly (defence-in-depth for the whole `torch>=2.6` floor). | `fix(security)` |
 | **Correctness/UX** | Plugin now handles non-actionable intents (`None`, `ask_status_generic`, `ask_time`, `chit_chat_greeting`) gracefully instead of "Command not found". `None` = silent reject; others get a short ack. No retrain needed. | `refactor(nlu)` |
 | **Hygiene** | Trimmed dead `IMPLICIT_STATE_INTENTS` (`toggle_autopilot_3`/`engine_3`/`engine_4`) + added a schema-consistency test. | `refactor(nlu)` |
-| **Repo** | `git rm --cached` the v1–v9 weights + generated datasets (93 files). They were tracked despite `.gitignore`/docs claiming otherwise — the ignore rules were added *after* the files were committed. Working-tree copies preserved. | `chore(repo)` |
+| **Repo** | Untracked the v1–v9 weights + generated datasets (they were tracked despite `.gitignore`/docs claiming otherwise — the ignore rules were added *after* the files were committed). Working-tree copies preserved. Initially done via `git rm --cached`; **subsumed by the history rewrite below**, which removes them from all history. | `chore(repo)` (pruned by rewrite) |
+| **Repo / LFS** | **History rewrite** (`git filter-repo`) purged `ML/models/**` + generated datasets from all commits; **Git LFS retired** in favour of GitHub Releases for weight distribution (`scripts/publish_model.sh` / `fetch_model.sh`, `docs/MODEL_DISTRIBUTION.md`). `git lfs prune` reclaimed the local LFS cache. `main` + the PR branch were force-pushed. | rewrite + `chore(lfs)` |
 
-Note: the pre-commit `check-added-large-files` (2 MB) + `detect-private-key` guards already existed — the weights pre-date them. No pre-commit change was needed.
+Notes:
+- The weights are in **Git LFS** (`.gitattributes`); the 2.2 GB lived in `.git/lfs`, not pack history (which was ~12 MB). So the rewrite reclaims local space and cleans history, but GitHub's **remote** LFS store is not auto-GC'd — see `docs/MODEL_DISTRIBUTION.md`.
+- The pre-commit `check-added-large-files` (2 MB) + `detect-private-key` guards already existed — the weights pre-date them. No pre-commit change was needed.
 
 ### Outstanding — owner actions
 
 1. **🔴 Revoke the HuggingFace token.** `scratch/token_HF.txt` holds a live `hf_…` token. It was never committed (verified) and `scratch/` is gitignored, but it's a usable credential on disk. Revoke at <https://huggingface.co/settings/tokens>, then delete the file. (Master-plan B-002, still open.)
-2. **🟠 Decide on a git history rewrite.** `git rm --cached` stops *future* tracking but the ~2.2 GB of weight/dataset blobs remain in history. Reclaiming the space needs `git filter-repo` (or BFG), which **rewrites every commit SHA** — all collaborators must re-clone. Defer until the team agrees; this is the only way to (a) shrink clones and (b) remove already-published weights from history.
+2. **🟠 Reclaim GitHub's remote LFS storage.** The history rewrite removed the LFS pointers, but GitHub keeps the ~2.2 GB of LFS objects until the repo is deleted/recreated or GitHub Support purges them. Only needed if the LFS quota matters.
+3. **🟠 Collaborators must re-clone.** The force-push rewrote every SHA; Aryan and Vyom should re-clone rather than pull.
 
 ### Not done (proposed follow-ups)
 
