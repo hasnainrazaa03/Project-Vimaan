@@ -1,37 +1,40 @@
-# Core deep-learning stack
-torch>=2.0
-transformers>=4.35
+# Project Vimaan — runtime dependencies for the active NLU pipeline + plugin.
+#
+# Versions are pinned with a lower bound (a known-good floor) and an upper
+# bound at the next major, so a fresh `pip install` is reproducible and a
+# breaking major release (e.g. transformers 4 -> 5) can't silently land.
+# Re-pin deliberately when upgrading; see docs/PRODUCTION_CHECKLIST.md.
 
-# Tokenizers / utilities that ship with HF but are nice to pin
-tokenizers>=0.14
-huggingface_hub>=0.19
+# ---- Core deep-learning stack ----
+# torch>=2.6: torch.load defaults to weights_only=True there, which the model
+# loader relies on to refuse unpickling arbitrary objects from checkpoints.
+torch>=2.6,<3
+transformers>=5.9,<6
+tokenizers>=0.21,<0.23
+huggingface_hub>=0.26,<2
 
-# Numerics & evaluation
-numpy
-scipy
-scikit-learn
-matplotlib
-tqdm
+# ---- Numerics & evaluation ----
+numpy>=1.26,<3
+scipy>=1.11
+scikit-learn>=1.3
+matplotlib>=3.7
+tqdm>=4.66
 
-# Numeric / phonetic text normalization
-word2number
-num2words
+# ---- Numeric / phonetic text normalization ----
+word2number==1.1
+num2words>=0.5.13
 
-# Optional ONNX inference backend (Phase 4C); CPU runtime.
+# ---- Optional ONNX inference backend (Phase 4C); CPU runtime ----
 # The plugin only needs these when VIMAAN_BACKEND=onnx.
-onnx>=1.16
-onnxruntime>=1.18
+onnx>=1.16,<2
+onnxruntime>=1.18,<2
 
-# Speech I/O
-SpeechRecognition
-sounddevice
-openai-whisper          # optional; required by legacy Whisper plugin
-
-# Legacy plugin (plugin/legacy/AI_CoPilot.py)
-joblib
-sentence-transformers
+# ---- Speech I/O (active plugin) ----
+SpeechRecognition>=3.10,<4
+sounddevice>=0.4
 
 # NOTE:
-# XPPython3 is provided by the X-Plane installation and MUST NOT be installed via pip.
-# PyAudio is required by SpeechRecognition's Microphone() backend; install via OS package
-# manager (e.g., `brew install portaudio && pip install pyaudio` on macOS).
+# - XPPython3 is provided by the X-Plane installation and MUST NOT be pip-installed.
+# - PyAudio is required by SpeechRecognition's Microphone() backend; install via
+#   the OS package manager (e.g. `brew install portaudio && pip install pyaudio`).
+# - Legacy plugins (plugin/legacy/) need extra heavy deps; see requirements-legacy.txt.
