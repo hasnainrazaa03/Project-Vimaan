@@ -318,6 +318,15 @@ git pull --ff-only origin main
 
 ---
 
+## License
+
+Released under the [MIT License](LICENSE) © 2026 Hasnain Raza, Aryan Shukla, Vyom Shukla.
+
+> Project Vimaan is for **flight simulation only** — it is not certified avionics
+> and must never be used for real-world flight operations.
+
+---
+
 ## Credits
 
 Project Vimaan is developed and maintained by **Hasnain Raza**, **Aryan Shukla**, and **Vyom Shukla**.
