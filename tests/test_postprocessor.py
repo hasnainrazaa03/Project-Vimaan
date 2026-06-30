@@ -144,3 +144,11 @@ class TestActionStateMapCoverage:
     def test_implicit_state_intents_are_only_toggles(self):
         for intent in IMPLICIT_STATE_INTENTS:
             assert intent.startswith("toggle_"), intent
+
+    def test_implicit_state_intents_exist_in_schema(self):
+        """Guard against drift: every implicit-state intent must be a real
+        intent in the schema (no dead entries like the old engine_3/_4)."""
+        from config.schema_config import SCHEMA
+
+        for intent in IMPLICIT_STATE_INTENTS:
+            assert intent in SCHEMA, f"{intent} is not a defined intent in schema_config"

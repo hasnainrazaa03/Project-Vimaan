@@ -6,8 +6,12 @@ return ``(None, intent_logits, slot_logits)`` as torch tensors so that
 ``predict()`` and the plugin handlers keep working unchanged.
 """
 
-import numpy as np
 import pytest
+
+# numpy is not part of the minimal CI dependency set; skip the whole module
+# cleanly when it (or torch, via the requires_torch marks below) is absent,
+# instead of failing collection.
+np = pytest.importorskip("numpy")
 
 requires_torch = pytest.mark.requires_torch
 

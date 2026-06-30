@@ -7,13 +7,11 @@ from utils import find_latest_version_path, get_next_version_path
 
 try:
     from num2words import num2words
-except ImportError:
-    print("Installing 'num2words' library...")
-    import subprocess
-    import sys
-
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "num2words"])
-    from num2words import num2words
+except ImportError as _n2w_err:
+    raise ImportError(
+        "The 'num2words' package is required for this script. "
+        "Install it from the project requirements: pip install -r requirements.txt"
+    ) from _n2w_err
 
 
 def clean_dataset(input_file, output_file):

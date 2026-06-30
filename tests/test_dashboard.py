@@ -74,6 +74,22 @@ class TestPaths:
         with pytest.raises(ValueError):
             dpaths.safe_upload_path(name)
 
+    def test_safe_model_path_accepts_relative_under_root(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(dpaths, "MODELS_ROOT", tmp_path)
+        p = dpaths.safe_model_path("v1")
+        assert p == (tmp_path / "v1").resolve()
+
+    def test_safe_model_path_accepts_absolute_inside(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(dpaths, "MODELS_ROOT", tmp_path)
+        p = dpaths.safe_model_path(str(tmp_path / "v2"))
+        assert p == (tmp_path / "v2").resolve()
+
+    @pytest.mark.parametrize("bad", ["../../etc/passwd", "/etc/passwd", "", "   ", "v1/../../.."])
+    def test_safe_model_path_rejects_escapes(self, monkeypatch, tmp_path, bad):
+        monkeypatch.setattr(dpaths, "MODELS_ROOT", tmp_path)
+        with pytest.raises(ValueError):
+            dpaths.safe_model_path(bad)
+
     def test_list_model_versions_orders_newest_first(self, monkeypatch, tmp_path):
         for v in ("v1", "v3", "v10", "v2"):
             (tmp_path / v).mkdir()
@@ -233,6 +249,13 @@ class TestAPI:
             files={"file": ("nokeys.jsonl", b'{"foo":"bar"}\n', "application/json")},
         )
         assert r.status_code == 400
+
+    @pytest.mark.parametrize("bad", ["/etc/passwd", "../../../../etc", ""])
+    def test_predict_rejects_model_path_outside_models_root(self, client, bad):
+        # Containment is checked before any torch import, so this is a clean 400
+        # regardless of whether inference deps are installed.
+        r = client.post("/api/predict", json={"model_path": bad, "text": "gear up"})
+        assert r.status_code == 400, r.text
 
     def test_train_start_rejects_outside_repo(self, client):
         r = client.post("/api/train/start", json={"dataset": "/etc/passwd"})

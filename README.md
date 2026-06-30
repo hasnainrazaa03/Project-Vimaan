@@ -245,7 +245,10 @@ Versioning: every script appends `_vN` to outputs and the trainer writes the nex
 
 ## Running the X-Plane Plugin
 
-1. Build/train a model so that `ML/models/vimaan_nlu_model_best/vN/` exists.
+1. Get a model so that `ML/models/vimaan_nlu_model_best/vN/` exists — either
+   train one (see above) or download a published checkpoint:
+   `scripts/fetch_model.sh` (weights ship as GitHub Release assets, not in the
+   repo — see [docs/MODEL_DISTRIBUTION.md](docs/MODEL_DISTRIBUTION.md)).
 2. Copy the **plugin folder + ML folder** into X-Plane:
 
    ```

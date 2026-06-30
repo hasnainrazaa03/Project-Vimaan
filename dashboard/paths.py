@@ -65,6 +65,28 @@ def list_datasets() -> list[dict]:
     return out
 
 
+def safe_model_path(model_path: str) -> Path:
+    """Resolve a client-supplied checkpoint path and confine it to MODELS_ROOT.
+
+    The predict endpoint loads weights from this path (``from_pretrained`` +
+    ``torch.load``), so an unconstrained path is a traversal / arbitrary-load
+    vector — even on localhost, where a browser can reach the dashboard via
+    DNS-rebinding. Relative paths resolve under MODELS_ROOT; absolute paths
+    must still land inside it. Raises ValueError otherwise.
+    """
+    if not model_path or not model_path.strip():
+        raise ValueError("model_path is required")
+    p = Path(model_path)
+    if not p.is_absolute():
+        p = MODELS_ROOT / model_path
+    p = p.resolve()
+    try:
+        p.relative_to(MODELS_ROOT.resolve())
+    except ValueError as e:
+        raise ValueError("model_path must live inside the models directory") from e
+    return p
+
+
 def safe_upload_path(filename: str) -> Path:
     """Sanitise a user-supplied filename and return its target path under UPLOAD_DIR."""
     base = os.path.basename(filename).strip()

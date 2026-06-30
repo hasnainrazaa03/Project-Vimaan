@@ -1,2 +1,8 @@
-*.safetensors filter=lfs diff=lfs merge=lfs -text
-*.bin filter=lfs diff=lfs merge=lfs -text
+# Model weights are NOT stored in git or Git LFS.
+#
+# They are distributed as GitHub Release assets (see docs/MODEL_DISTRIBUTION.md)
+# and installed locally with scripts/fetch_model.sh. ML/models/** is gitignored.
+#
+# Historical note: *.safetensors and *.bin were previously tracked via Git LFS.
+# Git LFS was retired on 2026-06-30 together with a history rewrite that purged
+# the weight blobs from the repository.
