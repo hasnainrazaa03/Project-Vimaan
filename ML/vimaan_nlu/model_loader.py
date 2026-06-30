@@ -42,7 +42,14 @@ class ModelLoader:
 
         intent_classifier_path = os.path.join(model_path, "intent_classifier.bin")
         if os.path.exists(intent_classifier_path):
-            intent_classifier_state = torch.load(intent_classifier_path, map_location=self.device)
+            # weights_only=True refuses to unpickle arbitrary objects: the
+            # checkpoint is a plain state_dict, so this is lossless and blocks
+            # the pickle-RCE class of bugs on untrusted/downloaded checkpoints.
+            # (Default flipped to True in torch 2.6; we set it explicitly so the
+            # behaviour holds on the torch>=2.6 floor regardless of release.)
+            intent_classifier_state = torch.load(
+                intent_classifier_path, map_location=self.device, weights_only=True
+            )
             self.model.intent_classifier.load_state_dict(intent_classifier_state)
         else:
             raise FileNotFoundError(f"Intent classifier not found at {intent_classifier_path}")

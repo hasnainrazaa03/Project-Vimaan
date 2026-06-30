@@ -16,6 +16,7 @@ from .paths import (
     ensure_dirs,
     list_datasets,
     list_model_versions,
+    safe_model_path,
     safe_upload_path,
 )
 from .predictor import predict as run_predict
@@ -107,7 +108,11 @@ class PredictRequest(BaseModel):
 @app.post("/api/predict")
 def api_predict(req: PredictRequest) -> dict[str, Any]:
     try:
-        return run_predict(req.model_path, req.text)
+        model_path = safe_model_path(req.model_path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    try:
+        return run_predict(str(model_path), req.text)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except ModuleNotFoundError as e:
