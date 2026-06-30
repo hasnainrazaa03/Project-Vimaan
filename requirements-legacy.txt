@@ -1,0 +1,15 @@
+# Legacy-plugin-only dependencies.
+#
+# These are required ONLY by the deprecated prototypes under plugin/legacy/
+# (the v1 joblib/MiniLM copilot and the Whisper-based prototype). The active
+# plugin (plugin/PI_VimaanCoPilot.py) and the NLU pipeline do NOT need them,
+# so they are kept out of requirements.txt to keep the default install light.
+#
+#   pip install -r requirements.txt -r requirements-legacy.txt
+
+# plugin/legacy/PI_Vimaan_Whisper.py
+openai-whisper
+
+# plugin/legacy/AI_CoPilot.py
+joblib
+sentence-transformers
