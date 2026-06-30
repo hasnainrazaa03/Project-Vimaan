@@ -124,6 +124,19 @@ class PythonInterface:
     # unchanged.
     BACKEND = os.environ.get("VIMAAN_BACKEND", "torch").lower()
 
+    # Intents the model can emit that map to no sim command. "None" is a
+    # deliberate out-of-scope reject sink (it improves precision on real
+    # commands); the conversational intents get a short spoken acknowledgement
+    # instead of the misleading "Command not found". A None value => stay
+    # silent. Without this, every one of these falls through to "Command not
+    # found" even though the model classified them correctly.
+    NON_ACTIONABLE_INTENTS = {
+        "None": None,
+        "ask_status_generic": "All systems nominal",
+        "ask_time": "I cannot read the clock yet",
+        "chit_chat_greeting": "Hello, standing by",
+    }
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -375,8 +388,15 @@ class PythonInterface:
                 xp.speakString("Please repeat that")
                 return
 
+            if intent_pred in self.NON_ACTIONABLE_INTENTS:
+                ack = self.NON_ACTIONABLE_INTENTS[intent_pred]
+                self.log(f"[Vimaan] Non-actionable intent '{intent_pred}'; acknowledging")
+                if ack:
+                    xp.speakString(ack)
+                return
+
             handler = self.intent_to_command.get(intent_pred)
-            if handler is None or intent_pred == "None":
+            if handler is None:
                 self.log(f"[Vimaan] Intent '{intent_pred}' has no handler")
                 xp.speakString("Command not found")
                 return

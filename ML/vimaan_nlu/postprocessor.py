@@ -17,16 +17,16 @@ ACTION_STATE_MAP = {
     "deactivate": "off",
 }
 
+# Intents whose `state` slot may be implied by an action verb ("raise the gear"
+# -> up). Must stay in sync with the actual intent set in config/schema_config.py
+# and the plugin's handlers — entries for intents that don't exist are dead.
 IMPLICIT_STATE_INTENTS = {
     "toggle_landing_gear": True,
     "toggle_flaps": True,
     "toggle_autopilot_1": True,
     "toggle_autopilot_2": True,
-    "toggle_autopilot_3": True,
     "toggle_engine_1": True,
     "toggle_engine_2": True,
-    "toggle_engine_3": True,
-    "toggle_engine_4": True,
     "toggle_parking_brake": True,
 }
 
