@@ -38,6 +38,12 @@ if _ML_PATH not in sys.path:
 
 from vimaan_nlu.inference import predict  # noqa: E402
 from vimaan_nlu.model_loader import ModelLoader  # noqa: E402
+from vimaan_nlu.safety import (  # noqa: E402
+    ConfirmationGate,
+    SafetyContext,
+    command_token,
+    evaluate_safety,
+)
 
 # ---------------------------------------------------------------------------
 # Listening parameters
@@ -137,6 +143,10 @@ class PythonInterface:
         "chit_chat_greeting": "Hello, standing by",
     }
 
+    # Seconds a risky command stays "armed" waiting for the pilot to repeat it
+    # as confirmation (Phase 6B safety interlocks).
+    CONFIRM_WINDOW_SEC = 8.0
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -165,6 +175,9 @@ class PythonInterface:
         self._flight_loop_id = None
         self.hotkeyPress = None
         self.hotkeyRelease = None
+
+        # Safety interlocks (Phase 6B): risky commands must be repeated to confirm.
+        self._confirm_gate = ConfirmationGate(window_sec=self.CONFIRM_WINDOW_SEC)
 
     def _setup_logging(self):
         try:
@@ -401,6 +414,20 @@ class PythonInterface:
                 xp.speakString("Command not found")
                 return
 
+            # Safety interlock: gate irreversible/dangerous commands on a
+            # confirmation (repeat the command) when risky in the current flight
+            # context. Fails safe if the relevant datarefs are unavailable.
+            verdict = evaluate_safety(intent_pred, slots, self._read_safety_context())
+            token = command_token(intent_pred, slots)
+            if verdict.requires_confirmation and not self._confirm_gate.confirm(token):
+                self._confirm_gate.arm(token)
+                self.log(
+                    f"[Vimaan] Safety hold: {intent_pred} ({verdict.rule}"
+                    f"{', fail-safe' if verdict.fail_safe else ''})"
+                )
+                xp.speakString(f"{verdict.message}. Repeat to confirm.")
+                return
+
             # Dispatch with intent context so generic handlers can branch.
             handler(slots, intent_pred)
         except Exception as exc:
@@ -422,6 +449,30 @@ class PythonInterface:
             return 1 if val > 0.5 else 0
         except Exception:
             return None
+
+    @staticmethod
+    def _read_dataref_float(dataref_name):
+        dref = xp.findDataRef(dataref_name)
+        if not dref:
+            return None
+        try:
+            return float(xp.getDataf(dref))
+        except Exception:
+            return None
+
+    def _read_safety_context(self):
+        """Sample flight state for the safety interlocks. Missing datarefs stay
+        None so the interlocks fail safe (treat the situation as risky)."""
+        agl_m = self._read_dataref_float("sim/flightmodel/position/y_agl")
+        gs_ms = self._read_dataref_float("sim/flightmodel/position/groundspeed")
+        ias = self._read_dataref_float("sim/cockpit2/gauges/indicators/airspeed_kts_pilot")
+        on_ground_i = self._read_state_int("sim/flightmodel/failures/onground_any")
+        return SafetyContext(
+            agl_ft=None if agl_m is None else agl_m * 3.28084,
+            ground_speed_kt=None if gs_ms is None else gs_ms * 1.94384,
+            ias_kt=ias,
+            on_ground=None if on_ground_i is None else bool(on_ground_i),
+        )
 
     def _fire_command(self, command_path):
         if not command_path:
