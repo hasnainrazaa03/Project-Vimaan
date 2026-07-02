@@ -33,6 +33,14 @@ from .postprocessor import (
     extract_numbers_from_text,
     postprocess_slots,
 )
+from .validators import (
+    SLOT_VALIDATORS,
+    Enum,
+    Range,
+    in_range,
+    slot_validator,
+    validate_slot,
+)
 
 __all__ = [
     "normalize_aviation_input",
@@ -45,6 +53,12 @@ __all__ = [
     "add_implicit_state",
     "extract_digit_sequence_frequency",
     "extract_numbers_from_text",
+    "SLOT_VALIDATORS",
+    "Range",
+    "Enum",
+    "in_range",
+    "slot_validator",
+    "validate_slot",
     "MANIFEST_FILENAME",
     "MANIFEST_SCHEMA_VERSION",
     "build_manifest",

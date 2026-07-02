@@ -1,5 +1,7 @@
 import re
 
+from .validators import in_range
+
 ACTION_STATE_MAP = {
     "raise": "up",
     "lower": "down",
@@ -65,23 +67,15 @@ def extract_digit_sequence_frequency(text):
                 found_sequence = True
             elif found_sequence and len(result) >= 3:
                 freq_str = "".join(result)
-                try:
-                    freq_val = float(freq_str)
-                    if 118 <= freq_val <= 137:
-                        return freq_str
-                except:
-                    pass
+                if in_range("frequency", freq_str):
+                    return freq_str
                 result = []
                 found_sequence = False
 
         if len(result) >= 3:
             freq_str = "".join(result)
-            try:
-                freq_val = float(freq_str)
-                if 118 <= freq_val <= 137:
-                    return freq_str
-            except:
-                pass
+            if in_range("frequency", freq_str):
+                return freq_str
 
     return None
 
@@ -127,53 +121,35 @@ def postprocess_slots(slots, original_text, intent=None):
 
             freq_numbers = re.findall(r"\d+\.?\d*", original_text)
             for num in freq_numbers:
-                if "." in num:
-                    val = float(num)
-                    if 118 <= val <= 137:
-                        slots[slot_name] = num
-                        break
+                if "." in num and in_range("frequency", num):
+                    slots[slot_name] = num
+                    break
 
         if slot_name in ["altitude", "degrees", "flight_level", "com_port"]:
             if len(numbers) > 0:
                 if slot_name == "altitude":
                     for num in numbers:
-                        try:
-                            val = int(float(num))
-                            if 1000 <= val <= 50000:
-                                slots[slot_name] = num
-                                break
-                        except:
-                            pass
+                        if in_range("altitude", num):
+                            slots[slot_name] = num
+                            break
 
                 elif slot_name == "degrees":
                     for num in numbers:
-                        try:
-                            val = int(float(num))
-                            if 0 <= val <= 360:
-                                slots[slot_name] = num
-                                break
-                        except:
-                            pass
+                        if in_range("degrees", num):
+                            slots[slot_name] = num
+                            break
 
                 elif slot_name == "flight_level":
                     for num in reversed(numbers):
-                        try:
-                            val = int(float(num))
-                            if 10 <= val <= 430:
-                                slots[slot_name] = num
-                                break
-                        except:
-                            pass
+                        if in_range("flight_level", num):
+                            slots[slot_name] = num
+                            break
 
                 elif slot_name == "com_port":
                     for num in numbers:
-                        try:
-                            val = int(float(num))
-                            if 1 <= val <= 4 and len(num) == 1:
-                                slots[slot_name] = num
-                                break
-                        except:
-                            pass
+                        if in_range("com_port", num) and len(num) == 1:
+                            slots[slot_name] = num
+                            break
 
     if intent:
         slots = add_implicit_state(slots, original_text, intent)
