@@ -38,6 +38,7 @@ if _ML_PATH not in sys.path:
 
 from vimaan_nlu.inference import predict  # noqa: E402
 from vimaan_nlu.model_loader import ModelLoader  # noqa: E402
+from vimaan_nlu.readback import spell_digits  # noqa: E402
 from vimaan_nlu.safety import (  # noqa: E402
     ConfirmationGate,
     SafetyContext,
@@ -147,6 +148,23 @@ class PythonInterface:
     # as confirmation (Phase 6B safety interlocks).
     CONFIRM_WINDOW_SEC = 8.0
 
+    # Canned utterances for the Ctrl-Z self-test (Phase 6C): representative of
+    # each actionable intent. Run through the full text -> NLU -> dispatch-
+    # resolution path (STT bypassed) to verify the model + handlers are alive
+    # without a microphone.
+    SELF_TEST_PROBES = (
+        "set heading two seven zero",
+        "climb to flight level three five zero",
+        "set altitude one five thousand",
+        "gear down",
+        "flaps up",
+        "engage autopilot one",
+        "flight director two on",
+        "tune com one one one eight decimal seven five",
+        "start engine one",
+        "parking brake on",
+    )
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -175,6 +193,7 @@ class PythonInterface:
         self._flight_loop_id = None
         self.hotkeyPress = None
         self.hotkeyRelease = None
+        self.hotkeySelfTest = None
 
         # Safety interlocks (Phase 6B): risky commands must be repeated to confirm.
         self._confirm_gate = ConfirmationGate(window_sec=self.CONFIRM_WINDOW_SEC)
@@ -274,6 +293,14 @@ class PythonInterface:
             "Vimaan Push-to-Talk -> Release",
             self.OnReleaseCallback,
         )
+        # Ctrl-Z: STT-bypass self-test (Phase 6C). Distinct flag combo from the
+        # plain-Z push-to-talk above. (Verify no key conflict in-sim.)
+        self.hotkeySelfTest = xp.registerHotKey(
+            xp.VK_Z,
+            xp.DownFlag | xp.ControlFlag,
+            "Vimaan Self-Test",
+            self._run_self_test,
+        )
 
         # Flight loop drains worker-thread results onto the main thread.
         self._flight_loop_id = xp.createFlightLoop(self._drain_results, phase=1)
@@ -287,6 +314,8 @@ class PythonInterface:
             xp.unregisterHotKey(self.hotkeyPress)
         if self.hotkeyRelease:
             xp.unregisterHotKey(self.hotkeyRelease)
+        if self.hotkeySelfTest:
+            xp.unregisterHotKey(self.hotkeySelfTest)
         if self._flight_loop_id:
             xp.destroyFlightLoop(self._flight_loop_id)
             self._flight_loop_id = None
@@ -437,6 +466,44 @@ class PythonInterface:
             xp.speakString("Command execution failed")
 
     # ------------------------------------------------------------------
+    # Diagnostics
+    # ------------------------------------------------------------------
+    def _run_self_test(self, *_):
+        """Ctrl-Z: run canned utterances through the text -> NLU -> dispatch-
+        resolution path (STT bypassed) to confirm the model and handlers are
+        alive without a microphone. Logs each result and speaks a summary."""
+        self.log("[Vimaan] === SELF-TEST START ===")
+        xp.speakString("Running self test")
+        resolved = 0
+        for text in self.SELF_TEST_PROBES:
+            try:
+                result = predict(
+                    text,
+                    self.loader.model,
+                    self.loader.tokenizer,
+                    self.device,
+                    self.loader.intent_map_rev,
+                    self.loader.slot_map_rev,
+                )
+                intent = result["intent"]
+                has_handler = intent in self.intent_to_command
+                non_actionable = intent in self.NON_ACTIONABLE_INTENTS
+                if has_handler or non_actionable:
+                    resolved += 1
+                status = (
+                    "OK" if has_handler else ("non-actionable" if non_actionable else "NO HANDLER")
+                )
+                self.log(
+                    f"[Vimaan] self-test '{text}' -> {intent} "
+                    f"({result['confidence']:.2f}) slots={result['slots']} [{status}]"
+                )
+            except Exception as exc:
+                self.log(f"[Vimaan] self-test ERROR on '{text}': {exc}")
+        total = len(self.SELF_TEST_PROBES)
+        self.log(f"[Vimaan] === SELF-TEST DONE: {resolved}/{total} resolved ===")
+        xp.speakString(f"Self test complete. {resolved} of {total} resolved.")
+
+    # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
     @staticmethod
@@ -535,7 +602,7 @@ class PythonInterface:
             dref = xp.findDataRef("sim/cockpit/autopilot/heading_mag")
             if dref:
                 xp.setDataf(dref, value)
-                xp.speakString(f"Heading {int(value):03d}")
+                xp.speakString(f"Heading {spell_digits(f'{int(value):03d}')}")
         except (TypeError, ValueError):
             xp.speakString("Invalid heading value")
 
@@ -563,7 +630,7 @@ class PythonInterface:
             dref = xp.findDataRef("sim/cockpit/autopilot/altitude")
             if dref:
                 xp.setDataf(dref, value)
-                xp.speakString(f"Flight level {int(float(flight_level))}")
+                xp.speakString(f"Flight level {spell_digits(int(float(flight_level)))}")
         except (TypeError, ValueError):
             xp.speakString("Invalid flight level")
 
@@ -583,7 +650,7 @@ class PythonInterface:
             dref = xp.findDataRef(dref_name)
             if dref:
                 xp.setDatai(dref, freq_hz)
-                xp.speakString(f"COM {com_port} set to {frequency}")
+                xp.speakString(f"COM {com_port} set to {spell_digits(frequency)}")
         except (TypeError, ValueError):
             xp.speakString("Invalid frequency")
 

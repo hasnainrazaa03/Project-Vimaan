@@ -33,6 +33,7 @@ from .postprocessor import (
     extract_numbers_from_text,
     postprocess_slots,
 )
+from .readback import spell_digits
 from .validators import (
     SLOT_VALIDATORS,
     Enum,
@@ -59,6 +60,7 @@ __all__ = [
     "in_range",
     "slot_validator",
     "validate_slot",
+    "spell_digits",
     "MANIFEST_FILENAME",
     "MANIFEST_SCHEMA_VERSION",
     "build_manifest",
