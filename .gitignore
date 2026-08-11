@@ -109,3 +109,9 @@ dist/
 
 # Dashboard upload area (user-uploaded datasets, not part of repo)
 ML/datasets/dashboard_uploads/
+
+# ---- Gold audio fixtures (Phase 6E) ----
+# Recorded wavs + the real manifest are personal/bulky; the README and
+# manifest.example.jsonl are kept.
+tests/audio_fixtures/*.wav
+tests/audio_fixtures/manifest.jsonl
