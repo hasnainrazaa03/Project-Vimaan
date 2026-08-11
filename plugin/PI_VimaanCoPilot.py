@@ -45,6 +45,7 @@ from vimaan_nlu.safety import (  # noqa: E402
     command_token,
     evaluate_safety,
 )
+from vimaan_nlu.stt import transcribe  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Listening parameters
@@ -131,6 +132,13 @@ class PythonInterface:
     # unchanged.
     BACKEND = os.environ.get("VIMAAN_BACKEND", "torch").lower()
 
+    # Speech-to-text backend (Phase 7 / R-09): "google" (online, default),
+    # "vosk" or "whisper" (offline, no network). Override with
+    # VIMAAN_STT_BACKEND. Offline backends need their package + a model
+    # installed; see docs/OFFLINE_STT.md.
+    STT_BACKEND = os.environ.get("VIMAAN_STT_BACKEND", "google").lower()
+    WHISPER_MODEL = os.environ.get("VIMAAN_WHISPER_MODEL", "base.en")
+
     # Intents the model can emit that map to no sim command. "None" is a
     # deliberate out-of-scope reject sink (it improves precision on real
     # commands); the conversational intents get a short spoken acknowledgement
@@ -188,6 +196,7 @@ class PythonInterface:
         self._init_model()
 
         self.intent_to_command = self._setup_intent_handlers()
+        self.log(f"[Vimaan] STT backend: {self.STT_BACKEND}")
 
         self._result_queue = queue.Queue()
         self._flight_loop_id = None
@@ -371,7 +380,9 @@ class PythonInterface:
                     phrase_time_limit=PHRASE_TIME_LIMIT_SEC,
                 )
             self._enqueue("speak", "Processing")
-            text = self.recognizer.recognize_google(audio)
+            text = transcribe(
+                self.recognizer, audio, self.STT_BACKEND, whisper_model=self.WHISPER_MODEL
+            )
             self.log(f"[Vimaan] Recognized text: {text}")
             self._enqueue("execute", text)
         except sr.WaitTimeoutError:
