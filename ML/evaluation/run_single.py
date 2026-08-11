@@ -22,7 +22,7 @@ def main():
 
     model_path = None
     if len(sys.argv) > 1:
-        version = sys.argv[1]
+        version = sys.argv[1].lstrip("v")  # accept "10" or "v10"
         models_dir = os.path.join(script_dir, "..", "models", "vimaan_nlu_model_best")
         model_path = os.path.join(models_dir, f"v{version}")
 

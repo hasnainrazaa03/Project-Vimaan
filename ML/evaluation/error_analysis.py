@@ -115,7 +115,8 @@ def main():
     n = len(rows) or 1
     buckets = Counter()
     for c in confidences:
-        buckets[f"{int(c * 10) * 10}-{int(c * 10) * 10 + 10}%"] += 1
+        lo = min(int(c * 10), 9) * 10  # clamp so conf==1.0 lands in 90-100%, not 100-110%
+        buckets[f"{lo}-{lo + 10}%"] += 1
 
     report = {
         "model_path": model_path,
