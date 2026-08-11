@@ -1,0 +1,9 @@
+{"wav": "gear_up_01.wav", "intent": "toggle_landing_gear", "slots": {"state": "up"}}
+{"wav": "gear_down_01.wav", "intent": "toggle_landing_gear", "slots": {"state": "down"}}
+{"wav": "heading_270_01.wav", "intent": "set_autopilot_heading", "slots": {"degrees": "270"}}
+{"wav": "flight_level_350_01.wav", "intent": "set_flight_level", "slots": {"flight_level": "350"}}
+{"wav": "flaps_down_01.wav", "intent": "toggle_flaps", "slots": {"state": "down"}}
+{"wav": "autopilot_1_on_01.wav", "intent": "toggle_autopilot_1", "slots": {"state": "on"}}
+{"wav": "engine_1_start_01.wav", "intent": "toggle_engine_1", "slots": {"state": "on"}}
+{"wav": "parking_brake_on_01.wav", "intent": "toggle_parking_brake", "slots": {"state": "on"}}
+{"wav": "com1_11875_01.wav", "intent": "set_com_frequency", "slots": {"com_port": "1", "frequency": "118.75"}}
