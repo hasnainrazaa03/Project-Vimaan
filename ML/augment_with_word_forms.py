@@ -1,19 +1,37 @@
 import json
 import os
+import re
 
 from tqdm import tqdm
 from utils import find_latest_version_path, get_next_version_path
 from vimaan_nlu import normalize_dataset
 
+_DIGIT_WORD_FORMS = {
+    "0": "zero",
+    "1": "one",
+    "2": "two",
+    "3": "three",
+    "4": "four",
+    "5": "five",
+    "6": "six",
+    "7": "seven",
+    "8": "eight",
+    "9": "nine",
+}
+
 
 def add_word_form_variants(dataset_path):
     print(f"Loading dataset: {dataset_path}")
 
-    with open(dataset_path) as f:
+    with open(dataset_path, encoding="utf-8") as f:
         data = [json.loads(line) for line in tqdm(f.readlines(), desc="Loading dataset")]
 
     new_examples = []
-    numeric_slots = ["altitude", "degrees", "flight_level", "frequency", "com_port"]
+    # Only single-digit slots are safe to spell out, and ONLY with a
+    # word-boundary replace: a bare `str.replace("1","one")` mangled the "1" in
+    # a "118.75" frequency ("one18.75"). frequency/com_port are excluded (a
+    # bare digit appears inside them), leaving single-digit degrees.
+    safe_numeric_slots = {"degrees", "altitude", "flight_level"}
 
     count_added = 0
 
@@ -31,29 +49,15 @@ def add_word_form_variants(dataset_path):
         modified = False
 
         for slot_name, slot_value in slots.items():
-            if slot_name in numeric_slots:
+            if slot_name in safe_numeric_slots:
                 value_str = str(slot_value).strip()
-
-                word_forms = {
-                    "1": "one",
-                    "2": "two",
-                    "3": "three",
-                    "4": "four",
-                    "5": "five",
-                    "6": "six",
-                    "7": "seven",
-                    "8": "eight",
-                    "9": "nine",
-                    "0": "zero",
-                }
-
-                try:
-                    if value_str in word_forms:
-                        word_form = word_forms[value_str]
-                        modified_text = modified_text.replace(value_str, word_form)
-                        modified = True
-                except:
-                    pass
+                if value_str in _DIGIT_WORD_FORMS:
+                    modified_text = re.sub(
+                        r"\b" + re.escape(value_str) + r"\b",
+                        _DIGIT_WORD_FORMS[value_str],
+                        modified_text,
+                    )
+                    modified = True
 
         if modified and modified_text != text:
             new_examples.append(

@@ -147,14 +147,15 @@ SCHEMA = {
         },
     },
     # --- Out-of-Scope Intent ---
+    # NOTE: templates here must NOT overlap the conversational intents below
+    # ("are we there yet" -> ask_status_generic, "what time is it" -> ask_time),
+    # or identical texts get contradictory intent labels (T1.8).
     "None": {
         "templates": [
             "what's the weather like today",
             "how are you doing",
             "tell me something interesting",
             "that's a beautiful sunset",
-            "are we there yet",
-            "what time is it",
             "i'm feeling hungry",
             "can you see the city lights",
         ],
