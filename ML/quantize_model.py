@@ -33,7 +33,7 @@ from torch import nn
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from utils import get_latest_model_path  # noqa: E402
+from utils import find_latest_version_path, get_latest_model_path  # noqa: E402
 from vimaan_nlu.inference import DEFAULT_MAX_LENGTH, predict  # noqa: E402
 from vimaan_nlu.model_loader import ModelLoader  # noqa: E402
 
@@ -51,11 +51,16 @@ LATENCY_COMMANDS = [
     "disengage the flight director",
 ]
 
-DEFAULT_DATASET = os.path.join(
-    os.path.dirname(__file__),
-    "datasets",
-    "05_final_merged",
-    "aviation_cmds_final_training_set_v5_v1.jsonl",
+# Resolve the latest merged dataset (matching the rest of the pipeline) rather
+# than a hardcoded _v5_v1 file that find_latest_version_path never selects and
+# that FileNotFoundErrors if removed/renamed.
+DEFAULT_DATASET = find_latest_version_path(
+    os.path.join(
+        os.path.dirname(__file__),
+        "datasets",
+        "05_final_merged",
+        "aviation_cmds_final_training_set.jsonl",
+    )
 )
 
 
@@ -270,19 +275,17 @@ def main():
 
     # --- Report ----------------------------------------------------------
     mb = 1024 * 1024
+    size_pct = manifest["size_reduction_pct"]
+    speedup = manifest["latency_ms"]["speedup_mean"]
+    size_pct_str = f"{size_pct:.1f}% smaller" if size_pct is not None else "n/a"
+    speedup_str = f"{speedup:.2f}x mean" if speedup is not None else "n/a"
     print("\n" + "=" * 64)
     print("QUANTIZATION BENCHMARK")
     print("=" * 64)
     print(f"Disk    fp32 weights : {fp32_bytes / mb:7.1f} MB")
-    print(
-        f"        int8 weights : {int8_bytes / mb:7.1f} MB"
-        f"   ({manifest['size_reduction_pct']:.1f}% smaller)"
-    )
+    print(f"        int8 weights : {int8_bytes / mb:7.1f} MB   ({size_pct_str})")
     print(f"Latency fp32  p50/p95: {fp32_p50:6.1f} / {fp32_p95:6.1f} ms")
-    print(
-        f"        int8  p50/p95: {int8_p50:6.1f} / {int8_p95:6.1f} ms"
-        f"   ({manifest['latency_ms']['speedup_mean']:.2f}x mean)"
-    )
+    print(f"        int8  p50/p95: {int8_p50:6.1f} / {int8_p95:6.1f} ms   ({speedup_str})")
     print(
         f"Intent  fp32 macroF1 : {fp32_acc['intent_macro_f1']:.4f}"
         f"  acc {fp32_acc['intent_accuracy']:.4f}"

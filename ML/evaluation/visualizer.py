@@ -23,26 +23,23 @@ class MetricsVisualizer:
     def load_all_metrics(self):
         metrics_files = glob.glob(os.path.join(self.results_dir, "metrics_v*.json"))
 
-        all_metrics = {}
+        # Multiple timestamped files can exist per version; keep the NEWEST per
+        # version. glob order is unsorted, so the old "last wins" plotted stale
+        # metrics (e.g. an older v9 file over the newer one).
+        by_version = {}
         for filepath in metrics_files:
-            with open(filepath) as f:
+            with open(filepath, encoding="utf-8") as f:
                 data = json.load(f)
-                version = data["metadata"]["model_version"]
-                all_metrics[version] = data
+            version = data["metadata"]["model_version"]
+            prev = by_version.get(version)
+            if prev is None or os.path.getmtime(filepath) > os.path.getmtime(prev[0]):
+                by_version[version] = (filepath, data)
 
+        all_metrics = {v: d for v, (_, d) in by_version.items()}
         print(f"Loaded metrics for {len(all_metrics)} versions")
-        return dict(sorted(all_metrics.items()))
-
-    def load_comparison_json(self):
-        comparison_files = glob.glob(
-            os.path.join(self.results_dir, "comparison_all_versions_*.json")
-        )
-
-        if comparison_files:
-            latest = max(comparison_files, key=os.path.getctime)
-            with open(latest) as f:
-                return json.load(f)
-        return None
+        # Sort ints numerically, keeping any non-int version key (e.g. "unknown")
+        # last, so a stray string key can't raise TypeError on comparison.
+        return dict(sorted(all_metrics.items(), key=lambda kv: (isinstance(kv[0], str), kv[0])))
 
     def plot_progress_metrics(self, all_metrics):
         versions = sorted(all_metrics.keys())

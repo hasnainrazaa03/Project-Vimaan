@@ -118,7 +118,7 @@ def analyze_dataset(dataset_path):
 if __name__ == "__main__":
     script_dir = os.path.dirname(__file__)
     DATA_DIR = os.path.join(script_dir, "..", "datasets", "05_final_merged")
-    BASE_FILENAME = os.path.join(DATA_DIR, "aviation_cmds_final_training_set_v5.jsonl")
+    BASE_FILENAME = os.path.join(DATA_DIR, "aviation_cmds_final_training_set.jsonl")
 
     print(f"Searching for the latest dataset in '{DATA_DIR}'...")
     latest_dataset = find_latest_version_path(BASE_FILENAME)
