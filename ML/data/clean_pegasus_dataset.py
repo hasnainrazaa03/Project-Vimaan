@@ -4,6 +4,7 @@ import os
 from schema_config import SCHEMA
 from tqdm import tqdm
 from utils import find_latest_version_path, get_next_version_path
+from utils.dataset_filters import instance_number_ok
 
 try:
     from num2words import num2words
@@ -53,6 +54,12 @@ def clean_dataset(input_file, output_file):
                         issues_found += 1
                         # print(f"\nRemoving L{original_count}: '{entry['text']}' missing words for '{slot_value}'")
                         break
+
+                # Drop paraphrases that dropped/flipped a numbered instance (T1.3).
+                if is_valid and not instance_number_ok(entry.get("intent"), entry["text"]):
+                    is_valid = False
+                    issues_found += 1
+
                 if is_valid:
                     clean_data.append(entry)
 

@@ -1,5 +1,6 @@
 import json
 import os
+import random
 
 import numpy as np
 import torch
@@ -9,9 +10,11 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from transformers import DistilBertTokenizerFast
 from utils import find_latest_version_path, get_model_versions_dir
+from utils.slot_alignment import align_offsets_to_labels, find_slot_char_spans
 from vimaan_nlu import (
     JointIntentAndSlotModel,
     build_manifest,
+    normalize_aviation_input,
     normalize_dataset,
     write_manifest,
 )
@@ -32,7 +35,9 @@ class AviationCommandDataset(Dataset):
 
     def __getitem__(self, idx):
         item = self.data[idx]
-        text = item["text"]
+        # Normalize the text the SAME way inference does (T1.4) so training sees
+        # e.g. "ap 1 on" (as the model will at run time), not "ap one on".
+        text = normalize_aviation_input(item["text"])
         intent_label = self.intent_map[item["intent"]]
 
         encoding = self.tokenizer(
@@ -41,51 +46,16 @@ class AviationCommandDataset(Dataset):
             truncation=True,
             max_length=self.max_length,
             return_tensors="pt",
+            return_offsets_mapping=True,
         )
-
         input_ids = encoding["input_ids"][0]
-        word_ids = encoding.word_ids()
+        offsets = encoding["offset_mapping"][0].tolist()
 
-        slot_labels = np.ones(len(input_ids), dtype=int) * -100
-
-        words_in_text = text.lower().split()
-        text_lower = text.lower()
-        word_idx_to_slot_name = {}
-
-        for slot_name, slot_value in item.get("slots", {}).items():
-            value_str = str(slot_value).lower().strip()
-
-            if value_str in text_lower:
-                slot_pos = text_lower.find(value_str)
-
-                char_pos = 0
-                for word_idx, word in enumerate(words_in_text):
-                    word_start = text_lower.find(word, char_pos)
-                    word_end = word_start + len(word)
-
-                    if word_start <= slot_pos < word_end:
-                        word_idx_to_slot_name[word_idx] = slot_name
-                        break
-
-                    char_pos = word_end
-
-        current_slot = None
-        for token_idx, word_idx in enumerate(word_ids):
-            if word_idx is None:
-                slot_labels[token_idx] = -100
-                continue
-
-            if word_idx in word_idx_to_slot_name:
-                slot_name = word_idx_to_slot_name[word_idx]
-
-                if word_idx != current_slot:
-                    slot_labels[token_idx] = self.slot_map[f"B-{slot_name}"]
-                    current_slot = word_idx
-                else:
-                    slot_labels[token_idx] = self.slot_map[f"I-{slot_name}"]
-            else:
-                slot_labels[token_idx] = self.slot_map["O"]
-                current_slot = None
+        # Offset-based BIO alignment (T1.1/T1.2): anchor each slot value at a
+        # word boundary and label tokens by char-span containment — no more
+        # split()/word_ids() mismatch or "on"-inside-"one" mislabeling.
+        spans = find_slot_char_spans(text, item.get("slots"))
+        slot_labels = np.array(align_offsets_to_labels(offsets, spans, self.slot_map), dtype=int)
 
         return {
             "input_ids": input_ids,
@@ -107,6 +77,11 @@ def train_model(
     patience=2,
     model_save_dir=None,
 ):
+    # Reproducibility (T1.10): the pipeline was fully unseeded except the split.
+    random.seed(42)
+    np.random.seed(42)
+    torch.manual_seed(42)
+
     print("Loading final dataset...")
     with open(dataset_path, encoding="utf-8") as f:
         data = [json.loads(line) for line in f if line.strip()]
