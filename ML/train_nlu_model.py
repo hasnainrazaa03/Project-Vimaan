@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from transformers import DistilBertTokenizerFast
 from utils import find_latest_version_path, get_model_versions_dir
+from utils.device import resolve_device
 from utils.slot_alignment import align_offsets_to_labels, find_slot_char_spans
 from vimaan_nlu import (
     JointIntentAndSlotModel,
@@ -76,6 +77,7 @@ def train_model(
     max_length=64,
     patience=2,
     model_save_dir=None,
+    device=None,
 ):
     # Reproducibility (T1.10): the pipeline was fully unseeded except the split.
     random.seed(42)
@@ -123,7 +125,8 @@ def train_model(
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = resolve_device(device)  # cuda > mps (Apple GPU) > cpu, or forced
+    print(f"Using device: {device}")
     model = JointIntentAndSlotModel(num_intents=len(intent_map), num_slots=len(slot_map)).to(device)
     optimizer = AdamW(model.parameters(), lr=lr)
 
@@ -188,8 +191,10 @@ def train_model(
             os.makedirs(model_save_path, exist_ok=True)
             tokenizer.save_pretrained(model_save_path)
             model.bert_for_slots.save_pretrained(model_save_path)
+            # .cpu() so the checkpoint is device-agnostic (e.g. saved from MPS).
             torch.save(
-                model.intent_classifier.state_dict(), f"{model_save_path}/intent_classifier.bin"
+                {k: v.detach().cpu() for k, v in model.intent_classifier.state_dict().items()},
+                f"{model_save_path}/intent_classifier.bin",
             )
             with open(f"{model_save_path}/intent_map.json", "w") as f:
                 json.dump(intent_map, f)
@@ -255,6 +260,12 @@ if __name__ == "__main__":
         default=None,
         help="Override the parent dir for the new v<N> checkpoint.",
     )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        help="Force a device: cpu | mps | cuda. Default: auto (cuda > mps > cpu).",
+    )
     args = parser.parse_args()
 
     script_dir = os.path.dirname(__file__)
@@ -284,4 +295,5 @@ if __name__ == "__main__":
         max_length=args.max_length,
         patience=args.patience,
         model_save_dir=args.model_save_dir,
+        device=args.device,
     )
