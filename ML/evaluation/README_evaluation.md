@@ -189,7 +189,7 @@ with open("evaluation/results/comparison_all_versions_*.json") as f:
     data = json.load(f)
 
 # Get v9 accuracy
-v9_accuracy = data['versions']['v9']['accuracy']
+v9_accuracy = data["versions"]["v9"]["accuracy"]
 ```
 
 ---
