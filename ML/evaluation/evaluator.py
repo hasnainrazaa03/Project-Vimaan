@@ -12,11 +12,13 @@ from sklearn.metrics import (
     confusion_matrix,
     precision_recall_fscore_support,
 )
+from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from utils import get_latest_model_path
+from vimaan_nlu import normalize_slot_value
 from vimaan_nlu.inference import predict
 from vimaan_nlu.model_loader import ModelLoader
 
@@ -79,21 +81,30 @@ class ModelEvaluator:
     def load_dataset(self, dataset_path):
         print(f"Loading dataset from: {dataset_path}")
 
-        with open(dataset_path) as f:
-            data = [json.loads(line) for line in f]
+        with open(dataset_path, encoding="utf-8") as f:
+            data = [json.loads(line) for line in f if line.strip()]
 
         print(f"Total examples: {len(data)}")
 
-        train_size = int(0.70 * len(data))
-        val_size = int(0.15 * len(data))
+        # Prefer a true held-out test set saved alongside the model. Older models
+        # have none — the previous code sliced the last 15% of the SAME file the
+        # (shuffled, seed-42) training run consumed in full, so ~85% of the "test"
+        # rows were actually trained on. Reproduce that split and evaluate on the
+        # VALIDATION partition instead (used for early stopping — mild leakage,
+        # but not directly trained on) and label it honestly.
+        holdout = os.path.join(self.model_path, "holdout_test.jsonl") if self.model_path else None
+        if holdout and os.path.isfile(holdout):
+            with open(holdout, encoding="utf-8") as f:
+                self.test_data = [json.loads(line) for line in f if line.strip()]
+            self.eval_set_kind = "held-out test set (saved with the model)"
+        else:
+            _train, self.test_data = train_test_split(data, test_size=0.15, random_state=42)
+            self.eval_set_kind = (
+                "validation split (legacy model — reproduced seed-42 training "
+                "split; NOT a true held-out test)"
+            )
 
-        self.train_data = data[:train_size]
-        self.val_data = data[train_size : train_size + val_size]
-        self.test_data = data[train_size + val_size :]
-
-        print(
-            f"Train: {len(self.train_data)}, Val: {len(self.val_data)}, Test: {len(self.test_data)}\n"
-        )
+        print(f"Eval set: {len(self.test_data)} examples  [{self.eval_set_kind}]\n")
 
     def evaluate_dataset(self, dataset, dataset_name="Test"):
         print(f"\n{'=' * 70}")
@@ -104,6 +115,8 @@ class ModelEvaluator:
         all_ground_truth = []
         all_confidences = []
         inference_times = []
+        all_pred_slots = []
+        all_gold_slots = []
 
         for item in tqdm(dataset, desc="Evaluating", unit="example"):
             text = item["text"]
@@ -124,16 +137,56 @@ class ModelEvaluator:
             all_predictions.append(result["intent"])
             all_ground_truth.append(true_intent)
             all_confidences.append(result["confidence"])
+            all_pred_slots.append(result.get("slots") or {})
+            all_gold_slots.append(item.get("slots") or {})
             inference_times.append(inference_time)
 
         metrics = self._calculate_metrics(
-            all_ground_truth, all_predictions, all_confidences, inference_times
+            all_ground_truth,
+            all_predictions,
+            all_confidences,
+            inference_times,
+            all_pred_slots,
+            all_gold_slots,
         )
 
         return metrics, all_predictions, all_ground_truth, all_confidences
 
-    def _calculate_metrics(self, y_true, y_pred, confidences, inference_times):
+    @staticmethod
+    def _slot_pair_metrics(pred_slots, gold_slots):
+        """Micro precision/recall/F1 over (slot_name, normalized_value) pairs.
+
+        Both sides are normalized (`normalize_slot_value`) so word/digit forms
+        compare equal. This catches slot regressions the intent metrics miss.
+        """
+        tp = fp = fn = 0
+        for pred, gold in zip(pred_slots, gold_slots):
+            pred_pairs = {(k, normalize_slot_value(v)) for k, v in pred.items()}
+            gold_pairs = {(k, normalize_slot_value(v)) for k, v in gold.items()}
+            tp += len(pred_pairs & gold_pairs)
+            fp += len(pred_pairs - gold_pairs)
+            fn += len(gold_pairs - pred_pairs)
+        precision = tp / (tp + fp) if (tp + fp) else 0.0
+        recall = tp / (tp + fn) if (tp + fn) else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+        return {
+            "slot_precision": float(precision),
+            "slot_recall": float(recall),
+            "slot_f1": float(f1),
+            "tp": tp,
+            "fp": fp,
+            "fn": fn,
+        }
+
+    def _calculate_metrics(
+        self, y_true, y_pred, confidences, inference_times, pred_slots=None, gold_slots=None
+    ):
         metrics = {}
+        metrics["eval_set_kind"] = getattr(self, "eval_set_kind", "unknown")
+
+        if not y_true:
+            metrics["error"] = "empty evaluation set"
+            return metrics
 
         metrics["overall_accuracy"] = accuracy_score(y_true, y_pred)
 
@@ -192,6 +245,9 @@ class ModelEvaluator:
             "incorrect_predictions": sum(1 for t, p in zip(y_true, y_pred) if t != p),
         }
 
+        if pred_slots is not None and gold_slots is not None:
+            metrics["slots"] = self._slot_pair_metrics(pred_slots, gold_slots)
+
         return metrics
 
     def save_metrics(self, metrics, output_dir=None):
@@ -221,6 +277,11 @@ class ModelEvaluator:
         print(f"\n{'=' * 70}")
         print(f"MODEL v{self.model_version} - EVALUATION SUMMARY")
         print(f"{'=' * 70}\n")
+        print(f"Eval set: {metrics.get('eval_set_kind', 'unknown')}\n")
+
+        if metrics.get("error"):
+            print(f"  {metrics['error']}")
+            return
 
         print("OVERALL METRICS")
         print("-" * 70)
@@ -228,6 +289,16 @@ class ModelEvaluator:
         print(f"  Weighted F1-Score:  {metrics['weighted_f1']:.4f}")
         print(f"  Macro F1-Score:     {metrics['macro_f1']:.4f}")
         print(f"  Cohen's Kappa:      {metrics['cohens_kappa']:.4f}")
+
+        if "slots" in metrics:
+            s = metrics["slots"]
+            print("\nSLOT METRICS (micro over name-value pairs)")
+            print("-" * 70)
+            print(
+                f"  Precision: {s['slot_precision']:.2%} | "
+                f"Recall: {s['slot_recall']:.2%} | F1: {s['slot_f1']:.4f}"
+            )
+            print(f"  TP {s['tp']}  FP {s['fp']}  FN {s['fn']}")
 
         print("\nDATASET STATISTICS")
         print("-" * 70)
