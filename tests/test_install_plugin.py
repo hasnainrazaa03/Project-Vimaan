@@ -91,8 +91,11 @@ class TestBuildPlan:
             ip.build_plan(str(repo), str(tmp_path / "nope"))
 
 
-def test_main_dry_run_against_real_repo(tmp_path, capsys):
-    # Uses the module's real REPO_ROOT (this checkout, which has a local model).
+def test_main_dry_run(tmp_path, monkeypatch, capsys):
+    # Point main() at a fake repo (with fake models) so it does not depend on
+    # this checkout having a trained model — CI has none.
+    repo = _fake_repo(tmp_path)
+    monkeypatch.setattr(ip, "REPO_ROOT", str(repo))
     rc = ip.main(["--xplane", str(_fake_xplane(tmp_path)), "--dry-run"])
     assert rc == 0
     out = capsys.readouterr().out
