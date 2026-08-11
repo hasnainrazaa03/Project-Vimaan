@@ -7,8 +7,10 @@
 pytest>=8.0
 pytest-cov>=5.0
 
-# Lint + format
-ruff>=0.5
+# Lint + format — pinned so local and CI format identically (ruff's formatter
+# changes between minors; an unpinned CI once reformatted a file the pinned dev
+# ruff had left alone and went red).
+ruff==0.16.2
 
 # Secret scanner used by pre-commit
 detect-secrets>=1.5
