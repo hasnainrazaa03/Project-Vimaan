@@ -5,6 +5,7 @@ from vimaan_nlu.postprocessor import (
     ACTION_STATE_MAP,
     IMPLICIT_STATE_INTENTS,
     add_implicit_state,
+    correct_numbered_intent,
     extract_digit_sequence_frequency,
     extract_numbers_from_text,
     postprocess_slots,
@@ -152,3 +153,43 @@ class TestActionStateMapCoverage:
 
         for intent in IMPLICIT_STATE_INTENTS:
             assert intent in SCHEMA, f"{intent} is not a defined intent in schema_config"
+
+
+class TestCorrectNumberedIntent:
+    def test_corrects_engine_variant_from_text(self):
+        assert correct_numbered_intent("toggle_engine_1", "engine 2 off") == "toggle_engine_2"
+
+    def test_corrects_autopilot_variant(self):
+        assert (
+            correct_numbered_intent("toggle_autopilot_2", "engage autopilot 1")
+            == "toggle_autopilot_1"
+        )
+
+    def test_corrects_flight_director_variant(self):
+        assert (
+            correct_numbered_intent("toggle_flight_director_1", "flight director 2 on")
+            == "toggle_flight_director_2"
+        )
+
+    def test_noop_when_text_agrees(self):
+        assert correct_numbered_intent("toggle_engine_2", "shut down engine 2") == "toggle_engine_2"
+
+    def test_noop_when_no_instance_digit(self):
+        # STT dropped the number -> keep the model's guess rather than invent one.
+        assert (
+            correct_numbered_intent("toggle_engine_1", "shut down the engine") == "toggle_engine_1"
+        )
+
+    def test_noop_for_non_numbered_intent(self):
+        assert correct_numbered_intent("toggle_landing_gear", "gear 2 up") == "toggle_landing_gear"
+        assert correct_numbered_intent("set_autopilot_heading", "heading 2 7 0") == (
+            "set_autopilot_heading"
+        )
+
+    def test_ignores_out_of_range_instances(self):
+        # Only 1 and 2 are valid variants; a stray large number must not corrupt it.
+        assert correct_numbered_intent("toggle_engine_1", "engine 1 at 350") == "toggle_engine_1"
+
+    def test_handles_empty_and_none(self):
+        assert correct_numbered_intent("", "engine 2") == ""
+        assert correct_numbered_intent("toggle_engine_1", "") == "toggle_engine_1"

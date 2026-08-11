@@ -80,6 +80,32 @@ def extract_digit_sequence_frequency(text):
     return None
 
 
+# Numbered toggle intents whose instance (1/2) is stated explicitly in the
+# utterance. The model occasionally confuses the variants (engine 1<->2,
+# FD 1<->2, AP 1<->2); the spoken number is authoritative, so we trust it.
+_NUMBERED_INTENT_RE = re.compile(r"^(toggle_(?:autopilot|flight_director|engine))_(\d+)$")
+
+
+def correct_numbered_intent(intent, normalized_text):
+    """Fix a mis-numbered toggle intent from the instance number in the text.
+
+    For ``toggle_engine_N`` / ``toggle_autopilot_N`` / ``toggle_flight_director_N``,
+    if the normalized utterance names a different instance (1 or 2), return the
+    matching variant. No-op for other intents or when no instance digit is
+    present, so it is safe to apply unconditionally.
+    """
+    if not intent:
+        return intent
+    match = _NUMBERED_INTENT_RE.match(intent)
+    if not match:
+        return intent
+    base, predicted = match.group(1), match.group(2)
+    spoken = re.findall(r"\b([12])\b", normalized_text or "")
+    if spoken and spoken[0] != predicted:
+        return f"{base}_{spoken[0]}"
+    return intent
+
+
 def add_implicit_state(slots, original_text, intent):
     if intent not in IMPLICIT_STATE_INTENTS:
         return slots
