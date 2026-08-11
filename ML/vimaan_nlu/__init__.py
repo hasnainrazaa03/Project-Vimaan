@@ -29,6 +29,7 @@ from .normalization import (
 from .postprocessor import (
     ACTION_STATE_MAP,
     add_implicit_state,
+    correct_numbered_intent,
     extract_digit_sequence_frequency,
     extract_numbers_from_text,
     postprocess_slots,
@@ -52,6 +53,7 @@ __all__ = [
     "ACTION_STATE_MAP",
     "postprocess_slots",
     "add_implicit_state",
+    "correct_numbered_intent",
     "extract_digit_sequence_frequency",
     "extract_numbers_from_text",
     "SLOT_VALIDATORS",
