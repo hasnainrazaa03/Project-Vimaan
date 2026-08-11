@@ -63,6 +63,20 @@ class TestNormalizeAviationInput:
         out = normalize_aviation_input("climb to fifteen thousand feet")
         assert "15000" in out
 
+    def test_atc_group_form_altitude(self):
+        # ATC "one five thousand" = 15000 (not the old "15 1000" -> altitude 1000)
+        assert "15000" in normalize_aviation_input("climb to one five thousand feet").split()
+        assert "25000" in normalize_aviation_input("descend to two five thousand").split()
+
+    def test_thousand_hundred_compound(self):
+        # "seven thousand five hundred" = 7500 (old code mis-split it to 7005)
+        out = normalize_aviation_input("descend to seven thousand five hundred feet")
+        assert "7500" in out.split()
+
+    def test_digit_run_without_magnitude_stays_a_digit_run(self):
+        # No magnitude word -> phonetic concat, not a cardinal/group form.
+        assert "270" in normalize_aviation_input("heading two seven zero").split()
+
     def test_compound_hundred(self):
         # "two hundred" -> "200"
         out = normalize_aviation_input("flaps two hundred")

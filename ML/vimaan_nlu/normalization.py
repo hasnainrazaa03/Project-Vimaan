@@ -27,84 +27,159 @@ PHONETIC_MAP = {
 }
 
 
+# Single spoken digits (phonetic alphabet). Used to build the digit-run and
+# group-form patterns below.
+_DIGIT_WORDS = "zero|oh|one|two|three|four|five|six|seven|eight|niner|nine"
+
+# Cardinal-number words for the compound pass. A run that contains a MAGNITUDE
+# word is handed to word2number as a whole ("seven thousand five hundred"->7500);
+# a run without one (a pure spoken-digit sequence like "two seven zero") is left
+# for the phonetic pass to concatenate.
+_CARDINAL_WORDS = {
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "niner",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+    "twenty",
+    "thirty",
+    "forty",
+    "fifty",
+    "sixty",
+    "seventy",
+    "eighty",
+    "ninety",
+    "hundred",
+    "thousand",
+    "million",
+    "billion",
+    "and",
+}
+_MAGNITUDE_WORDS = {"hundred", "thousand", "million", "billion"}
+
+# ATC group-form: two-or-more spoken digits then a magnitude, e.g.
+# "one five thousand" = 15000, "two five hundred" = 2500. Must run BEFORE the
+# phonetic pass, which would otherwise collapse "one five" -> "15" and leave a
+# dangling "thousand" (the old code produced "15 1000").
+_GROUP_FORM_RE = re.compile(
+    rf"\b((?:{_DIGIT_WORDS})(?:[\s-]+(?:{_DIGIT_WORDS}))+)\s+(thousand|hundred)\b",
+    flags=re.IGNORECASE,
+)
+
+_DECIMAL_SEQUENCE_RE = re.compile(
+    rf"\b(?:(?:{_DIGIT_WORDS})[\s-]*)+(?:\s+(?:point|decimal)\s+)(?:(?:{_DIGIT_WORDS})[\s-]*)+\b",
+    flags=re.IGNORECASE,
+)
+_PHONETIC_SEQUENCE_RE = re.compile(
+    rf"\b((?:{_DIGIT_WORDS})(?:\s+(?:{_DIGIT_WORDS}))+)\b",
+    flags=re.IGNORECASE,
+)
+_SIMPLE_NUMBER_RE = re.compile(
+    r"\b(?:zero|oh|one|two|three|four|five|six|seven|eight|nine|niner|ten|eleven"
+    r"|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty"
+    r"|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)"
+    r"(?:\s+(?:zero|oh|one|two|three|four|five|six|seven|eight|nine|niner|ten|eleven"
+    r"|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty"
+    r"|thirty|forty|fifty|sixty|seventy|eighty|ninety))?\b",
+    flags=re.IGNORECASE,
+)
+
+
+def _digits_only(words):
+    return "".join(PHONETIC_MAP[w] for w in words if PHONETIC_MAP.get(w, ".") != ".")
+
+
+def _group_form_repl(match):
+    digits = _digits_only(re.split(r"[\s-]+", match.group(1).lower()))
+    if not digits:
+        return match.group(0)
+    multiplier = 1000 if match.group(2).lower() == "thousand" else 100
+    return str(int(digits) * multiplier)
+
+
+def _convert_decimal_sequence(match):
+    parts = re.split(r"\b(?:point|decimal)\b", match.group(0))
+    result_parts = [_digits_only(p.split()) for p in parts]
+    result_parts = [p for p in result_parts if p]
+    if len(result_parts) == 2:
+        return result_parts[0] + "." + result_parts[1]
+    if len(result_parts) == 1:
+        return result_parts[0]
+    return match.group(0)
+
+
+def _convert_phonetic_sequence(match):
+    return _digits_only(match.group(0).split())
+
+
+def _convert_word_number(match):
+    try:
+        return str(w2n.word_to_num(match.group(0)))
+    except (ValueError, IndexError):
+        return match.group(0)
+
+
+def _convert_cardinals(text):
+    """Convert maximal cardinal-word runs that include a magnitude word.
+
+    Pure spoken-digit runs (no hundred/thousand) are left untouched for the
+    phonetic pass, so "two seven zero" stays a digit run (270), while
+    "seven thousand five hundred" becomes 7500 in one piece.
+    """
+    words = text.split()
+    out = []
+    i = 0
+    while i < len(words):
+        if words[i].lower() in _CARDINAL_WORDS and words[i].lower() != "and":
+            j = i
+            while j < len(words) and words[j].lower() in _CARDINAL_WORDS:
+                j += 1
+            run = [w.lower() for w in words[i:j]]
+            while run and run[-1] == "and":
+                run = run[:-1]
+                j -= 1
+            if any(w in _MAGNITUDE_WORDS for w in run):
+                try:
+                    out.append(str(w2n.word_to_num(" ".join(run))))
+                    i = j
+                    continue
+                except (ValueError, IndexError):
+                    pass
+        out.append(words[i])
+        i += 1
+    return " ".join(out)
+
+
 def normalize_aviation_input(text):
     text_lower = text.lower()
-
-    def convert_digit_sequence_with_decimal(match):
-        phrase = match.group(0)
-
-        parts = re.split(r"\b(?:point|decimal)\b", phrase)
-
-        result_parts = []
-        for part_idx, part in enumerate(parts):
-            digits = []
-            for word in part.split():
-                word = word.strip()
-                if word in PHONETIC_MAP:
-                    digit = PHONETIC_MAP[word]
-                    if digit != ".":
-                        digits.append(digit)
-
-            if digits:
-                result_parts.append("".join(digits))
-
-        if len(result_parts) == 2:
-            return result_parts[0] + "." + result_parts[1]
-        elif len(result_parts) == 1:
-            return result_parts[0]
-
-        return phrase
-
-    # NOTE: the decimal pass must run BEFORE the phonetic-sequence pass. The
-    # phonetic pass collapses runs like "one two one" into "121", which would
-    # otherwise leave "121 decimal 5" that the decimal pass can no longer merge
-    # (its operands must be phonetic words, not digits).
-    decimal_sequence_pattern = r"\b(?:(?:zero|oh|one|two|three|four|five|six|seven|eight|niner|nine)[\s-]*)+(?:\s+(?:point|decimal)\s+)(?:(?:zero|oh|one|two|three|four|five|six|seven|eight|niner|nine)[\s-]*)+\b"
-    text_lower = re.sub(
-        decimal_sequence_pattern,
-        convert_digit_sequence_with_decimal,
-        text_lower,
-        flags=re.IGNORECASE,
-    )
-
-    def convert_phonetic_sequence(match):
-        """Convert phonetic digit sequence like 'zero niner zero' to '090'"""
-        phrase = match.group(0)
-        digits = []
-        for word in phrase.split():
-            if word in PHONETIC_MAP:
-                digit = PHONETIC_MAP[word]
-                if digit != ".":
-                    digits.append(digit)
-        return "".join(digits)
-
-    phonetic_sequence_pattern = r"\b((?:zero|oh|one|two|three|four|five|six|seven|eight|niner|nine)(?:\s+(?:zero|oh|one|two|three|four|five|six|seven|eight|niner|nine))+)\b"
-    text_lower = re.sub(
-        phonetic_sequence_pattern, convert_phonetic_sequence, text_lower, flags=re.IGNORECASE
-    )
-
-    def convert_compound_numbers(match):
-        phrase = match.group(0)
-        try:
-            result = w2n.word_to_num(phrase)
-            return str(result)
-        except:
-            return phrase
-
-    compound_pattern = r"\b(?:(?:zero|one|two|three|four|five|six|seven|eight|nine|niner|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:\s+(?:and\s+)?)?)+(?:\s+(?:hundred|thousand|million|billion))(?:\s+(?:(?:zero|one|two|three|four|five|six|seven|eight|nine|niner|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:\s+(?:and\s+)?)?)+(?:\s+(?:hundred))?)?(?:\s+(?:(?:zero|one|two|three|four|five|six|seven|eight|nine|niner|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:\s+(?:and\s+)?)?)+)?\b"
-    text_lower = re.sub(compound_pattern, convert_compound_numbers, text_lower, flags=re.IGNORECASE)
-
-    def convert_word_number(match):
-        phrase = match.group(0)
-        try:
-            result = w2n.word_to_num(phrase)
-            return str(result)
-        except:
-            return phrase
-
-    simple_number_pattern = r"\b(?:zero|oh|one|two|three|four|five|six|seven|eight|nine|niner|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)(?:\s+(?:zero|oh|one|two|three|four|five|six|seven|eight|nine|niner|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety))?\b"
-    text_lower = re.sub(simple_number_pattern, convert_word_number, text_lower, flags=re.IGNORECASE)
-
+    # 1. Decimals (frequencies): "one one eight decimal seven five" -> "118.75".
+    #    Must precede the phonetic pass, which would collapse the integer part.
+    text_lower = _DECIMAL_SEQUENCE_RE.sub(_convert_decimal_sequence, text_lower)
+    # 2. ATC group-form altitudes: "one five thousand" -> "15000". Before the
+    #    phonetic pass so "one five" is not collapsed to "15" first.
+    text_lower = _GROUP_FORM_RE.sub(_group_form_repl, text_lower)
+    # 3. Cardinals with a magnitude word: "seven thousand five hundred" -> "7500".
+    text_lower = _convert_cardinals(text_lower)
+    # 4. Phonetic digit runs: "two seven zero" -> "270".
+    text_lower = _PHONETIC_SEQUENCE_RE.sub(_convert_phonetic_sequence, text_lower)
+    # 5. Remaining single/paired word-numbers: "twenty" -> "20".
+    text_lower = _SIMPLE_NUMBER_RE.sub(_convert_word_number, text_lower)
     return text_lower
 
 

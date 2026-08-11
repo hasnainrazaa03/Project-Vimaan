@@ -57,6 +57,7 @@ from vimaan_nlu.safety import (  # noqa: E402
     evaluate_safety,
 )
 from vimaan_nlu.stt import transcribe  # noqa: E402
+from vimaan_nlu.validators import validate_slot  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Listening parameters
@@ -99,14 +100,8 @@ TOGGLE_BINDINGS = {
         "toggle": "sim/autopilot/fdir2_toggle",
         "label": "Flight Director 2",
     },
-    "toggle_parking_brake": {
-        "dataref": "sim/cockpit2/controls/parking_brake_ratio",
-        "on_cmd": "sim/flight_controls/brakes_toggle_max",  # not ideal; see set below
-        "off_cmd": "sim/flight_controls/brakes_toggle_max",
-        "toggle": "sim/flight_controls/brakes_toggle_max",
-        "label": "Parking brake",
-        "is_float_dataref": True,
-    },
+    # Parking brake is handled by its own _toggle_parking_brake (direct dataref
+    # set), not the generic _ensure_state path — so it has no binding here.
     "toggle_engine_1": {
         "dataref": "sim/cockpit2/engine/actuators/starter_hit[0]",
         "on_cmd": "sim/starters/engage_starter_1",
@@ -627,12 +622,19 @@ class PythonInterface:
         if not degrees:
             xp.speakString("Heading value missing")
             return
+        # Validators enforce the documented ranges before we touch a dataref
+        # (heading wraps into 0-360; the others reject out-of-range values so a
+        # mis-decoded number can't be written to the sim).
+        value, ok, _reason = validate_slot("degrees", degrees)
+        if not ok:
+            xp.speakString("Invalid heading value")
+            return
         try:
-            value = float(degrees) % 360
+            v = float(value)
             dref = xp.findDataRef("sim/cockpit/autopilot/heading_mag")
             if dref:
-                xp.setDataf(dref, value)
-                xp.speakString(f"Heading {spell_digits(f'{int(value):03d}')}")
+                xp.setDataf(dref, v)
+                xp.speakString(f"Heading {spell_digits(f'{int(v):03d}')}")
         except (TypeError, ValueError):
             xp.speakString("Invalid heading value")
 
@@ -641,12 +643,16 @@ class PythonInterface:
         if not altitude:
             xp.speakString("Altitude value missing")
             return
+        value, ok, _reason = validate_slot("altitude", altitude)
+        if not ok:
+            xp.speakString("Altitude out of range")
+            return
         try:
-            value = float(altitude)
+            v = float(value)
             dref = xp.findDataRef("sim/cockpit/autopilot/altitude")
             if dref:
-                xp.setDataf(dref, value)
-                xp.speakString(f"Altitude {int(value)} feet")
+                xp.setDataf(dref, v)
+                xp.speakString(f"Altitude {int(v)} feet")
         except (TypeError, ValueError):
             xp.speakString("Invalid altitude value")
 
@@ -655,12 +661,15 @@ class PythonInterface:
         if not flight_level:
             xp.speakString("Flight level missing")
             return
+        value, ok, _reason = validate_slot("flight_level", flight_level)
+        if not ok:
+            xp.speakString("Flight level out of range")
+            return
         try:
-            value = float(flight_level) * 100
             dref = xp.findDataRef("sim/cockpit/autopilot/altitude")
             if dref:
-                xp.setDataf(dref, value)
-                xp.speakString(f"Flight level {spell_digits(int(float(flight_level)))}")
+                xp.setDataf(dref, float(value) * 100)
+                xp.speakString(f"Flight level {spell_digits(int(float(value)))}")
         except (TypeError, ValueError):
             xp.speakString("Invalid flight level")
 
@@ -670,8 +679,14 @@ class PythonInterface:
         if not frequency:
             xp.speakString("Frequency missing")
             return
+        fval, ok, _reason = validate_slot("frequency", frequency)
+        if not ok:
+            xp.speakString("Frequency out of range")
+            return
+        pval, pok, _ = validate_slot("com_port", com_port)
+        com_port = pval if pok else "1"
         try:
-            freq_hz = int(round(float(frequency) * 1_000_000))
+            freq_hz = int(round(float(fval) * 1_000_000))
             dref_name = (
                 "sim/cockpit/radios/com1_freq_hz"
                 if com_port == "1"
@@ -680,7 +695,7 @@ class PythonInterface:
             dref = xp.findDataRef(dref_name)
             if dref:
                 xp.setDatai(dref, freq_hz)
-                xp.speakString(f"COM {com_port} set to {spell_digits(frequency)}")
+                xp.speakString(f"COM {com_port} set to {spell_digits(fval)}")
         except (TypeError, ValueError):
             xp.speakString("Invalid frequency")
 
