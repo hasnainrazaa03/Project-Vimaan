@@ -31,8 +31,18 @@ import speech_recognition as sr
 import torch
 from XPPython3 import xp
 
-# Plugin lives in <repo>/plugin/, ML package is at <repo>/ML/
-_ML_PATH = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ML"))
+# Locate the ML package. In dev it is <repo>/ML (i.e. <plugin_dir>/../ML); when
+# installed by scripts/install_plugin.py it sits beside the plugin as
+# PythonPlugins/ML. Use the first layout that exists so both work.
+_PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
+_ML_CANDIDATES = (
+    os.path.join(_PLUGIN_DIR, "..", "ML"),  # <repo>/plugin/ -> <repo>/ML (dev)
+    os.path.join(_PLUGIN_DIR, "ML"),  # PythonPlugins/PI_*.py + PythonPlugins/ML (installed)
+)
+_ML_PATH = next(
+    (os.path.abspath(p) for p in _ML_CANDIDATES if os.path.isdir(os.path.abspath(p))),
+    os.path.abspath(_ML_CANDIDATES[0]),
+)
 if _ML_PATH not in sys.path:
     sys.path.insert(0, _ML_PATH)
 

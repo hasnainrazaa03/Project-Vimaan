@@ -33,13 +33,13 @@ jobs:
             fastapi 'uvicorn[standard]' python-multipart httpx
 
       - name: Ruff lint
-        run: ruff check ML plugin tests dashboard
+        run: ruff check ML plugin tests dashboard scripts
 
       - name: Ruff format check
-        run: ruff format --check ML plugin tests dashboard
+        run: ruff format --check ML plugin tests dashboard scripts
 
       - name: Compileall (syntax sanity)
-        run: python -m compileall -q ML plugin dashboard
+        run: python -m compileall -q ML plugin dashboard scripts
 
       - name: Pytest (skips torch-only tests)
         run: pytest -q --cov=ML/vimaan_nlu --cov=ML/utils --cov=dashboard --cov-report=term-missing
