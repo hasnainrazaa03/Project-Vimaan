@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 import textwrap
+import threading
 import time
 from pathlib import Path
 
@@ -100,6 +101,26 @@ class TestPaths:
         assert rows[0]["has_manifest"] is True
         assert rows[1]["has_manifest"] is False
 
+    def test_safe_dataset_path_accepts_in_repo(self):
+        p = dpaths.safe_dataset_path("ML/datasets/05_final_merged/x.jsonl")
+        assert "05_final_merged" in str(p)
+
+    def test_safe_dataset_path_rejects_absolute_dotdot(self):
+        # The old train endpoint skipped resolve() for absolute paths.
+        evil = str(dpaths.REPO_ROOT) + "/../../../../etc/passwd"
+        with pytest.raises(ValueError):
+            dpaths.safe_dataset_path(evil)
+
+    @pytest.mark.parametrize("bad", ["", "   ", "../../../etc/passwd"])
+    def test_safe_dataset_path_rejects_escapes(self, bad):
+        with pytest.raises(ValueError):
+            dpaths.safe_dataset_path(bad)
+
+    def test_safe_upload_path_rejects_emoji_stem(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(dpaths, "UPLOAD_DIR", tmp_path)
+        with pytest.raises(ValueError):
+            dpaths.safe_upload_path("\U0001f600.jsonl")  # emoji filtered -> ".jsonl"
+
 
 # ---- TrainingManager (fake subprocess) -------------------------------------
 
@@ -161,6 +182,75 @@ def test_training_manager_rejects_concurrent_start(fake_train_script):
             mgr.start(str(ds))
     finally:
         mgr.stop()
+
+
+def _slow_train_fixture(tmp_path, monkeypatch, body):
+    script = tmp_path / "slow_train.py"
+    script.write_text(body)
+    ds = tmp_path / "ds.jsonl"
+    ds.write_text('{"text":"a","intent":"x","slots":{}}\n')
+    monkeypatch.setattr("dashboard.training.TRAIN_SCRIPT", script)
+    monkeypatch.setattr("dashboard.training.ML_DIR", tmp_path)
+    return ds
+
+
+def test_training_manager_concurrent_start_is_single_flight(tmp_path, monkeypatch):
+    # Two start() calls fired together: exactly one must win. The old code did
+    # the running-check and Popen in separate lock sections, so both could pass.
+    ds = _slow_train_fixture(
+        tmp_path, monkeypatch, "import time\nprint('go', flush=True)\ntime.sleep(1.0)\n"
+    )
+    mgr = TrainingManager()
+    barrier = threading.Barrier(2)
+    results: list[str] = []
+
+    def go():
+        barrier.wait()
+        try:
+            mgr.start(str(ds))
+            results.append("started")
+        except RuntimeError:
+            results.append("rejected")
+
+    threads = [threading.Thread(target=go) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    try:
+        assert sorted(results) == ["rejected", "started"], results
+    finally:
+        mgr.stop()
+
+
+def test_stop_reports_stopped_not_failed(tmp_path, monkeypatch):
+    ds = _slow_train_fixture(tmp_path, monkeypatch, "import time\ntime.sleep(30)\n")
+    mgr = TrainingManager()
+    mgr.start(str(ds))
+    mgr.stop()
+    for _ in range(50):
+        if mgr.snapshot()["status"] != "running":
+            break
+        time.sleep(0.1)
+    assert mgr.snapshot()["status"] == "stopped"
+
+
+def test_pump_drops_tqdm_progress_noise(tmp_path, monkeypatch):
+    ds = _slow_train_fixture(
+        tmp_path,
+        monkeypatch,
+        "print('Epoch 1 [Training]:  50%|#####     | 5/10 [00:01<00:01, 3.2it/s]', flush=True)\n"
+        "print('Epoch 1 - Average Training Loss: 0.5000', flush=True)\n",
+    )
+    mgr = TrainingManager()
+    mgr.start(str(ds))
+    for _ in range(50):
+        if mgr.snapshot()["status"] != "running":
+            break
+        time.sleep(0.1)
+    logs = mgr.snapshot()["log_tail"]
+    assert any("Average Training Loss" in x for x in logs)
+    assert not any("it/s" in x for x in logs)
 
 
 def test_training_manager_missing_dataset_raises(tmp_path):
@@ -262,6 +352,20 @@ class TestAPI:
         # Either "outside repo" (400) or "not found" (404) — both are OK
         # so long as we don't 200 and run something dangerous.
         assert r.status_code in (400, 404)
+
+    def test_train_start_rejects_absolute_dotdot_traversal(self, client):
+        # The bypass: absolute path with `..` that resolves outside the repo.
+        evil = str(dpaths.REPO_ROOT) + "/../../../../etc/passwd"
+        r = client.post("/api/train/start", json={"dataset": evil})
+        assert r.status_code == 400
+
+    def test_train_start_missing_dataset_preserves_404_detail(self, client):
+        # A deliberate 404 must keep its real detail (the old 404 handler
+        # clobbered every 404 body to exactly "not found").
+        r = client.post("/api/train/start", json={"dataset": "ML/datasets/__nope__.jsonl"})
+        assert r.status_code == 404
+        detail = r.json()["detail"]
+        assert detail != "not found" and "not found" in detail.lower()
 
     def test_train_status_idle(self, client):
         r = client.get("/api/train/status")

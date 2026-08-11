@@ -32,12 +32,18 @@ def predict(model_path: str, text: str) -> dict[str, Any]:
     from vimaan_nlu import predict as nlu_predict
     from vimaan_nlu.model_loader import ModelLoader
 
-    with _CACHE_LOCK:
-        loader = _CACHE.get(model_path)
-        if loader is None:
-            loader = ModelLoader()
-            loader.load_all(model_path)
-            _CACHE[model_path] = loader
+    loader = _CACHE.get(model_path)
+    if loader is None:
+        # Load OUTSIDE the global lock so a slow (multi-second) weight load does
+        # not serialize predicts for other, already-cached models. Double-check
+        # after loading in case another thread cached the same path meanwhile.
+        new_loader = ModelLoader()
+        new_loader.load_all(model_path)
+        with _CACHE_LOCK:
+            loader = _CACHE.get(model_path)
+            if loader is None:
+                _CACHE[model_path] = new_loader
+                loader = new_loader
 
     result = nlu_predict(
         text,

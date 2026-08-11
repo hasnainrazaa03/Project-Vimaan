@@ -30,13 +30,17 @@ def list_model_versions() -> list[dict]:
             num = int(entry.name[1:])
         except ValueError:
             continue
+        try:
+            mtime = entry.stat().st_mtime  # may vanish between iterdir() and stat()
+        except OSError:
+            continue
         out.append(
             {
                 "version": entry.name,
                 "version_num": num,
                 "path": str(entry),
                 "has_manifest": (entry / "train_manifest.json").is_file(),
-                "mtime": entry.stat().st_mtime,
+                "mtime": mtime,
             }
         )
     out.sort(key=lambda d: d["version_num"], reverse=True)
@@ -87,6 +91,27 @@ def safe_model_path(model_path: str) -> Path:
     return p
 
 
+def safe_dataset_path(dataset: str) -> Path:
+    """Resolve a client-supplied dataset path and confine it to the repo.
+
+    Absolute paths are resolved BEFORE the containment check. The earlier train
+    endpoint skipped ``resolve()`` for absolute paths, so an absolute ``..``
+    path (e.g. ``<repo>/../../etc/passwd``) slipped past the purely-lexical
+    ``relative_to`` check. Raises ValueError on escape.
+    """
+    if not dataset or not dataset.strip():
+        raise ValueError("dataset is required")
+    p = Path(dataset)
+    if not p.is_absolute():
+        p = REPO_ROOT / dataset
+    p = p.resolve()
+    try:
+        p.relative_to(REPO_ROOT.resolve())
+    except ValueError as e:
+        raise ValueError("dataset must live inside the repo") from e
+    return p
+
+
 def safe_upload_path(filename: str) -> Path:
     """Sanitise a user-supplied filename and return its target path under UPLOAD_DIR."""
     base = os.path.basename(filename).strip()
@@ -95,6 +120,8 @@ def safe_upload_path(filename: str) -> Path:
     if not base.endswith(".jsonl"):
         raise ValueError("only .jsonl uploads are accepted")
     safe = "".join(c for c in base if c.isalnum() or c in ("-", "_", "."))
-    if not safe:
+    # Re-validate after filtering: stripping non-safe chars (e.g. an emoji stem)
+    # can leave a hidden/dotfile like ".jsonl".
+    if not safe or safe.startswith("."):
         raise ValueError("filename has no safe characters")
     return UPLOAD_DIR / safe

@@ -7,15 +7,15 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .paths import (
-    REPO_ROOT,
     ensure_dirs,
     list_datasets,
     list_model_versions,
+    safe_dataset_path,
     safe_model_path,
     safe_upload_path,
 )
@@ -64,11 +64,22 @@ async def api_upload_dataset(file: UploadFile = File(...)) -> dict[str, Any]:
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    contents = await file.read()
+    # Read in chunks and abort past the cap, so an oversized upload is not fully
+    # buffered into memory before the size is checked.
+    max_bytes = 200 * 1024 * 1024
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(status_code=413, detail="file too large (>200MB)")
+        chunks.append(chunk)
+    contents = b"".join(chunks)
     if not contents:
         raise HTTPException(status_code=400, detail="empty file")
-    if len(contents) > 200 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="file too large (>200MB)")
 
     # Light validation: every line must be JSON with `text` and `intent`.
     line_count = 0
@@ -139,14 +150,11 @@ class TrainRequest(BaseModel):
 
 @app.post("/api/train/start")
 def api_train_start(req: TrainRequest) -> dict[str, Any]:
-    # Resolve dataset against the repo root to keep clients honest.
-    ds_path = Path(req.dataset)
-    if not ds_path.is_absolute():
-        ds_path = (REPO_ROOT / req.dataset).resolve()
+    # Confine the dataset to the repo (resolves absolute paths first).
     try:
-        ds_path.relative_to(REPO_ROOT)
+        ds_path = safe_dataset_path(req.dataset)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail="dataset must live inside the repo") from e
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     try:
         return MANAGER.start(
@@ -178,7 +186,7 @@ def api_train_status() -> dict[str, Any]:
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-
-@app.exception_handler(404)
-async def _not_found(_req, exc) -> JSONResponse:  # pragma: no cover
-    return JSONResponse({"detail": "not found"}, status_code=404)
+# NOTE: no custom 404 handler — FastAPI's default already returns JSON
+# ({"detail": ...}) for both unknown routes and deliberate HTTPException(404),
+# and a status-code handler would clobber the detail of intentional 404s
+# (e.g. "model not found").

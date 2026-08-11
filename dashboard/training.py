@@ -7,6 +7,7 @@ is intentionally single-user.
 from __future__ import annotations
 
 import collections
+import re
 import subprocess
 import sys
 import threading
@@ -20,10 +21,18 @@ from .paths import ML_DIR, TRAIN_SCRIPT
 
 _MAX_LOG_LINES = 2000
 
+# tqdm writes a progress bar per refresh; universal-newlines turns each \r into
+# its own line, which floods the log buffer and buries the epoch summaries.
+_PROGRESS_NOISE_RE = re.compile(r"%\||\bit/s\b|\bexample/s\b")
+
+
+def _is_progress_noise(line: str) -> bool:
+    return bool(_PROGRESS_NOISE_RE.search(line))
+
 
 @dataclass
 class TrainingState:
-    status: str = "idle"  # idle | running | finished | failed
+    status: str = "idle"  # idle | running | finished | failed | stopped
     started_at: float | None = None
     finished_at: float | None = None
     exit_code: int | None = None
@@ -43,6 +52,7 @@ class TrainingManager:
         self._lock = threading.Lock()
         self._proc: subprocess.Popen | None = None
         self._thread: threading.Thread | None = None
+        self._stopping = False  # set by stop(); distinguishes stopped from failed
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
@@ -75,9 +85,6 @@ class TrainingManager:
         max_length: int = 64,
         patience: int = 2,
     ) -> dict[str, Any]:
-        if self.is_running():
-            raise RuntimeError("a training job is already running")
-
         ds = Path(dataset)
         if not ds.is_file():
             raise FileNotFoundError(f"dataset not found: {dataset}")
@@ -102,7 +109,14 @@ class TrainingManager:
             str(patience),
         ]
 
+        # Reserve the single-flight slot and spawn atomically: doing the
+        # running-check, state reset, and Popen in ONE locked section stops two
+        # concurrent start() calls from both passing the check and launching
+        # (which would orphan a process and race model-version writes).
         with self._lock:
+            if self._state.status == "running":
+                raise RuntimeError("a training job is already running")
+            self._stopping = False
             self._state = TrainingState(
                 status="running",
                 started_at=time.time(),
@@ -116,36 +130,44 @@ class TrainingManager:
                     "patience": patience,
                 },
             )
-
-        self._proc = subprocess.Popen(
-            cmd,
-            cwd=str(ML_DIR),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-        )
-        with self._lock:
+            try:
+                self._proc = subprocess.Popen(
+                    cmd,
+                    cwd=str(ML_DIR),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                )
+            except Exception:
+                self._state.status = "failed"
+                self._proc = None
+                raise
             self._state.pid = self._proc.pid
+            self._thread = threading.Thread(target=self._pump, args=(self._proc,), daemon=True)
+            self._thread.start()
 
-        self._thread = threading.Thread(target=self._pump, daemon=True)
-        self._thread.start()
         return self.snapshot()
 
     def stop(self) -> dict[str, Any]:
-        if self._proc and self._proc.poll() is None:
-            self._proc.terminate()
+        with self._lock:
+            proc = self._proc
+            if proc and proc.poll() is None:
+                self._stopping = True
+        if proc and proc.poll() is None:
+            proc.terminate()
             try:
-                self._proc.wait(timeout=10)
+                proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
-                self._proc.kill()
+                proc.kill()
         return self.snapshot()
 
-    def _pump(self) -> None:
-        assert self._proc is not None
-        assert self._proc.stdout is not None
-        for raw in self._proc.stdout:
+    def _pump(self, proc: subprocess.Popen) -> None:
+        assert proc.stdout is not None
+        for raw in proc.stdout:
             line = raw.rstrip("\n")
+            if _is_progress_noise(line):
+                continue
             event = parse_line(line)
             with self._lock:
                 self._state.logs.append(line)
@@ -155,11 +177,14 @@ class TrainingManager:
                     self._merge_metric(event)
                 elif event["type"] == "checkpoint_saved":
                     self._state.checkpoints.append(event["path"])
-        rc = self._proc.wait()
+        rc = proc.wait()
         with self._lock:
             self._state.exit_code = rc
             self._state.finished_at = time.time()
-            self._state.status = "finished" if rc == 0 else "failed"
+            if self._stopping:
+                self._state.status = "stopped"
+            else:
+                self._state.status = "finished" if rc == 0 else "failed"
 
     def _merge_metric(self, event: dict[str, Any]) -> None:
         """Combine train/val loss for the same epoch into one row."""
