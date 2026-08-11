@@ -108,11 +108,25 @@ def train_model(
     model_save_dir=None,
 ):
     print("Loading final dataset...")
-    with open(dataset_path) as f:
-        data = [json.loads(line) for line in f]
+    with open(dataset_path, encoding="utf-8") as f:
+        data = [json.loads(line) for line in f if line.strip()]
 
     data = normalize_dataset(data)
-    train_data, val_data = train_test_split(data, test_size=0.15, random_state=42)
+
+    # 3-way split: 70% train / 15% val (early stopping) / 15% held-out TEST.
+    # The test split is never trained or early-stopped on and is saved with the
+    # model (holdout_test.jsonl) so the evaluator can measure real generalization
+    # instead of re-slicing the training file. Stratified by intent when possible.
+    def _split(rows, frac, seed=42):
+        labels = [r["intent"] for r in rows]
+        try:
+            return train_test_split(rows, test_size=frac, random_state=seed, stratify=labels)
+        except ValueError:  # a class too small to stratify
+            return train_test_split(rows, test_size=frac, random_state=seed)
+
+    train_data, temp_data = _split(data, 0.30)
+    val_data, test_data = _split(temp_data, 0.50)
+    print(f"Split: train {len(train_data)}, val {len(val_data)}, held-out test {len(test_data)}")
 
     intents = sorted(list(set(item["intent"] for item in data)))
     intent_map = {name: i for i, name in enumerate(intents)}
@@ -206,6 +220,13 @@ def train_model(
                 json.dump(intent_map, f)
             with open(f"{model_save_path}/slot_map.json", "w") as f:
                 json.dump(slot_map, f)
+
+            # Held-out test set (never trained or early-stopped on) so the
+            # evaluator can measure true generalization — ML/evaluation/evaluator
+            # loads this in preference to re-slicing the training file.
+            with open(f"{model_save_path}/holdout_test.jsonl", "w", encoding="utf-8") as f:
+                for row in test_data:
+                    f.write(json.dumps(row) + "\n")
 
             # Provenance sidecar (Phase 3 / B-015 manifest). Written every time
             # the "best" model is overwritten so it always reflects the actually
