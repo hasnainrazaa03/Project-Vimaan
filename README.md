@@ -249,13 +249,16 @@ Versioning: every script appends `_vN` to outputs and the trainer writes the nex
    train one (see above) or download a published checkpoint:
    `scripts/fetch_model.sh` (weights ship as GitHub Release assets, not in the
    repo — see [docs/MODEL_DISTRIBUTION.md](docs/MODEL_DISTRIBUTION.md)).
-2. Copy the **plugin folder + ML folder** into X-Plane:
+2. Install into X-Plane with the helper — it copies the plugin, the runtime ML
+   package, and the latest model into `Resources/plugins/PythonPlugins/`:
 
+   ```bash
+   python scripts/install_plugin.py --xplane "/path/to/X-Plane 12"
+   # preview with --dry-run; choose a version with --model v10
    ```
-   X-Plane 12/Resources/plugins/PythonPlugins/
-   ├── PI_VimaanCoPilot.py        ← copy from plugin/
-   └── ML/                        ← copy whole ML/ tree (with models/)
-   ```
+
+   This lays it out as `PythonPlugins/PI_VimaanCoPilot.py` + `PythonPlugins/ML/`
+   (the plugin resolves either that or the dev `<repo>/ML` layout automatically).
 
 3. Start X-Plane. You should see `[Vimaan] Model loaded ...` in the Log.txt.
 4. In the sim, **hold `Z`** to talk, release to execute.
