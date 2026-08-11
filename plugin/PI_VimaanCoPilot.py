@@ -36,6 +36,7 @@ _ML_PATH = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__
 if _ML_PATH not in sys.path:
     sys.path.insert(0, _ML_PATH)
 
+from vimaan_nlu.audio_health import is_silent, rms_from_pcm16  # noqa: E402
 from vimaan_nlu.inference import predict  # noqa: E402
 from vimaan_nlu.model_loader import ModelLoader  # noqa: E402
 from vimaan_nlu.readback import spell_digits  # noqa: E402
@@ -379,6 +380,14 @@ class PythonInterface:
                     timeout=LISTEN_TIMEOUT_SEC,
                     phrase_time_limit=PHRASE_TIME_LIMIT_SEC,
                 )
+            # Mic-health (Phase 6F): a dead/muted mic yields near-silent audio.
+            # Warn instead of wasting an STT call + a confusing "didn't catch that".
+            rms = rms_from_pcm16(audio.get_raw_data(convert_width=2))
+            if is_silent(rms):
+                self.log(f"[Vimaan] Microphone appears silent (rms={rms:.1f})")
+                self._enqueue("speak", "Microphone appears silent")
+                return
+
             self._enqueue("speak", "Processing")
             text = transcribe(
                 self.recognizer, audio, self.STT_BACKEND, whisper_model=self.WHISPER_MODEL
