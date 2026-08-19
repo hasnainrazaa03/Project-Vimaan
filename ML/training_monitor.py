@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 RUNS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "training_runs")
@@ -111,6 +112,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, *args):  # silence per-request stderr spam
         pass
+
+
+class DualStackServer(ThreadingHTTPServer):
+    """Listen on IPv6 with dual-stack so BOTH http://localhost (which many
+    systems resolve to IPv6 ::1) and http://127.0.0.1 reach the monitor."""
+
+    address_family = socket.AF_INET6
+    allow_reuse_address = True
+
+    def server_bind(self):
+        try:
+            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        except (AttributeError, OSError):
+            pass
+        super().server_bind()
 
 
 PAGE = r"""<!doctype html>
@@ -227,6 +243,8 @@ function setupCanvas(cv,h){
 }
 function niceMax(v){if(v<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(v)));const n=v/p;
   const s=n<=1?1:n<=2?2:n<=5?5:10;return s*p;}
+function quantile(arr,q){if(!arr.length)return 0;const a=arr.slice().sort((x,y)=>x-y);
+  const i=(a.length-1)*q,lo=Math.floor(i),hi=Math.ceil(i);return a[lo]+(a[hi]-a[lo])*(i-lo);}
 
 // Generic line chart. series:[{name,color,pts:[[x,y]],markers,alpha,width}]
 function lineChart(cv,series,o){
@@ -235,24 +253,43 @@ function lineChart(cv,series,o){
   let xmin=o.xmin,xmax=o.xmax,ymin=o.ymin,ymax=o.ymax;
   if(xmin==null){xmin=Infinity;xmax=-Infinity;series.forEach(s=>s.pts.forEach(p=>{xmin=Math.min(xmin,p[0]);xmax=Math.max(xmax,p[0]);}));}
   if(!isFinite(xmin)){xmin=0;xmax=1;} if(xmax===xmin)xmax=xmin+1;
-  if(ymin==null)ymin=0;
-  if(ymax==null){ymax=-Infinity;series.forEach(s=>s.pts.forEach(p=>ymax=Math.max(ymax,p[1])));ymax=niceMax(ymax*1.08);}
+  const ys=[]; series.forEach(s=>s.pts.forEach(p=>{if(isFinite(p[1]))ys.push(p[1]);}));
+  if(o.yadapt==='loss'&&ys.length){
+    // Ignore the one-time warmup spike: fit to the 97th percentile of losses so
+    // the meaningful low-loss band fills the chart (the spike simply clips).
+    if(ymin==null)ymin=0;
+    if(ymax==null)ymax=quantile(ys,0.97)*1.25;
+    if(!isFinite(ymax)||ymax<=0)ymax=Math.max(...ys)||1;
+  }else if(o.yadapt==='zoom'&&ys.length){
+    // Zoom to the data (with padding) so ~99% lines aren't flat at the top.
+    let lo=Math.min(...ys),hi=Math.max(...ys),pad=Math.max((hi-lo)*0.6,0.02);
+    if(ymin==null)ymin=lo-pad; if(ymax==null)ymax=hi+pad;
+    if(o.yclamp){ymin=Math.max(o.yclamp[0],ymin);ymax=Math.min(o.yclamp[1],ymax);}
+    const span=o.yminspan||0.08;
+    if(ymax-ymin<span){const c=(ymax+ymin)/2;ymin=c-span/2;ymax=c+span/2;
+      if(o.yclamp){ymin=Math.max(o.yclamp[0],ymin);ymax=Math.min(o.yclamp[1],ymax);}}
+  }else{
+    if(ymin==null)ymin=0;
+    if(ymax==null){ymax=-Infinity;ys.forEach(v=>ymax=Math.max(ymax,v));ymax=niceMax(ymax*1.08);}
+  }
   if(!isFinite(ymax)||ymax<=ymin)ymax=ymin+1;
   const X=x=>L+(x-xmin)/(xmax-xmin)*pw, Y=y=>T+ph-(y-ymin)/(ymax-ymin)*ph;
   // grid + y ticks
   ctx.font='11px -apple-system,system-ui,sans-serif'; ctx.textBaseline='middle';
-  const ny=o.yticks||4;
-  for(let i=0;i<=ny;i++){const yv=ymin+(ymax-ymin)*i/ny, y=Y(yv);
+  const ny=o.yticks||4, span=ymax-ymin;
+  const ydec=span<0.15?(o.ypct?1:3):span<3?2:0;
+  for(let i=0;i<=ny;i++){const yv=ymin+span*i/ny, y=Y(yv);
     ctx.strokeStyle=COL.line; ctx.globalAlpha=i===0?.9:.35; ctx.beginPath();ctx.moveTo(L,y);ctx.lineTo(w-R,y);ctx.stroke();
     ctx.globalAlpha=1; ctx.fillStyle=COL.faint; ctx.textAlign='right';
-    ctx.fillText(o.ypct?(yv*100).toFixed(0)+'%':(''+(Math.round(yv*100)/100)),L-6,y);
+    ctx.fillText(o.ypct?(yv*100).toFixed(span<0.15?1:0)+'%':(''+ (+yv.toFixed(ydec))),L-6,y);
   }
-  // x ticks
-  ctx.textAlign='center'; ctx.textBaseline='top';
-  const nx=o.xticks||5;
-  for(let i=0;i<=nx;i++){const xv=xmin+(xmax-xmin)*i/nx;
-    ctx.fillStyle=COL.faint; ctx.fillText(o.xfmt?o.xfmt(xv):(''+Math.round(xv)),X(xv),h-B+7);}
-  if(o.xlabel){ctx.fillStyle=COL.muted;ctx.textAlign='right';ctx.fillText(o.xlabel,w-R,h-B+7);}
+  // x ticks — integer stepping for epoch axes (no duplicates), else even spacing
+  ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillStyle=COL.faint;
+  let xt=[];
+  if(o.xint){const st=Math.max(1,Math.ceil((xmax-xmin)/8));
+    for(let v=Math.ceil(xmin);v<=Math.floor(xmax)+1e-6;v+=st)xt.push(v);}
+  else{const nx=o.xticks||5;for(let i=0;i<=nx;i++)xt.push(xmin+(xmax-xmin)*i/nx);}
+  xt.forEach(xv=>ctx.fillText(o.xfmt?o.xfmt(xv):(''+Math.round(xv)),X(xv),h-B+7));
   // clip to plot
   ctx.save();ctx.beginPath();ctx.rect(L,T,pw,ph);ctx.clip();
   series.forEach(s=>{
@@ -329,7 +366,7 @@ function render(d){
     {name:'step',color:COL.blue,pts:stepPts,alpha:.5,width:1.4},
     {name:'train',color:COL.blue,pts:trPts,markers:true,alpha:.85,width:2},
     {name:'val',color:COL.orange,pts:valPts,markers:true,width:2},
-  ],{height:236,xlabel:'step',xfmt:v=>Math.round(v).toLocaleString()});
+  ],{height:236,yadapt:'loss',xfmt:v=>Math.round(v).toLocaleString()});
   $('lv-step').textContent=lastStep?fmt(lastStep.loss):'—';
   $('lv-tr').textContent=epochs.length?fmt(epochs[epochs.length-1].train_loss):'—';
   $('lv-val').textContent=epochs.length?fmt(epochs[epochs.length-1].val_loss):'—';
@@ -340,8 +377,8 @@ function render(d){
   lineChart($('metrics'),[
     {name:'acc',color:COL.blue,pts:accPts,markers:true,width:2},
     {name:'f1',color:COL.green,pts:f1Pts,markers:true,width:2},
-  ],{height:236,ymin:0,ymax:1,ypct:true,xlabel:'epoch',
-     xmin:1,xmax:Math.max(2,meta.epochs),xticks:Math.max(1,Math.min(10,meta.epochs)),xfmt:v=>Math.round(v)});
+  ],{height:236,ypct:true,yadapt:'zoom',yclamp:[0,1],yminspan:0.06,
+     xmin:1,xmax:Math.max(2,epochs.length),xint:true});
   $('mv-acc').textContent=epochs.length?pct(epochs[epochs.length-1].val_intent_acc):'—';
   $('mv-f1').textContent=epochs.length?fmt(epochs[epochs.length-1].val_slot_f1):'—';
 }
@@ -393,9 +430,10 @@ def main():
 
     Handler.runs_dir = args.runs_dir
     Handler.pinned_run = args.run
-    srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    srv = DualStackServer(("::", args.port), Handler)
     where = args.run or (os.path.basename(_newest_run(args.runs_dir) or "") or "waiting for a run")
-    print(f"Training monitor → http://localhost:{args.port}   (run: {where})")
+    print(f"Training monitor → http://localhost:{args.port}  or  http://127.0.0.1:{args.port}")
+    print(f"  (run: {where})")
     print("Open that URL in your browser. Ctrl-C to stop.")
     try:
         srv.serve_forever()
