@@ -168,6 +168,11 @@ def _convert_cardinals(text):
 
 def normalize_aviation_input(text):
     text_lower = text.lower()
+    # 0. Split a word fused to its number ("heading109" -> "heading 109",
+    #    "com2" -> "com 2", "15000ft" -> "15000 ft") so the number can be
+    #    tokenised and slot-tagged. Paraphrasers drop the space; real ASR/typing
+    #    does too. Digit<->digit glue (e.g. "com 2135.79") is left alone.
+    text_lower = re.sub(r"(?<=[a-z])(?=\d)|(?<=\d)(?=[a-z])", " ", text_lower)
     # 1. Decimals (frequencies): "one one eight decimal seven five" -> "118.75".
     #    Must precede the phonetic pass, which would collapse the integer part.
     text_lower = _DECIMAL_SEQUENCE_RE.sub(_convert_decimal_sequence, text_lower)
