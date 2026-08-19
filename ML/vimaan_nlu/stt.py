@@ -15,13 +15,14 @@ environment variable.
 from __future__ import annotations
 
 import json
+from typing import Any
 
-SUPPORTED_BACKENDS = ("google", "vosk", "whisper", "sphinx")
+SUPPORTED_BACKENDS: tuple[str, ...] = ("google", "vosk", "whisper", "sphinx")
 
 
 def transcribe(
-    recognizer,
-    audio,
+    recognizer: Any,
+    audio: Any,
     backend: str = "google",
     *,
     whisper_model: str = "base.en",
@@ -46,7 +47,7 @@ def transcribe(
     raise ValueError(f"unknown STT backend: {backend!r} (supported: {SUPPORTED_BACKENDS})")
 
 
-def _vosk_text(raw) -> str:
+def _vosk_text(raw: Any) -> str:
     """Pull the transcript out of vosk's JSON (or dict/plain) output."""
     if isinstance(raw, dict):
         return (raw.get("text") or "").strip()

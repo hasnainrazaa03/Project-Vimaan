@@ -37,3 +37,23 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B011"]  # assert False / assert True are fine in tests
 "plugin/PI_VimaanCoPilot.py" = ["E402"]  # sys.path adjusted before package imports
+
+[tool.mypy]
+python_version = "3.11"
+files = ["ML/vimaan_nlu", "plugin/PI_VimaanCoPilot.py"]
+# ML holds the `vimaan_nlu` package; plugin/stubs holds the XPPython3 `xp` stub.
+mypy_path = "ML:plugin/stubs"
+explicit_package_bases = true
+check_untyped_defs = true      # check bodies even where annotations are missing
+no_implicit_optional = true    # a None default must be spelled Optional[...]
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+# Heavy/optional runtime deps we don't ship type stubs for.
+[[tool.mypy.overrides]]
+module = [
+    "torch.*", "transformers.*", "numpy", "numpy.*", "sklearn.*",
+    "onnxruntime", "onnxruntime.*", "word2number.*", "num2words.*",
+    "speech_recognition", "vosk", "whisper", "sounddevice", "pyaudio", "scipy.*",
+]
+ignore_missing_imports = true

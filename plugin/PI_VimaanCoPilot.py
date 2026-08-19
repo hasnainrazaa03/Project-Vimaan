@@ -26,6 +26,7 @@ import sys
 import threading
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import speech_recognition as sr
 import torch
@@ -71,7 +72,7 @@ QUEUE_POLL_INTERVAL_SEC = 0.2
 #            fallback toggle cmd)
 # Datarefs are 0/1 integers indicating the system is off/on.
 # ---------------------------------------------------------------------------
-TOGGLE_BINDINGS = {
+TOGGLE_BINDINGS: dict[str, dict[str, Any]] = {
     "toggle_autopilot_1": {
         "dataref": "sim/cockpit2/autopilot/servos_on",
         "on_cmd": "sim/autopilot/servos_on",
@@ -204,7 +205,7 @@ class PythonInterface:
         self.intent_to_command = self._setup_intent_handlers()
         self.log(f"[Vimaan] STT backend: {self.STT_BACKEND}")
 
-        self._result_queue = queue.Queue()
+        self._result_queue: queue.Queue = queue.Queue()
         self._flight_loop_id = None
         self.hotkeyPress = None
         self.hotkeyRelease = None

@@ -13,10 +13,10 @@ class ModelLoader:
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
         self.tokenizer = None
-        self.intent_map = None
-        self.slot_map = None
-        self.intent_map_rev = None
-        self.slot_map_rev = None
+        self.intent_map: dict = {}
+        self.slot_map: dict = {}
+        self.intent_map_rev: dict = {}
+        self.slot_map_rev: dict = {}
 
     def load_maps(self, model_path):
         with open(f"{model_path}/intent_map.json") as f:
