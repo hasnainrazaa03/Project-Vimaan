@@ -122,6 +122,28 @@ slots = postprocess_slots(intent, slots)
 return {"intent": intent, "slots": slots, "confidence": softmax_max}
 ```
 
+### 3.1 Inference backends & performance
+
+`predict()` is backend-agnostic — two backends produce identical
+`(intent_logits, slot_logits)`:
+
+- **torch** (default) — the fp32 checkpoint; optionally dynamic-int8 quantized
+  (`ModelLoader.load_all(quantize=True)` / `USE_QUANTIZED_MODEL`).
+- **onnx** — `OnnxBackend` (duck-types the model), selected via
+  `ModelLoader.load_all(backend="onnx")` or the plugin's `VIMAAN_BACKEND=onnx`.
+  Export with `python ML/export_onnx.py --model-path .../vN` (artifacts land in
+  `vN/onnx/`, gitignored).
+
+**v11 benchmark** (Apple M5 Pro CPU, 200 reps, `max_length=32`, opset 17):
+
+| backend | p50 | p95 | size | cold start |
+|---|---|---|---|---|
+| torch fp32 | 6.1 ms | 6.5 ms | 253 MB | — |
+| **onnx** | **3.1 ms** | **3.4 ms** | 253 MB | 83 ms |
+
+ONNX is **~2.0× faster** with **10/10 argmax parity** (max logit diff 3.9e-5).
+Re-run: `python ML/export_onnx.py --model-path ML/models/vimaan_nlu_model_best/v11`.
+
 ---
 
 ## 4. Plugin lifecycle
