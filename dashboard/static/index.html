@@ -9,9 +9,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%88%EF%B8%8F%3C/text%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="/static/style.css?v=2" />
+  <link rel="stylesheet" href="/static/style.css?v=3" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
-  <script src="/static/app.js?v=2" defer></script>
+  <script src="/static/app.js?v=3" defer></script>
 </head>
 <body>
   <!-- animated aurora backdrop -->
@@ -161,13 +161,35 @@
           </div>
         </section>
 
-        <!-- loss chart -->
+        <!-- run overview -->
         <section class="card glass">
           <header class="card-head">
-            <h2>Loss curve</h2>
+            <h2>Run overview</h2>
+            <span class="badge ghost" id="run-badge">no run yet</span>
+          </header>
+          <div class="splitbar" id="split-bar" hidden></div>
+          <div class="split-legend" id="split-legend"></div>
+          <div class="run-stats" id="run-stats"></div>
+          <div class="section-label" id="intent-dist-label" hidden>Intent distribution (train split)</div>
+          <div class="intent-bars" id="run-intents"></div>
+        </section>
+      </div>
+
+      <!-- live charts -->
+      <div class="cols">
+        <section class="card glass">
+          <header class="card-head">
+            <h2>Loss</h2>
             <span class="badge ghost" id="train-summary">no data yet</span>
           </header>
-          <canvas id="loss-chart" height="150"></canvas>
+          <canvas id="loss-chart" height="160"></canvas>
+        </section>
+        <section class="card glass">
+          <header class="card-head">
+            <h2>Validation metrics</h2>
+            <span class="badge ghost" id="valmet-badge">—</span>
+          </header>
+          <canvas id="val-chart" height="160"></canvas>
         </section>
       </div>
 

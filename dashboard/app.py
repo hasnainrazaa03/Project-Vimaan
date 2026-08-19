@@ -20,6 +20,7 @@ from .paths import (
     safe_upload_path,
 )
 from .predictor import predict as run_predict
+from .run_metrics import latest_run_metrics
 from .training import MANAGER
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -180,6 +181,14 @@ def api_train_stop() -> dict[str, Any]:
 @app.get("/api/train/status")
 def api_train_status() -> dict[str, Any]:
     return MANAGER.snapshot()
+
+
+@app.get("/api/train/metrics")
+def api_train_metrics() -> dict[str, Any]:
+    """Rich live metrics for the newest run (split, per-step loss, per-epoch
+    val intent-accuracy + slot-F1), streamed by the trainer to
+    ML/training_runs/<version>/metrics.jsonl."""
+    return latest_run_metrics()
 
 
 # ---- static (mount last so /api/* wins) ------------------------------------

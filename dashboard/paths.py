@@ -12,6 +12,7 @@ DATASETS_ROOT = ML_DIR / "datasets"
 DATASETS_FINAL = DATASETS_ROOT / "05_final_merged"
 UPLOAD_DIR = DATASETS_ROOT / "dashboard_uploads"
 TRAIN_SCRIPT = ML_DIR / "train_nlu_model.py"
+TRAINING_RUNS = ML_DIR / "training_runs"
 
 
 def ensure_dirs() -> None:
