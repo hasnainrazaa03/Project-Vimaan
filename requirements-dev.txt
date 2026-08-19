@@ -12,6 +12,10 @@ pytest-cov>=5.0
 # ruff had left alone and went red).
 ruff==0.16.2
 
+# Static type checker — pinned so local and CI agree. Config in
+# pyproject.toml [tool.mypy]; torch/transformers are treated as Any in CI.
+mypy==2.3.1
+
 # Secret scanner used by pre-commit
 detect-secrets>=1.5
 

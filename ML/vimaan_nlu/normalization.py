@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 import re
+from collections.abc import Iterable
+from typing import Any
 
 try:
     from word2number import w2n
@@ -9,7 +13,7 @@ except ImportError as _w2n_err:
     ) from _w2n_err
 
 
-PHONETIC_MAP = {
+PHONETIC_MAP: dict[str, str] = {
     "zero": "0",
     "oh": "0",
     "one": "1",
@@ -101,11 +105,11 @@ _SIMPLE_NUMBER_RE = re.compile(
 )
 
 
-def _digits_only(words):
+def _digits_only(words: Iterable[str]) -> str:
     return "".join(PHONETIC_MAP[w] for w in words if PHONETIC_MAP.get(w, ".") != ".")
 
 
-def _group_form_repl(match):
+def _group_form_repl(match: re.Match[str]) -> str:
     digits = _digits_only(re.split(r"[\s-]+", match.group(1).lower()))
     if not digits:
         return match.group(0)
@@ -113,7 +117,7 @@ def _group_form_repl(match):
     return str(int(digits) * multiplier)
 
 
-def _convert_decimal_sequence(match):
+def _convert_decimal_sequence(match: re.Match[str]) -> str:
     parts = re.split(r"\b(?:point|decimal)\b", match.group(0))
     result_parts = [_digits_only(p.split()) for p in parts]
     result_parts = [p for p in result_parts if p]
@@ -124,18 +128,18 @@ def _convert_decimal_sequence(match):
     return match.group(0)
 
 
-def _convert_phonetic_sequence(match):
+def _convert_phonetic_sequence(match: re.Match[str]) -> str:
     return _digits_only(match.group(0).split())
 
 
-def _convert_word_number(match):
+def _convert_word_number(match: re.Match[str]) -> str:
     try:
         return str(w2n.word_to_num(match.group(0)))
     except (ValueError, IndexError):
         return match.group(0)
 
 
-def _convert_cardinals(text):
+def _convert_cardinals(text: str) -> str:
     """Convert maximal cardinal-word runs that include a magnitude word.
 
     Pure spoken-digit runs (no hundred/thousand) are left untouched for the
@@ -166,7 +170,7 @@ def _convert_cardinals(text):
     return " ".join(out)
 
 
-def normalize_aviation_input(text):
+def normalize_aviation_input(text: str) -> str:
     text_lower = text.lower()
     # 0. Split a word fused to its number ("heading109" -> "heading 109",
     #    "com2" -> "com 2", "15000ft" -> "15000 ft") so the number can be
@@ -188,7 +192,7 @@ def normalize_aviation_input(text):
     return text_lower
 
 
-def normalize_slot_value(value_str):
+def normalize_slot_value(value_str: Any) -> str:
     value_str = str(value_str).lower().strip()
 
     if value_str.replace(".", "").replace("-", "").isdigit():
@@ -215,12 +219,12 @@ def normalize_slot_value(value_str):
     return value_str
 
 
-def normalize_dataset_item(item):
+def normalize_dataset_item(item: dict[str, Any]) -> dict[str, Any]:
     if "slots" in item:
         for slot_name, slot_value in item["slots"].items():
             item["slots"][slot_name] = normalize_slot_value(slot_value)
     return item
 
 
-def normalize_dataset(data):
+def normalize_dataset(data: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     return [normalize_dataset_item(item) for item in data]

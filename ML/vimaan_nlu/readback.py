@@ -8,7 +8,7 @@ cardinals. This is clearer through TTS than letting the synth guess
 
 from __future__ import annotations
 
-_DIGIT_WORDS = {
+_DIGIT_WORDS: dict[str, str] = {
     "0": "zero",
     "1": "one",
     "2": "two",
@@ -24,7 +24,7 @@ _DIGIT_WORDS = {
 }
 
 
-def spell_digits(value) -> str:
+def spell_digits(value: object) -> str:
     """Read a number digit-by-digit, aviation style.
 
     ``"270" -> "two seven zero"``; ``"121.5" -> "one two one decimal five"``.

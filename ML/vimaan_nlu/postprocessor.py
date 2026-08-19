@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import re
+from typing import Any
 
 from .validators import in_range
 
@@ -10,7 +13,7 @@ from .validators import in_range
 # ("on"/"down"/...), which the aligner never tagged. It is also why the map must
 # be per-intent: "set" implies ON only for the parking brake, and up/down apply
 # only to gear/flaps — a global map would mislabel "set flaps up".
-STATE_SYNONYMS = {
+STATE_SYNONYMS: dict[str, dict[str, list[str]]] = {
     "toggle_landing_gear": {
         "up": ["raise", "retract", "stow"],
         "down": ["lower", "extend", "deploy", "drop"],
@@ -32,7 +35,10 @@ STATE_SYNONYMS = {
 }
 
 # Generic verbs valid across every toggle intent.
-_GENERIC_STATE = {"on": ["turn on", "switch on"], "off": ["turn off", "switch off"]}
+_GENERIC_STATE: dict[str, list[str]] = {
+    "on": ["turn on", "switch on"],
+    "off": ["turn off", "switch off"],
+}
 
 # Intents whose `state` slot may be implied by an action verb ("raise the gear"
 # -> up). Derived from STATE_SYNONYMS so it can never drift out of sync.
@@ -50,12 +56,12 @@ ACTION_STATE_MAP.update({v: "on" for v in _GENERIC_STATE["on"]})
 ACTION_STATE_MAP.update({v: "off" for v in _GENERIC_STATE["off"]})
 
 
-def extract_numbers_from_text(text):
+def extract_numbers_from_text(text: str) -> list[str]:
     numbers = re.findall(r"\d+(?:\.\d+)?", text)
     return numbers
 
 
-def extract_digit_sequence_frequency(text):
+def extract_digit_sequence_frequency(text: str) -> str | None:
     digit_map = {
         "zero": "0",
         "oh": "0",
@@ -103,7 +109,7 @@ def extract_digit_sequence_frequency(text):
 _NUMBERED_INTENT_RE = re.compile(r"^(toggle_(?:autopilot|flight_director|engine))_(\d+)$")
 
 
-def correct_numbered_intent(intent, normalized_text):
+def correct_numbered_intent(intent: str | None, normalized_text: str | None) -> str | None:
     """Fix a mis-numbered toggle intent from the instance number in the text.
 
     For ``toggle_engine_N`` / ``toggle_autopilot_N`` / ``toggle_flight_director_N``,
@@ -123,7 +129,7 @@ def correct_numbered_intent(intent, normalized_text):
     return intent
 
 
-def _build_state_matchers(intent):
+def _build_state_matchers(intent: str) -> list[tuple[re.Pattern[str], str]]:
     """Compiled (regex, canonical) matchers for a toggle intent.
 
     Verbs match as a STEM PREFIX (``\\bengag`` -> engage/engaged/engaging/engages,
@@ -132,14 +138,15 @@ def _build_state_matchers(intent):
     literals on/off/up/down instead match as WHOLE WORDS so ``\\bon\\b`` never
     fires inside "one". Verbs are tried first, longest first (so "disengage"
     wins over "engage" and "shut down" over "shut")."""
-    verbs, literals = [], []
+    verbs: list[tuple[str, str]] = []
+    literals: list[tuple[str, str]] = []
     for canon, syns in STATE_SYNONYMS[intent].items():
         literals.append((canon, canon))
         verbs.extend((v, canon) for v in syns)
         verbs.extend((v, canon) for v in _GENERIC_STATE.get(canon, []))
     verbs.sort(key=lambda c: len(c[0]), reverse=True)
 
-    matchers = []
+    matchers: list[tuple[re.Pattern[str], str]] = []
     for verb, canon in verbs:
         stem = verb[:-1] if verb.endswith("e") else verb  # drop trailing e for -ing forms
         matchers.append((re.compile(r"\b" + re.escape(stem)), canon))
@@ -151,14 +158,16 @@ def _build_state_matchers(intent):
 _STATE_MATCHERS = {intent: _build_state_matchers(intent) for intent in STATE_SYNONYMS}
 
 
-def add_implicit_state(slots, original_text, intent):
+def add_implicit_state(
+    slots: dict[str, Any], original_text: str, intent: str | None
+) -> dict[str, Any]:
     """Fill a missing ``state`` slot from an action verb / literal in the text.
 
     Only for toggle intents, only when the model didn't already extract a state.
     Intent-aware: ``set`` implies ON only for the parking brake and ``down``
     never applies to an autopilot.
     """
-    matchers = _STATE_MATCHERS.get(intent)
+    matchers = _STATE_MATCHERS.get(intent) if intent is not None else None
     if matchers is None:
         return slots
     if slots.get("state"):
@@ -172,7 +181,9 @@ def add_implicit_state(slots, original_text, intent):
     return slots
 
 
-def postprocess_slots(slots, original_text, intent=None):
+def postprocess_slots(
+    slots: dict[str, Any], original_text: str, intent: str | None = None
+) -> dict[str, Any]:
     numbers = extract_numbers_from_text(original_text)
 
     for slot_name, slot_value in list(slots.items()):

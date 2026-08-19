@@ -91,7 +91,7 @@ def predict(
     with torch.no_grad():
         _, intent_logits, slot_logits = model(input_ids, attention_mask)
 
-    intent_pred_idx = torch.argmax(intent_logits, dim=1).item()
+    intent_pred_idx = int(torch.argmax(intent_logits, dim=1).item())
     intent_pred = intent_map_rev[intent_pred_idx]
     intent_confidence = torch.softmax(intent_logits, dim=1)[0, intent_pred_idx].item()
 

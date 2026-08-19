@@ -15,6 +15,7 @@ Pure-Python (no torch), so it imports anywhere the package does.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -32,21 +33,21 @@ class Range:
     integer: bool = True
     wrap: bool = False
 
-    def _num(self, value):
+    def _num(self, value: Any) -> float | None:
         try:
             v = float(value)
         except (TypeError, ValueError):
             return None
         return int(v) if self.integer else v
 
-    def _fmt(self, v) -> str:
+    def _fmt(self, v: float) -> str:
         return str(int(v)) if self.integer else str(v)
 
-    def contains(self, value) -> bool:
+    def contains(self, value: Any) -> bool:
         v = self._num(value)
         return v is not None and self.lo <= v <= self.hi
 
-    def validate(self, value):
+    def validate(self, value: Any) -> tuple[str | None, bool, str]:
         """Return ``(coerced_value | None, ok, reason)``."""
         v = self._num(value)
         if v is None:
@@ -63,12 +64,12 @@ class Range:
 class Enum:
     """A closed set of allowed string values (case-insensitive)."""
 
-    values: tuple
+    values: tuple[str, ...]
 
-    def contains(self, value) -> bool:
+    def contains(self, value: Any) -> bool:
         return str(value).strip().lower() in self.values
 
-    def validate(self, value):
+    def validate(self, value: Any) -> tuple[str | None, bool, str]:
         s = str(value).strip().lower()
         if s in self.values:
             return s, True, "valid"
@@ -87,12 +88,12 @@ SLOT_VALIDATORS: dict[str, Range | Enum] = {
 }
 
 
-def slot_validator(name: str):
+def slot_validator(name: str) -> Range | Enum | None:
     """Return the validator for ``name``, or ``None`` if the slot is unconstrained."""
     return SLOT_VALIDATORS.get(name)
 
 
-def validate_slot(name: str, value):
+def validate_slot(name: str, value: Any) -> tuple[Any, bool, str]:
     """Validate ``value`` for slot ``name``.
 
     Returns ``(value, ok, reason)``. Unknown slots pass through unchanged
@@ -104,7 +105,7 @@ def validate_slot(name: str, value):
     return v.validate(value)
 
 
-def in_range(name: str, value) -> bool:
+def in_range(name: str, value: Any) -> bool:
     """True if ``value`` satisfies the slot's constraint (no wrap/coercion)."""
     v = SLOT_VALIDATORS.get(name)
     return bool(v and v.contains(value))

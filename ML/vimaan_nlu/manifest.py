@@ -58,13 +58,13 @@ def get_git_sha(repo_dir: str | os.PathLike | None = None) -> str:
 def _framework_versions() -> dict[str, str]:
     versions: dict[str, str] = {}
     try:
-        import torch  # type: ignore
+        import torch
 
         versions["torch"] = getattr(torch, "__version__", "unknown")
     except Exception:
         versions["torch"] = "unknown"
     try:
-        import transformers  # type: ignore
+        import transformers
 
         versions["transformers"] = getattr(transformers, "__version__", "unknown")
     except Exception:
