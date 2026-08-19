@@ -115,3 +115,6 @@ ML/datasets/dashboard_uploads/
 # manifest.example.jsonl are kept.
 tests/audio_fixtures/*.wav
 tests/audio_fixtures/manifest.jsonl
+
+# fetched external ATC transcripts (phrasing bank, see scripts/fetch_atc_corpora.py)
+ML/datasets/external/

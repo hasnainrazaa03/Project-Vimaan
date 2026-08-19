@@ -1,0 +1,47 @@
+{
+  "device": "mps",
+  "dataset": "aviation_cmds_final_training_set_v5.jsonl",
+  "eval_sample": 3000,
+  "curve": [
+    {
+      "fraction": 0.1,
+      "train_rows": 4894,
+      "minutes": 1.7,
+      "n": 3000,
+      "intent_acc": 0.9837,
+      "slot_precision": 0.909,
+      "slot_recall": 0.8534,
+      "slot_f1": 0.8803
+    },
+    {
+      "fraction": 0.25,
+      "train_rows": 12235,
+      "minutes": 4.7,
+      "n": 3000,
+      "intent_acc": 0.9877,
+      "slot_precision": 0.9101,
+      "slot_recall": 0.8547,
+      "slot_f1": 0.8815
+    },
+    {
+      "fraction": 0.5,
+      "train_rows": 24471,
+      "minutes": 6.9,
+      "n": 3000,
+      "intent_acc": 0.9907,
+      "slot_precision": 0.9101,
+      "slot_recall": 0.8547,
+      "slot_f1": 0.8815
+    },
+    {
+      "fraction": 1.0,
+      "train_rows": 48942,
+      "minutes": 15.8,
+      "n": 3000,
+      "intent_acc": 0.9913,
+      "slot_precision": 0.9101,
+      "slot_recall": 0.8547,
+      "slot_f1": 0.8815
+    }
+  ]
+}
