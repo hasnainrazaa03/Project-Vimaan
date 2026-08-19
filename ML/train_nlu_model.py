@@ -1,9 +1,12 @@
 import json
 import os
 import random
+import time
+from collections import Counter
 
 import numpy as np
 import torch
+from sklearn.metrics import f1_score
 from sklearn.model_selection import train_test_split
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset
@@ -11,6 +14,7 @@ from tqdm import tqdm
 from transformers import DistilBertTokenizerFast
 from utils import find_latest_version_path, get_model_versions_dir
 from utils.device import resolve_device
+from utils.run_logger import RunLogger
 from utils.slot_alignment import align_offsets_to_labels, find_slot_char_spans
 from vimaan_nlu import (
     JointIntentAndSlotModel,
@@ -147,8 +151,32 @@ def train_model(
     next_version = f"v{latest_version + 1}"
     model_save_path = os.path.join(models_dir, next_version)
 
+    # Live metrics stream for the training monitor (ML/training_monitor.py).
+    ml_dir = os.path.dirname(os.path.abspath(__file__))
+    run_dir = os.path.join(ml_dir, "training_runs", next_version)
+    logger = RunLogger(run_dir)
+    logger.log(
+        type="meta",
+        version=next_version,
+        device=str(device),
+        dataset=os.path.basename(dataset_path),
+        max_length=max_length,
+        batch_size=batch_size,
+        epochs=num_epochs,
+        lr=lr,
+        patience=patience,
+        num_intents=len(intent_map),
+        num_slots=len(slot_map),
+        steps_per_epoch=len(train_loader),
+        split={"train": len(train_data), "val": len(val_data), "test": len(test_data)},
+        intent_dist=dict(Counter(r["intent"] for r in train_data).most_common()),
+    )
+    print(f"Live metrics -> {run_dir}/metrics.jsonl  (watch: python ML/training_monitor.py)")
+
     print("\nStarting training...")
     numOfEpochs = num_epochs
+    start_time = time.time()
+    global_step = 0
     for epoch in range(numOfEpochs):
         model.train()
         total_train_loss = 0
@@ -161,15 +189,29 @@ def train_model(
 
             loss, _, _ = model(input_ids, attention_mask, intent_labels, slot_labels)
 
-            total_train_loss += loss.item()
+            step_loss = loss.item()
+            total_train_loss += step_loss
             loss.backward()
             optimizer.step()
+
+            global_step += 1
+            logger.log(
+                type="step",
+                epoch=epoch + 1,
+                step=global_step,
+                loss=step_loss,
+                elapsed=time.time() - start_time,
+            )
 
         avg_train_loss = total_train_loss / len(train_loader)
         print(f"Epoch {epoch + 1} - Average Training Loss: {avg_train_loss:.4f}")
 
         model.eval()
         total_val_loss = 0
+        intent_correct = 0
+        intent_total = 0
+        slot_true = []
+        slot_pred = []
         with torch.no_grad():
             for batch in tqdm(val_loader, desc=f"Epoch {epoch + 1} [Validation]"):
                 input_ids = batch["input_ids"].to(device)
@@ -177,13 +219,40 @@ def train_model(
                 intent_labels = batch["intent_label"].to(device)
                 slot_labels = batch["slot_labels"].to(device)
 
-                loss, _, _ = model(input_ids, attention_mask, intent_labels, slot_labels)
+                loss, intent_logits, slot_logits = model(
+                    input_ids, attention_mask, intent_labels, slot_labels
+                )
                 total_val_loss += loss.item()
 
-        avg_val_loss = total_val_loss / len(val_loader)
-        print(f"Epoch {epoch + 1} - Average Validation Loss: {avg_val_loss:.4f}")
+                intent_correct += (intent_logits.argmax(dim=-1) == intent_labels).sum().item()
+                intent_total += intent_labels.numel()
 
-        if avg_val_loss < best_val_loss:
+                mask = slot_labels != -100
+                slot_true.extend(slot_labels[mask].cpu().tolist())
+                slot_pred.extend(slot_logits.argmax(dim=-1)[mask].cpu().tolist())
+
+        avg_val_loss = total_val_loss / len(val_loader)
+        val_intent_acc = intent_correct / max(intent_total, 1)
+        val_slot_f1 = (
+            f1_score(slot_true, slot_pred, average="macro", zero_division=0) if slot_true else 0.0
+        )
+        print(
+            f"Epoch {epoch + 1} - Val Loss: {avg_val_loss:.4f}  "
+            f"Intent Acc: {val_intent_acc:.4f}  Slot F1(macro): {val_slot_f1:.4f}"
+        )
+        is_best = avg_val_loss < best_val_loss
+        logger.log(
+            type="epoch",
+            epoch=epoch + 1,
+            train_loss=avg_train_loss,
+            val_loss=avg_val_loss,
+            val_intent_acc=val_intent_acc,
+            val_slot_f1=float(val_slot_f1),
+            best=bool(is_best),
+            elapsed=time.time() - start_time,
+        )
+
+        if is_best:
             best_val_loss = avg_val_loss
             epochs_no_improve = 0
 
@@ -235,6 +304,15 @@ def train_model(
             if epochs_no_improve >= patience:
                 print(f"Early stopping triggered after {epoch + 1} epochs.")
                 break
+
+    logger.log(
+        type="done",
+        best_val_loss=float(best_val_loss),
+        elapsed=time.time() - start_time,
+        model_path=model_save_path,
+    )
+    logger.close()
+    print(f"\nTraining complete. Best val loss {best_val_loss:.4f} -> {model_save_path}")
 
 
 if __name__ == "__main__":
