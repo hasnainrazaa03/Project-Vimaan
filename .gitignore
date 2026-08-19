@@ -118,3 +118,6 @@ tests/audio_fixtures/manifest.jsonl
 
 # fetched external ATC transcripts (phrasing bank, see scripts/fetch_atc_corpora.py)
 ML/datasets/external/
+
+# live training-run metrics + logs (runtime output, not source)
+ML/training_runs/
