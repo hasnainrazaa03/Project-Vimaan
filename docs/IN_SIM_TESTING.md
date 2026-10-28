@@ -107,14 +107,19 @@ plugin holds the starter until the engine runs (up to 20 s) and says
 "Engine 1 running", or "did not start" with mixture/ignition/battery values in
 the log.
 
-**Threads inside X-Plane:** background Python threads barely get the GIL
-inside the sim (first in-sim run: a 9 s press captured 0.03 s of audio through
-a Python audio callback). So PortAudio buffers audio in C and the flight loop
-drains it every frame, and while Google STT runs the flight loop sleeps ~4 ms
-per frame to let the STT thread work (measured under a simulated starved GIL:
-release-to-action 0.68 s with the hand-off, never without it). Google STT also
-encodes FLAC in-process with `soundfile`; SpeechRecognition's bundled
-`flac-mac` is x86_64-only and fails without Rosetta.
+**Voice worker process:** the microphone, Google STT and the model run in a
+separate process started with XPPython3's `xp.pythonExecutable` (logged as
+`worker_spawn`; its own output goes to `~/Vimaan_Logs/vimaan_<ts>.worker.log`).
+Inside X-Plane, Python background threads only run when the sim's main thread
+releases the GIL, so doing this work in-process cost a ~118 ms frame hitch per
+command (measured in-sim). Now the plugin only sends start/stop messages and
+reads replies without blocking: measured ≤0.4 ms per frame in every phase,
+~27 MB in X-Plane instead of ~900 MB, and X-Plane keeps rendering while the
+model loads (~2-3 s; Vimaan says "ready" when done). If the worker crashes it
+is logged (`worker_exit` with the tail of its log) and restarted up to 3 times.
+
+To replay a recording instead of using the mic (debugging):
+`VIMAAN_WORKER_AUDIO_FILE=/path/to/16k-mono.wav` before launching X-Plane.
 
 **Talking:** push-to-talk is *hold*-to-talk — recording runs while Z (or the
 bound button) is held and stops on release (12 s cap; taps under 0.3 s are

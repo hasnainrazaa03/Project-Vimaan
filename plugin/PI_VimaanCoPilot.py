@@ -4,16 +4,20 @@ Hold-to-talk speech command for X-Plane via a joint intent/slot DistilBERT
 model. Hold the ``Z`` key (or a yoke/joystick button bound to the
 ``vimaan/push_to_talk`` command), speak, release.
 
-Threading model
----------------
-All XPPython3 (`xp.*`) calls must run on the simulator's main thread.
-PortAudio buffers audio in C between button down and up, and the flight loop
-drains it every frame (Python threads are starved of the GIL inside X-Plane,
-so no Python audio callback is used). STT is blocking network/CPU work, so it
-runs on a worker thread — given GIL time by the flight loop — that posts
-results back through a thread-safe queue. A flight-loop callback drains
-the queue on the main thread and dispatches xp.* calls from there. The same
-flight loop drives deferred work (engine cranking, post-write verification).
+Process model
+-------------
+The voice pipeline — microphone, speech-to-text, the model — runs in a
+separate worker process (``ML/vimaan_nlu/voice_worker.py``) started with
+XPPython3's ``xp.pythonExecutable``. Inside X-Plane, Python background threads
+only run when the simulator's main thread releases the GIL, so in-process
+capture/STT/NLU cost visible frame hitches (measured in-sim: ~118 ms per
+command, plus several ms per frame while transcribing). The plugin now only
+sends "start"/"stop" on key down/up and reads replies from a non-blocking pipe
+in the flight loop — microseconds per frame. torch never loads into X-Plane.
+
+All XPPython3 (`xp.*`) calls run on the simulator's main thread: dispatch,
+safety checks, dataref writes, verification and engine cranking all happen in
+the flight loop.
 
 State management
 ----------------
@@ -25,7 +29,8 @@ vice-versa. Every dataref/command name here is verified against X-Plane
 Diagnostics
 -----------
 Every push-to-talk gets a command id that tags each stage (capture, STT,
-NLU, decision, sim writes, verification) in ``~/Vimaan_Logs/``; see
+NLU, decision, sim writes, verification) in ``~/Vimaan_Logs/``; the worker's
+own output goes to ``vimaan_<ts>.worker.log``. See
 ``ML/vimaan_nlu/telemetry.py`` and ``scripts/vimaan_log_report.py``.
 """
 
@@ -35,9 +40,7 @@ _IMPORT_T0 = time.perf_counter()
 
 import logging  # noqa: E402
 import os  # noqa: E402
-import queue  # noqa: E402
 import sys  # noqa: E402
-import threading  # noqa: E402
 from typing import Any  # noqa: E402
 
 from XPPython3 import xp  # noqa: E402
@@ -57,30 +60,8 @@ _ML_PATH = next(
 if _ML_PATH not in sys.path:
     sys.path.insert(0, _ML_PATH)
 
-# Telemetry first: it is stdlib-only, so even a failed torch import below is
-# recorded by the plugin once it starts.
-from vimaan_nlu.telemetry import Telemetry  # noqa: E402
-
-_IMPORT_ERRORS: dict[str, str] = {}
-_IMPORT_MS: dict[str, float] = {}
-
-
-def _timed_import(name):
-    t = time.perf_counter()
-    try:
-        module = __import__(name)
-    except Exception as exc:  # recorded and surfaced at plugin start
-        _IMPORT_ERRORS[name] = f"{type(exc).__name__}: {exc}"
-        module = None
-    _IMPORT_MS[name] = round((time.perf_counter() - t) * 1000, 1)
-    return module
-
-
-torch = _timed_import("torch")
-sr = _timed_import("speech_recognition")
-
-from vimaan_nlu.audio_capture import PushToTalkRecorder  # noqa: E402
-from vimaan_nlu.audio_health import is_silent, rms_from_pcm16  # noqa: E402
+# Only light, stdlib-backed modules load into X-Plane; the heavy ones live in
+# the worker process.
 from vimaan_nlu.readback import spell_digits  # noqa: E402
 from vimaan_nlu.safety import (  # noqa: E402
     ConfirmationGate,
@@ -88,27 +69,17 @@ from vimaan_nlu.safety import (  # noqa: E402
     command_token,
     evaluate_safety,
 )
-from vimaan_nlu.stt import transcribe  # noqa: E402
+from vimaan_nlu.telemetry import Telemetry  # noqa: E402
 from vimaan_nlu.validators import validate_slot  # noqa: E402
+from vimaan_nlu.worker_client import WorkerClient  # noqa: E402
 
-_IMPORT_MS["total"] = round((time.perf_counter() - _IMPORT_T0) * 1000, 1)
+_IMPORT_MS = round((time.perf_counter() - _IMPORT_T0) * 1000, 1)
 
-# ---------------------------------------------------------------------------
-# Listening parameters
-# ---------------------------------------------------------------------------
-MAX_RECORD_SEC = 12.0  # recording is cut off after this even if still held
-MIN_RECORD_SEC = 0.3  # shorter than this is an accidental tap, not a command
-# Keep recording this long after the key is released: PortAudio hands audio
-# over ~20-200 ms late, and pilots let go as they finish the last word. Without
-# it, the first in-sim run heard "gear" / "parking brake" / "engine" with the
-# final "up" / "on" / "off" cut off.
-RELEASE_TAIL_SEC = 0.3
-# Inside X-Plane, background Python threads only run when the main thread
-# lets go of the GIL (measured in-sim: an audio-callback thread got ~0.3% of
-# its time). While an STT worker is running, each flight loop sleeps this long
-# so the worker can make progress; the cost is paid only while transcribing.
-STT_GIL_YIELD_SEC = 0.004
 QUEUE_POLL_INTERVAL_SEC = 0.2
+# A command with no reply from the worker after this long is abandoned.
+WORKER_REPLY_TIMEOUT_SEC = 20.0
+# The worker is restarted after a crash at most this many times per session.
+WORKER_MAX_RESTARTS = 3
 
 # Engine start: hold the starter until the engine reports running, up to this.
 STARTER_MAX_CRANK_SEC = 20.0
@@ -218,8 +189,7 @@ class PythonInterface:
     # Inference backend (Phase 4C): "torch" (default) or "onnx". Override at
     # runtime with the VIMAAN_BACKEND env var. The ONNX backend requires
     # onnxruntime and a prior `python3 ML/export_onnx.py` to produce
-    # <model>/onnx/model.onnx; it duck-types the torch model so handlers are
-    # unchanged.
+    # <model>/onnx/model.onnx.
     BACKEND = os.environ.get("VIMAAN_BACKEND", "torch").lower()
 
     # Speech-to-text backend (Phase 7 / R-09): "google" (online, default),
@@ -262,6 +232,17 @@ class PythonInterface:
         ("parking brake on", "toggle_parking_brake"),
     )
 
+    # What the pilot hears when a command ends without reaching the sim.
+    OUTCOME_SPEECH = {
+        "silent_mic": "Microphone appears silent",
+        "not_understood": "I could not understand you",
+        "stt_service_error": "Recognition service failed",
+        "mic_error": "Microphone error",
+        "worker_error": "An error occurred",
+        "timeout": "Voice engine timed out",
+        "too_short": None,
+    }
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -281,14 +262,12 @@ class PythonInterface:
             **self.tel.environment(),
         )
         self.ready = False
-        self.loader: Any = None
-        self.recorder: Any = None
-        self.recognizer: Any = None
-        self.device = None
-        self._recording: dict[str, Any] | None = None  # the press being recorded
-        self._transcribing = False  # an STT worker is running
-        self._worker_lock = threading.Lock()
-        self._result_queue: queue.Queue = queue.Queue()
+        self.worker: Any = None
+        self._worker_started_at: float | None = None
+        self._worker_restarts = 0
+        # The push-to-talk command in flight: recording, then awaiting a reply.
+        self._active: dict[str, Any] | None = None
+        self._self_test_pending = False
         self._flight_loop_id = None
         self.hotkeyPress = None
         self.hotkeyRelease = None
@@ -302,60 +281,79 @@ class PythonInterface:
         # Safety interlocks (Phase 6B): risky commands must be repeated to confirm.
         self._confirm_gate = ConfirmationGate(window_sec=self.CONFIRM_WINDOW_SEC)
         self.intent_to_command = self._setup_intent_handlers()
+        self._start_worker()
 
-        if _IMPORT_ERRORS:
-            # Missing torch / SpeechRecognition in XPPython3's Python is the
-            # most likely first-run failure; say exactly which and stay loaded
-            # so the log reaches the user instead of a silent plugin failure.
-            self.tel.event("dependency_missing", logging.ERROR, missing=_IMPORT_ERRORS)
-            return
+    # ------------------------------------------------------------------
+    # Voice worker process
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _python_executable():
+        """The interpreter to run the worker with. ``sys.executable`` is
+        X-Plane itself here; XPPython3 exposes the right one. (Its standalone
+        ``bin/python3.12`` is unsigned for arm64 and killed by macOS.)"""
+        exe = getattr(xp, "pythonExecutable", None)
+        if exe and os.path.exists(exe):
+            return exe
+        app = os.path.join(
+            sys.exec_prefix, "Resources", "Python.app", "Contents", "MacOS", "Python"
+        )
+        return app if os.path.exists(app) else sys.executable
 
-        self.recognizer = sr.Recognizer()
-        self.recorder = self._setup_microphone()
-        self.device = torch.device("cpu")
-        self._init_model()
+    def _worker_argv(self):
+        argv = [
+            self._python_executable(),
+            "-u",
+            "-m",
+            "vimaan_nlu.voice_worker",
+            "--stt-backend",
+            self.STT_BACKEND,
+            "--whisper-model",
+            self.WHISPER_MODEL,
+            "--backend",
+            self.BACKEND,
+        ]
+        if not self.USE_QUANTIZED_MODEL:
+            argv.append("--no-quantize")
+        return argv
 
-    def _setup_microphone(self):
+    def _start_worker(self):
+        env = dict(os.environ)
+        env["PYTHONPATH"] = _ML_PATH + os.pathsep + env.get("PYTHONPATH", "")
+        env["HF_HUB_OFFLINE"] = "1"  # the model is local; never touch the network for it
+        env["TOKENIZERS_PARALLELISM"] = "false"
+        log_path = self.tel.log_dir / f"vimaan_{self.tel.session_id}.worker.log"
+        argv = self._worker_argv()
+        self.worker = WorkerClient(argv, log_path, env=env, cwd=_ML_PATH)
         try:
-            recorder = PushToTalkRecorder(max_sec=MAX_RECORD_SEC)
-            self.tel.event("microphone_ready", **recorder.describe())
-            return recorder
+            self.worker.start()
         except Exception as exc:
-            # ImportError: sounddevice missing; PortAudioError: no input device.
-            self.tel.error("microphone_unavailable", exc, hint="pip install sounddevice")
-            return None
+            self.tel.error("worker_spawn_failed", exc, argv=argv)
+            self.worker = None
+            return
+        self._worker_started_at = time.perf_counter()
+        self.tel.event("worker_spawn", pid=self.worker.pid, argv=argv, log=str(log_path))
 
-    def _init_model(self):
-        from vimaan_nlu.model_loader import ModelLoader
-
-        try:
-            with self.tel.stage("model_load", backend=self.BACKEND) as res:
-                self.loader = ModelLoader(self.device)
-                use_onnx = self.BACKEND == "onnx"
-                results = self.loader.load_all(
-                    quantize=self.USE_QUANTIZED_MODEL and not use_onnx,
-                    backend=self.BACKEND,
-                )
-                self.device = self.loader.device
-                res.update(
-                    model_path=results["model"]["model_path"],
-                    device=str(self.device),
-                    quantized=results.get("quantized"),
-                    intents=results["maps"]["intents"],
-                    slots=results["maps"]["slots"],
-                    # transformers is imported lazily by the loader, so its
-                    # version is only known now.
-                    versions=self.tel.environment(),
-                )
-            self.ready = True
-            # Warm-up: the first forward pass is several times slower than the
-            # rest; pay it now rather than on the pilot's first command.
-            with self.tel.stage("nlu", cmd="warmup"):
-                self._predict("set heading two seven zero")
-        except Exception:
-            # stage() already logged the traceback; keep the plugin loaded so
-            # the pilot hears the failure and the log has the cause.
-            self.ready = False
+    def _check_worker(self):
+        """Detect a dead worker; restart it a few times, then give up loudly."""
+        if self.worker is None or self.worker.alive:
+            return
+        self.tel.event(
+            "worker_exit",
+            logging.ERROR,
+            returncode=self.worker.returncode,
+            log_tail=self.worker.log_tail(25),
+        )
+        self.ready = False
+        if self._active is not None:
+            self._end_command("worker_error")
+        self.worker.stop()
+        if self._worker_restarts < WORKER_MAX_RESTARTS:
+            self._worker_restarts += 1
+            self._say("Voice engine restarting")
+            self._start_worker()
+        else:
+            self.worker = None
+            self._say("Voice engine failed. Check the log.")
 
     def _setup_intent_handlers(self):
         return {
@@ -393,17 +391,14 @@ class PythonInterface:
         self._register_command("vimaan/push_to_talk", "Vimaan: push to talk", self._on_ptt_command)
         self._register_command("vimaan/self_test", "Vimaan: run self test", self._on_self_test_cmd)
 
-        # Flight loop drains worker-thread results onto the main thread.
+        # Flight loop: worker replies, dispatch, verification, engine cranks.
         self._flight_loop_id = xp.createFlightLoop(self._flight_loop, phase=1)
         xp.scheduleFlightLoop(self._flight_loop_id, QUEUE_POLL_INTERVAL_SEC, 1)
 
-        self.tel.event("plugin_start", ready=self.ready, sim=self._sim_info())
-        if self.ready:
-            self._say("Vimaan AI CoPilot ready")
-        elif _IMPORT_ERRORS:
-            self._say("Vimaan could not load its Python packages. Check the log.")
-        else:
-            self._say("Vimaan could not load its model. Check the log.")
+        self.tel.event("plugin_start", worker=self.worker is not None, sim=self._sim_info())
+        if self.worker is None:
+            self._say("Vimaan could not start its voice engine. Check the log.")
+        # "Ready" is announced when the worker has loaded the model.
         return self.Name, self.Sig, self.Desc
 
     def XPluginStop(self):
@@ -413,15 +408,11 @@ class PythonInterface:
         for cmd_ref, handler in self._commands:
             xp.unregisterCommandHandler(cmd_ref, handler, 1, None)
         self._commands = []
-        if self.recorder is not None:
-            self.recorder.stop()
-            self.recorder.wait_idle(2.0)  # release the mic before unloading
-            self._recording = None
-        for hotkey in (self.hotkeyPress, self.hotkeyRelease):
+        if self.worker is not None:
+            self.worker.stop()
+        for hotkey in (self.hotkeyPress, self.hotkeyRelease, self.hotkeySelfTest):
             if hotkey:
                 xp.unregisterHotKey(hotkey)
-        if self.hotkeySelfTest:
-            xp.unregisterHotKey(self.hotkeySelfTest)
         if self._flight_loop_id:
             xp.destroyFlightLoop(self._flight_loop_id)
             self._flight_loop_id = None
@@ -454,7 +445,7 @@ class PythonInterface:
         return info
 
     # ------------------------------------------------------------------
-    # Push-to-talk
+    # Push-to-talk: the plugin only sends start/stop; the worker records
     # ------------------------------------------------------------------
     def _on_ptt_command(self, cmd_ref, phase, refcon):
         if phase == xp.CommandBegin:
@@ -469,203 +460,171 @@ class PythonInterface:
         return 1
 
     def OnPressCallback(self, inRefcon, source="hotkey"):
-        if self._recording is not None:
-            return  # key auto-repeat while held
+        t_press = time.perf_counter()
+        if self._active is not None:
+            if self._active.get("t_release") is not None:
+                self.tel.event("ptt_ignored", reason="still_processing", source=source)
+            return  # otherwise key auto-repeat while held
         if not self.ready:
             self.tel.event("ptt_ignored", logging.WARNING, reason="not_ready", source=source)
-            self._say("Vimaan is not ready. Check the log.")
+            self._say("Vimaan is not ready yet")
             return
-        if self.recorder is None:
-            self.tel.event("ptt_ignored", logging.WARNING, reason="no_microphone", source=source)
-            self._say("Microphone not available")
-            return
-        with self._worker_lock:
-            busy = self._transcribing
-        if busy:
-            self.tel.event("ptt_ignored", reason="still_transcribing", source=source)
-            return
-
         cmd = self.tel.new_command_id()
-        t_press = time.perf_counter()
-        self.recorder.start()  # opens the mic in the background
-        self._recording = {"cmd": cmd, "t_press": t_press, "source": source}
+        if not self.worker.send({"op": "start", "cmd": cmd}):
+            self.tel.event("ptt_ignored", logging.ERROR, reason="worker_gone", source=source)
+            return
+        self._active = {"cmd": cmd, "t_press": t_press, "t_release": None, "source": source}
         if self._flight_loop_id:
-            # Drain the mic from the very next frame, not up to 0.2 s later.
-            xp.scheduleFlightLoop(self._flight_loop_id, -1.0, 1)
+            xp.scheduleFlightLoop(self._flight_loop_id, -1.0, 1)  # replies from next frame
         self.tel.event(
             "ptt_press",
             cmd=cmd,
             source=source,
-            handler_ms=round((time.perf_counter() - t_press) * 1000, 2),
+            handler_ms=round((time.perf_counter() - t_press) * 1000, 3),
         )
 
     def OnReleaseCallback(self, inRefcon, source="hotkey"):
-        rec = self._recording
-        if rec is None or "released_at" in rec:
+        active = self._active
+        if active is None or active["t_release"] is not None:
             return
-        rec["released_at"] = time.perf_counter()
-        rec["released_by"] = source
-        if RELEASE_TAIL_SEC <= 0:
-            self._finish_recording()
-        # Otherwise the flight loop finishes it once the tail has been captured.
-
-    def _finish_recording(self):
-        rec, self._recording = self._recording, None
-        if rec is None:
-            return
-        cmd, t_press, source = rec["cmd"], rec["t_press"], rec.get("released_by")
-        raw = self.recorder.stop()
-        audio_sec = self.recorder.seconds(raw)
+        t = time.perf_counter()
+        active["t_release"] = t
+        self.worker.send({"op": "stop", "cmd": active["cmd"]})
         self.tel.event(
-            "stage",
-            stage="capture",
-            cmd=cmd,
-            ms=round((time.perf_counter() - t_press) * 1000, 1),
-            audio_sec=round(audio_sec, 2),
-            truncated=self.recorder.truncated,
-            overflows=self.recorder.overflows,
-            released_by=source,
+            "ptt_release",
+            cmd=active["cmd"],
+            source=source,
+            held_ms=round((t - active["t_press"]) * 1000, 1),
+            handler_ms=round((time.perf_counter() - t) * 1000, 3),
         )
-        if audio_sec < MIN_RECORD_SEC:
-            self.tel.command_done(cmd, "too_short", t_press)
+
+    def _end_command(self, outcome, **fields):
+        """Close the active command without dispatching (error / timeout)."""
+        active, self._active = self._active, None
+        if active is None:
             return
-        with self._worker_lock:
-            self._transcribing = True
-        threading.Thread(
-            target=self._stt_worker, args=(cmd, t_press, raw), name=f"stt-{cmd}", daemon=True
-        ).start()
+        speech = self.OUTCOME_SPEECH.get(outcome, "An error occurred")
+        if speech:
+            self._say(speech)
+        self.tel.command_done(active["cmd"], outcome, active["t_press"], **fields)
 
     # ------------------------------------------------------------------
-    # Worker / queue plumbing
+    # Flight loop (main thread)
     # ------------------------------------------------------------------
-    def _enqueue(self, kind, payload=None):
-        self._result_queue.put((kind, payload, time.perf_counter()))
-
-    def _stt_worker(self, cmd, t_press, raw):
-        outcome = None
-        try:
-            # Mic-health (Phase 6F): a dead/muted mic (or no macOS permission)
-            # yields near-silent audio. Say so instead of a confusing
-            # "didn't catch that".
-            rms = rms_from_pcm16(raw)
-            self.tel.event("audio_level", cmd=cmd, rms=round(rms, 1))
-            if is_silent(rms):
-                outcome = "silent_mic"
-                self._enqueue("speak", "Microphone appears silent")
-                return
-
-            t_speech_end = time.perf_counter()
-            audio = sr.AudioData(raw, self.recorder.sample_rate, 2)
-            with self.tel.stage(
-                "stt", cmd=cmd, expected=(sr.UnknownValueError,), backend=self.STT_BACKEND
-            ) as res:
-                text = transcribe(
-                    self.recognizer, audio, self.STT_BACKEND, whisper_model=self.WHISPER_MODEL
-                )
-                res["text"] = text
-            self._enqueue(
-                "execute",
-                {"cmd": cmd, "text": text, "t_press": t_press, "t_speech_end": t_speech_end},
-            )
-        except sr.UnknownValueError:
-            outcome = "not_understood"
-            self._enqueue("speak", "I could not understand you")
-        except sr.RequestError:
-            outcome = "stt_service_error"  # network down / quota for google
-            self._enqueue("speak", "Recognition service failed")
-        except Exception as exc:
-            outcome = "worker_error"
-            self.tel.error("stt_worker_error", exc, cmd=cmd)
-            self._enqueue("speak", "An error occurred")
-        finally:
-            with self._worker_lock:
-                self._transcribing = False
-            if outcome is not None:
-                self.tel.command_done(cmd, outcome, t_press)
-
     def _flight_loop(self, *_):
         t0 = time.perf_counter()
         try:
-            while True:
-                kind, payload, t_enq = self._result_queue.get_nowait()
-                if kind == "speak":
-                    self._say(payload)
-                elif kind == "execute":
-                    payload["queue_wait_ms"] = round((time.perf_counter() - t_enq) * 1000, 1)
-                    self._execute_command(payload)
-        except queue.Empty:
-            pass
-        except Exception as exc:  # never let the flight loop die
-            self.tel.error("flight_loop_error", exc)
-        try:
-            rec = self._recording
-            if rec is not None and self.recorder.error is not None:
-                open_error, self.recorder.error = self.recorder.error, None
-                self._recording = None
-                self.recorder.stop()
-                self.tel.error("microphone_start_failed", open_error, cmd=rec["cmd"])
-                self.tel.command_done(rec["cmd"], "mic_error", rec["t_press"])
-                self._say("Microphone error")
-                rec = None
-            if rec is not None:
-                self.recorder.poll()
-                released = rec.get("released_at")
-                if released is not None:
-                    if time.perf_counter() - released >= RELEASE_TAIL_SEC:
-                        self._finish_recording()
-                elif self.recorder.elapsed() > MAX_RECORD_SEC + 0.5:
-                    # A missed key-up must not leave the mic open forever.
-                    self.OnReleaseCallback(None, source="auto_stop")
+            if self.worker is not None:
+                for msg in self.worker.poll():
+                    self._on_worker_message(msg)
+                self._check_worker()
+            active = self._active
+            if (
+                active is not None
+                and active["t_release"] is not None
+                and time.perf_counter() - active["t_release"] > WORKER_REPLY_TIMEOUT_SEC
+            ):
+                self._end_command("timeout")
             self._service_cranks()
             self._service_verifications()
-        except Exception as exc:
+        except Exception as exc:  # never let the flight loop die
             self.tel.error("flight_loop_error", exc)
-        busy_ms = (time.perf_counter() - t0) * 1000
-        with self._worker_lock:
-            transcribing = self._transcribing
-        mic_busy = self.recorder is not None and self.recorder.busy
-        if transcribing or mic_busy:
-            # Deliberate, not counted as our busy time: background threads
-            # (STT, mic open/close) only run while we let go of the GIL.
-            time.sleep(STT_GIL_YIELD_SEC)
         self.tel.tick(
-            busy_ms=busy_ms,
-            queue_depth=self._result_queue.qsize(),
+            busy_ms=(time.perf_counter() - t0) * 1000,
             pending_verifications=len(self._verifications),
             paused=self._read_int(DREF_PAUSED),
         )
-        if self._recording is not None or transcribing or mic_busy:
-            return -1.0  # every frame: drain the mic / give workers GIL time
+        if self._active is not None or self._self_test_pending:
+            return -1.0  # every frame while a reply is due: act on it immediately
         return QUEUE_POLL_INTERVAL_SEC
 
-    # ------------------------------------------------------------------
-    # NLU + dispatch (main thread only)
-    # ------------------------------------------------------------------
-    def _predict(self, text):
-        from vimaan_nlu.inference import predict
+    def _on_worker_message(self, msg):
+        kind = msg.get("type")
+        cmd = msg.get("cmd")
+        active = self._active
+        mine = active is not None and cmd == active["cmd"]
+        if kind == "ready":
+            self.ready = True
+            self.tel.event(
+                "stage",
+                stage="model_load",
+                ms=msg.get("load_ms"),
+                **{k: v for k, v in msg.items() if k not in ("type", "load_ms")},
+            )
+            boot = time.perf_counter() - (self._worker_started_at or time.perf_counter())
+            self.tel.event("worker_ready", boot_sec=round(boot, 2), restarts=self._worker_restarts)
+            self._say("Vimaan AI CoPilot ready")
+        elif kind == "fatal":
+            self.tel.event("worker_fatal", logging.ERROR, **msg)
+            self.ready = False
+            self._say("Vimaan could not load its model. Check the log.")
+        elif kind == "recording" and mine:
+            self.tel.event("mic_open", cmd=cmd, open_ms=msg.get("open_ms"))
+        elif kind == "captured" and active is not None and mine:
+            self.tel.event(
+                "stage",
+                stage="capture",
+                cmd=cmd,
+                ms=round((time.perf_counter() - active["t_press"]) * 1000, 1),
+                **{k: v for k, v in msg.items() if k not in ("type", "cmd")},
+            )
+        elif kind == "result" and active is not None and mine:
+            self._active = None
+            if msg.get("stt_ms") is not None:
+                self.tel.event(
+                    "stage",
+                    stage="stt",
+                    cmd=cmd,
+                    ms=msg["stt_ms"],
+                    backend=self.STT_BACKEND,
+                    text=msg["text"],
+                )
+            self._execute_command(
+                {
+                    "cmd": cmd,
+                    "text": msg["text"],
+                    "prediction": msg,
+                    "t_press": active["t_press"],
+                    "t_release": active["t_release"],
+                }
+            )
+        elif kind == "error" and mine:
+            if msg.get("stage") == "stt":
+                self.tel.event(
+                    "stage_ended",
+                    stage="stt",
+                    cmd=cmd,
+                    ms=msg.get("stt_ms"),
+                    reason=msg.get("error"),
+                )
+            level = logging.INFO if msg.get("outcome") == "too_short" else logging.WARNING
+            self.tel.event("worker_error", level, **msg)
+            self._end_command(msg.get("outcome", "worker_error"))
+        elif kind == "selftest":
+            self._finish_self_test(msg.get("results", []))
+        elif kind == "log":
+            self.tel.log(f"[worker] {msg.get('msg')}", logging.WARNING)
+        else:
+            self.tel.event("worker_message_ignored", logging.DEBUG, msg=msg)
 
-        return predict(
-            text,
-            self.loader.model,
-            self.loader.tokenizer,
-            self.device,
-            self.loader.intent_map_rev,
-            self.loader.slot_map_rev,
-        )
-
+    # ------------------------------------------------------------------
+    # Dispatch (main thread only)
+    # ------------------------------------------------------------------
     def _execute_command(self, job):
-        cmd, text = job["cmd"], job["text"]
+        cmd, text, result = job["cmd"], job["text"], job["prediction"]
         self._current_cmd = cmd
         outcome = "failed"
         try:
-            with self.tel.stage("nlu", cmd=cmd, queue_wait_ms=job.get("queue_wait_ms")) as res:
-                result = self._predict(text)
-                res.update(
-                    normalized=result["normalized_text"],
-                    intent=result["intent"],
-                    confidence=round(result["confidence"], 3),
-                    slots=result["slots"],
-                )
+            self.tel.event(
+                "stage",
+                stage="nlu",
+                cmd=cmd,
+                ms=result.get("nlu_ms"),
+                normalized=result.get("normalized"),
+                intent=result["intent"],
+                confidence=round(result["confidence"], 3),
+                slots=result["slots"],
+            )
             intent_pred, slots = result["intent"], result["slots"]
 
             if result["confidence"] < self.CONFIDENCE_FLOOR:
@@ -727,50 +686,66 @@ class PythonInterface:
             self._say("Command execution failed")
         finally:
             self._current_cmd = None
-            self.tel.command_done(
-                cmd,
-                outcome,
-                job["t_press"],
-                text=text,
-                speech_to_action_ms=round((time.perf_counter() - job["t_speech_end"]) * 1000, 1),
-            )
+            extra = {}
+            if job.get("t_release") is not None:
+                extra["speech_to_action_ms"] = round(
+                    (time.perf_counter() - job["t_release"]) * 1000, 1
+                )
+            self.tel.command_done(cmd, outcome, job["t_press"], text=text, **extra)
 
     # ------------------------------------------------------------------
     # Diagnostics
     # ------------------------------------------------------------------
     def _run_self_test(self, *_):
-        """Ctrl-Z: run canned utterances through text -> NLU (STT bypassed,
-        nothing actuated) and check each resolves to the expected intent with
-        every slot its handler needs. Logs each probe and speaks a summary."""
+        """Ctrl-Z: run canned utterances through text -> NLU in the worker (STT
+        bypassed, nothing actuated) and check each resolves to the expected
+        intent with every slot its handler needs. Spoken summary on reply."""
         if not self.ready:
-            self._say("Vimaan is not ready. Check the log.")
+            self._say("Vimaan is not ready yet")
             return
+        if self._self_test_pending:
+            return
+        self._self_test_pending = True
+        self._self_test_started = time.perf_counter()
         self._say("Running self test")
+        self.worker.send({"op": "selftest", "probes": [list(p) for p in self.SELF_TEST_PROBES]})
+        if self._flight_loop_id:
+            xp.scheduleFlightLoop(self._flight_loop_id, -1.0, 1)
+
+    def _finish_self_test(self, results):
+        self._self_test_pending = False
         passed = 0
-        with self.tel.stage("self_test") as summary:
-            for text, expected in self.SELF_TEST_PROBES:
-                try:
-                    result = self._predict(text)
-                except Exception as exc:
-                    self.tel.error("self_test_error", exc, text=text)
-                    continue
-                intent, slots = result["intent"], result["slots"]
-                missing = [s for s in REQUIRED_SLOTS.get(intent, ()) if not slots.get(s)]
-                ok = intent == expected and intent in self.intent_to_command and not missing
-                passed += ok
-                self.tel.event(
-                    "self_test_probe",
-                    logging.INFO if ok else logging.WARNING,
-                    text=text,
-                    expected=expected,
-                    intent=intent,
-                    confidence=round(result["confidence"], 3),
-                    slots=slots,
-                    missing_slots=missing,
-                    ok=ok,
-                )
-            summary.update(passed=passed, total=len(self.SELF_TEST_PROBES))
-        self._say(f"Self test complete. {passed} of {len(self.SELF_TEST_PROBES)} passed.")
+        for r in results:
+            intent, slots = r.get("intent"), r.get("slots") or {}
+            missing = [s for s in REQUIRED_SLOTS.get(intent, ()) if not slots.get(s)]
+            ok = (
+                "error" not in r
+                and intent == r["expected"]
+                and intent in self.intent_to_command
+                and not missing
+            )
+            passed += ok
+            self.tel.event(
+                "self_test_probe",
+                logging.INFO if ok else logging.WARNING,
+                text=r["text"],
+                expected=r["expected"],
+                intent=intent,
+                confidence=round(r.get("confidence") or 0.0, 3),
+                slots=slots,
+                missing_slots=missing,
+                error=r.get("error"),
+                ok=ok,
+            )
+        total = len(self.SELF_TEST_PROBES)
+        self.tel.event(
+            "stage",
+            stage="self_test",
+            ms=round((time.perf_counter() - self._self_test_started) * 1000, 1),
+            passed=passed,
+            total=total,
+        )
+        self._say(f"Self test complete. {passed} of {total} passed.")
 
     # ------------------------------------------------------------------
     # Sim I/O helpers (every read/write/command is logged with the command id)

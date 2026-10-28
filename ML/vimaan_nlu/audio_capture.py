@@ -79,6 +79,11 @@ class PushToTalkRecorder:
         return self._recording
 
     @property
+    def is_open(self) -> bool:
+        """True once the background open has finished and audio is flowing."""
+        return self._stream is not None
+
+    @property
     def busy(self) -> bool:
         """True while the mic is being opened or closed in the background."""
         self._workers = [t for t in self._workers if t.is_alive()]

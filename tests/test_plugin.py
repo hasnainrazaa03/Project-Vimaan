@@ -1,8 +1,11 @@
 """The real X-Plane plugin, driven against a fake sim (tests/fake_xplane.py).
 
-NLU is stubbed with a lookup table so these run in CI without torch; the
-point is the dispatch layer: which datarefs/commands get touched, with what
-values, and what the pilot hears.
+The voice worker process is replaced by ``FakeWorkerClient``, which runs the
+real ``VoiceWorker`` protocol in-process with a fake microphone, a scripted
+speech-to-text and an NLU lookup table — so these run in CI without torch,
+audio hardware or network. The point is the plugin: which datarefs/commands
+get touched, with what values, what the pilot hears, and that nothing heavy
+runs on X-Plane's main thread.
 """
 
 import importlib.util
@@ -10,94 +13,134 @@ import json
 import os
 import struct
 import sys
-import threading
 import time
 import types
 
 import pytest
-from fake_xplane import make_sounddevice, make_speech_recognition, make_xp
+from fake_xplane import make_sounddevice, make_xp
+from vimaan_nlu.audio_capture import PushToTalkRecorder
+from vimaan_nlu.voice_worker import VoiceWorker
 
 PLUGIN_PATH = os.path.join(os.path.dirname(__file__), "..", "plugin", "PI_VimaanCoPilot.py")
 
 # utterance -> (intent, slots, confidence)
 NLU: dict[str, tuple[str, dict, float]] = {}
+# What the fake speech-to-text returns next (a transcript, or an exception to raise).
+STT: dict[str, object] = {"next": "set heading two seven zero"}
 
 
-def _fake_predict(text, *args, **kwargs):
+class UnknownValueError(Exception):
+    """Named like speech_recognition's, which the worker classifies by name."""
+
+
+def _fake_predict(text):
     intent, slots, conf = NLU.get(text, ("None", {}, 0.99))
-    return {
-        "intent": intent,
-        "slots": dict(slots),
-        "confidence": conf,
-        "original_text": text,
-        "normalized_text": text,
-    }
+    return {"intent": intent, "slots": dict(slots), "confidence": conf, "normalized_text": text}
 
 
-class _FakeLoader:
-    def __init__(self, device=None):
-        self.device = device
-        self.model = self.tokenizer = object()
-        self.intent_map_rev: dict = {}
-        self.slot_map_rev: dict = {}
+class FakeWorkerClient:
+    """In-process stand-in for the worker process (same interface as
+    vimaan_nlu.worker_client.WorkerClient)."""
 
-    def load_all(self, quantize=False, backend="torch"):
-        return {
-            "model": {"model_path": "/fake/v11", "device": "cpu"},
-            "maps": {"intents": 17, "slots": 13},
-            "quantized": quantize,
-        }
+    boot = "ready"  # or "fatal" (model failed to load) / "no_mic"
+    sd = None  # the fake sounddevice module
+
+    def __init__(self, argv, log_path, env=None, cwd=None):
+        self.argv, self.log_path, self.env, self.cwd = argv, log_path, env, cwd
+        self.outbox, self.sent = [], []
+        self.alive, self.returncode, self.pid = False, None, 4242
+
+    def start(self):
+        self.alive = True
+        self.recorder = None if self.boot == "no_mic" else PushToTalkRecorder(sd=self.sd)
+        self.worker = VoiceWorker(
+            self.outbox.append, self.recorder, self._transcribe, _fake_predict, release_tail_sec=0
+        )
+        if self.boot == "fatal":
+            self.outbox.append({"type": "fatal", "error": "No module named 'torch'"})
+        else:
+            self.outbox.append(
+                {"type": "ready", "load_ms": 12.0, "model_path": "/fake/v11", "mic": {}}
+            )
+
+    @staticmethod
+    def _transcribe(raw, rate):
+        result = STT["next"]
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    def send(self, msg):
+        self.sent.append(msg)
+        if not self.alive:
+            return False
+        self.worker.handle(msg)
+        return True
+
+    def poll(self):
+        if self.recorder is not None:
+            self.recorder.wait_idle()  # the real worker has its own threads
+        self.worker.tick()
+        out = list(self.outbox)
+        self.outbox.clear()  # in place: the worker holds a reference to this list
+        return out
+
+    def log_tail(self, lines=20):
+        return ["Fatal Python error: Segmentation fault"]
+
+    def stop(self, timeout=2.0):
+        self.alive = False
 
 
-def _load_plugin(monkeypatch, tmp_path, with_torch=True, with_sounddevice=True):
+def _load_plugin(monkeypatch, tmp_path, boot="ready"):
     monkeypatch.setenv("HOME", str(tmp_path))
     xp = make_xp()
     pkg = types.ModuleType("XPPython3")
     pkg.xp = xp
     monkeypatch.setitem(sys.modules, "XPPython3", pkg)
     monkeypatch.setitem(sys.modules, "XPPython3.xp", xp)
-    monkeypatch.setitem(sys.modules, "speech_recognition", make_speech_recognition())
-    monkeypatch.setitem(
-        sys.modules, "sounddevice", make_sounddevice() if with_sounddevice else None
-    )
-    if with_torch:
-        fake_torch = types.ModuleType("torch")
-        fake_torch.device = lambda name: name
-        monkeypatch.setitem(sys.modules, "torch", fake_torch)
-    else:
-        monkeypatch.setitem(sys.modules, "torch", None)  # import raises ImportError
-    loader_mod = types.ModuleType("vimaan_nlu.model_loader")
-    loader_mod.ModelLoader = _FakeLoader
-    infer_mod = types.ModuleType("vimaan_nlu.inference")
-    infer_mod.predict = _fake_predict
-    monkeypatch.setitem(sys.modules, "vimaan_nlu.model_loader", loader_mod)
-    monkeypatch.setitem(sys.modules, "vimaan_nlu.inference", infer_mod)
+    # The plugin must never import these into X-Plane: make any import fail.
+    for heavy in ("torch", "speech_recognition", "sounddevice", "transformers"):
+        monkeypatch.setitem(sys.modules, heavy, None)
+    sd = make_sounddevice()
 
     spec = importlib.util.spec_from_file_location("PI_VimaanCoPilot_under_test", PLUGIN_PATH)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    # Finish recordings on key-up so tests don't wait out the release tail;
-    # test_release_tail_* covers the real behaviour.
-    module.RELEASE_TAIL_SEC = 0.0
+    client = type("Client", (FakeWorkerClient,), {"boot": boot, "sd": sd})
+    module.WorkerClient = client
     plugin = module.PythonInterface()
     plugin.XPluginStart()
+    plugin.sd = sd
+    plugin._flight_loop()  # receive the worker's ready / fatal
     return module, plugin, xp
 
 
 @pytest.fixture
 def sim(monkeypatch, tmp_path):
     NLU.clear()
+    STT["next"] = "set heading two seven zero"
     module, plugin, xp = _load_plugin(monkeypatch, tmp_path)
     yield module, plugin, xp
     plugin.XPluginStop()
 
 
 def say(plugin, text, intent=None, slots=None, conf=0.99):
+    """Dispatch a prediction as if the worker had just returned it."""
     if intent is not None:
         NLU[text] = (intent, slots or {}, conf)
     xp_spoken_before = len(sys.modules["XPPython3"].xp.spoken)
     now = time.perf_counter()
-    plugin._execute_command({"cmd": "c9999", "text": text, "t_press": now, "t_speech_end": now})
+    p = _fake_predict(text)
+    plugin._execute_command(
+        {
+            "cmd": "c9999",
+            "text": text,
+            "prediction": {**p, "nlu_ms": 5.0, "normalized": text},
+            "t_press": now,
+            "t_release": now,
+        }
+    )
     return sys.modules["XPPython3"].xp.spoken[xp_spoken_before:]
 
 
@@ -108,7 +151,7 @@ def events(plugin, kind=None):
 
 
 # ---------------------------------------------------------------------------
-# Startup / registration
+# Startup / registration / worker lifecycle
 # ---------------------------------------------------------------------------
 def test_startup_registers_and_logs(sim):
     _, plugin, xp = sim
@@ -118,25 +161,72 @@ def test_startup_registers_and_logs(sim):
     assert len(xp.flight_loops) == 1
     assert xp.spoken[-1] == "Vimaan AI CoPilot ready"
     kinds = [e["kind"] for e in events(plugin)]
-    for kind in ("session_start", "microphone_ready", "plugin_start"):
+    for kind in ("session_start", "worker_spawn", "plugin_start", "worker_ready"):
         assert kind in kinds
-    mic = events(plugin, "microphone_ready")[0]
-    assert mic["using"] == "Fake Mic" and mic["input_devices"] == ["Fake Mic"]
     assert any(e["stage"] == "model_load" for e in events(plugin, "stage"))
 
 
-def test_missing_torch_keeps_plugin_loaded_and_explains(monkeypatch, tmp_path):
+def test_plugin_never_imports_heavy_modules(sim):
+    # _load_plugin made torch / speech_recognition / sounddevice unimportable;
+    # the plugin still loaded and is ready, so none of them run in X-Plane.
+    module, plugin, _ = sim
+    assert plugin.ready
+    for heavy in ("torch", "speech_recognition", "sounddevice", "transformers"):
+        assert heavy not in vars(module)
+
+
+def test_worker_launched_with_xppython3_interpreter(sim):
+    _, plugin, xp = sim
+    argv = plugin.worker.argv
+    assert argv[1:4] == ["-u", "-m", "vimaan_nlu.voice_worker"]
+    assert plugin.worker.env["HF_HUB_OFFLINE"] == "1"
+    assert plugin.worker.env["PYTHONPATH"].startswith(plugin.worker.cwd)
+
+
+def test_worker_uses_xp_python_executable_when_available(sim, monkeypatch):
+    _, plugin, xp = sim
+    monkeypatch.setattr(xp, "pythonExecutable", sys.executable, raising=False)
+    assert plugin._python_executable() == sys.executable
+
+
+def test_model_load_failure_keeps_plugin_loaded_and_explains(monkeypatch, tmp_path):
     NLU.clear()
-    _, plugin, xp = _load_plugin(monkeypatch, tmp_path, with_torch=False)
+    _, plugin, xp = _load_plugin(monkeypatch, tmp_path, boot="fatal")
     try:
         assert not plugin.ready
-        missing = events(plugin, "dependency_missing")
-        assert missing and "torch" in missing[0]["missing"]
-        assert "could not load its Python packages" in xp.spoken[-1]
+        assert events(plugin, "worker_fatal")
+        assert "could not load its model" in xp.spoken[-1]
         plugin.OnPressCallback(None)
-        assert xp.spoken[-1] == "Vimaan is not ready. Check the log."
+        assert xp.spoken[-1] == "Vimaan is not ready yet"
     finally:
         plugin.XPluginStop()
+
+
+def test_worker_crash_is_logged_and_restarted(sim):
+    _, plugin, xp = sim
+    plugin.worker.alive, plugin.worker.returncode = False, -11
+    plugin._flight_loop()
+    crash = events(plugin, "worker_exit")[-1]
+    assert crash["returncode"] == -11 and "Segmentation fault" in crash["log_tail"][-1]
+    assert "Voice engine restarting" in xp.spoken
+    plugin._flight_loop()  # the new worker reports ready
+    assert plugin.ready and len(events(plugin, "worker_spawn")) == 2
+
+
+def test_worker_restarts_are_bounded(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "WORKER_MAX_RESTARTS", 0)
+    plugin.worker.alive = False
+    plugin._flight_loop()
+    assert xp.spoken[-1] == "Voice engine failed. Check the log."
+    assert plugin.worker is None and not plugin.ready
+
+
+def test_plugin_stop_stops_worker(monkeypatch, tmp_path):
+    _, plugin, _ = _load_plugin(monkeypatch, tmp_path)
+    worker = plugin.worker
+    plugin.XPluginStop()
+    assert not worker.alive
 
 
 # ---------------------------------------------------------------------------
@@ -362,6 +452,7 @@ def test_self_test_checks_intent_and_slots(sim):
     text, intent = module.PythonInterface.SELF_TEST_PROBES[7]
     NLU[text] = (intent, {}, 0.99)  # e.g. the COM probe losing its frequency
     plugin._run_self_test()
+    plugin._flight_loop()  # worker reply
     assert xp.spoken[-1] == "Self test complete. 9 of 10 passed."
     failed = [e for e in events(plugin, "self_test_probe") if not e["ok"]]
     assert failed[0]["missing_slots"] == ["frequency"]
@@ -381,23 +472,19 @@ def test_push_to_talk_command_binding(sim, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Hold-to-talk: press -> record -> release -> STT worker -> flight loop
+# Hold-to-talk through the worker protocol
 # ---------------------------------------------------------------------------
 LOUD = struct.pack("<2h", 8000, -8000) * 8000  # 1 s of 16 kHz, rms 8000
 SILENT = b"\x00\x00" * 16000
 
 
 def _talk(plugin, audio, transcript="set heading two seven zero"):
-    plugin.recognizer.next_result = transcript
-    sd = sys.modules["sounddevice"]
+    STT["next"] = transcript
     plugin.OnPressCallback(None)
-    plugin.recorder.wait_idle()
-    sd.streams[-1].feed(audio)
+    plugin._flight_loop()  # mic open in the worker
+    plugin.sd.streams[-1].feed(audio)
     plugin.OnReleaseCallback(None)
-    for t in threading.enumerate():
-        if t.name.startswith("stt-"):
-            t.join(timeout=5)
-    plugin._flight_loop()
+    plugin._flight_loop()  # reply -> dispatch
 
 
 def test_hold_to_talk_end_to_end(sim):
@@ -405,13 +492,28 @@ def test_hold_to_talk_end_to_end(sim):
     NLU["set heading two seven zero"] = ("set_autopilot_heading", {"degrees": "270"}, 0.99)
     _talk(plugin, LOUD)
     assert xp.datarefs["sim/cockpit2/autopilot/heading_dial_deg_mag_pilot"] == 270.0
-    plugin.recorder.wait_idle()
-    assert sys.modules["sounddevice"].streams[-1].closed  # mic released
+    assert [m["op"] for m in plugin.worker.sent if m["op"] in ("start", "stop")] == [
+        "start",
+        "stop",
+    ]
     stt = [e for e in events(plugin, "stage") if e["stage"] == "stt"][-1]
     assert stt["text"] == "set heading two seven zero"
     capture = [e for e in events(plugin, "stage") if e["stage"] == "capture"][-1]
     assert capture["audio_sec"] == 1.0
-    assert events(plugin, "command_done")[-1]["outcome"] == "executed"
+    done = events(plugin, "command_done")[-1]
+    assert done["outcome"] == "executed" and "speech_to_action_ms" in done
+    plugin.worker.recorder.wait_idle()
+    assert plugin.sd.streams[-1].closed  # mic released
+
+
+def test_press_and_release_handlers_only_send_messages(sim):
+    _, plugin, _ = sim
+    plugin.OnPressCallback(None)
+    plugin.OnReleaseCallback(None)
+    press = events(plugin, "ptt_press")[-1]
+    release = events(plugin, "ptt_release")[-1]
+    assert press["handler_ms"] < 5 and release["handler_ms"] < 5
+    plugin._flight_loop()
 
 
 def test_silent_mic_reported(sim):
@@ -421,74 +523,86 @@ def test_silent_mic_reported(sim):
     assert events(plugin, "command_done")[-1]["outcome"] == "silent_mic"
 
 
-def test_accidental_tap_ignored(sim):
+def test_accidental_tap_ignored_quietly(sim):
     _, plugin, xp = sim
+    spoken_before = list(xp.spoken)
     _talk(plugin, LOUD[:3200])  # 0.1 s
     assert events(plugin, "command_done")[-1]["outcome"] == "too_short"
-    assert xp.writes == []
+    assert xp.writes == [] and xp.spoken == spoken_before
 
 
 def test_unrecognised_speech(sim):
     _, plugin, xp = sim
-    _talk(plugin, LOUD, transcript=sys.modules["speech_recognition"].UnknownValueError())
+    _talk(plugin, LOUD, transcript=UnknownValueError())
     assert xp.spoken[-1] == "I could not understand you"
     assert events(plugin, "stage_ended")[-1]["stage"] == "stt"
 
 
-def test_key_repeat_does_not_restart_recording(sim):
+def test_key_repeat_sends_one_start(sim):
     _, plugin, _ = sim
-    sd = sys.modules["sounddevice"]
     plugin.OnPressCallback(None)
-    plugin.recorder.wait_idle()
     plugin.OnPressCallback(None)
-    assert len(sd.streams) == 1
+    assert [m["op"] for m in plugin.worker.sent].count("start") == 1
     plugin.OnReleaseCallback(None)
+    plugin._flight_loop()
 
 
-def test_flight_loop_drains_mic_every_frame_while_recording(sim):
+def test_press_while_previous_command_processing_is_ignored(sim):
+    _, plugin, _ = sim
+    plugin.OnPressCallback(None)
+    plugin.OnReleaseCallback(None)
+    plugin.OnPressCallback(None)  # reply not read yet
+    assert events(plugin, "ptt_ignored")[-1]["reason"] == "still_processing"
+    plugin._flight_loop()
+
+
+def test_no_reply_times_out(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "WORKER_REPLY_TIMEOUT_SEC", -1.0)
+    plugin.OnPressCallback(None)
+    monkeypatch.setattr(plugin.worker, "send", lambda msg: True)  # stop is lost
+    plugin.OnReleaseCallback(None)
+    plugin._flight_loop()
+    assert xp.spoken[-1] == "Voice engine timed out"
+    assert plugin._active is None
+
+
+def test_flight_loop_runs_every_frame_only_while_a_reply_is_due(sim):
     module, plugin, _ = sim
-    sd = sys.modules["sounddevice"]
     assert plugin._flight_loop() == module.QUEUE_POLL_INTERVAL_SEC
     plugin.OnPressCallback(None)
-    plugin.recorder.wait_idle()
-    sd.streams[-1].feed(LOUD)
-    assert plugin._flight_loop() == -1.0  # every frame while the key is held
-    assert sd.streams[-1].read_available == 0  # drained on the main thread
-    plugin.OnReleaseCallback(None)
-
-
-def test_flight_loop_yields_to_stt_worker(sim, monkeypatch):
-    module, plugin, _ = sim
-    slept = []
-    monkeypatch.setattr(module.time, "sleep", slept.append)
-    plugin._transcribing = True
     assert plugin._flight_loop() == -1.0
-    assert slept == [module.STT_GIL_YIELD_SEC]
-    plugin._transcribing = False
-
-
-def test_missed_key_up_auto_stops(sim, monkeypatch):
-    module, plugin, _ = sim
-    monkeypatch.setattr(module, "MAX_RECORD_SEC", -1.0)
-    plugin.OnPressCallback(None)
-    plugin.recorder.wait_idle()
-    sys.modules["sounddevice"].streams[-1].feed(LOUD)
+    plugin.OnReleaseCallback(None)
     plugin._flight_loop()
-    assert plugin._recording is None
-    capture = [e for e in events(plugin, "stage") if e["stage"] == "capture"][-1]
-    assert capture["released_by"] == "auto_stop"
+    assert plugin._flight_loop() == module.QUEUE_POLL_INTERVAL_SEC
 
 
-def test_missing_sounddevice_degrades_to_no_microphone(monkeypatch, tmp_path):
+def test_no_microphone_in_worker(monkeypatch, tmp_path):
     NLU.clear()
-    _, plugin, xp = _load_plugin(monkeypatch, tmp_path, with_sounddevice=False)
+    _, plugin, xp = _load_plugin(monkeypatch, tmp_path, boot="no_mic")
     try:
-        assert plugin.ready and plugin.recorder is None
-        assert events(plugin, "microphone_unavailable")
+        assert plugin.ready
         plugin.OnPressCallback(None)
-        assert xp.spoken[-1] == "Microphone not available"
+        plugin._flight_loop()
+        assert xp.spoken[-1] == "Microphone error"
+        assert events(plugin, "command_done")[-1]["outcome"] == "mic_error"
     finally:
         plugin.XPluginStop()
+
+
+def test_reply_for_an_abandoned_command_is_ignored(sim):
+    _, plugin, xp = sim
+    plugin._on_worker_message(
+        {
+            "type": "result",
+            "cmd": "c0999",
+            "text": "gear up",
+            "intent": "toggle_landing_gear",
+            "confidence": 1.0,
+            "slots": {"state": "up"},
+        }
+    )
+    assert xp.commands_fired == []
 
 
 # ---------------------------------------------------------------------------
@@ -546,30 +660,6 @@ def test_every_sim_name_exists_in_xplane():
     assert module.main(["--xplane", XPLANE_ROOT]) == 0
 
 
-def test_release_tail_keeps_recording_after_key_up(sim, monkeypatch):
-    # PortAudio delivers audio late and pilots release on the last word; the
-    # first in-sim run lost "up"/"on"/"off" from every command.
-    module, plugin, _ = sim
-    monkeypatch.setattr(module, "RELEASE_TAIL_SEC", 0.05)
-    sd = sys.modules["sounddevice"]
-    plugin.OnPressCallback(None)
-    plugin.recorder.wait_idle()
-    sd.streams[-1].feed(LOUD)
-    plugin.OnReleaseCallback(None)
-    assert plugin._recording is not None  # still capturing the tail
-    sd.streams[-1].feed(LOUD[:3200])  # the late-arriving last word
-    plugin.OnPressCallback(None)  # a press during the tail doesn't restart
-    assert len(sd.streams) == 1
-    time.sleep(0.06)
-    plugin._flight_loop()
-    assert plugin._recording is None
-    capture = [e for e in events(plugin, "stage") if e["stage"] == "capture"][-1]
-    assert capture["audio_sec"] == 1.1  # tail included
-    for t in threading.enumerate():
-        if t.name.startswith("stt-"):
-            t.join(timeout=5)
-
-
 def test_misheard_command_does_not_cancel_pending_confirmation(sim):
     _, plugin, xp = sim
     xp.datarefs["sim/flightmodel/engine/ENGN_running"][0] = 1
@@ -591,28 +681,3 @@ def test_executed_command_cancels_pending_confirmation(sim):
     say(plugin, "hdg", "set_autopilot_heading", {"degrees": "90"})
     say(plugin, "engine one off", "toggle_engine_1", {"state": "off"})
     assert "sim/starters/shut_down_1" not in xp.commands_fired  # asks again
-
-
-def test_microphone_open_failure_is_reported(sim, monkeypatch):
-    _, plugin, xp = sim
-    sd = sys.modules["sounddevice"]
-
-    def broken(**kw):
-        raise OSError("no input device")
-
-    monkeypatch.setattr(sd, "RawInputStream", broken)
-    plugin.OnPressCallback(None)
-    plugin.recorder.wait_idle()
-    plugin._flight_loop()
-    assert xp.spoken[-1] == "Microphone error"
-    assert events(plugin, "command_done")[-1]["outcome"] == "mic_error"
-    assert plugin._recording is None
-
-
-def test_press_handler_is_cheap_and_logged(sim):
-    _, plugin, _ = sim
-    plugin.OnPressCallback(None)
-    plugin.recorder.wait_idle()
-    press = events(plugin, "ptt_press")[-1]
-    assert press["handler_ms"] < 20
-    plugin.OnReleaseCallback(None)

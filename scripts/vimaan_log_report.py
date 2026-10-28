@@ -35,6 +35,9 @@ PROBLEM_KINDS = {
     "dataref_read_error",
     "safety_hold",
     "slot_rejected",
+    "worker_spawn_failed",
+    "worker_exit",
+    "worker_fatal",
 }
 
 
@@ -66,6 +69,8 @@ def is_problem(ev: dict) -> bool:
         return True
     if ev.get("kind") == "crank_end" and ev.get("result") != "running":
         return True
+    if ev.get("kind") == "worker_error" and ev.get("outcome") != "too_short":
+        return True
     return ev.get("kind") == "self_test_probe" and not ev.get("ok")
 
 
@@ -90,11 +95,18 @@ def report(path: Path) -> str:
         (e for e in events if e["kind"] == "stage" and e.get("stage") == "model_load"), None
     )
     if load:
-        v = load.get("versions") or {}
+        v = load.get("versions") or load  # in-process (old) or worker-reported (new)
         w(
             f"  model: {load.get('model_path')}  quantized={load.get('quantized')}  "
-            f"transformers {v.get('transformers_version', '-')}"
+            f"torch {v.get('torch_version', '-')}  transformers {v.get('transformers_version', '-')}"
         )
+        if load.get("executable"):
+            w(
+                f"  voice worker: pid {load.get('pid')}  Python {load.get('python')} @ "
+                f"{load.get('executable')}  ready in {load.get('ms')} ms"
+            )
+        if isinstance(load.get("mic"), dict) and load["mic"].get("using"):
+            w(f"  microphone: {load['mic'].get('using')!r} of {load['mic'].get('input_devices')}")
     mic = next((e for e in events if e["kind"] == "microphone_ready"), None)
     if mic:
         w(f"  microphone: {mic.get('using')!r} of {mic.get('input_devices')}")
