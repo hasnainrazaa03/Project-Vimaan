@@ -184,10 +184,16 @@ def _clean_asr_formatting(text: str) -> str:
     # Thousands separators: "7,500" -> "7500" (otherwise the tokenizer splits
     # it and the slot tagger keeps only "500").
     text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", text)
+    # Google writes some digit runs as clock times: "1:18 75" -> "118.75"
+    # (a frequency), otherwise just drop the colon ("1:18" -> "118").
+    text = re.sub(r"\b(1):(1[89]|2\d|3[0-7]) (\d{1,3})\b", r"\1\2.\3", text)
+    text = re.sub(r"(?<=\d):(?=\d)", "", text)
     # Sentence punctuation. A period is only kept when it sits between digits
     # (a decimal point: "118.75").
     text = re.sub(r"(?<!\d)\.|\.(?!\d)", " ", text)
     text = re.sub(r"[,!?;:\"“”()]", " ", text)
+    # "com" misheard as "cam" / "calm" / "come" before a radio number.
+    text = re.sub(r"\b(?:cam|calm|come|comm)\b(?=\s+(?:\d|one\b|two\b))", "com", text)
     # Aviation abbreviations ASR emits for words the model was trained on.
     text = re.sub(r"\bfl(?=\s|\d|$)", "flight level ", text)
     text = re.sub(r"(?<=\d)ft\b|\bft\b", " feet", text)

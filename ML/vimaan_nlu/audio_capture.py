@@ -27,9 +27,12 @@ from typing import Any
 
 DEFAULT_SAMPLE_RATE = 16_000  # what every STT backend we support wants
 SAMPLE_WIDTH = 2  # int16
-# PortAudio sizes its blocking-mode ring buffer from the suggested latency.
-# Generous, so a long sim frame (scenery load) between polls loses nothing.
-RING_BUFFER_SEC = 1.0
+# PortAudio sizes its blocking-mode ring buffer from the suggested latency,
+# and the same value sets how late audio is handed over. Measured on an M5
+# MacBook mic: 1.0 -> 230-360 ms late (cut the last word off every command);
+# 0.1 -> 22 ms late but overflows if polls are >0.25 s apart; 0.2 survives
+# 0.25 s gaps. The flight loop polls every frame while recording.
+RING_BUFFER_SEC = 0.2
 
 
 class PushToTalkRecorder:

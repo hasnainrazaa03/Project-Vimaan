@@ -206,3 +206,23 @@ class TestRecognizerFormatting:
     )
     def test_absorbed_com_port_split_out(self, text, expected):
         assert normalize_aviation_input(text) == expected
+
+
+class TestGoogleMishearings:
+    """Seen in the first in-sim session (Google Web Speech)."""
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("tune on 1 to 1:18 75", "tune on 1 to 118.75"),  # clock-time format
+            ("Tune COM 1 to 1:18 75.", "tune com 1 to 118.75"),
+            ("tune cam 1 to 118.75", "tune com 1 to 118.75"),
+            ("come one one two one decimal five", "com 1 121.5"),
+            ("set altitude 1:30", "set altitude 130"),
+        ],
+    )
+    def test_mishearings(self, text, expected):
+        assert normalize_aviation_input(text) == expected
+
+    def test_ordinary_words_untouched(self):
+        assert normalize_aviation_input("come here") == "come here"

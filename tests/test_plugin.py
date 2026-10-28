@@ -76,6 +76,9 @@ def _load_plugin(monkeypatch, tmp_path, with_torch=True, with_sounddevice=True):
     spec = importlib.util.spec_from_file_location("PI_VimaanCoPilot_under_test", PLUGIN_PATH)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    # Finish recordings on key-up so tests don't wait out the release tail;
+    # test_release_tail_* covers the real behaviour.
+    module.RELEASE_TAIL_SEC = 0.0
     plugin = module.PythonInterface()
     plugin.XPluginStart()
     return module, plugin, xp
@@ -536,3 +539,49 @@ def test_every_sim_name_exists_in_xplane():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     assert module.main(["--xplane", XPLANE_ROOT]) == 0
+
+
+def test_release_tail_keeps_recording_after_key_up(sim, monkeypatch):
+    # PortAudio delivers audio late and pilots release on the last word; the
+    # first in-sim run lost "up"/"on"/"off" from every command.
+    module, plugin, _ = sim
+    monkeypatch.setattr(module, "RELEASE_TAIL_SEC", 0.05)
+    sd = sys.modules["sounddevice"]
+    plugin.OnPressCallback(None)
+    sd.streams[-1].feed(LOUD)
+    plugin.OnReleaseCallback(None)
+    assert plugin._recording is not None  # still capturing the tail
+    sd.streams[-1].feed(LOUD[:3200])  # the late-arriving last word
+    plugin.OnPressCallback(None)  # a press during the tail doesn't restart
+    assert len(sd.streams) == 1
+    time.sleep(0.06)
+    plugin._flight_loop()
+    assert plugin._recording is None
+    capture = [e for e in events(plugin, "stage") if e["stage"] == "capture"][-1]
+    assert capture["audio_sec"] == 1.1  # tail included
+    for t in threading.enumerate():
+        if t.name.startswith("stt-"):
+            t.join(timeout=5)
+
+
+def test_misheard_command_does_not_cancel_pending_confirmation(sim):
+    _, plugin, xp = sim
+    xp.datarefs["sim/flightmodel/engine/ENGN_running"][0] = 1
+    xp.datarefs["sim/flightmodel/failures/onground_any"] = 0
+    xp.datarefs["sim/flightmodel/position/y_agl"] = 400.0
+    say(plugin, "engine one off", "toggle_engine_1", {"state": "off"})
+    assert xp.commands_fired == []
+    say(plugin, "engine", "toggle_engine_1", {})  # clipped repeat: rejected
+    say(plugin, "engine one off", "toggle_engine_1", {"state": "off"})
+    assert xp.commands_fired == ["sim/starters/shut_down_1"]
+
+
+def test_executed_command_cancels_pending_confirmation(sim):
+    _, plugin, xp = sim
+    xp.datarefs["sim/flightmodel/engine/ENGN_running"][0] = 1
+    xp.datarefs["sim/flightmodel/failures/onground_any"] = 0
+    xp.datarefs["sim/flightmodel/position/y_agl"] = 400.0
+    say(plugin, "engine one off", "toggle_engine_1", {"state": "off"})
+    say(plugin, "hdg", "set_autopilot_heading", {"degrees": "90"})
+    say(plugin, "engine one off", "toggle_engine_1", {"state": "off"})
+    assert "sim/starters/shut_down_1" not in xp.commands_fired  # asks again

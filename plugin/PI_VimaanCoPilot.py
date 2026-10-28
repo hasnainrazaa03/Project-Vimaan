@@ -98,6 +98,11 @@ _IMPORT_MS["total"] = round((time.perf_counter() - _IMPORT_T0) * 1000, 1)
 # ---------------------------------------------------------------------------
 MAX_RECORD_SEC = 12.0  # recording is cut off after this even if still held
 MIN_RECORD_SEC = 0.3  # shorter than this is an accidental tap, not a command
+# Keep recording this long after the key is released: PortAudio hands audio
+# over ~20-200 ms late, and pilots let go as they finish the last word. Without
+# it, the first in-sim run heard "gear" / "parking brake" / "engine" with the
+# final "up" / "on" / "off" cut off.
+RELEASE_TAIL_SEC = 0.3
 # Inside X-Plane, background Python threads only run when the main thread
 # lets go of the GIL (measured in-sim: an audio-callback thread got ~0.3% of
 # its time). While an STT worker is running, each flight loop sleeps this long
@@ -238,7 +243,7 @@ class PythonInterface:
 
     # Seconds a risky command stays "armed" waiting for the pilot to repeat it
     # as confirmation (Phase 6B safety interlocks).
-    CONFIRM_WINDOW_SEC = 8.0
+    CONFIRM_WINDOW_SEC = 12.0
 
     # Canned (utterance, expected intent) pairs for the Ctrl-Z self-test
     # (Phase 6C): one per actionable intent family, run through text -> NLU
@@ -492,10 +497,20 @@ class PythonInterface:
         self.tel.event("ptt_press", cmd=cmd, source=source)
 
     def OnReleaseCallback(self, inRefcon, source="hotkey"):
+        rec = self._recording
+        if rec is None or "released_at" in rec:
+            return
+        rec["released_at"] = time.perf_counter()
+        rec["released_by"] = source
+        if RELEASE_TAIL_SEC <= 0:
+            self._finish_recording()
+        # Otherwise the flight loop finishes it once the tail has been captured.
+
+    def _finish_recording(self):
         rec, self._recording = self._recording, None
         if rec is None:
             return
-        cmd, t_press = rec["cmd"], rec["t_press"]
+        cmd, t_press, source = rec["cmd"], rec["t_press"], rec.get("released_by")
         raw = self.recorder.stop()
         audio_sec = self.recorder.seconds(raw)
         self.tel.event(
@@ -580,10 +595,15 @@ class PythonInterface:
         except Exception as exc:  # never let the flight loop die
             self.tel.error("flight_loop_error", exc)
         try:
-            if self._recording is not None:
+            rec = self._recording
+            if rec is not None:
                 self.recorder.poll()
-                # A missed key-up must not leave the mic open forever.
-                if self.recorder.elapsed() > MAX_RECORD_SEC + 0.5:
+                released = rec.get("released_at")
+                if released is not None:
+                    if time.perf_counter() - released >= RELEASE_TAIL_SEC:
+                        self._finish_recording()
+                elif self.recorder.elapsed() > MAX_RECORD_SEC + 0.5:
+                    # A missed key-up must not leave the mic open forever.
                     self.OnReleaseCallback(None, source="auto_stop")
             self._service_cranks()
             self._service_verifications()
@@ -681,12 +701,13 @@ class PythonInterface:
                 )
                 self._say(f"{verdict.message}. Repeat to confirm.")
                 return
-            # Any other command cancels a pending confirmation.
-            self._confirm_gate.clear()
-
             with self.tel.stage("dispatch", cmd=cmd, intent=intent_pred) as res:
                 outcome = handler(slots, intent_pred) or "executed"
                 res["outcome"] = outcome
+            # A different command that actually ran cancels a pending
+            # confirmation; a misheard or incomplete one ("engine") must not.
+            if outcome == "executed":
+                self._confirm_gate.clear()
         except Exception as exc:
             self.tel.error("execute_error", exc, cmd=cmd, text=text)
             self._say("Command execution failed")

@@ -74,7 +74,7 @@ def test_no_python_audio_callback():
     rec = PushToTalkRecorder(sd=sd)
     rec.start()
     assert sd.streams[-1].callback is None
-    assert sd.streams[-1].latency >= 0.5  # ring buffer survives long frames
+    assert sd.streams[-1].latency >= 0.2  # survives 0.25 s between polls
     rec.stop()
 
 
