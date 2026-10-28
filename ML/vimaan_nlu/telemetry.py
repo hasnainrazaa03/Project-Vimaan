@@ -53,7 +53,7 @@ STAGE_BUDGET_MS: dict[str, float] = {
     "model_load": 30_000.0,
     "self_test": 5_000.0,
 }
-# End-to-end budget from end of speech to the sim being changed.
+# Budget from end of speech (key release) to the sim being changed.
 COMMAND_BUDGET_MS = 4_000.0
 # Main-thread time we may spend per flight-loop callback before it shows as
 # a frame hitch (one frame at 60 fps is ~16 ms).
@@ -268,7 +268,9 @@ class Telemetry:
         """Close out one command. ``started_at`` is a ``clock()`` reading."""
         self.counters["commands"] += 1
         total = (self._clock() - started_at) * 1000
-        slow = total > COMMAND_BUDGET_MS
+        # Judge speed from end of speech when known: total_ms includes however
+        # long the pilot held the push-to-talk key.
+        slow = fields.get("speech_to_action_ms", total) > COMMAND_BUDGET_MS
         self.event(
             "command_done",
             logging.WARNING if slow or outcome not in ("executed", "no_op") else logging.INFO,

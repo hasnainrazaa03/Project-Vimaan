@@ -139,3 +139,10 @@ def test_mirror_receives_log_lines(tmp_path):
 def test_command_ids_are_sequential(tel):
     assert tel.new_command_id() == "c0001"
     assert tel.new_command_id() == "c0002"
+
+
+def test_command_done_ignores_key_hold_time(tel):
+    start = tel.fake_clock.now
+    tel.fake_clock.now += 6.0  # pilot held the key for ~5 s
+    tel.command_done("c0005", "executed", start, speech_to_action_ms=900.0)
+    assert "slow" not in read_events(tel)[-1]
