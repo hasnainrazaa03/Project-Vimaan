@@ -5,10 +5,16 @@ wheel, must be compiled against XPPython3's bundled Python). ``sounddevice``
 wheels ship PortAudio, so a plain ``pip install sounddevice`` is enough.
 
 Recording runs from :meth:`start` (button down) to :meth:`stop` (button up):
-the pilot decides where the phrase ends, so no voice-activity guessing. Audio
-arrives on PortAudio's thread via a callback; ``start``/``stop`` are cheap and
-safe to call from X-Plane's main thread. Output is 16-bit mono PCM, the format
-``speech_recognition.AudioData`` and the STT backends expect.
+the pilot decides where the phrase ends, so no voice-activity guessing.
+Output is 16-bit mono PCM, the format ``speech_recognition.AudioData`` and the
+STT backends expect.
+
+Why no audio callback: inside X-Plane, background Python threads barely get
+the GIL (measured in-sim: a 9 s press captured 0.03 s through a Python
+callback, with no overflow reported). So the stream runs in PortAudio's
+*blocking* mode — PortAudio's own C thread fills a ring buffer, which needs no
+GIL — and the owner calls :meth:`poll` from the thread that does hold the GIL
+(the plugin's flight loop, every frame while recording) to drain it.
 
 ``sd`` is injectable so this is testable without audio hardware.
 """
@@ -21,6 +27,9 @@ from typing import Any
 
 DEFAULT_SAMPLE_RATE = 16_000  # what every STT backend we support wants
 SAMPLE_WIDTH = 2  # int16
+# PortAudio sizes its blocking-mode ring buffer from the suggested latency.
+# Generous, so a long sim frame (scenery load) between polls loses nothing.
+RING_BUFFER_SEC = 1.0
 
 
 class PushToTalkRecorder:
@@ -63,16 +72,6 @@ class PushToTalkRecorder:
         return 0.0 if self._started_at is None else time.perf_counter() - self._started_at
 
     # ------------------------------------------------------------------
-    def _callback(self, indata, frames, time_info, status) -> None:
-        if status:
-            self.overflows += 1
-        with self._lock:
-            if self._frames >= self.max_sec * self.sample_rate:
-                self.truncated = True
-                return
-            self._chunks.append(bytes(indata))
-            self._frames += frames
-
     def start(self) -> None:
         if self._stream is not None:
             return
@@ -85,20 +84,50 @@ class PushToTalkRecorder:
             channels=1,
             dtype="int16",
             device=self.device,
-            callback=self._callback,
+            latency=RING_BUFFER_SEC,
         )
         stream.start()
         self._stream = stream
         self._started_at = time.perf_counter()
 
+    def poll(self) -> int:
+        """Move whatever PortAudio has buffered into memory; returns frames read.
+
+        Call often while recording (every frame from the flight loop). Never
+        blocks: it only reads what is already available.
+        """
+        stream = self._stream
+        if stream is None:
+            return 0
+        available = stream.read_available
+        if available <= 0:
+            return 0
+        data, overflowed = stream.read(available)
+        if overflowed:
+            self.overflows += 1
+        with self._lock:
+            room = int(self.max_sec * self.sample_rate) - self._frames
+            if room <= 0:
+                self.truncated = True
+                return available
+            if available > room:
+                self.truncated = True
+            take = min(available, room)
+            self._chunks.append(bytes(data)[: take * SAMPLE_WIDTH])
+            self._frames += take
+        return available
+
     def stop(self) -> bytes:
-        """Stop recording and return the captured 16-bit mono PCM."""
-        stream, self._stream = self._stream, None
-        if stream is not None:
-            try:
-                stream.stop()
-            finally:
-                stream.close()
+        """Drain, stop recording and return the captured 16-bit mono PCM."""
+        try:
+            self.poll()
+        finally:
+            stream, self._stream = self._stream, None
+            if stream is not None:
+                try:
+                    stream.stop()
+                finally:
+                    stream.close()
         with self._lock:
             raw = b"".join(self._chunks)
             self._chunks, self._frames = [], 0

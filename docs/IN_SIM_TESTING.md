@@ -31,7 +31,7 @@ into **that** Python, not the project venv.
 In X-Plane: **Plugins → XPPython3 → Pip Package Installer**, then install:
 
 ```
-torch transformers tokenizers safetensors numpy SpeechRecognition sounddevice word2number num2words
+torch transformers tokenizers safetensors numpy SpeechRecognition sounddevice soundfile word2number
 ```
 
 or, equivalently, from a terminal with XPPython3's own interpreter:
@@ -39,7 +39,7 @@ or, equivalently, from a terminal with XPPython3's own interpreter:
 ```bash
 PY="<X-Plane 12>/Resources/plugins/XPPython3/mac_x64/python3.12/bin/python3.12"
 "$PY" -m pip install torch transformers tokenizers safetensors numpy \
-    SpeechRecognition sounddevice word2number num2words
+    SpeechRecognition sounddevice soundfile word2number
 ```
 
 > **Apple Silicon gotcha (XPPython3 4.7.x):** the standalone
@@ -52,7 +52,7 @@ PY="<X-Plane 12>/Resources/plugins/XPPython3/mac_x64/python3.12/bin/python3.12"
 > ```bash
 > SP="<X-Plane 12>/Resources/plugins/XPPython3/mac_x64/python3.12/lib/python3.12/site-packages"
 > python3.12 -m pip install --target /tmp/xpp3_site torch "transformers>=5.9,<6" \
->     "tokenizers>=0.21,<0.23" safetensors numpy SpeechRecognition sounddevice word2number==1.1
+>     "tokenizers>=0.21,<0.23" safetensors numpy SpeechRecognition sounddevice soundfile word2number==1.1
 > rsync -a /tmp/xpp3_site/ "$SP/"      # do NOT exclude nested bin/ — torch/bin is required
 > ```
 >
@@ -107,9 +107,18 @@ plugin holds the starter until the engine runs (up to 20 s) and says
 "Engine 1 running", or "did not start" with mixture/ignition/battery values in
 the log.
 
+**Threads inside X-Plane:** background Python threads barely get the GIL
+inside the sim (first in-sim run: a 9 s press captured 0.03 s of audio through
+a Python audio callback). So PortAudio buffers audio in C and the flight loop
+drains it every frame, and while Google STT runs the flight loop sleeps ~4 ms
+per frame to let the STT thread work (measured under a simulated starved GIL:
+release-to-action 0.68 s with the hand-off, never without it). Google STT also
+encodes FLAC in-process with `soundfile`; SpeechRecognition's bundled
+`flac-mac` is x86_64-only and fails without Rosetta.
+
 **Talking:** push-to-talk is *hold*-to-talk — recording runs while Z (or the
 bound button) is held and stops on release (12 s cap; taps under 0.3 s are
-ignored). The copilot stays quiet while you talk so its voice isn't recorded.
+ignored). Start speaking a beat after pressing — the mic takes ~0.2 s to open. The copilot stays quiet while you talk so its voice isn't recorded.
 
 **Push-to-talk on a yoke button:** Settings → Joystick → search `vimaan` →
 bind **Vimaan: push to talk** (and optionally **Vimaan: run self test**).

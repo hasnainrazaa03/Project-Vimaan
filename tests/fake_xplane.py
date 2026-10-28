@@ -195,7 +195,8 @@ def make_speech_recognition() -> types.ModuleType:
 
 
 def make_sounddevice() -> types.ModuleType:
-    """Fake ``sounddevice``: tests push PCM through ``sd.streams[-1].feed()``."""
+    """Fake ``sounddevice`` in blocking mode: tests push PCM with
+    ``sd.streams[-1].feed()``; the recorder drains it with ``read()``."""
     sd = types.ModuleType("sounddevice")
     sd.streams = []
     devices = [
@@ -204,9 +205,11 @@ def make_sounddevice() -> types.ModuleType:
     ]
 
     class RawInputStream:
-        def __init__(self, samplerate, channels, dtype, device, callback):
-            self.samplerate, self.callback = samplerate, callback
+        def __init__(self, samplerate, channels, dtype, device=None, latency=None, callback=None):
+            self.samplerate, self.latency, self.callback = samplerate, latency, callback
             self.active = self.closed = False
+            self.overflow_next = False
+            self._buf = bytearray()
             sd.streams.append(self)
 
         def start(self):
@@ -219,7 +222,17 @@ def make_sounddevice() -> types.ModuleType:
             self.closed = True
 
         def feed(self, raw: bytes) -> None:
-            self.callback(raw, len(raw) // 2, None, None)
+            self._buf.extend(raw)
+
+        @property
+        def read_available(self) -> int:
+            return len(self._buf) // 2
+
+        def read(self, frames):
+            data = bytes(self._buf[: frames * 2])
+            del self._buf[: frames * 2]
+            overflowed, self.overflow_next = self.overflow_next, False
+            return data, overflowed
 
     def query_devices(device=None, kind=None):
         return devices[0] if kind == "input" else devices

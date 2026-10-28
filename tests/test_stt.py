@@ -70,3 +70,39 @@ class TestTranscribe:
 
     def test_supported_backends_listed(self):
         assert set(SUPPORTED_BACKENDS) == {"google", "vosk", "whisper", "sphinx"}
+
+
+class _Audio:
+    def __init__(self, frame_data, sample_rate=16000, sample_width=2):
+        self.frame_data, self.sample_rate, self.sample_width = frame_data, sample_rate, sample_width
+
+
+def test_flac_encoded_in_process_round_trips():
+    sf = pytest.importorskip("soundfile")
+    import io
+    import struct
+
+    from vimaan_nlu.stt import flac_bytes
+
+    pcm = struct.pack("<4h", 0, 1000, -1000, 32767) * 400
+    data = flac_bytes(pcm, 16000)
+    assert data[:4] == b"fLaC"
+    back, rate = sf.read(io.BytesIO(data), dtype="int16")
+    assert rate == 16000 and back.tobytes() == pcm
+
+
+def test_google_uses_in_process_flac_not_bundled_binary():
+    # SpeechRecognition's bundled flac-mac is x86_64-only ("Bad CPU type" on
+    # Apple Silicon without Rosetta); the Google path must not shell out.
+    pytest.importorskip("soundfile")
+    from vimaan_nlu.stt import use_inprocess_flac
+
+    audio = _Audio(b"\x00\x00" * 1600)
+    assert use_inprocess_flac(audio) is True
+    assert audio.get_flac_data(convert_rate=None, convert_width=2)[:4] == b"fLaC"
+
+
+def test_in_process_flac_skipped_for_non_16bit_audio():
+    from vimaan_nlu.stt import use_inprocess_flac
+
+    assert use_inprocess_flac(_Audio(b"\x00" * 100, sample_width=1)) is False

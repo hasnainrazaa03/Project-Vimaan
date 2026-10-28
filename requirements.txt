@@ -34,6 +34,9 @@ onnxruntime>=1.18,<2
 # sounddevice, whose wheels bundle PortAudio (no PyAudio / compiler needed).
 SpeechRecognition>=3.10,<4
 sounddevice>=0.4
+# In-process FLAC for Google STT: SpeechRecognition's bundled flac-mac binary
+# is x86_64-only and fails on Apple Silicon without Rosetta.
+soundfile>=0.12
 
 # NOTE:
 # - XPPython3 is provided by the X-Plane installation and MUST NOT be pip-installed.

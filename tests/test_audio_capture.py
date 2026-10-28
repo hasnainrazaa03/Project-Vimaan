@@ -60,9 +60,37 @@ def test_overflow_status_counted():
     sd = make_sounddevice()
     rec = PushToTalkRecorder(sd=sd)
     rec.start()
-    rec._callback(b"\x00\x00", 1, None, "input overflow")
+    sd.streams[-1].feed(ONE_SEC)
+    sd.streams[-1].overflow_next = True
+    rec.poll()
     assert rec.overflows == 1
     rec.stop()
+
+
+def test_no_python_audio_callback():
+    # Inside X-Plane a Python callback thread is starved of the GIL (a 9 s
+    # press captured 0.03 s). PortAudio must buffer in C, drained by poll().
+    sd = make_sounddevice()
+    rec = PushToTalkRecorder(sd=sd)
+    rec.start()
+    assert sd.streams[-1].callback is None
+    assert sd.streams[-1].latency >= 0.5  # ring buffer survives long frames
+    rec.stop()
+
+
+def test_poll_drains_incrementally():
+    sd = make_sounddevice()
+    rec = PushToTalkRecorder(sd=sd)
+    rec.start()
+    sd.streams[-1].feed(ONE_SEC[:3200])
+    assert rec.poll() == 1600
+    assert rec.poll() == 0  # nothing new: never blocks
+    sd.streams[-1].feed(ONE_SEC[:3200])
+    assert rec.seconds(rec.stop()) == 0.2
+
+
+def test_poll_when_not_recording_is_noop():
+    assert PushToTalkRecorder(sd=make_sounddevice()).poll() == 0
 
 
 def test_describe_lists_only_input_devices():

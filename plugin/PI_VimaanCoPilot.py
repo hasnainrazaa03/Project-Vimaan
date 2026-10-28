@@ -7,9 +7,11 @@ model. Hold the ``Z`` key (or a yoke/joystick button bound to the
 Threading model
 ---------------
 All XPPython3 (`xp.*`) calls must run on the simulator's main thread.
-Audio is captured by PortAudio's own thread (``sounddevice``) between button
-down and up; STT is blocking network/CPU work, so it runs on a worker thread
-that posts results back through a thread-safe queue. A flight-loop callback drains
+PortAudio buffers audio in C between button down and up, and the flight loop
+drains it every frame (Python threads are starved of the GIL inside X-Plane,
+so no Python audio callback is used). STT is blocking network/CPU work, so it
+runs on a worker thread — given GIL time by the flight loop — that posts
+results back through a thread-safe queue. A flight-loop callback drains
 the queue on the main thread and dispatches xp.* calls from there. The same
 flight loop drives deferred work (engine cranking, post-write verification).
 
@@ -96,6 +98,11 @@ _IMPORT_MS["total"] = round((time.perf_counter() - _IMPORT_T0) * 1000, 1)
 # ---------------------------------------------------------------------------
 MAX_RECORD_SEC = 12.0  # recording is cut off after this even if still held
 MIN_RECORD_SEC = 0.3  # shorter than this is an accidental tap, not a command
+# Inside X-Plane, background Python threads only run when the main thread
+# lets go of the GIL (measured in-sim: an audio-callback thread got ~0.3% of
+# its time). While an STT worker is running, each flight loop sleeps this long
+# so the worker can make progress; the cost is paid only while transcribing.
+STT_GIL_YIELD_SEC = 0.004
 QUEUE_POLL_INTERVAL_SEC = 0.2
 
 # Engine start: hold the starter until the engine reports running, up to this.
@@ -573,19 +580,28 @@ class PythonInterface:
         except Exception as exc:  # never let the flight loop die
             self.tel.error("flight_loop_error", exc)
         try:
-            # A missed key-up must not leave the mic open forever.
-            if self._recording is not None and self.recorder.elapsed() > MAX_RECORD_SEC + 0.5:
-                self.OnReleaseCallback(None, source="auto_stop")
+            if self._recording is not None:
+                self.recorder.poll()
+                # A missed key-up must not leave the mic open forever.
+                if self.recorder.elapsed() > MAX_RECORD_SEC + 0.5:
+                    self.OnReleaseCallback(None, source="auto_stop")
             self._service_cranks()
             self._service_verifications()
         except Exception as exc:
             self.tel.error("flight_loop_error", exc)
+        busy_ms = (time.perf_counter() - t0) * 1000
+        with self._worker_lock:
+            transcribing = self._transcribing
+        if transcribing:
+            time.sleep(STT_GIL_YIELD_SEC)  # deliberate; not counted as our busy time
         self.tel.tick(
-            busy_ms=(time.perf_counter() - t0) * 1000,
+            busy_ms=busy_ms,
             queue_depth=self._result_queue.qsize(),
             pending_verifications=len(self._verifications),
             paused=self._read_int(DREF_PAUSED),
         )
+        if self._recording is not None or transcribing:
+            return -1.0  # every frame: drain the mic / give the STT worker GIL time
         return QUEUE_POLL_INTERVAL_SEC
 
     # ------------------------------------------------------------------

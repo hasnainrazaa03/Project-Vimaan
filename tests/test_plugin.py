@@ -439,6 +439,27 @@ def test_key_repeat_does_not_restart_recording(sim):
     plugin.OnReleaseCallback(None)
 
 
+def test_flight_loop_drains_mic_every_frame_while_recording(sim):
+    module, plugin, _ = sim
+    sd = sys.modules["sounddevice"]
+    assert plugin._flight_loop() == module.QUEUE_POLL_INTERVAL_SEC
+    plugin.OnPressCallback(None)
+    sd.streams[-1].feed(LOUD)
+    assert plugin._flight_loop() == -1.0  # every frame while the key is held
+    assert sd.streams[-1].read_available == 0  # drained on the main thread
+    plugin.OnReleaseCallback(None)
+
+
+def test_flight_loop_yields_to_stt_worker(sim, monkeypatch):
+    module, plugin, _ = sim
+    slept = []
+    monkeypatch.setattr(module.time, "sleep", slept.append)
+    plugin._transcribing = True
+    assert plugin._flight_loop() == -1.0
+    assert slept == [module.STT_GIL_YIELD_SEC]
+    plugin._transcribing = False
+
+
 def test_missed_key_up_auto_stops(sim, monkeypatch):
     module, plugin, _ = sim
     monkeypatch.setattr(module, "MAX_RECORD_SEC", -1.0)
