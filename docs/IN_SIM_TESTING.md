@@ -42,6 +42,24 @@ PY="<X-Plane 12>/Resources/plugins/XPPython3/mac_x64/python3.12/bin/python3.12"
     SpeechRecognition sounddevice word2number num2words
 ```
 
+> **Apple Silicon gotcha (XPPython3 4.7.x):** the standalone
+> `python3.12` executable XPPython3 ships is **not code-signed for arm64**, so
+> macOS kills it on launch (exit 137) and the command above fails. XPPython3
+> itself is fine — inside X-Plane it runs Python from the signed
+> `libpython3.12.dylib`. Install with any other arm64 Python 3.12 instead
+> (e.g. `uv python install 3.12`), targeting XPPython3's `site-packages`:
+>
+> ```bash
+> SP="<X-Plane 12>/Resources/plugins/XPPython3/mac_x64/python3.12/lib/python3.12/site-packages"
+> python3.12 -m pip install --target /tmp/xpp3_site torch "transformers>=5.9,<6" \
+>     "tokenizers>=0.21,<0.23" safetensors numpy SpeechRecognition sounddevice word2number==1.1
+> rsync -a /tmp/xpp3_site/ "$SP/"      # do NOT exclude nested bin/ — torch/bin is required
+> ```
+>
+> The bundled `charset_normalizer` 3.3.2 is also x86_64-only (breaks
+> `import requests` on arm64); replace it with
+> `python3.12 -m pip install --no-deps --target ... "charset_normalizer>=2,<4"`.
+
 No PyAudio, Homebrew or compiler is needed: microphone capture uses
 `sounddevice`, whose wheel bundles PortAudio.
 
