@@ -165,30 +165,66 @@ def make_xp() -> types.ModuleType:
 def make_speech_recognition() -> types.ModuleType:
     sr = types.ModuleType("speech_recognition")
 
-    class WaitTimeoutError(Exception):
-        pass
-
     class UnknownValueError(Exception):
         pass
 
     class RequestError(Exception):
         pass
 
-    class Microphone:
-        SAMPLE_RATE = 16000
-        device_index = None
-
-        @staticmethod
-        def list_microphone_names():
-            return ["Fake Mic"]
+    class AudioData:
+        def __init__(self, frame_data, sample_rate, sample_width):
+            self.frame_data = frame_data
+            self.sample_rate = sample_rate
+            self.sample_width = sample_width
 
     class Recognizer:
-        energy_threshold = 300.0
+        # Tests set this to the transcript (or an exception instance to raise).
+        next_result: Any = "set heading two seven zero"
 
-    sr.WaitTimeoutError = WaitTimeoutError
+        def recognize_google(self, audio, language="en-US"):
+            if isinstance(self.next_result, Exception):
+                raise self.next_result
+            return self.next_result
+
     sr.UnknownValueError = UnknownValueError
     sr.RequestError = RequestError
-    sr.Microphone = Microphone
+    sr.AudioData = AudioData
     sr.Recognizer = Recognizer
     sr.__version__ = "fake"
     return sr
+
+
+def make_sounddevice() -> types.ModuleType:
+    """Fake ``sounddevice``: tests push PCM through ``sd.streams[-1].feed()``."""
+    sd = types.ModuleType("sounddevice")
+    sd.streams = []
+    devices = [
+        {"name": "Fake Mic", "max_input_channels": 1},
+        {"name": "Fake Speakers", "max_input_channels": 0},
+    ]
+
+    class RawInputStream:
+        def __init__(self, samplerate, channels, dtype, device, callback):
+            self.samplerate, self.callback = samplerate, callback
+            self.active = self.closed = False
+            sd.streams.append(self)
+
+        def start(self):
+            self.active = True
+
+        def stop(self):
+            self.active = False
+
+        def close(self):
+            self.closed = True
+
+        def feed(self, raw: bytes) -> None:
+            self.callback(raw, len(raw) // 2, None, None)
+
+    def query_devices(device=None, kind=None):
+        return devices[0] if kind == "input" else devices
+
+    sd.RawInputStream = RawInputStream
+    sd.query_devices = query_devices
+    sd.__version__ = "fake"
+    return sd

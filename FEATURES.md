@@ -5,7 +5,8 @@ A snapshot of what Project Vimaan currently does. For what's *planned*, see [doc
 ## Current
 
 ### Voice → action
-- Push-to-talk capture (`Z` hotkey) inside X-Plane, with speech capture and
+- Hold-to-talk capture (`Z` hotkey, or any yoke/joystick button bound to the
+  `vimaan/push_to_talk` command) inside X-Plane, with speech capture and
   transcription run **off the simulator's main thread** so the sim never blocks.
 - **Selectable speech backend** via `VIMAAN_STT_BACKEND`: `google` (online, default),
   or `vosk` / `whisper` / `sphinx` for fully **offline** operation — see
@@ -91,7 +92,7 @@ A snapshot of what Project Vimaan currently does. For what's *planned*, see [doc
 - Binds to `127.0.0.1` by design — single-user, no auth.
 
 ### Project hygiene
-- **347 automated tests** (25 modules) running in under 10 s with no simulator,
+- **361 automated tests** (26 modules) running in under 10 s with no simulator,
   microphone, GPU, or network required.
 - GitHub Actions CI on Python 3.11 + 3.12: ruff lint + format, **mypy**, compileall, and
   pytest with coverage. Conventional Commits enforced by commitlint.

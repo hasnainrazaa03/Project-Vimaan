@@ -47,7 +47,6 @@ from typing import Any, TextIO
 
 # Per-stage latency budgets (ms). Exceeding one logs a WARNING tagged slow.
 STAGE_BUDGET_MS: dict[str, float] = {
-    "capture": 15_000.0,  # includes waiting for the pilot to start talking
     "stt": 3_000.0,
     "nlu": 150.0,
     "dispatch": 30.0,

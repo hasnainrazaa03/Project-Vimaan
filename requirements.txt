@@ -30,11 +30,11 @@ onnx>=1.16,<2
 onnxruntime>=1.18,<2
 
 # ---- Speech I/O (active plugin) ----
+# SpeechRecognition provides the STT backends; microphone capture is
+# sounddevice, whose wheels bundle PortAudio (no PyAudio / compiler needed).
 SpeechRecognition>=3.10,<4
 sounddevice>=0.4
 
 # NOTE:
 # - XPPython3 is provided by the X-Plane installation and MUST NOT be pip-installed.
-# - PyAudio is required by SpeechRecognition's Microphone() backend; install via
-#   the OS package manager (e.g. `brew install portaudio && pip install pyaudio`).
 # - Legacy plugins (plugin/legacy/) need extra heavy deps; see requirements-legacy.txt.

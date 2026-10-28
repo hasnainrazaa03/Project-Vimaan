@@ -34,7 +34,7 @@
 
 **Project Vimaan** is an experimental AI-driven First Officer for the [X-Plane](https://www.x-plane.com/) flight simulator. The pilot issues a natural-language voice command (e.g. *"climb to flight level two five zero"*), and the system:
 
-1. Captures audio via push-to-talk (`Z` key).
+1. Captures audio while you hold push-to-talk (`Z` key, or a yoke button bound to `vimaan/push_to_talk`).
 2. Transcribes it to text using a speech recognizer.
 3. Parses the text with a custom **joint intent + slot** NLU model (DistilBERT-based).
 4. Maps the structured prediction to an X-Plane command/dataref via [XPPython3](https://xppython3.readthedocs.io/).
@@ -152,7 +152,7 @@ See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for the full map.
 
 **Tooling**
 - `tqdm`, `scikit-learn`, `matplotlib`
-- `pytest` (347 tests), `ruff`, `mypy`, `pre-commit`, `detect-secrets`, GitHub Actions CI
+- `pytest` (361 tests), `ruff`, `mypy`, `pre-commit`, `detect-secrets`, GitHub Actions CI
 
 ---
 
@@ -218,7 +218,7 @@ dispatched at all.
 - For the plugin:
   - X-Plane 12
   - [XPPython3](https://xppython3.readthedocs.io/) installed in `X-Plane/Resources/plugins/`
-  - PyAudio + a working microphone
+  - A working microphone (captured via `sounddevice`, which bundles PortAudio)
 
 ---
 

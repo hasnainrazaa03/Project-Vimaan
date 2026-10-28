@@ -8,12 +8,14 @@ values, and what the pilot hears.
 import importlib.util
 import json
 import os
+import struct
 import sys
+import threading
 import time
 import types
 
 import pytest
-from fake_xplane import make_speech_recognition, make_xp
+from fake_xplane import make_sounddevice, make_speech_recognition, make_xp
 
 PLUGIN_PATH = os.path.join(os.path.dirname(__file__), "..", "plugin", "PI_VimaanCoPilot.py")
 
@@ -47,7 +49,7 @@ class _FakeLoader:
         }
 
 
-def _load_plugin(monkeypatch, tmp_path, with_torch=True):
+def _load_plugin(monkeypatch, tmp_path, with_torch=True, with_sounddevice=True):
     monkeypatch.setenv("HOME", str(tmp_path))
     xp = make_xp()
     pkg = types.ModuleType("XPPython3")
@@ -55,6 +57,9 @@ def _load_plugin(monkeypatch, tmp_path, with_torch=True):
     monkeypatch.setitem(sys.modules, "XPPython3", pkg)
     monkeypatch.setitem(sys.modules, "XPPython3.xp", xp)
     monkeypatch.setitem(sys.modules, "speech_recognition", make_speech_recognition())
+    monkeypatch.setitem(
+        sys.modules, "sounddevice", make_sounddevice() if with_sounddevice else None
+    )
     if with_torch:
         fake_torch = types.ModuleType("torch")
         fake_torch.device = lambda name: name
@@ -112,6 +117,8 @@ def test_startup_registers_and_logs(sim):
     kinds = [e["kind"] for e in events(plugin)]
     for kind in ("session_start", "microphone_ready", "plugin_start"):
         assert kind in kinds
+    mic = events(plugin, "microphone_ready")[0]
+    assert mic["using"] == "Fake Mic" and mic["input_devices"] == ["Fake Mic"]
     assert any(e["stage"] == "model_load" for e in events(plugin, "stage"))
 
 
@@ -361,11 +368,98 @@ def test_self_test_checks_intent_and_slots(sim):
 def test_push_to_talk_command_binding(sim, monkeypatch):
     module, plugin, xp = sim
     calls = []
-    monkeypatch.setattr(plugin, "OnPressCallback", lambda ref, source: calls.append(source))
+    monkeypatch.setattr(plugin, "OnPressCallback", lambda ref, source: calls.append("down"))
+    monkeypatch.setattr(plugin, "OnReleaseCallback", lambda ref, source: calls.append("up"))
     handler = xp.custom_commands["vimaan/push_to_talk"]
     assert handler("vimaan/push_to_talk", xp.CommandBegin, None) == 1
+    handler("vimaan/push_to_talk", xp.CommandContinue, None)
     handler("vimaan/push_to_talk", xp.CommandEnd, None)
-    assert calls == ["command"]
+    assert calls == ["down", "up"]
+
+
+# ---------------------------------------------------------------------------
+# Hold-to-talk: press -> record -> release -> STT worker -> flight loop
+# ---------------------------------------------------------------------------
+LOUD = struct.pack("<2h", 8000, -8000) * 8000  # 1 s of 16 kHz, rms 8000
+SILENT = b"\x00\x00" * 16000
+
+
+def _talk(plugin, audio, transcript="set heading two seven zero"):
+    plugin.recognizer.next_result = transcript
+    sd = sys.modules["sounddevice"]
+    plugin.OnPressCallback(None)
+    sd.streams[-1].feed(audio)
+    plugin.OnReleaseCallback(None)
+    for t in threading.enumerate():
+        if t.name.startswith("stt-"):
+            t.join(timeout=5)
+    plugin._flight_loop()
+
+
+def test_hold_to_talk_end_to_end(sim):
+    _, plugin, xp = sim
+    NLU["set heading two seven zero"] = ("set_autopilot_heading", {"degrees": "270"}, 0.99)
+    _talk(plugin, LOUD)
+    assert xp.datarefs["sim/cockpit2/autopilot/heading_dial_deg_mag_pilot"] == 270.0
+    assert sys.modules["sounddevice"].streams[-1].closed  # mic released
+    stt = [e for e in events(plugin, "stage") if e["stage"] == "stt"][-1]
+    assert stt["text"] == "set heading two seven zero"
+    capture = [e for e in events(plugin, "stage") if e["stage"] == "capture"][-1]
+    assert capture["audio_sec"] == 1.0
+    assert events(plugin, "command_done")[-1]["outcome"] == "executed"
+
+
+def test_silent_mic_reported(sim):
+    _, plugin, xp = sim
+    _talk(plugin, SILENT)
+    assert xp.spoken[-1] == "Microphone appears silent"
+    assert events(plugin, "command_done")[-1]["outcome"] == "silent_mic"
+
+
+def test_accidental_tap_ignored(sim):
+    _, plugin, xp = sim
+    _talk(plugin, LOUD[:3200])  # 0.1 s
+    assert events(plugin, "command_done")[-1]["outcome"] == "too_short"
+    assert xp.writes == []
+
+
+def test_unrecognised_speech(sim):
+    _, plugin, xp = sim
+    _talk(plugin, LOUD, transcript=sys.modules["speech_recognition"].UnknownValueError())
+    assert xp.spoken[-1] == "I could not understand you"
+    assert events(plugin, "stage_ended")[-1]["stage"] == "stt"
+
+
+def test_key_repeat_does_not_restart_recording(sim):
+    _, plugin, _ = sim
+    sd = sys.modules["sounddevice"]
+    plugin.OnPressCallback(None)
+    plugin.OnPressCallback(None)
+    assert len(sd.streams) == 1
+    plugin.OnReleaseCallback(None)
+
+
+def test_missed_key_up_auto_stops(sim, monkeypatch):
+    module, plugin, _ = sim
+    monkeypatch.setattr(module, "MAX_RECORD_SEC", -1.0)
+    plugin.OnPressCallback(None)
+    sys.modules["sounddevice"].streams[-1].feed(LOUD)
+    plugin._flight_loop()
+    assert plugin._recording is None
+    capture = [e for e in events(plugin, "stage") if e["stage"] == "capture"][-1]
+    assert capture["released_by"] == "auto_stop"
+
+
+def test_missing_sounddevice_degrades_to_no_microphone(monkeypatch, tmp_path):
+    NLU.clear()
+    _, plugin, xp = _load_plugin(monkeypatch, tmp_path, with_sounddevice=False)
+    try:
+        assert plugin.ready and plugin.recorder is None
+        assert events(plugin, "microphone_unavailable")
+        plugin.OnPressCallback(None)
+        assert xp.spoken[-1] == "Microphone not available"
+    finally:
+        plugin.XPluginStop()
 
 
 # ---------------------------------------------------------------------------

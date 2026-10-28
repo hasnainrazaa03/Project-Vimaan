@@ -31,20 +31,24 @@ into **that** Python, not the project venv.
 In X-Plane: **Plugins → XPPython3 → Pip Package Installer**, then install:
 
 ```
-torch transformers tokenizers safetensors numpy SpeechRecognition word2number num2words
+torch transformers tokenizers safetensors numpy SpeechRecognition sounddevice word2number num2words
 ```
 
-Microphone capture also needs **PyAudio**, which needs PortAudio:
+or, equivalently, from a terminal with XPPython3's own interpreter:
 
 ```bash
-brew install portaudio
+PY="<X-Plane 12>/Resources/plugins/XPPython3/mac_x64/python3.12/bin/python3.12"
+"$PY" -m pip install torch transformers tokenizers safetensors numpy \
+    SpeechRecognition sounddevice word2number num2words
 ```
 
-then install `pyaudio` through the same Pip Package Installer.
+No PyAudio, Homebrew or compiler is needed: microphone capture uses
+`sounddevice`, whose wheel bundles PortAudio.
 
 If anything is missing, the plugin still loads, says *"Vimaan could not load
 its Python packages"*, and logs a `dependency_missing` event naming exactly
-which import failed.
+which import failed. A missing `sounddevice` only disables the microphone
+(`microphone_unavailable`); the self-test still works.
 
 ## 3. Install the plugin
 
@@ -68,7 +72,7 @@ gear, flaps, autopilot and flight director, so every command can be exercised.
 | --- | --- | --- | --- |
 | 1 | Load the Baron on a runway, engines running | "Vimaan AI CoPilot ready" | `model_load` / `dependency_missing` in the log |
 | 2 | **Ctrl-Z** (self-test, no mic) | "Self test complete. 10 of 10 passed." | `self_test_probe` events with `ok: false` |
-| 3 | Press **Z**, say "set heading two seven zero" | "Listening" … "Heading two seven zero"; HDG bug moves | see the command trace (§5) |
+| 3 | **Hold Z**, say "set heading two seven zero", release | "Heading two seven zero"; HDG bug moves | see the command trace (§5) |
 | 4 | "set altitude seven thousand five hundred" | "Altitude 7500 feet" | |
 | 5 | "tune com one to one one eight decimal seven five" | "COM 1 set to …"; COM1 shows 118.750 | |
 | 6 | "parking brake on" then "parking brake off" | each confirmed | |
@@ -84,6 +88,10 @@ On the ground with engines off you can also try "start engine one": the
 plugin holds the starter until the engine runs (up to 20 s) and says
 "Engine 1 running", or "did not start" with mixture/ignition/battery values in
 the log.
+
+**Talking:** push-to-talk is *hold*-to-talk — recording runs while Z (or the
+bound button) is held and stops on release (12 s cap; taps under 0.3 s are
+ignored). The copilot stays quiet while you talk so its voice isn't recorded.
 
 **Push-to-talk on a yoke button:** Settings → Joystick → search `vimaan` →
 bind **Vimaan: push to talk** (and optionally **Vimaan: run self test**).
@@ -121,7 +129,7 @@ X-Plane's own logs, for crashes outside Python: `<X-Plane 12>/Log.txt` and
 | Sim hitched / stalled | `sim_stall`, `main_thread_overrun` | >2 s between frames we saw; >20 ms spent in our callback |
 | Slow command | `stage` with `slow: true` | budgets: STT 3 s, NLU 150 ms, dispatch 30 ms, total 4 s |
 | Wrong action | `stage nlu` (transcript, normalized text, intent, slots, confidence) → `sim_write` / `sim_command` → `verify` | |
-| Mic dead/muted | `command_done outcome=silent_mic`, `rms` on the `capture` stage | |
+| Mic dead/muted | `command_done outcome=silent_mic`; `rms` on `audio_level` | `microphone_ready` shows which input device is used |
 | No mic permission | `microphone_unavailable`, or capture with `rms` ≈ 0 | System Settings → Privacy & Security → Microphone → enable X-Plane (and Steam, if launched from Steam) |
 | Memory | `peak_rss_mb` on `heartbeat` / `session_end` | expect ~1 GB for torch + model |
 

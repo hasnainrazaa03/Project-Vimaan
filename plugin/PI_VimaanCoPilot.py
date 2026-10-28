@@ -1,15 +1,15 @@
 """Vimaan AI Co-Pilot — X-Plane plugin entry point.
 
-Push-to-talk speech command for X-Plane via a joint intent/slot DistilBERT
-model. Push-to-talk is the ``Z`` key, or bind the ``vimaan/push_to_talk``
-command to a yoke/joystick button in X-Plane's keyboard/joystick settings.
+Hold-to-talk speech command for X-Plane via a joint intent/slot DistilBERT
+model. Hold the ``Z`` key (or a yoke/joystick button bound to the
+``vimaan/push_to_talk`` command), speak, release.
 
 Threading model
 ---------------
 All XPPython3 (`xp.*`) calls must run on the simulator's main thread.
-Speech capture and STT are blocking I/O and would freeze the sim if invoked
-synchronously from the key callback, so we run them on a worker thread and
-post results back through a thread-safe queue. A flight-loop callback drains
+Audio is captured by PortAudio's own thread (``sounddevice``) between button
+down and up; STT is blocking network/CPU work, so it runs on a worker thread
+that posts results back through a thread-safe queue. A flight-loop callback drains
 the queue on the main thread and dispatches xp.* calls from there. The same
 flight loop drives deferred work (engine cranking, post-write verification).
 
@@ -77,6 +77,7 @@ def _timed_import(name):
 torch = _timed_import("torch")
 sr = _timed_import("speech_recognition")
 
+from vimaan_nlu.audio_capture import PushToTalkRecorder  # noqa: E402
 from vimaan_nlu.audio_health import is_silent, rms_from_pcm16  # noqa: E402
 from vimaan_nlu.readback import spell_digits  # noqa: E402
 from vimaan_nlu.safety import (  # noqa: E402
@@ -93,8 +94,8 @@ _IMPORT_MS["total"] = round((time.perf_counter() - _IMPORT_T0) * 1000, 1)
 # ---------------------------------------------------------------------------
 # Listening parameters
 # ---------------------------------------------------------------------------
-LISTEN_TIMEOUT_SEC = 8  # max seconds to wait for speech to start
-PHRASE_TIME_LIMIT_SEC = 12  # max seconds of recorded speech per press
+MAX_RECORD_SEC = 12.0  # recording is cut off after this even if still held
+MIN_RECORD_SEC = 0.3  # shorter than this is an accidental tap, not a command
 QUEUE_POLL_INTERVAL_SEC = 0.2
 
 # Engine start: hold the starter until the engine reports running, up to this.
@@ -269,14 +270,16 @@ class PythonInterface:
         )
         self.ready = False
         self.loader: Any = None
-        self.microphone: Any = None
+        self.recorder: Any = None
         self.recognizer: Any = None
         self.device = None
-        self._is_listening = False
-        self._listen_lock = threading.Lock()
+        self._recording: dict[str, Any] | None = None  # the press being recorded
+        self._transcribing = False  # an STT worker is running
+        self._worker_lock = threading.Lock()
         self._result_queue: queue.Queue = queue.Queue()
         self._flight_loop_id = None
         self.hotkeyPress = None
+        self.hotkeyRelease = None
         self.hotkeySelfTest = None
         self._commands: list[tuple[Any, Any]] = []
         self._current_cmd: str | None = None
@@ -296,25 +299,18 @@ class PythonInterface:
             return
 
         self.recognizer = sr.Recognizer()
-        self.microphone = self._setup_microphone()
+        self.recorder = self._setup_microphone()
         self.device = torch.device("cpu")
         self._init_model()
 
     def _setup_microphone(self):
         try:
-            names = sr.Microphone.list_microphone_names()
-            mic = sr.Microphone()
-            self.tel.event(
-                "microphone_ready",
-                device_index=mic.device_index,
-                sample_rate=mic.SAMPLE_RATE,
-                devices=names,
-            )
-            return mic
-        except (AttributeError, OSError) as exc:
-            # AttributeError is SpeechRecognition's way of saying PyAudio is
-            # not installed.
-            self.tel.error("microphone_unavailable", exc, hint="pip install pyaudio")
+            recorder = PushToTalkRecorder(max_sec=MAX_RECORD_SEC)
+            self.tel.event("microphone_ready", **recorder.describe())
+            return recorder
+        except Exception as exc:
+            # ImportError: sounddevice missing; PortAudioError: no input device.
+            self.tel.error("microphone_unavailable", exc, hint="pip install sounddevice")
             return None
 
     def _init_model(self):
@@ -370,8 +366,12 @@ class PythonInterface:
     # XPPython3 plugin hooks
     # ------------------------------------------------------------------
     def XPluginStart(self):
+        # Hold Z to talk: key down starts recording, key up ends it.
         self.hotkeyPress = xp.registerHotKey(
             xp.VK_Z, xp.DownFlag, "Vimaan Push-to-Talk", self.OnPressCallback
+        )
+        self.hotkeyRelease = xp.registerHotKey(
+            xp.VK_Z, xp.UpFlag, "Vimaan Push-to-Talk release", self.OnReleaseCallback
         )
         # Ctrl-Z: STT-bypass self-test (Phase 6C).
         self.hotkeySelfTest = xp.registerHotKey(
@@ -401,8 +401,12 @@ class PythonInterface:
         for cmd_ref, handler in self._commands:
             xp.unregisterCommandHandler(cmd_ref, handler, 1, None)
         self._commands = []
-        if self.hotkeyPress:
-            xp.unregisterHotKey(self.hotkeyPress)
+        if self._recording is not None and self.recorder is not None:
+            self.recorder.stop()
+            self._recording = None
+        for hotkey in (self.hotkeyPress, self.hotkeyRelease):
+            if hotkey:
+                xp.unregisterHotKey(hotkey)
         if self.hotkeySelfTest:
             xp.unregisterHotKey(self.hotkeySelfTest)
         if self._flight_loop_id:
@@ -442,6 +446,8 @@ class PythonInterface:
     def _on_ptt_command(self, cmd_ref, phase, refcon):
         if phase == xp.CommandBegin:
             self.OnPressCallback(refcon, source="command")
+        elif phase == xp.CommandEnd:
+            self.OnReleaseCallback(refcon, source="command")
         return 1
 
     def _on_self_test_cmd(self, cmd_ref, phase, refcon):
@@ -450,28 +456,58 @@ class PythonInterface:
         return 1
 
     def OnPressCallback(self, inRefcon, source="hotkey"):
+        if self._recording is not None:
+            return  # key auto-repeat while held
         if not self.ready:
             self.tel.event("ptt_ignored", logging.WARNING, reason="not_ready", source=source)
             self._say("Vimaan is not ready. Check the log.")
             return
-        if self.microphone is None:
+        if self.recorder is None:
             self.tel.event("ptt_ignored", logging.WARNING, reason="no_microphone", source=source)
             self._say("Microphone not available")
             return
-
-        # Spin up a worker if nothing is already listening. The worker
-        # captures audio + runs STT off-thread so the sim main loop is never
-        # blocked. Recording ends at the natural end of the phrase.
-        with self._listen_lock:
-            if self._is_listening:
-                self.tel.event("ptt_ignored", reason="already_listening", source=source)
-                return
-            self._is_listening = True
+        with self._worker_lock:
+            busy = self._transcribing
+        if busy:
+            self.tel.event("ptt_ignored", reason="still_transcribing", source=source)
+            return
 
         cmd = self.tel.new_command_id()
+        t_press = time.perf_counter()
+        try:
+            self.recorder.start()
+        except Exception as exc:
+            self.tel.error("microphone_start_failed", exc, cmd=cmd)
+            self.tel.command_done(cmd, "mic_error", t_press)
+            self._say("Microphone error")
+            return
+        self._recording = {"cmd": cmd, "t_press": t_press, "source": source}
         self.tel.event("ptt_press", cmd=cmd, source=source)
+
+    def OnReleaseCallback(self, inRefcon, source="hotkey"):
+        rec, self._recording = self._recording, None
+        if rec is None:
+            return
+        cmd, t_press = rec["cmd"], rec["t_press"]
+        raw = self.recorder.stop()
+        audio_sec = self.recorder.seconds(raw)
+        self.tel.event(
+            "stage",
+            stage="capture",
+            cmd=cmd,
+            ms=round((time.perf_counter() - t_press) * 1000, 1),
+            audio_sec=round(audio_sec, 2),
+            truncated=self.recorder.truncated,
+            overflows=self.recorder.overflows,
+            released_by=source,
+        )
+        if audio_sec < MIN_RECORD_SEC:
+            self.tel.command_done(cmd, "too_short", t_press)
+            return
+        with self._worker_lock:
+            self._transcribing = True
         threading.Thread(
-            target=self._listen_worker, args=(cmd, time.perf_counter()), name=f"listen-{cmd}"
+            target=self._stt_worker, args=(cmd, t_press, raw), name=f"stt-{cmd}", daemon=True
         ).start()
 
     # ------------------------------------------------------------------
@@ -480,35 +516,21 @@ class PythonInterface:
     def _enqueue(self, kind, payload=None):
         self._result_queue.put((kind, payload, time.perf_counter()))
 
-    def _listen_worker(self, cmd, t_press):
+    def _stt_worker(self, cmd, t_press, raw):
         outcome = None
         try:
-            self._enqueue("speak", "Listening")
-            with self.tel.stage("capture", cmd=cmd, expected=(sr.WaitTimeoutError,)) as res:
-                with self.microphone as source:
-                    self.recognizer.adjust_for_ambient_noise(source, duration=0.3)
-                    res["energy_threshold"] = round(self.recognizer.energy_threshold, 1)
-                    audio = self.recognizer.listen(
-                        source,
-                        timeout=LISTEN_TIMEOUT_SEC,
-                        phrase_time_limit=PHRASE_TIME_LIMIT_SEC,
-                    )
-                raw = audio.get_raw_data(convert_width=2)
-                rms = rms_from_pcm16(raw)
-                res.update(
-                    audio_sec=round(len(raw) / (2 * audio.sample_rate), 2),
-                    sample_rate=audio.sample_rate,
-                    rms=round(rms, 1),
-                )
-            # Mic-health (Phase 6F): a dead/muted mic yields near-silent audio.
-            # Warn instead of wasting an STT call + a confusing "didn't catch that".
+            # Mic-health (Phase 6F): a dead/muted mic (or no macOS permission)
+            # yields near-silent audio. Say so instead of a confusing
+            # "didn't catch that".
+            rms = rms_from_pcm16(raw)
+            self.tel.event("audio_level", cmd=cmd, rms=round(rms, 1))
             if is_silent(rms):
                 outcome = "silent_mic"
                 self._enqueue("speak", "Microphone appears silent")
                 return
 
-            self._enqueue("speak", "Processing")
             t_speech_end = time.perf_counter()
+            audio = sr.AudioData(raw, self.recorder.sample_rate, 2)
             with self.tel.stage(
                 "stt", cmd=cmd, expected=(sr.UnknownValueError,), backend=self.STT_BACKEND
             ) as res:
@@ -520,9 +542,6 @@ class PythonInterface:
                 "execute",
                 {"cmd": cmd, "text": text, "t_press": t_press, "t_speech_end": t_speech_end},
             )
-        except sr.WaitTimeoutError:
-            outcome = "no_speech"
-            self._enqueue("speak", "No speech detected")
         except sr.UnknownValueError:
             outcome = "not_understood"
             self._enqueue("speak", "I could not understand you")
@@ -531,11 +550,11 @@ class PythonInterface:
             self._enqueue("speak", "Recognition service failed")
         except Exception as exc:
             outcome = "worker_error"
-            self.tel.error("listen_worker_error", exc, cmd=cmd)
+            self.tel.error("stt_worker_error", exc, cmd=cmd)
             self._enqueue("speak", "An error occurred")
         finally:
-            with self._listen_lock:
-                self._is_listening = False
+            with self._worker_lock:
+                self._transcribing = False
             if outcome is not None:
                 self.tel.command_done(cmd, outcome, t_press)
 
@@ -554,6 +573,9 @@ class PythonInterface:
         except Exception as exc:  # never let the flight loop die
             self.tel.error("flight_loop_error", exc)
         try:
+            # A missed key-up must not leave the mic open forever.
+            if self._recording is not None and self.recorder.elapsed() > MAX_RECORD_SEC + 0.5:
+                self.OnReleaseCallback(None, source="auto_stop")
             self._service_cranks()
             self._service_verifications()
         except Exception as exc:
