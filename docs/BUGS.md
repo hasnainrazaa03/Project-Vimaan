@@ -19,7 +19,7 @@ Severity legend: 🔴 critical · 🟠 high · 🟡 medium · ⚪ minor.
 | ID | Severity | Area | Status | Commit / Notes |
 | --- | --- | --- | --- | --- |
 | B-001 | 🔴 | Legacy plugin | **done** | `444fd60` — deprecation banner; active plugin is `plugin/PI_VimaanCoPilot.py` |
-| B-002 | 🔴 | Security | **needs revoke** (user action) | scratch/ now gitignored; token must be revoked at huggingface.co |
+| B-002 | 🔴 | Security | **done** | 2026-08-22 — token revoked at huggingface.co and `scratch/token_HF.txt` deleted; never committed |
 | B-003 | 🟠 | ML core | **done** | `444fd60` — auto-pip block removed; clean ImportError |
 | B-004 | 🟠 | Training | **done** | `444fd60` — unused num2words import removed |
 | B-005 | 🟠 | Plugin handlers | **done** | `444fd60` — state-aware toggles; explicit on/off |
@@ -34,8 +34,9 @@ Severity legend: 🔴 critical · 🟠 high · 🟡 medium · ⚪ minor.
 | B-014 | ⚪ | Plugin | **done** | `444fd60` — log path uses `Path.home() / Vimaan_Logs` |
 | B-015 | ⚪ | Tooling | **done** | `dca83e7` — pytest + ruff + pre-commit + GitHub Actions CI |
 
-**Outstanding from Phase 0:** only B-002 (user action: revoke the
-compromised HuggingFace token). Everything else is shipped.
+**Outstanding from Phase 0: none.** B-002 (revoke the compromised
+HuggingFace token) was closed on 2026-08-22 — every Phase 0 finding is
+now shipped.
 
 ---
 
