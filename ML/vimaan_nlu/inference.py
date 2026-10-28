@@ -1,6 +1,7 @@
 import torch
 
 from vimaan_nlu import correct_numbered_intent, normalize_aviation_input, postprocess_slots
+from vimaan_nlu.postprocessor import NUMBERED_INTENT_RE
 
 # Aviation commands are short (the longest in the training set is well under
 # 32 word-piece tokens). Padding/truncating to 32 instead of 64 roughly halves
@@ -93,12 +94,24 @@ def predict(
 
     intent_pred_idx = int(torch.argmax(intent_logits, dim=1).item())
     intent_pred = intent_map_rev[intent_pred_idx]
-    intent_confidence = torch.softmax(intent_logits, dim=1)[0, intent_pred_idx].item()
+    probs = torch.softmax(intent_logits, dim=1)[0]
+    intent_confidence = probs[intent_pred_idx].item()
 
     # Trust the spoken instance number over the model's variant choice (fixes
-    # rare engine/AP/FD 1<->2 confusion). Kept at the model's confidence so the
-    # plugin's confidence floor still dispatches a confidently-said command.
+    # engine/AP/FD 1<->2 confusion; defaults to 1 when none is named).
     intent_pred = correct_numbered_intent(intent_pred, text_normalized)
+
+    # The instance is now decided by rule, so the model's job was only to pick
+    # the family ("an autopilot command"). Score that: the summed probability
+    # of every variant. Otherwise "engage the autopilot" — certain it's the
+    # autopilot, split 50/50 on which — falls under the confidence floor.
+    family = NUMBERED_INTENT_RE.match(intent_pred or "")
+    if family:
+        intent_confidence = sum(
+            probs[idx].item()
+            for idx, name in intent_map_rev.items()
+            if (m := NUMBERED_INTENT_RE.match(name)) and m.group(1) == family.group(1)
+        )
 
     slot_pred_indices = torch.argmax(slot_logits, dim=2)[0].cpu().numpy()
     tokens = tokenizer.convert_ids_to_tokens(input_ids[0].cpu().numpy())

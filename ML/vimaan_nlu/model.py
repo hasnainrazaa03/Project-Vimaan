@@ -3,10 +3,13 @@ from transformers import DistilBertForTokenClassification
 
 
 class JointIntentAndSlotModel(torch.nn.Module):
-    def __init__(self, num_intents, num_slots):
+    def __init__(self, num_intents, num_slots, base_model="distilbert-base-uncased"):
+        """``base_model`` is a hub name (training starts from pretrained
+        DistilBERT) or a local checkpoint dir (inference loads the fine-tuned
+        encoder + slot head directly, with no network access)."""
         super().__init__()
         self.bert_for_slots = DistilBertForTokenClassification.from_pretrained(
-            "distilbert-base-uncased", num_labels=num_slots
+            base_model, num_labels=num_slots
         )
         self.intent_classifier = torch.nn.Linear(
             self.bert_for_slots.config.hidden_size, num_intents

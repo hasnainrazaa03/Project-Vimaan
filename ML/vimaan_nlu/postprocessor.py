@@ -19,8 +19,14 @@ STATE_SYNONYMS: dict[str, dict[str, list[str]]] = {
         "down": ["lower", "extend", "deploy", "drop"],
     },
     "toggle_flaps": {"up": ["retract", "raise"], "down": ["extend", "lower", "deploy"]},
-    "toggle_autopilot_1": {"on": ["engage", "activate"], "off": ["disengage", "deactivate"]},
-    "toggle_autopilot_2": {"on": ["engage", "activate"], "off": ["disengage", "deactivate"]},
+    "toggle_autopilot_1": {
+        "on": ["engage", "activate"],
+        "off": ["disengage", "deactivate", "disconnect"],
+    },
+    "toggle_autopilot_2": {
+        "on": ["engage", "activate"],
+        "off": ["disengage", "deactivate", "disconnect"],
+    },
     "toggle_flight_director_1": {"on": ["enable", "activate"], "off": ["disable", "deactivate"]},
     "toggle_flight_director_2": {"on": ["enable", "activate"], "off": ["disable", "deactivate"]},
     "toggle_parking_brake": {"on": ["engage", "set"], "off": ["release", "disengage"]},
@@ -106,26 +112,40 @@ def extract_digit_sequence_frequency(text: str) -> str | None:
 # Numbered toggle intents whose instance (1/2) is stated explicitly in the
 # utterance. The model occasionally confuses the variants (engine 1<->2,
 # FD 1<->2, AP 1<->2); the spoken number is authoritative, so we trust it.
-_NUMBERED_INTENT_RE = re.compile(r"^(toggle_(?:autopilot|flight_director|engine))_(\d+)$")
+NUMBERED_INTENT_RE = re.compile(r"^(toggle_(?:autopilot|flight_director|engine))_(\d+)$")
+
+
+# Ordinal / side words that name an instance without a digit.
+_INSTANCE_WORDS = {"first": "1", "left": "1", "second": "2", "right": "2"}
 
 
 def correct_numbered_intent(intent: str | None, normalized_text: str | None) -> str | None:
-    """Fix a mis-numbered toggle intent from the instance number in the text.
+    """Pick the engine/AP/FD variant from the instance the pilot actually named.
 
-    For ``toggle_engine_N`` / ``toggle_autopilot_N`` / ``toggle_flight_director_N``,
-    if the normalized utterance names a different instance (1 or 2), return the
-    matching variant. No-op for other intents or when no instance digit is
-    present, so it is safe to apply unconditionally.
+    For ``toggle_engine_N`` / ``toggle_autopilot_N`` / ``toggle_flight_director_N``:
+    an explicit instance in the utterance ("2", "second", "right") wins over
+    the model's choice. When no instance is named ("autopilot on"), the model
+    has nothing to go on and splits between _1 and _2 at low confidence, so we
+    default to instance 1 (the captain-side / only system on most aircraft).
+    No-op for other intents, so it is safe to apply unconditionally.
     """
     if not intent:
         return intent
-    match = _NUMBERED_INTENT_RE.match(intent)
+    match = NUMBERED_INTENT_RE.match(intent)
     if not match:
         return intent
     base, predicted = match.group(1), match.group(2)
-    spoken = re.findall(r"\b([12])\b", normalized_text or "")
-    if spoken and spoken[0] != predicted:
-        return f"{base}_{spoken[0]}"
+    text = normalized_text or ""
+    spoken = re.findall(r"\b([12])\b", text)
+    if spoken:
+        instance = spoken[0]
+    else:
+        named = [
+            _INSTANCE_WORDS[w] for w in re.findall(r"\b[a-z]+\b", text) if w in _INSTANCE_WORDS
+        ]
+        instance = named[0] if named else "1"
+    if instance != predicted:
+        return f"{base}_{instance}"
     return intent
 
 

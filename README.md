@@ -152,7 +152,7 @@ See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for the full map.
 
 **Tooling**
 - `tqdm`, `scikit-learn`, `matplotlib`
-- `pytest` (284 tests), `ruff`, `mypy`, `pre-commit`, `detect-secrets`, GitHub Actions CI
+- `pytest` (347 tests), `ruff`, `mypy`, `pre-commit`, `detect-secrets`, GitHub Actions CI
 
 ---
 
@@ -282,6 +282,10 @@ Versioning: every script appends `_vN` to outputs and the trainer writes the nex
 
 ## Running the X-Plane Plugin
 
+> **First time in X-Plane?** Follow [docs/IN_SIM_TESTING.md](docs/IN_SIM_TESTING.md): XPPython3 +
+> dependency setup, a 13-step test flight, and how to read the session logs
+> (`python scripts/vimaan_log_report.py`).
+
 1. Get a model so that `ML/models/vimaan_nlu_model_best/vN/` exists — either
    train one (see above) or download a published checkpoint:
    `scripts/fetch_model.sh` (weights ship as GitHub Release assets, not in the
@@ -368,6 +372,7 @@ web dashboard's Training tab.
 - 🐞 Bugs found while auditing the codebase: [docs/BUGS.md](docs/BUGS.md)
 - 🚀 Planned features and improvements: [docs/ROADMAP.md](docs/ROADMAP.md)
 - ✅ Production checklist: [docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md)
+- ✈️ In-sim testing runbook + log reading: [docs/IN_SIM_TESTING.md](docs/IN_SIM_TESTING.md)
 - 📜 Change history: [CHANGELOG.md](CHANGELOG.md)
 - 🧭 Architecture deep dive: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 

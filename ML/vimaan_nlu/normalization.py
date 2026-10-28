@@ -170,8 +170,68 @@ def _convert_cardinals(text: str) -> str:
     return " ".join(out)
 
 
+# Instance words: a lone digit right after one of these is the radio/engine/
+# autopilot number, not part of a spoken digit run ("com 1 1 1 8" = port 1).
+_INSTANCE_WORDS = {"com", "comm", "radio", "engine", "autopilot", "director", "number", "nav"}
+
+
+def _clean_asr_formatting(text: str) -> str:
+    """Undo the formatting real speech recognizers add (Google/Whisper write
+    "Climb to 10,000 ft." where the training data says "climb to 10000 feet").
+
+    Runs on lowercased text before any number conversion.
+    """
+    # Thousands separators: "7,500" -> "7500" (otherwise the tokenizer splits
+    # it and the slot tagger keeps only "500").
+    text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", text)
+    # Sentence punctuation. A period is only kept when it sits between digits
+    # (a decimal point: "118.75").
+    text = re.sub(r"(?<!\d)\.|\.(?!\d)", " ", text)
+    text = re.sub(r"[,!?;:\"“”()]", " ", text)
+    # Aviation abbreviations ASR emits for words the model was trained on.
+    text = re.sub(r"\bfl(?=\s|\d|$)", "flight level ", text)
+    text = re.sub(r"(?<=\d)ft\b|\bft\b", " feet", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _join_spaced_digits(text: str) -> str:
+    """Join digit-by-digit dictation: "heading 2 7 0" -> "heading 270".
+
+    A single digit right after an instance word stays separate, so
+    "com 1 1 1 8.75" keeps port 1 apart from the frequency.
+    """
+    words = text.split()
+    out: list[str] = []
+    i = 0
+    while i < len(words):
+        w = words[i]
+        if len(w) == 1 and w.isdigit() and not (out and out[-1] in _INSTANCE_WORDS):
+            j = i
+            while j < len(words) and len(words[j]) == 1 and words[j].isdigit():
+                j += 1
+            out.append("".join(words[i:j]))
+            i = j
+        else:
+            out.append(w)
+            i += 1
+    return " ".join(out)
+
+
+# "com 1118.75": a port digit absorbed into the frequency when the pilot says
+# "com one one one eight decimal ...". No real VHF frequency has four integer
+# digits, so a leading 1-4 followed by a valid 118-137 MHz value is the port.
+_ABSORBED_PORT_RE = re.compile(r"\b(com|comm|radio)\s+([1-4])(1[1-3]\d)(\.\d+)?\b")
+
+
+def _split_absorbed_com_port(match: re.Match[str]) -> str:
+    word, port, mhz, frac = match.groups()
+    if 118 <= int(mhz) <= 137:
+        return f"{word} {port} {mhz}{frac or ''}"
+    return match.group(0)
+
+
 def normalize_aviation_input(text: str) -> str:
-    text_lower = text.lower()
+    text_lower = _clean_asr_formatting(text.lower())
     # 0. Split a word fused to its number ("heading109" -> "heading 109",
     #    "com2" -> "com 2", "15000ft" -> "15000 ft") so the number can be
     #    tokenised and slot-tagged. Paraphrasers drop the space; real ASR/typing
@@ -189,6 +249,12 @@ def normalize_aviation_input(text: str) -> str:
     text_lower = _PHONETIC_SEQUENCE_RE.sub(_convert_phonetic_sequence, text_lower)
     # 5. Remaining single/paired word-numbers: "twenty" -> "20".
     text_lower = _SIMPLE_NUMBER_RE.sub(_convert_word_number, text_lower)
+    # 6. Digit-by-digit dictation in numerals: "heading 2 7 0" -> "270".
+    text_lower = _join_spaced_digits(text_lower)
+    #    ...and numerals around a spoken decimal: "121 decimal 5" -> "121.5".
+    text_lower = re.sub(r"\b(\d+) (?:point|decimal) (\d+)\b", r"\1.\2", text_lower)
+    # 7. Port digit absorbed into a frequency: "com 1118.75" -> "com 1 118.75".
+    text_lower = _ABSORBED_PORT_RE.sub(_split_absorbed_com_port, text_lower)
     return text_lower
 
 

@@ -91,7 +91,7 @@ A snapshot of what Project Vimaan currently does. For what's *planned*, see [doc
 - Binds to `127.0.0.1` by design — single-user, no auth.
 
 ### Project hygiene
-- **284 automated tests** (24 modules) running in under 10 s with no simulator,
+- **347 automated tests** (25 modules) running in under 10 s with no simulator,
   microphone, GPU, or network required.
 - GitHub Actions CI on Python 3.11 + 3.12: ruff lint + format, **mypy**, compileall, and
   pytest with coverage. Conventional Commits enforced by commitlint.

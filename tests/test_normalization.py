@@ -164,3 +164,45 @@ class TestNormalizeDataset:
 
     def test_empty_dataset(self):
         assert normalize_dataset([]) == []
+
+
+class TestRecognizerFormatting:
+    """Real STT (Google/Whisper) output: capitals, punctuation, thousands
+    separators, abbreviations, digit-by-digit dictation."""
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("Set altitude to 7,500.", "set altitude to 7500"),
+            ("Climb to 10,000 ft", "climb to 10000 feet"),
+            ("Set altitude 35,000", "set altitude 35000"),
+            ("Climb to FL 350.", "climb to flight level 350"),
+            ("FL350", "flight level 350"),
+            ("Climb to 15000ft.", "climb to 15000 feet"),
+            ("Heading 2 7 0", "heading 270"),
+            ("Set heading 270.", "set heading 270"),
+            ("Gear up!", "gear up"),
+            ("Tune COM1 to 118.75.", "tune com 1 to 118.75"),
+            ("Set com 2 to 121.5.", "set com 2 to 121.5"),
+        ],
+    )
+    def test_asr_formatting(self, text, expected):
+        assert normalize_aviation_input(text) == expected
+
+    def test_decimal_point_survives_punctuation_cleanup(self):
+        assert normalize_aviation_input("contact 118.75, thanks") == "contact 118.75 thanks"
+
+    def test_instance_digit_not_merged_into_value(self):
+        assert normalize_aviation_input("com 1 1 2 1 decimal 5") == "com 1 121.5"
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("tune com one one one eight decimal seven five", "tune com 1 118.75"),
+            ("com two one three two decimal four two five", "com 2 132.425"),
+            # 3 integer digits: the frequency itself, not a port.
+            ("com one two one decimal five", "com 121.5"),
+        ],
+    )
+    def test_absorbed_com_port_split_out(self, text, expected):
+        assert normalize_aviation_input(text) == expected
