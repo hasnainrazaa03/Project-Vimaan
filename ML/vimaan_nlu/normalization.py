@@ -226,7 +226,9 @@ def _join_spaced_digits(text: str) -> str:
 # "com 1118.75": a port digit absorbed into the frequency when the pilot says
 # "com one one one eight decimal ...". No real VHF frequency has four integer
 # digits, so a leading 1-4 followed by a valid 118-137 MHz value is the port.
-_ABSORBED_PORT_RE = re.compile(r"\b(com|comm|radio)\s+([1-4])(1[1-3]\d)(\.\d+)?\b")
+# Google also hears "com one TO one one eight ..." as "com 12118.75": the "to"
+# becomes a 2 between port and frequency, so it is dropped too.
+_ABSORBED_PORT_RE = re.compile(r"\b(com|comm|radio)\s+([1-4])2?(1[1-3]\d)(\.\d+)?\b")
 
 
 def _split_absorbed_com_port(match: re.Match[str]) -> str:

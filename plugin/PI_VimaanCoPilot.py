@@ -413,8 +413,9 @@ class PythonInterface:
         for cmd_ref, handler in self._commands:
             xp.unregisterCommandHandler(cmd_ref, handler, 1, None)
         self._commands = []
-        if self._recording is not None and self.recorder is not None:
+        if self.recorder is not None:
             self.recorder.stop()
+            self.recorder.wait_idle(2.0)  # release the mic before unloading
             self._recording = None
         for hotkey in (self.hotkeyPress, self.hotkeyRelease):
             if hotkey:
@@ -486,15 +487,17 @@ class PythonInterface:
 
         cmd = self.tel.new_command_id()
         t_press = time.perf_counter()
-        try:
-            self.recorder.start()
-        except Exception as exc:
-            self.tel.error("microphone_start_failed", exc, cmd=cmd)
-            self.tel.command_done(cmd, "mic_error", t_press)
-            self._say("Microphone error")
-            return
+        self.recorder.start()  # opens the mic in the background
         self._recording = {"cmd": cmd, "t_press": t_press, "source": source}
-        self.tel.event("ptt_press", cmd=cmd, source=source)
+        if self._flight_loop_id:
+            # Drain the mic from the very next frame, not up to 0.2 s later.
+            xp.scheduleFlightLoop(self._flight_loop_id, -1.0, 1)
+        self.tel.event(
+            "ptt_press",
+            cmd=cmd,
+            source=source,
+            handler_ms=round((time.perf_counter() - t_press) * 1000, 2),
+        )
 
     def OnReleaseCallback(self, inRefcon, source="hotkey"):
         rec = self._recording
@@ -596,6 +599,14 @@ class PythonInterface:
             self.tel.error("flight_loop_error", exc)
         try:
             rec = self._recording
+            if rec is not None and self.recorder.error is not None:
+                open_error, self.recorder.error = self.recorder.error, None
+                self._recording = None
+                self.recorder.stop()
+                self.tel.error("microphone_start_failed", open_error, cmd=rec["cmd"])
+                self.tel.command_done(rec["cmd"], "mic_error", rec["t_press"])
+                self._say("Microphone error")
+                rec = None
             if rec is not None:
                 self.recorder.poll()
                 released = rec.get("released_at")
@@ -612,16 +623,19 @@ class PythonInterface:
         busy_ms = (time.perf_counter() - t0) * 1000
         with self._worker_lock:
             transcribing = self._transcribing
-        if transcribing:
-            time.sleep(STT_GIL_YIELD_SEC)  # deliberate; not counted as our busy time
+        mic_busy = self.recorder is not None and self.recorder.busy
+        if transcribing or mic_busy:
+            # Deliberate, not counted as our busy time: background threads
+            # (STT, mic open/close) only run while we let go of the GIL.
+            time.sleep(STT_GIL_YIELD_SEC)
         self.tel.tick(
             busy_ms=busy_ms,
             queue_depth=self._result_queue.qsize(),
             pending_verifications=len(self._verifications),
             paused=self._read_int(DREF_PAUSED),
         )
-        if self._recording is not None or transcribing:
-            return -1.0  # every frame: drain the mic / give the STT worker GIL time
+        if self._recording is not None or transcribing or mic_busy:
+            return -1.0  # every frame: drain the mic / give workers GIL time
         return QUEUE_POLL_INTERVAL_SEC
 
     # ------------------------------------------------------------------

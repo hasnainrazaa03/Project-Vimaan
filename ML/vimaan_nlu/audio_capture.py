@@ -16,6 +16,10 @@ callback, with no overflow reported). So the stream runs in PortAudio's
 GIL — and the owner calls :meth:`poll` from the thread that does hold the GIL
 (the plugin's flight loop, every frame while recording) to drain it.
 
+Opening and closing a CoreAudio stream take ~85 ms and ~118 ms (a visible
+frame hitch per command in-sim), so both run on a short-lived thread;
+:attr:`busy` tells the owner to give that thread GIL time.
+
 ``sd`` is injectable so this is testable without audio hardware.
 """
 
@@ -55,9 +59,12 @@ class PushToTalkRecorder:
         self._chunks: list[bytes] = []
         self._frames = 0
         self._stream: Any = None
+        self._recording = False
         self._started_at: float | None = None
+        self._workers: list[threading.Thread] = []
         self.truncated = False
         self.overflows = 0
+        self.error: BaseException | None = None  # set if opening the mic failed
 
     # ------------------------------------------------------------------
     def describe(self) -> dict[str, Any]:
@@ -69,29 +76,67 @@ class PushToTalkRecorder:
 
     @property
     def is_recording(self) -> bool:
-        return self._stream is not None
+        return self._recording
+
+    @property
+    def busy(self) -> bool:
+        """True while the mic is being opened or closed in the background."""
+        self._workers = [t for t in self._workers if t.is_alive()]
+        return bool(self._workers)
+
+    def wait_idle(self, timeout: float = 2.0) -> None:
+        """Block until background open/close work is done (shutdown, tests)."""
+        for t in list(self._workers):
+            t.join(timeout)
+
+    def _run_async(self, fn, name: str) -> None:
+        t = threading.Thread(target=fn, name=f"mic-{name}", daemon=True)
+        self._workers.append(t)
+        t.start()
+
+    @staticmethod
+    def _close(stream: Any) -> None:
+        try:
+            stream.stop()
+        finally:
+            stream.close()
 
     def elapsed(self) -> float:
         return 0.0 if self._started_at is None else time.perf_counter() - self._started_at
 
     # ------------------------------------------------------------------
     def start(self) -> None:
-        if self._stream is not None:
+        """Begin a recording. The stream opens in the background (~85 ms);
+        audio is captured from the moment it is open."""
+        if self._recording:
             return
         with self._lock:
             self._chunks, self._frames = [], 0
         self.truncated = False
         self.overflows = 0
-        stream = self._sd.RawInputStream(
-            samplerate=self.sample_rate,
-            channels=1,
-            dtype="int16",
-            device=self.device,
-            latency=RING_BUFFER_SEC,
-        )
-        stream.start()
-        self._stream = stream
+        self.error = None
+        self._recording = True
         self._started_at = time.perf_counter()
+        self._run_async(self._open, "open")
+
+    def _open(self) -> None:
+        try:
+            stream = self._sd.RawInputStream(
+                samplerate=self.sample_rate,
+                channels=1,
+                dtype="int16",
+                device=self.device,
+                latency=RING_BUFFER_SEC,
+            )
+            stream.start()
+        except BaseException as exc:  # reported to the owner via .error
+            self.error = exc
+            return
+        with self._lock:
+            if self._recording and self._stream is None:
+                self._stream = stream
+                return
+        self._close(stream)  # released before it finished opening
 
     def poll(self) -> int:
         """Move whatever PortAudio has buffered into memory; returns frames read.
@@ -121,19 +166,19 @@ class PushToTalkRecorder:
         return available
 
     def stop(self) -> bytes:
-        """Drain, stop recording and return the captured 16-bit mono PCM."""
-        try:
-            self.poll()
-        finally:
-            stream, self._stream = self._stream, None
-            if stream is not None:
-                try:
-                    stream.stop()
-                finally:
-                    stream.close()
+        """End the recording and return the captured 16-bit mono PCM.
+
+        Drains what PortAudio has buffered, then closes the stream on a
+        background thread so the caller (X-Plane's main thread) doesn't stall.
+        """
+        self._recording = False
+        self.poll()
         with self._lock:
+            stream, self._stream = self._stream, None
             raw = b"".join(self._chunks)
             self._chunks, self._frames = [], 0
+        if stream is not None:
+            self._run_async(lambda: self._close(stream), "close")
         return raw
 
     def seconds(self, raw: bytes) -> float:

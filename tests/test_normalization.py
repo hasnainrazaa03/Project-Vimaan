@@ -219,6 +219,7 @@ class TestGoogleMishearings:
             ("tune cam 1 to 118.75", "tune com 1 to 118.75"),
             ("come one one two one decimal five", "com 1 121.5"),
             ("set altitude 1:30", "set altitude 130"),
+            ("Dune cam 12118.75", "dune com 1 118.75"),  # "one TO one one eight"
         ],
     )
     def test_mishearings(self, text, expected):

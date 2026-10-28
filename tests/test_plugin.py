@@ -391,6 +391,7 @@ def _talk(plugin, audio, transcript="set heading two seven zero"):
     plugin.recognizer.next_result = transcript
     sd = sys.modules["sounddevice"]
     plugin.OnPressCallback(None)
+    plugin.recorder.wait_idle()
     sd.streams[-1].feed(audio)
     plugin.OnReleaseCallback(None)
     for t in threading.enumerate():
@@ -404,6 +405,7 @@ def test_hold_to_talk_end_to_end(sim):
     NLU["set heading two seven zero"] = ("set_autopilot_heading", {"degrees": "270"}, 0.99)
     _talk(plugin, LOUD)
     assert xp.datarefs["sim/cockpit2/autopilot/heading_dial_deg_mag_pilot"] == 270.0
+    plugin.recorder.wait_idle()
     assert sys.modules["sounddevice"].streams[-1].closed  # mic released
     stt = [e for e in events(plugin, "stage") if e["stage"] == "stt"][-1]
     assert stt["text"] == "set heading two seven zero"
@@ -437,6 +439,7 @@ def test_key_repeat_does_not_restart_recording(sim):
     _, plugin, _ = sim
     sd = sys.modules["sounddevice"]
     plugin.OnPressCallback(None)
+    plugin.recorder.wait_idle()
     plugin.OnPressCallback(None)
     assert len(sd.streams) == 1
     plugin.OnReleaseCallback(None)
@@ -447,6 +450,7 @@ def test_flight_loop_drains_mic_every_frame_while_recording(sim):
     sd = sys.modules["sounddevice"]
     assert plugin._flight_loop() == module.QUEUE_POLL_INTERVAL_SEC
     plugin.OnPressCallback(None)
+    plugin.recorder.wait_idle()
     sd.streams[-1].feed(LOUD)
     assert plugin._flight_loop() == -1.0  # every frame while the key is held
     assert sd.streams[-1].read_available == 0  # drained on the main thread
@@ -467,6 +471,7 @@ def test_missed_key_up_auto_stops(sim, monkeypatch):
     module, plugin, _ = sim
     monkeypatch.setattr(module, "MAX_RECORD_SEC", -1.0)
     plugin.OnPressCallback(None)
+    plugin.recorder.wait_idle()
     sys.modules["sounddevice"].streams[-1].feed(LOUD)
     plugin._flight_loop()
     assert plugin._recording is None
@@ -548,6 +553,7 @@ def test_release_tail_keeps_recording_after_key_up(sim, monkeypatch):
     monkeypatch.setattr(module, "RELEASE_TAIL_SEC", 0.05)
     sd = sys.modules["sounddevice"]
     plugin.OnPressCallback(None)
+    plugin.recorder.wait_idle()
     sd.streams[-1].feed(LOUD)
     plugin.OnReleaseCallback(None)
     assert plugin._recording is not None  # still capturing the tail
@@ -585,3 +591,28 @@ def test_executed_command_cancels_pending_confirmation(sim):
     say(plugin, "hdg", "set_autopilot_heading", {"degrees": "90"})
     say(plugin, "engine one off", "toggle_engine_1", {"state": "off"})
     assert "sim/starters/shut_down_1" not in xp.commands_fired  # asks again
+
+
+def test_microphone_open_failure_is_reported(sim, monkeypatch):
+    _, plugin, xp = sim
+    sd = sys.modules["sounddevice"]
+
+    def broken(**kw):
+        raise OSError("no input device")
+
+    monkeypatch.setattr(sd, "RawInputStream", broken)
+    plugin.OnPressCallback(None)
+    plugin.recorder.wait_idle()
+    plugin._flight_loop()
+    assert xp.spoken[-1] == "Microphone error"
+    assert events(plugin, "command_done")[-1]["outcome"] == "mic_error"
+    assert plugin._recording is None
+
+
+def test_press_handler_is_cheap_and_logged(sim):
+    _, plugin, _ = sim
+    plugin.OnPressCallback(None)
+    plugin.recorder.wait_idle()
+    press = events(plugin, "ptt_press")[-1]
+    assert press["handler_ms"] < 20
+    plugin.OnReleaseCallback(None)
