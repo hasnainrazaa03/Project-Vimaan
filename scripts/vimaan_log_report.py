@@ -79,17 +79,25 @@ def report(path: Path) -> str:
     if start:
         w(f"  Python {start.get('python')} @ {start.get('executable')}")
         w(
-            f"  torch {start.get('torch_version', '-')}  transformers "
-            f"{start.get('transformers_version', '-')}  backend={start.get('backend')}  "
+            f"  torch {start.get('torch_version', '-')}  backend={start.get('backend')}  "
             f"stt={start.get('stt_backend')}"
         )
         w(f"  import ms: {start.get('import_ms')}")
     plugin_start = next((e for e in events if e["kind"] == "plugin_start"), None)
     if plugin_start:
         w(f"  ready={plugin_start.get('ready')}  sim={plugin_start.get('sim')}")
+    load = next(
+        (e for e in events if e["kind"] == "stage" and e.get("stage") == "model_load"), None
+    )
+    if load:
+        v = load.get("versions") or {}
+        w(
+            f"  model: {load.get('model_path')}  quantized={load.get('quantized')}  "
+            f"transformers {v.get('transformers_version', '-')}"
+        )
     mic = next((e for e in events if e["kind"] == "microphone_ready"), None)
     if mic:
-        w(f"  microphone: index={mic.get('device_index')} devices={mic.get('devices')}")
+        w(f"  microphone: {mic.get('using')!r} of {mic.get('input_devices')}")
 
     kinds = {e["kind"] for e in events}
     w("")
