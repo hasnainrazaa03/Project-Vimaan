@@ -123,6 +123,11 @@ def report(path: Path) -> str:
         )
     faults = path.with_name(path.name.replace(".events.jsonl", ".faults.log"))
     if faults.exists() and faults.stat().st_size:
+        text = faults.read_text(errors="replace")
+        if "Timeout (" in text and "<no Python frame>" in text:
+            w("  faults file: hang-detector dump with X-Plane's main thread in its own")
+            w("  code (no Python frame) — the sim stopped calling plugins for 30 s:")
+            w("  menu / loading / quit screen, or a freeze inside X-Plane, not Vimaan.")
         w(f"  faults file has content ({faults.stat().st_size} bytes) — last 40 lines:")
         for line in faults.read_text(errors="replace").splitlines()[-40:]:
             w(f"    {line}")

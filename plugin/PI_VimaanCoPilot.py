@@ -150,7 +150,9 @@ DREF_COM_KHZ = {
 DREF_GEAR_HANDLE = "sim/cockpit2/controls/gear_handle_down"
 DREF_GEAR_RETRACTABLE = "sim/aircraft/gear/acf_gear_retract"
 DREF_FLAP_HANDLE = "sim/cockpit2/controls/flap_handle_request_ratio"
-DREF_PARKING_BRAKE = "sim/cockpit2/controls/parking_brake_ratio"
+# cockpit2/controls/parking_brake_ratio is deprecated in 12.4 (X-Plane logs
+# "has been replaced" on every read); this is its replacement.
+DREF_PARKING_BRAKE = "sim/flightmodel/controls/parkbrake"
 DREF_ENGINE_RUNNING = "sim/flightmodel/engine/ENGN_running"
 DREF_ENGINE_MIXTURE = "sim/flightmodel/engine/ENGN_mixt"
 DREF_IGNITION_KEY = "sim/cockpit2/engine/actuators/ignition_key"
@@ -268,6 +270,7 @@ class PythonInterface:
         # The push-to-talk command in flight: recording, then awaiting a reply.
         self._active: dict[str, Any] | None = None
         self._self_test_pending = False
+        self._self_test_started = 0.0
         self._flight_loop_id = None
         self.hotkeyPress = None
         self.hotkeyRelease = None
@@ -714,6 +717,7 @@ class PythonInterface:
 
     def _finish_self_test(self, results):
         self._self_test_pending = False
+        self._self_test_started = 0.0
         passed = 0
         for r in results:
             intent, slots = r.get("intent"), r.get("slots") or {}

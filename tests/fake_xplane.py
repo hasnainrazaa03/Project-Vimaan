@@ -21,7 +21,7 @@ DEFAULT_DATAREFS: dict[str, Any] = {
     "sim/cockpit2/controls/gear_handle_down": 1,
     "sim/aircraft/gear/acf_gear_retract": 1,
     "sim/cockpit2/controls/flap_handle_request_ratio": 0.0,
-    "sim/cockpit2/controls/parking_brake_ratio": 0.0,
+    "sim/flightmodel/controls/parkbrake": 0.0,
     "sim/cockpit2/autopilot/servos_on": 0,
     "sim/cockpit2/autopilot/servos2_on": 0,
     "sim/cockpit2/autopilot/flight_director_mode": 0,

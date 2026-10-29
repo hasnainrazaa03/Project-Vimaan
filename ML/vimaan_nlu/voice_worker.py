@@ -43,6 +43,9 @@ from vimaan_nlu.audio_health import is_silent, rms_from_pcm16
 
 MAX_RECORD_SEC = 12.0  # recording is cut off after this even if still held
 MIN_RECORD_SEC = 0.3  # shorter than this is an accidental tap, not a command
+# Google STT has no timeout by default: one stalled request would block the
+# worker forever and every later command would time out. Fail it instead.
+STT_TIMEOUT_SEC = 8.0
 # Keep recording this long after the key is released: PortAudio hands audio
 # over ~100-160 ms late, and pilots let go as they finish the last word. Without
 # it, in-sim Google heard "gear" / "parking brake" with the "up" / "on" cut off.
@@ -103,7 +106,7 @@ def _error_outcome(exc: BaseException) -> str:
     name = type(exc).__name__
     if name == "UnknownValueError":
         return "not_understood"
-    if name == "RequestError":
+    if name in ("RequestError", "URLError", "TimeoutError", "timeout"):
         return "stt_service_error"
     return "worker_error"
 
@@ -392,6 +395,7 @@ def main(argv: list[str] | None = None) -> int:
 
         predict_text("set heading two seven zero")  # warm-up: first pass is slow
         recognizer = sr.Recognizer()
+        recognizer.operation_timeout = STT_TIMEOUT_SEC
 
         def transcribe_audio(raw: bytes, rate: int) -> str:
             return transcribe(

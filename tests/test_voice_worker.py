@@ -116,6 +116,7 @@ def test_missed_key_up_auto_stops(monkeypatch):
     [
         (UnknownValueError(), "not_understood"),
         (RequestError("offline"), "stt_service_error"),
+        (TimeoutError("read timed out"), "stt_service_error"),
         (RuntimeError("boom"), "worker_error"),
     ],
 )
