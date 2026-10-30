@@ -194,6 +194,9 @@ def _clean_asr_formatting(text: str) -> str:
     text = re.sub(r"[,!?;:\"“”()]", " ", text)
     # "com" misheard as "cam" / "calm" / "come" before a radio number.
     text = re.sub(r"\b(?:cam|calm|come|comm)\b(?=\s+(?:\d|one\b|two\b))", "com", text)
+    # "set com" run together; "flaps" heard as "slaps".
+    text = re.sub(r"\bsecom\b", "set com", text)
+    text = re.sub(r"\bslaps\b", "flaps", text)
     # Aviation abbreviations ASR emits for words the model was trained on.
     text = re.sub(r"\bfl(?=\s|\d|$)", "flight level ", text)
     text = re.sub(r"(?<=\d)ft\b|\bft\b", " feet", text)

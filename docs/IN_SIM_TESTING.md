@@ -163,7 +163,7 @@ X-Plane's own logs, for crashes outside Python: `<X-Plane 12>/Log.txt` and
 | Wrong action | `stage nlu` (transcript, normalized text, intent, slots, confidence) → `sim_write` / `sim_command` → `verify` | |
 | Mic dead/muted | `command_done outcome=silent_mic`; `rms` on `audio_level` | `microphone_ready` shows which input device is used |
 | No mic permission | `microphone_unavailable`, or capture with `rms` ≈ 0 | System Settings → Privacy & Security → Microphone → enable X-Plane (and Steam, if launched from Steam) |
-| Memory | `peak_rss_mb` on `heartbeat` / `session_end` | expect ~1 GB for torch + model |
+| Memory | `peak_rss_mb` on `heartbeat` / `session_end` | X-Plane's whole process (scenery included, ~5 GB in flight); torch + model live in the worker process, not here |
 
 ## 6. Switching speech backends
 
