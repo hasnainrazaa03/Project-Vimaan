@@ -1,53 +1,91 @@
-# Offline Speech-to-Text
+# Speech recognition
 
-By default the plugin transcribes with **Google Web Speech** (online). You can
-switch to a fully **offline** backend so the copilot works with no network and
-no audio leaving the machine. Selection is by environment variable — no code
-change:
+Vimaan recognises speech **offline by default**, with
+[Vosk](https://alphacephei.com/vosk/) (Kaldi). No audio leaves the machine and
+no network is needed. Google Web Speech (online) is still available.
 
 ```bash
-export VIMAAN_STT_BACKEND=vosk       # or: whisper | sphinx | google (default)
+export VIMAAN_STT_BACKEND=vosk      # default
+export VIMAAN_STT_BACKEND=google    # online
 ```
 
-The dispatch lives in [`ML/vimaan_nlu/stt.py`](../ML/vimaan_nlu/stt.py)
-(`transcribe()`), so all backends share the same capture path and the plugin's
-intent pipeline is unchanged.
+Set the variable before launching X-Plane. The worker reports which backend it
+actually uses in the `model_load` event; if Vosk can't load (package or model
+missing) it falls back to Google and logs a `stt_fallback` warning with the
+reason.
 
-## Backends
+## How it works
+
+- **Streaming.** Audio is fed to the recogniser while you hold the key, so on
+  release only the final bit is decoded: 2–5 ms, versus ~460 ms (p50) for a
+  Google round trip in-sim.
+- **Grammar.** Vosk may only output the ~145 words in
+  [`ML/vimaan_nlu/command_words.txt`](../ML/vimaan_nlu/command_words.txt)
+  plus `[unk]`. That file is generated from the training schema by
+  `python scripts/build_stt_vocabulary.py`; a test fails if it is stale.
+  Out-of-grammar speech becomes `[unk]` (dropped), so chatter doesn't turn
+  into commands.
+
+**Real voice** (first A330 flight, 33 labelled commands, replayed with
+`python scripts/stt_benchmark.py`):
+
+| Recogniser | Right command | Time after key-up |
+| --- | --- | --- |
+| **Vosk, command grammar** | **30 / 33** | 10 ms |
+| Vosk, full vocabulary | 20 / 33 | 46 ms |
+| Google | 32 / 33 | 424 ms |
+
+Vosk's 3 misses were all safe: "AP2 on" heard as "eighty two on" (twice;
+low confidence, asked to repeat) and a stray leading word on "engine two
+off" (executed correctly anyway). Google's labels were the starting point
+for the label file, which flatters Google slightly. The same flight found
+that Vosk hears "two" as "do" (now excluded from the grammar) and that the
+normalizer read "one eighty" as 81 (fixed: pilot number groups).
+
+Measured on 108 synthetic clips (6 macOS voices × 18 commands), right intent
+and slots end to end, through the v11 model:
+
+| Recogniser | Correct | Notes |
+| --- | --- | --- |
+| Vosk, full vocabulary | 62 / 108 | "gear" → "you're", "set" → "that" |
+| **Vosk, command grammar + `[unk]`** | **94 / 108** | default |
+| Vosk, command grammar, no `[unk]` | 99 / 108 | but chatter becomes commands ("let me check the chart" → "retract start" = start engine 1) |
+| Google | 49 / 108 | returns nothing on many synthetic clips; real voices are the fair test (see below) |
+
+## Setup
+
+```bash
+python scripts/fetch_vosk_model.py      # ~40 MB, SHA-256 checked -> ML/models/vosk/
+python scripts/install_plugin.py --xplane "<X-Plane 12>"   # ships the model too
+```
+
+and `vosk` in XPPython3's Python (see [IN_SIM_TESTING.md](IN_SIM_TESTING.md)
+§2 for installing packages there on Apple Silicon).
+
+## Saved audio and the benchmark
+
+Each command's audio is saved to `~/Vimaan_Logs/audio/<session>_<cmd>.wav`
+(16 kHz mono, ~32 KB per second, stops at 500 MB). The file name joins it to
+that session's `events.jsonl`, which holds the transcript and outcome. These
+recordings are how recognisers are compared on real voices (Track S3 in
+[PHASE_PLAN.md](PHASE_PLAN.md)). Turn off with `VIMAAN_SAVE_AUDIO=0`.
+
+```bash
+python scripts/stt_benchmark.py --seed-labels   # Google's guess for new clips -> labels.jsonl
+# review ~/Vimaan_Logs/audio/labels.jsonl: fix what was actually said
+python scripts/stt_benchmark.py --backends vosk,vosk-open,google
+```
+
+## Other backends
 
 | Backend | Offline | Install | Notes |
 | --- | --- | --- | --- |
-| `google` | ❌ | (default) | Free tier, rate-limited, needs internet. |
-| `vosk` | ✅ | `pip install vosk` + a model | Lightweight, real-time friendly. **Recommended offline choice.** |
-| `whisper` | ✅ | `pip install openai-whisper` | Most accurate; heavier, slower on CPU. Model via `VIMAAN_WHISPER_MODEL` (default `base.en`). |
-| `sphinx` | ✅ | `pip install pocketsphinx` | Lowest resource, lowest accuracy. |
+| `vosk` | ✅ | `vosk` + model | Default. Streaming, grammar-restricted. |
+| `google` | ❌ | (included) | Free tier, rate-limited, needs internet. |
+| `whisper` | ✅ | `pip install openai-whisper` | Starts after key-up; 0.3–1 s on CPU; can invent text on silence. `VIMAAN_WHISPER_MODEL` (default `base.en`). |
+| `sphinx` | ✅ | `pip install pocketsphinx` | Lowest accuracy. |
 
-## Vosk setup (recommended)
-
-```bash
-pip install vosk
-# Download a small English model and point SpeechRecognition at it:
-#   https://alphacephei.com/vosk/models  (e.g. vosk-model-small-en-us-0.15)
-```
-
-`SpeechRecognition`'s `recognize_vosk` looks for a `model/` directory in the
-working directory by default; place or symlink the unpacked model there, or set
-it up per the SpeechRecognition docs. `transcribe()` parses vosk's JSON output
-back to a plain string automatically.
-
-## Whisper setup
-
-```bash
-pip install openai-whisper
-export VIMAAN_STT_BACKEND=whisper
-export VIMAAN_WHISPER_MODEL=base.en   # tiny.en / base.en / small.en ...
-```
-
-## Notes
-
-- Offline packages are **not** in `requirements.txt` (they're heavy and
-  model-dependent) — install only the backend you use.
-- On plugin start the log records the active backend:
-  `[Vimaan] STT backend: vosk`.
-- End-to-end accuracy of each backend in-sim is still to be measured
-  (tracked with the gold-audio set, Phase 6E).
+Words the small Vosk model doesn't know (warned in the worker log): compounds
+such as *autothrottle*, *speedbrake*, *autobrake*. New commands must use the
+split forms ("auto throttle") in the grammar and have the normalizer rejoin
+them.

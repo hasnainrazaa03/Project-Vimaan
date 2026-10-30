@@ -3,6 +3,8 @@
 Uses a fake recognizer so no speech_recognition / model / audio is needed.
 """
 
+import os
+
 import pytest
 from vimaan_nlu.stt import SUPPORTED_BACKENDS, transcribe
 
@@ -106,3 +108,110 @@ def test_in_process_flac_skipped_for_non_16bit_audio():
     from vimaan_nlu.stt import use_inprocess_flac
 
     assert use_inprocess_flac(_Audio(b"\x00" * 100, sample_width=1)) is False
+
+
+# ---------------------------------------------------------------------------
+# VoskStream (streaming offline recognition) with a fake vosk module
+# ---------------------------------------------------------------------------
+class FakeKaldi:
+    def __init__(self, model, rate, grammar=None):
+        self.model, self.rate, self.grammar = model, rate, grammar
+        self.fed = b""
+        self.final = '{"text": "gear up"}'
+
+    def Reset(self):
+        self.fed = b""
+
+    def AcceptWaveform(self, pcm):
+        self.fed += pcm
+
+    def FinalResult(self):
+        return self.final
+
+
+class FakeVosk:
+    def __init__(self):
+        self.Model = lambda path: ("model", path)
+        self.KaldiRecognizer = FakeKaldi
+
+
+class TestVoskStream:
+    def make(self, words=("gear", "up", "[unk]")):
+        from vimaan_nlu.stt import VoskStream
+
+        return VoskStream(
+            "/models/x", words=None if words is None else list(words), vosk=FakeVosk()
+        )
+
+    def test_grammar_passed_as_json(self):
+        import json
+
+        s = self.make()
+        assert s.grammar and json.loads(s._rec.grammar) == ["gear", "up", "[unk]"]
+        assert s._rec.model == ("model", "/models/x") and s._rec.rate == 16000
+
+    def test_full_vocabulary_without_grammar(self):
+        s = self.make(words=None)
+        assert not s.grammar and s._rec.grammar is None
+
+    def test_feed_and_finish(self):
+        s = self.make()
+        s.begin()
+        s.feed(b"\x01\x00" * 10)
+        s.feed(b"")
+        assert s.fed_bytes == 20 and s._rec.fed == b"\x01\x00" * 10
+        assert s.finish() == "gear up"
+        s.begin()
+        assert s.fed_bytes == 0 and s._rec.fed == b""
+
+    def test_unknown_words_dropped(self):
+        s = self.make()
+        s._rec.final = '{"text": "[unk] gear [unk] up"}'
+        assert s.finish() == "gear up"
+
+    @pytest.mark.parametrize("final", ['{"text": ""}', '{"text": "[unk] [unk]"}'])
+    def test_nothing_recognised_is_not_understood(self, final):
+        from vimaan_nlu.stt import UnknownValueError
+        from vimaan_nlu.voice_worker import _error_outcome
+
+        s = self.make()
+        s._rec.final = final
+        with pytest.raises(UnknownValueError) as exc:
+            s.finish()
+        assert _error_outcome(exc.value) == "not_understood"
+
+
+def _real_vosk_ready():
+    import shutil
+
+    from vimaan_nlu.stt import DEFAULT_VOSK_MODEL
+
+    try:
+        import vosk  # noqa: F401
+    except Exception:
+        return False
+    return os.path.isdir(DEFAULT_VOSK_MODEL) and shutil.which("say") is not None
+
+
+@pytest.mark.skipif(not _real_vosk_ready(), reason="needs vosk, its model and macOS `say`")
+def test_real_vosk_grammar_on_synthesized_speech(tmp_path):
+    import subprocess
+    import wave
+
+    from vimaan_nlu.stt import DEFAULT_VOSK_MODEL, VoskStream
+    from vimaan_nlu.stt_vocabulary import grammar
+
+    stream = VoskStream(DEFAULT_VOSK_MODEL, words=grammar())
+    heard = {}
+    for phrase in ("set heading two seven zero", "parking brake on", "flaps up"):
+        path = tmp_path / "p.wav"
+        subprocess.run(
+            ["say", "-v", "Samantha", "-o", str(path), "--data-format=LEI16@16000", phrase],
+            check=True,
+        )
+        pcm = wave.open(str(path)).readframes(10**7)
+        stream.begin()
+        for i in range(0, len(pcm), 640):  # 20 ms chunks, like the live mic
+            stream.feed(pcm[i : i + 640])
+        heard[phrase] = stream.finish()
+    assert heard == {p: p for p in heard}

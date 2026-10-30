@@ -37,6 +37,8 @@ sounddevice>=0.4
 # In-process FLAC for Google STT: SpeechRecognition's bundled flac-mac binary
 # is x86_64-only and fails on Apple Silicon without Rosetta.
 soundfile>=0.12
+# Offline speech recognition (the default); model: scripts/fetch_vosk_model.py
+vosk>=0.3.44,<0.4
 
 # NOTE:
 # - XPPython3 is provided by the X-Plane installation and MUST NOT be pip-installed.

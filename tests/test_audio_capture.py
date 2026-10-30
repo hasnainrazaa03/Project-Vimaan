@@ -166,3 +166,21 @@ def test_release_while_still_opening_closes_the_stream():
     assert rec.stop() == b""
     rec.wait_idle()
     assert sd.streams[-1].closed
+
+
+def test_take_new_streams_without_affecting_stop():
+    sd = make_sounddevice()
+    rec = PushToTalkRecorder(sd=sd)
+    rec.start()
+    rec.wait_idle()
+    sd.streams[-1].feed(ONE_SEC[:8000])
+    rec.poll()
+    assert len(rec.take_new()) == 8000
+    assert rec.take_new() == b""
+    sd.streams[-1].feed(ONE_SEC[:4000])
+    rec.poll()
+    assert len(rec.take_new()) == 4000
+    assert len(rec.stop()) == 12000  # stop still returns everything
+    rec.start()  # a new press starts the stream cursor over
+    rec.wait_idle()
+    assert rec.take_new() == b""

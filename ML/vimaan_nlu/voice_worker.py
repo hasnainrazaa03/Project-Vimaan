@@ -50,6 +50,10 @@ STT_TIMEOUT_SEC = 8.0
 # over ~100-160 ms late, and pilots let go as they finish the last word. Without
 # it, in-sim Google heard "gear" / "parking brake" with the "up" / "on" cut off.
 RELEASE_TAIL_SEC = 0.3
+# Each command's audio is saved (16 kHz mono WAV, ~32 KB/s) so real flights
+# become a test set for comparing recognisers (scripts/stt_benchmark.py).
+# Saving stops once the folder holds this much.
+MAX_AUDIO_DIR_BYTES = 500 * 1024 * 1024
 
 
 class WavRecorder:
@@ -70,12 +74,13 @@ class WavRecorder:
         self.overflows, self.truncated, self.busy, self.is_open = 0, False, False, False
         self._t0: float | None = None
         self._taken = 0
+        self._streamed = 0  # frames handed out by take_new()
 
     def describe(self) -> dict[str, Any]:
         return {"using": f"WAV file {self.path}", "sample_rate": self.sample_rate}
 
     def start(self) -> None:
-        self._t0, self._taken, self.is_open = time.perf_counter(), 0, True
+        self._t0, self._taken, self._streamed, self.is_open = time.perf_counter(), 0, 0, True
 
     def elapsed(self) -> float:
         return 0.0 if self._t0 is None else time.perf_counter() - self._t0
@@ -86,6 +91,11 @@ class WavRecorder:
         due = min(len(self._pcm) // 2, int(self.elapsed() * self.sample_rate))
         n, self._taken = due - self._taken, due
         return n
+
+    def take_new(self) -> bytes:
+        new = self._pcm[self._streamed * 2 : self._taken * 2]
+        self._streamed = self._taken
+        return new
 
     def stop(self) -> bytes:
         self.poll()
@@ -124,6 +134,9 @@ class VoiceWorker:
         *,
         release_tail_sec: float = RELEASE_TAIL_SEC,
         clock: Callable[[], float] = time.perf_counter,
+        stream_stt: Any = None,
+        audio_dir: str | None = None,
+        audio_prefix: str = "",
     ) -> None:
         self.send = send
         self.recorder = recorder
@@ -131,6 +144,12 @@ class VoiceWorker:
         self.predict_text = predict_text
         self.release_tail_sec = release_tail_sec
         self.clock = clock
+        # Optional streaming recogniser (stt.VoskStream): fed while recording,
+        # used instead of transcribe_audio.
+        self.stream_stt = stream_stt
+        self.audio_dir = audio_dir
+        self.audio_prefix = audio_prefix
+        self._audio_dir_bytes = _dir_bytes(audio_dir) if audio_dir else 0
         self.rec: dict[str, Any] | None = None  # the recording in progress
 
     # ------------------------------------------------------------------
@@ -147,6 +166,8 @@ class VoiceWorker:
                 )
                 return True
             self.recorder.start()
+            if self.stream_stt is not None:
+                self.stream_stt.begin()
             self.rec = {
                 "cmd": cmd,
                 "t_start": self.clock(),
@@ -211,6 +232,8 @@ class VoiceWorker:
                 }
             )
         self.recorder.poll()
+        if self.stream_stt is not None:
+            self.stream_stt.feed(self.recorder.take_new())
         released = rec["released_at"]
         if released is not None:
             if self.clock() - released >= self.release_tail_sec:
@@ -241,6 +264,7 @@ class VoiceWorker:
                 "overflows": self.recorder.overflows,
                 "truncated": self.recorder.truncated,
                 "auto_stop": auto_stop,
+                "audio_file": self._save_audio(cmd, raw),
             }
         )
         if audio_sec < MIN_RECORD_SEC:
@@ -251,7 +275,11 @@ class VoiceWorker:
             return
         t = self.clock()
         try:
-            text = self.transcribe_audio(raw, self.recorder.sample_rate)
+            if self.stream_stt is not None:
+                self.stream_stt.feed(raw[self.stream_stt.fed_bytes :])  # the release tail
+                text = self.stream_stt.finish()
+            else:
+                text = self.transcribe_audio(raw, self.recorder.sample_rate)
         except Exception as exc:
             self.send(
                 {
@@ -267,6 +295,27 @@ class VoiceWorker:
         self._predict_and_reply(
             cmd, text, stt_ms=round((self.clock() - t) * 1000, 1), audio=audio_sec
         )
+
+    def _save_audio(self, cmd: Any, raw: bytes) -> str | None:
+        if not self.audio_dir or not raw:
+            return None
+        if self._audio_dir_bytes + len(raw) > MAX_AUDIO_DIR_BYTES:
+            return None
+        import wave
+
+        try:
+            os.makedirs(self.audio_dir, exist_ok=True)
+            path = os.path.join(self.audio_dir, f"{self.audio_prefix}{cmd}.wav")
+            with wave.open(path, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(self.recorder.sample_rate)
+                w.writeframes(raw)
+        except OSError as exc:
+            self.send({"type": "log", "level": "warning", "msg": f"audio not saved: {exc}"})
+            return None
+        self._audio_dir_bytes += len(raw) + 44
+        return path
 
     def _predict_and_reply(
         self, cmd: Any, text: str, stt_ms: float | None, audio: float | None
@@ -335,6 +384,13 @@ class VoiceWorker:
             self.tick()
 
 
+def _dir_bytes(path: str) -> int:
+    try:
+        return sum(e.stat().st_size for e in os.scandir(path) if e.is_file())
+    except OSError:
+        return 0
+
+
 def _protocol_writer() -> Callable[[dict[str, Any]], None]:
     """Reserve the real stdout for protocol lines; send stray prints (and
     C-level writes, e.g. library warnings) to stderr instead."""
@@ -349,9 +405,46 @@ def _protocol_writer() -> Callable[[dict[str, Any]], None]:
     return send
 
 
+def _make_stream_stt(args: argparse.Namespace) -> tuple[Any, str, dict[str, Any]]:
+    """(streaming recogniser or None, backend actually used, details to log).
+    Vosk that can't load (package or model missing) falls back to Google so
+    the copilot still works; the reason is reported in ``ready``."""
+    if args.stt_backend != "vosk":
+        return None, args.stt_backend, {}
+    from vimaan_nlu.stt import DEFAULT_VOSK_MODEL, VoskStream
+    from vimaan_nlu.stt_vocabulary import grammar
+
+    model = args.vosk_model or DEFAULT_VOSK_MODEL
+    t = time.perf_counter()
+    try:
+        words = None if args.no_grammar else grammar()
+        stream = VoskStream(model, words=words)
+    except Exception as exc:
+        return None, "google", {"fallback_from": "vosk", "error": f"{type(exc).__name__}: {exc}"}
+    return (
+        stream,
+        "vosk",
+        {
+            "model": model,
+            "grammar_words": None if words is None else len(words),
+            "load_ms": round((time.perf_counter() - t) * 1000, 1),
+        },
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Vimaan voice worker (spawned by the plugin)")
-    parser.add_argument("--stt-backend", default="google")
+    parser.add_argument("--stt-backend", default="vosk", help="vosk | google | whisper | sphinx")
+    parser.add_argument("--vosk-model", default=None, help="Vosk model directory")
+    parser.add_argument(
+        "--no-grammar",
+        action="store_true",
+        help="vosk: decode with the full vocabulary instead of the command words",
+    )
+    parser.add_argument(
+        "--save-audio-dir", default=None, help="save each command's audio here as WAV"
+    )
+    parser.add_argument("--audio-prefix", default="", help="file-name prefix for saved audio")
     parser.add_argument("--whisper-model", default="base.en")
     parser.add_argument("--backend", default="torch", choices=("torch", "onnx"))
     parser.add_argument("--no-quantize", action="store_true")
@@ -394,6 +487,7 @@ def main(argv: list[str] | None = None) -> int:
             )
 
         predict_text("set heading two seven zero")  # warm-up: first pass is slow
+        stream_stt, stt_backend, stt_info = _make_stream_stt(args)
         recognizer = sr.Recognizer()
         recognizer.operation_timeout = STT_TIMEOUT_SEC
 
@@ -401,7 +495,7 @@ def main(argv: list[str] | None = None) -> int:
             return transcribe(
                 recognizer,
                 sr.AudioData(raw, rate, 2),
-                args.stt_backend,
+                stt_backend,
                 whisper_model=args.whisper_model,
             )
 
@@ -437,11 +531,21 @@ def main(argv: list[str] | None = None) -> int:
             "quantized": loaded.get("quantized"),
             "torch_version": torch.__version__,
             "transformers_version": transformers.__version__,
-            "stt_backend": args.stt_backend,
+            "stt_backend": stt_backend,
+            "stt": stt_info,
             "mic": mic,
+            "audio_dir": args.save_audio_dir,
         }
     )
-    VoiceWorker(send, recorder, transcribe_audio, predict_text).run(sys.stdin)
+    VoiceWorker(
+        send,
+        recorder,
+        transcribe_audio,
+        predict_text,
+        stream_stt=stream_stt,
+        audio_dir=args.save_audio_dir,
+        audio_prefix=args.audio_prefix,
+    ).run(sys.stdin)
     return 0
 
 

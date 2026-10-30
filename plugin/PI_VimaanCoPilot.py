@@ -70,7 +70,11 @@ from vimaan_nlu.safety import (  # noqa: E402
     evaluate_safety,
 )
 from vimaan_nlu.telemetry import Telemetry  # noqa: E402
-from vimaan_nlu.validators import validate_slot  # noqa: E402
+from vimaan_nlu.validators import (  # noqa: E402
+    has_command_word,
+    heading_too_short,
+    validate_slot,
+)
 from vimaan_nlu.worker_client import WorkerClient  # noqa: E402
 
 _IMPORT_MS = round((time.perf_counter() - _IMPORT_T0) * 1000, 1)
@@ -194,11 +198,14 @@ class PythonInterface:
     # <model>/onnx/model.onnx.
     BACKEND = os.environ.get("VIMAAN_BACKEND", "torch").lower()
 
-    # Speech-to-text backend (Phase 7 / R-09): "google" (online, default),
-    # "vosk" or "whisper" (offline, no network). Override with
-    # VIMAAN_STT_BACKEND. Offline backends need their package + a model
-    # installed; see docs/OFFLINE_STT.md.
-    STT_BACKEND = os.environ.get("VIMAAN_STT_BACKEND", "google").lower()
+    # Speech-to-text backend: "vosk" (offline, streaming, restricted to the
+    # command words; default), "google" (online), "whisper". Override with
+    # VIMAAN_STT_BACKEND. If Vosk can't load, the worker falls back to Google
+    # and logs stt_fallback. See docs/OFFLINE_STT.md.
+    STT_BACKEND = os.environ.get("VIMAAN_STT_BACKEND", "vosk").lower()
+    # Each command's audio is saved under ~/Vimaan_Logs/audio/ so real flights
+    # become a recogniser test set. VIMAAN_SAVE_AUDIO=0 turns it off.
+    SAVE_AUDIO = os.environ.get("VIMAAN_SAVE_AUDIO", "1") != "0"
     WHISPER_MODEL = os.environ.get("VIMAAN_WHISPER_MODEL", "base.en")
 
     # Intents the model can emit that map to no sim command. "None" is a
@@ -317,6 +324,13 @@ class PythonInterface:
         ]
         if not self.USE_QUANTIZED_MODEL:
             argv.append("--no-quantize")
+        if self.SAVE_AUDIO:
+            argv += [
+                "--save-audio-dir",
+                str(self.tel.log_dir / "audio"),
+                "--audio-prefix",
+                f"{self.tel.session_id}_",
+            ]
         return argv
 
     def _start_worker(self):
@@ -554,6 +568,15 @@ class PythonInterface:
                 ms=msg.get("load_ms"),
                 **{k: v for k, v in msg.items() if k not in ("type", "load_ms")},
             )
+            requested, self.STT_BACKEND = self.STT_BACKEND, msg.get("stt_backend", self.STT_BACKEND)
+            if self.STT_BACKEND != requested:
+                self.tel.event(
+                    "stt_fallback",
+                    logging.WARNING,
+                    requested=requested,
+                    using=self.STT_BACKEND,
+                    **(msg.get("stt") or {}),
+                )
             boot = time.perf_counter() - (self._worker_started_at or time.perf_counter())
             self.tel.event("worker_ready", boot_sec=round(boot, 2), restarts=self._worker_restarts)
             self._say("Vimaan AI CoPilot ready")
@@ -648,6 +671,22 @@ class PythonInterface:
                 self._say("Command not found")
                 return
 
+            # A fragment ("seventy", "city eight on") can be classified
+            # confidently; only act when the pilot named the thing.
+            normalized = result.get("normalized") or text
+            if not has_command_word(intent_pred, normalized):
+                outcome = "rejected"
+                self.tel.event("implausible", cmd=cmd, reason="no_command_word", intent=intent_pred)
+                self._say("Please repeat that")
+                return
+            if intent_pred == "set_autopilot_heading" and heading_too_short(slots.get("degrees")):
+                outcome = "rejected"
+                self.tel.event(
+                    "implausible", cmd=cmd, reason="one_digit_heading", value=slots.get("degrees")
+                )
+                self._say("Say the heading as three digits")
+                return
+
             # Commands this aircraft physically can't do are rejected before
             # the safety gate, which would otherwise ask the pilot to confirm
             # "gear up" on a fixed-gear Cessna.
@@ -717,6 +756,7 @@ class PythonInterface:
 
     def _finish_self_test(self, results):
         self._self_test_pending = False
+        elapsed_ms = round((time.perf_counter() - self._self_test_started) * 1000, 1)
         self._self_test_started = 0.0
         passed = 0
         for r in results:
@@ -745,7 +785,7 @@ class PythonInterface:
         self.tel.event(
             "stage",
             stage="self_test",
-            ms=round((time.perf_counter() - self._self_test_started) * 1000, 1),
+            ms=elapsed_ms,
             passed=passed,
             total=total,
         )
@@ -848,7 +888,8 @@ class PythonInterface:
         return True
 
     def _expect(self, label, read, expected, delay=None):
-        """After a command, check the sim actually changed (logged, not spoken)."""
+        """After a command, check the sim actually changed; say so if it didn't
+        (in-sim the A330 ignored "autopilot on" while Vimaan had said "on")."""
         self._verifications.append(
             {
                 "cmd": self._current_cmd,
@@ -875,6 +916,8 @@ class PythonInterface:
                 actual=actual,
                 ok=ok,
             )
+            if not ok:
+                self._say(f"{v['label'].replace('_', ' ')} did not respond")
 
     def _not_applicable(self, intent):
         """Why this aircraft can't perform ``intent``, or None if it can."""

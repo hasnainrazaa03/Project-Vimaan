@@ -4,6 +4,7 @@ Pure-Python, no torch. Also guards that the postprocessor's bounds stay in
 sync with the validator definitions (single source of truth).
 """
 
+import pytest
 from vimaan_nlu.validators import (
     SLOT_VALIDATORS,
     Enum,
@@ -100,3 +101,42 @@ class TestBoundsMatchReadme:
         assert (SLOT_VALIDATORS["degrees"].lo, SLOT_VALIDATORS["degrees"].hi) == (0, 360)
         assert (SLOT_VALIDATORS["flight_level"].lo, SLOT_VALIDATORS["flight_level"].hi) == (10, 430)
         assert (SLOT_VALIDATORS["frequency"].lo, SLOT_VALIDATORS["frequency"].hi) == (118.0, 137.0)
+
+
+class TestPlausibility:
+    @pytest.mark.parametrize(
+        ("intent", "text", "ok"),
+        [
+            ("set_autopilot_heading", "set heading 270", True),
+            ("set_autopilot_heading", "turn to 090 degrees", True),
+            ("set_autopilot_heading", "180", False),
+            ("set_flight_level", "climb to flight level 240", True),
+            ("set_flight_level", "70", False),
+            ("toggle_flight_director_1", "city 8 on", False),
+            ("toggle_flight_director_1", "fd one on", True),
+            ("toggle_parking_brake", "parking off", True),
+            ("toggle_parking_brake", "on", False),
+            ("toggle_engine_2", "shut down engine 2", True),
+            ("ask_time", "what time is it", True),  # no list: never blocked
+        ],
+    )
+    def test_has_command_word(self, intent, text, ok):
+        from vimaan_nlu.validators import has_command_word
+
+        assert has_command_word(intent, text) is ok
+
+    def test_every_actionable_intent_has_command_words(self):
+        from config.schema_config import SCHEMA
+        from vimaan_nlu.validators import COMMAND_WORDS
+
+        actionable = {i for i, d in SCHEMA.items() if d.get("slots")}
+        assert actionable <= set(COMMAND_WORDS)
+
+    @pytest.mark.parametrize(
+        ("value", "short"),
+        [("1", True), ("5", True), ("05", False), ("090", False), ("270", False)],
+    )
+    def test_heading_too_short(self, value, short):
+        from vimaan_nlu.validators import heading_too_short
+
+        assert heading_too_short(value) is short

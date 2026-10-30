@@ -15,9 +15,17 @@ environment variable.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 SUPPORTED_BACKENDS: tuple[str, ...] = ("google", "vosk", "whisper", "sphinx")
+# Shipped by scripts/install_plugin.py next to the NLU model.
+DEFAULT_VOSK_MODEL = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "models",
+    "vosk",
+    "vosk-model-small-en-us-0.15",
+)
 
 
 def transcribe(
@@ -83,6 +91,59 @@ def use_inprocess_flac(audio: Any) -> bool:
 
     audio.get_flac_data = get_flac_data
     return True
+
+
+class UnknownValueError(Exception):
+    """Nothing intelligible was said. Same name as SpeechRecognition's, so the
+    voice worker classifies both as ``not_understood``."""
+
+
+class VoskStream:
+    """Streaming offline recognition: audio is decoded *while* the pilot
+    talks, so after key-up only the last few hundred ms remain (measured
+    1-2 ms to finish vs ~460 ms for a Google round trip).
+
+    ``words`` restricts output to a grammar (see ``stt_vocabulary``); None
+    means Vosk's full vocabulary. ``model`` is a path or a loaded
+    ``vosk.Model``; ``vosk`` is injectable for tests.
+    """
+
+    def __init__(
+        self,
+        model: Any,
+        sample_rate: int = 16_000,
+        words: list[str] | None = None,
+        vosk: Any = None,
+    ) -> None:
+        if vosk is None:
+            import vosk as vosk_module  # deferred: optional dependency
+
+            vosk_module.SetLogLevel(-1)
+            vosk = vosk_module
+        if isinstance(model, str):
+            model = vosk.Model(model)
+        args = (model, sample_rate) if words is None else (model, sample_rate, json.dumps(words))
+        self._rec = vosk.KaldiRecognizer(*args)
+        self.sample_rate = sample_rate
+        self.grammar = words is not None
+        self.fed_bytes = 0
+
+    def begin(self) -> None:
+        self._rec.Reset()
+        self.fed_bytes = 0
+
+    def feed(self, pcm: bytes) -> None:
+        if pcm:
+            self._rec.AcceptWaveform(pcm)
+            self.fed_bytes += len(pcm)
+
+    def finish(self) -> str:
+        """Final transcript of everything fed since :meth:`begin`."""
+        text = _vosk_text(self._rec.FinalResult())
+        text = " ".join(w for w in text.split() if w != "[unk]")
+        if not text:
+            raise UnknownValueError("no command words recognised")
+        return text
 
 
 def _vosk_text(raw: Any) -> str:

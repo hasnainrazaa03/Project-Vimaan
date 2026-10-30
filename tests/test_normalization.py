@@ -208,6 +208,38 @@ class TestRecognizerFormatting:
         assert normalize_aviation_input(text) == expected
 
 
+class TestPilotNumberGroups:
+    """Vosk returns words, as pilots say them. In-sim, "heading one eighty"
+    set the heading to 81 (word2number adds the groups)."""
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("heading one eighty", "heading 180"),
+            ("heading two seventy", "heading 270"),
+            ("three sixty", "360"),
+            ("flight level two forty", "flight level 240"),
+            ("flight level one fifty", "flight level 150"),
+            ("speed one twenty five", "speed 125"),
+            ("one eighteen decimal seven five", "118.75"),
+            ("tune com one to one twenty one decimal five", "tune com 1 to 121.5"),
+            ("twenty five hundred", "2500"),  # word2number says 200
+            ("set altitude thirty five hundred feet", "set altitude 3500 feet"),
+            # unchanged behaviour
+            ("eighty", "80"),
+            ("heading two seven zero", "heading 270"),
+            ("heading two hundred seventy", "heading 270"),
+            ("seven thousand five hundred", "7500"),
+            ("fifteen hundred", "1500"),
+            ("one five thousand", "15000"),
+            ("engine two off", "engine 2 off"),
+            ("one one eight decimal seven five", "118.75"),
+        ],
+    )
+    def test_groups(self, text, expected):
+        assert normalize_aviation_input(text) == expected
+
+
 class TestGoogleMishearings:
     """Seen in the first in-sim session (Google Web Speech)."""
 
