@@ -153,6 +153,46 @@ def make_xp() -> types.ModuleType:
         setattr(xp, fn.__name__, fn)
     xp.getDatavi = getDatav
     xp.getDatavf = getDatav
+    # Windows + 2D drawing (the overlay). Windows are recorded; drawing calls
+    # are recorded as (text, x, y, rgb) so tests can read the screen.
+    xp.windows = {}  # id -> {"geom", "visible", "draw", "title", ...}
+    xp.drawn = []
+    xp.WindowDecorationRoundRectangle, xp.WindowLayerFloatingWindows = 1, 1
+    xp.WindowPositionFree, xp.Font_Proportional = 0, 18
+
+    def createWindowEx(left, top, right, bottom, visible, draw, *rest):
+        wid = len(xp.windows) + 1
+        xp.windows[wid] = {"geom": (left, top, right, bottom), "visible": visible, "draw": draw}
+        return wid
+
+    def setWindowIsVisible(wid, visible=1):
+        xp.windows[wid]["visible"] = visible
+
+    def drawString(rgb, x, y, value, wrap=None, font=None):
+        xp.drawn.append((value, x, y, tuple(rgb)))
+
+    xp.createWindowEx = createWindowEx
+    xp.setWindowIsVisible = setWindowIsVisible
+    xp.getWindowIsVisible = lambda wid: xp.windows[wid]["visible"]
+    xp.getWindowGeometry = lambda wid: xp.windows[wid]["geom"]
+    xp.setWindowTitle = lambda wid, title: xp.windows[wid].update(title=title)
+    xp.setWindowPositioningMode = lambda wid, mode, index=-1: None
+    xp.setWindowResizingLimits = lambda wid, *a: None
+    xp.destroyWindow = lambda wid: xp.windows.pop(wid, None)
+    xp.getScreenBoundsGlobal = lambda: (0, 1080, 1920, 0)
+    xp.drawTranslucentDarkBox = lambda *a: None
+    xp.drawString = drawString
+    xp.measureString = lambda font, text: 8.0 * len(text)
+
+    def draw_windows():
+        """Run every visible window's draw callback once (one rendered frame)."""
+        xp.drawn.clear()
+        for wid, w in xp.windows.items():
+            if w["visible"] and w["draw"] is not None:
+                w["draw"](wid, None)
+        return [d[0] for d in xp.drawn]
+
+    xp.draw_windows = draw_windows
     xp.unregisterHotKey = lambda hid: None
     xp.scheduleFlightLoop = lambda lid, interval, rel=1: None
     xp.destroyFlightLoop = lambda lid: None

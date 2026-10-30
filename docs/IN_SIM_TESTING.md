@@ -126,6 +126,18 @@ To replay a recording instead of using the mic (debugging):
 bound button) is held and stops on release (12 s cap; taps under 0.3 s are
 ignored). Start speaking a beat after pressing — the mic takes ~0.2 s to open. The copilot stays quiet while you talk so its voice isn't recorded.
 
+**Overlay:** a bar at the bottom of the screen shows what Vimaan hears
+*while you talk* (Vosk), then what it heard, what it understood (command,
+values, confidence) and what happened, colour-coded: green done, amber
+confirm / repeat / rejected (with the reason), red errors or "did not
+respond". It appears when you press push-to-talk and fades ~6 s after the
+result. It's an ordinary X-Plane window: drag it, resize it, or pop it out to
+another monitor. Bind **Vimaan: overlay auto / pinned / off** (command
+`vimaan/toggle_overlay`) to cycle modes, or set `VIMAAN_OVERLAY=pinned|off`
+before launch. Drawn with ImGui (bundled with XPPython3), falling back to
+X-Plane's own text if ImGui can't load; the log report shows which, and the
+worst draw time per frame.
+
 **Push-to-talk on a yoke button:** Settings → Joystick → search `vimaan` →
 bind **Vimaan: push to talk** (and optionally **Vimaan: run self test**).
 

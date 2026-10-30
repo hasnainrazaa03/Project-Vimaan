@@ -196,6 +196,9 @@ class FakeStream:
     def finish(self):
         return self.text
 
+    def partial(self):
+        return "gear" if self.fed_bytes else ""
+
 
 def test_streaming_stt_fed_while_recording(tmp_path):
     w, out, sd, clock = make_worker(transcript=RuntimeError("batch STT must not run"))
@@ -210,6 +213,18 @@ def test_streaming_stt_fed_while_recording(tmp_path):
     assert w.stream_stt.fed == LOUD[:32000]  # every byte exactly once
     assert out[-1]["type"] == "result" and out[-1]["text"] == "gear up"
     assert w.stream_stt.begun == 1
+
+
+def test_live_partials_sent_while_recording():
+    w, out, sd, clock = make_worker()
+    w.stream_stt = FakeStream()
+    press_and_feed(w, sd, LOUD[:3200])
+    w.tick()
+    w.tick()  # same text again within the interval: not resent
+    clock.now += 0.2
+    w.tick()  # unchanged text: not resent either
+    partials = [m for m in out if m["type"] == "partial"]
+    assert partials == [{"type": "partial", "cmd": "c1", "text": "gear"}]
 
 
 def test_audio_saved_per_command(tmp_path):
