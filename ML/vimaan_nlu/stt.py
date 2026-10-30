@@ -137,6 +137,14 @@ class VoskStream:
             self._rec.AcceptWaveform(pcm)
             self.fed_bytes += len(pcm)
 
+    def partial(self) -> str:
+        """Best guess so far (shown live in the overlay while talking)."""
+        try:
+            raw = json.loads(self._rec.PartialResult()).get("partial", "")
+        except (ValueError, TypeError, AttributeError):
+            return ""
+        return " ".join(w for w in raw.split() if w != "[unk]")
+
     def finish(self) -> str:
         """Final transcript of everything fed since :meth:`begin`."""
         text = _vosk_text(self._rec.FinalResult())
