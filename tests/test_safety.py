@@ -31,24 +31,24 @@ class TestGearUpInterlock:
 
 class TestEngineShutdownInterlock:
     def test_engine_off_airborne_requires_confirmation(self):
-        v = evaluate_safety("toggle_engine_1", {"state": "off"}, SafetyContext(agl_ft=3000))
+        v = evaluate_safety("toggle_engine", {"state": "off"}, SafetyContext(agl_ft=3000))
         assert v.requires_confirmation and v.rule == "engine_shutdown_in_flight"
 
     def test_engine_off_on_ground_is_fine(self):
         ctx = SafetyContext(on_ground=True, agl_ft=0, ias_kt=0)
-        v = evaluate_safety("toggle_engine_2", {"state": "off"}, ctx)
+        v = evaluate_safety("toggle_engine", {"state": "off"}, ctx)
         assert not v.requires_confirmation
 
     def test_engine_off_unknown_state_fails_safe(self):
-        v = evaluate_safety("toggle_engine_1", {"state": "off"}, SafetyContext())
+        v = evaluate_safety("toggle_engine", {"state": "off"}, SafetyContext())
         assert v.requires_confirmation and v.fail_safe
 
     def test_engine_start_not_gated(self):
-        v = evaluate_safety("toggle_engine_1", {"state": "on"}, SafetyContext(agl_ft=3000))
+        v = evaluate_safety("toggle_engine", {"state": "on"}, SafetyContext(agl_ft=3000))
         assert not v.requires_confirmation
 
     def test_airborne_detected_by_speed_when_no_agl(self):
-        v = evaluate_safety("toggle_engine_1", {"state": "off"}, SafetyContext(ias_kt=120))
+        v = evaluate_safety("toggle_engine", {"state": "off"}, SafetyContext(ias_kt=120))
         assert v.requires_confirmation and not v.fail_safe
 
 
@@ -88,7 +88,7 @@ class TestConfirmationGate:
 
     def test_confirm_consumes_pending(self):
         gate = ConfirmationGate()
-        token = command_token("toggle_engine_1", {"state": "off"})
+        token = command_token("toggle_engine", {"state": "off"})
         gate.arm(token)
         assert gate.confirm(token) is True
         assert gate.confirm(token) is False  # already consumed
@@ -116,8 +116,10 @@ class TestConfirmationGate:
         now["t"] = 105.0  # 5s later, inside the window
         assert gate.confirm(token) is True
 
-    def test_command_token_keys_on_intent_and_state(self):
-        assert command_token("toggle_engine_1", {"state": "off"}) == "toggle_engine_1:off"
-        assert command_token("toggle_engine_1", {"state": "on"}) != command_token(
-            "toggle_engine_1", {"state": "off"}
-        )
+    def test_command_token_keys_on_intent_instance_and_state(self):
+        off_1 = command_token("toggle_engine", {"state": "off", "instance": "1"})
+        assert off_1 == "toggle_engine:1:off"
+        assert off_1 != command_token("toggle_engine", {"state": "on", "instance": "1"})
+        # "engine two off" must not confirm a pending "engine one off"
+        assert off_1 != command_token("toggle_engine", {"state": "off", "instance": "2"})
+        assert command_token("set_flaps", {"position": "up"}) == "set_flaps::up"

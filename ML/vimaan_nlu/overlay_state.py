@@ -64,7 +64,7 @@ def describe_intent(intent: str) -> str:
 def describe_slots(slots: dict[str, Any]) -> str:
     parts = []
     for name, value in slots.items():
-        if name == "state":
+        if str(value).isalpha():  # on / up / both
             parts.append(str(value).upper())
         else:
             parts.append(f"{SLOT_DISPLAY.get(name, name.replace('_', ' '))} {value}")

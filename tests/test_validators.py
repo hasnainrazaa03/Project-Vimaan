@@ -112,11 +112,11 @@ class TestPlausibility:
             ("set_autopilot_heading", "180", False),
             ("set_flight_level", "climb to flight level 240", True),
             ("set_flight_level", "70", False),
-            ("toggle_flight_director_1", "city 8 on", False),
-            ("toggle_flight_director_1", "fd one on", True),
+            ("toggle_flight_director", "city 8 on", False),
+            ("toggle_flight_director", "fd one on", True),
             ("toggle_parking_brake", "parking off", True),
             ("toggle_parking_brake", "on", False),
-            ("toggle_engine_2", "shut down engine 2", True),
+            ("toggle_engine", "shut down engine 2", True),
             ("ask_time", "what time is it", True),  # no list: never blocked
         ],
     )

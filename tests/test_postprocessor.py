@@ -2,13 +2,13 @@
 
 import pytest
 from vimaan_nlu.postprocessor import (
-    ACTION_STATE_MAP,
-    IMPLICIT_STATE_INTENTS,
+    CHOICE_SYNONYMS,
     add_implicit_state,
-    correct_numbered_intent,
+    canonicalize_choices,
     extract_digit_sequence_frequency,
     extract_numbers_from_text,
     postprocess_slots,
+    resolve_instance,
 )
 
 
@@ -51,7 +51,7 @@ class TestAddImplicitState:
 
     def test_existing_state_preserved(self):
         slots = {"state": "on"}
-        out = add_implicit_state(slots, "engage autopilot", "toggle_autopilot_1")
+        out = add_implicit_state(slots, "engage autopilot", "toggle_autopilot")
         assert out == {"state": "on"}
 
     @pytest.mark.parametrize(
@@ -80,7 +80,7 @@ class TestAddImplicitState:
     )
     def test_autopilot_action_inference(self, phrase, expected):
         slots = {}
-        out = add_implicit_state(slots, phrase, "toggle_autopilot_1")
+        out = add_implicit_state(slots, phrase, "toggle_autopilot")
         assert out["state"] == expected
 
     def test_unknown_action_leaves_slots_alone(self):
@@ -137,81 +137,72 @@ class TestPostprocessSlots:
         assert "state" not in out
 
 
-class TestActionStateMapCoverage:
-    def test_all_actions_resolve_to_valid_state(self):
-        for action, state in ACTION_STATE_MAP.items():
-            assert state in {"up", "down", "on", "off"}, action
+class TestChoiceSynonymCoverage:
+    def test_every_verb_maps_to_a_valid_value(self):
+        from vimaan_nlu.validators import SLOT_VALIDATORS
 
-    def test_implicit_state_intents_are_only_toggles(self):
-        for intent in IMPLICIT_STATE_INTENTS:
-            assert intent.startswith("toggle_"), intent
+        for intent, slots in CHOICE_SYNONYMS.items():
+            for slot, values in slots.items():
+                for value in values:
+                    assert SLOT_VALIDATORS[slot].contains(value), (intent, slot, value)
 
-    def test_implicit_state_intents_exist_in_schema(self):
-        """Guard against drift: every implicit-state intent must be a real
-        intent in the schema (no dead entries like the old engine_3/_4)."""
-        from config.schema_config import SCHEMA
+    def test_no_verb_means_two_things_for_one_intent(self):
+        for intent, slots in CHOICE_SYNONYMS.items():
+            for slot, values in slots.items():
+                verbs = [v for syns in values.values() for v in syns]
+                assert len(verbs) == len(set(verbs)), (intent, slot)
 
-        for intent in IMPLICIT_STATE_INTENTS:
-            assert intent in SCHEMA, f"{intent} is not a defined intent in schema_config"
+    def test_tagged_verb_becomes_canonical(self):
+        # v12 tags the word spoken; the plugin needs the value.
+        assert canonicalize_choices(
+            {"state": "raise"}, "raise the gear", "toggle_landing_gear"
+        ) == {"state": "up"}
+        assert canonicalize_choices({"position": "retract"}, "retract flaps", "set_flaps") == {
+            "position": "up"
+        }
+        assert canonicalize_choices(
+            {"state": "shut down"}, "shut down engine 2", "toggle_engine"
+        ) == {"state": "off"}
 
 
-class TestCorrectNumberedIntent:
-    def test_corrects_engine_variant_from_text(self):
-        assert correct_numbered_intent("toggle_engine_1", "engine 2 off") == "toggle_engine_2"
+def instance(text, intent="toggle_engine", slots=None):
+    return resolve_instance(dict(slots or {}), text, intent)["instance"]
 
-    def test_corrects_autopilot_variant(self):
-        assert (
-            correct_numbered_intent("toggle_autopilot_2", "engage autopilot 1")
-            == "toggle_autopilot_1"
-        )
 
-    def test_corrects_flight_director_variant(self):
-        assert (
-            correct_numbered_intent("toggle_flight_director_1", "flight director 2 on")
-            == "toggle_flight_director_2"
-        )
+class TestResolveInstance:
+    def test_named_number(self):
+        assert instance("engine 2 off") == "2"
+        assert instance("engage autopilot 1", "toggle_autopilot") == "1"
+        assert instance("flight director 2 on", "toggle_flight_director") == "2"
 
-    def test_noop_when_text_agrees(self):
-        assert correct_numbered_intent("toggle_engine_2", "shut down engine 2") == "toggle_engine_2"
+    def test_tagged_value_wins(self):
+        assert instance("start engine 2", slots={"instance": "2"}) == "2"
+        assert instance("autopilot two on", "toggle_autopilot", {"instance": "two"}) == "2"
 
     def test_defaults_to_instance_1_when_none_named(self):
-        # "autopilot on" names no instance: the model's _1/_2 choice is a coin
-        # flip, so default to the captain-side / only system.
-        assert (
-            correct_numbered_intent("toggle_engine_1", "shut down the engine") == "toggle_engine_1"
-        )
-        assert correct_numbered_intent("toggle_autopilot_2", "engage the autopilot") == (
-            "toggle_autopilot_1"
-        )
-        assert correct_numbered_intent("toggle_flight_director_2", "flight director on") == (
-            "toggle_flight_director_1"
-        )
+        assert instance("shut down the engine") == "1"
+        assert instance("engage the autopilot", "toggle_autopilot") == "1"
+        assert instance("flight director on", "toggle_flight_director") == "1"
 
     def test_ordinal_and_side_words_name_the_instance(self):
-        assert correct_numbered_intent("toggle_engine_1", "shut down right engine") == (
-            "toggle_engine_2"
-        )
-        assert correct_numbered_intent("toggle_autopilot_1", "engage second autopilot") == (
-            "toggle_autopilot_2"
-        )
-        assert correct_numbered_intent("toggle_engine_2", "start the left engine") == (
-            "toggle_engine_1"
-        )
+        assert instance("shut down right engine") == "2"
+        assert instance("engage second autopilot", "toggle_autopilot") == "2"
+        assert instance("start the left engine") == "1"
+
+    def test_both(self):
+        assert instance("shut down both engines") == "both"
 
     def test_disconnect_means_off_for_autopilot(self):
-        slots = postprocess_slots({}, "disconnect autopilot", "toggle_autopilot_1")
-        assert slots.get("state") == "off"
+        slots = postprocess_slots({}, "disconnect autopilot", "toggle_autopilot")
+        assert slots == {"state": "off", "instance": "1"}
 
-    def test_noop_for_non_numbered_intent(self):
-        assert correct_numbered_intent("toggle_landing_gear", "gear 2 up") == "toggle_landing_gear"
-        assert correct_numbered_intent("set_autopilot_heading", "heading 2 7 0") == (
-            "set_autopilot_heading"
-        )
+    def test_not_applied_to_other_intents(self):
+        assert resolve_instance({}, "gear 2 up", "toggle_landing_gear") == {}
+        assert resolve_instance({}, "heading 2 7 0", "set_autopilot_heading") == {}
 
-    def test_ignores_out_of_range_instances(self):
-        # Only 1 and 2 are valid variants; a stray large number must not corrupt it.
-        assert correct_numbered_intent("toggle_engine_1", "engine 1 at 350") == "toggle_engine_1"
+    def test_ignores_other_numbers(self):
+        assert instance("engine 1 at 350") == "1"
 
-    def test_handles_empty_and_none(self):
-        assert correct_numbered_intent("", "engine 2") == ""
-        assert correct_numbered_intent("toggle_engine_1", "") == "toggle_engine_1"
+    def test_handles_empty(self):
+        assert resolve_instance({}, "engine 2", "") == {}
+        assert instance("") == "1"

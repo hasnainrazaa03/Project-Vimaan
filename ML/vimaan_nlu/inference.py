@@ -1,7 +1,15 @@
 import torch
 
-from vimaan_nlu import correct_numbered_intent, normalize_aviation_input, postprocess_slots
-from vimaan_nlu.postprocessor import NUMBERED_INTENT_RE
+from vimaan_nlu import normalize_aviation_input, postprocess_slots
+from vimaan_nlu.commands import LEGACY_INTENTS
+
+
+def family_of(intent: str) -> str:
+    """The command a model's intent name means (models from before command
+    families say "toggle_engine_2" for what is now "toggle_engine")."""
+    legacy = LEGACY_INTENTS.get(intent)
+    return legacy[0] if legacy else intent
+
 
 # Aviation commands are short (the longest in the training set is well under
 # 32 word-piece tokens). Padding/truncating to 32 instead of 64 roughly halves
@@ -93,30 +101,23 @@ def predict(
         _, intent_logits, slot_logits = model(input_ids, attention_mask)
 
     intent_pred_idx = int(torch.argmax(intent_logits, dim=1).item())
-    intent_pred = intent_map_rev[intent_pred_idx]
+    intent_raw = intent_map_rev[intent_pred_idx]
     probs = torch.softmax(intent_logits, dim=1)[0]
-    intent_confidence = probs[intent_pred_idx].item()
-
-    # Trust the spoken instance number over the model's variant choice (fixes
-    # engine/AP/FD 1<->2 confusion; defaults to 1 when none is named).
-    intent_pred = correct_numbered_intent(intent_pred, text_normalized)
-
-    # The instance is now decided by rule, so the model's job was only to pick
-    # the family ("an autopilot command"). Score that: the summed probability
-    # of every variant. Otherwise "engage the autopilot" — certain it's the
-    # autopilot, split 50/50 on which — falls under the confidence floor.
-    family = NUMBERED_INTENT_RE.match(intent_pred or "")
-    if family:
-        intent_confidence = sum(
-            probs[idx].item()
-            for idx, name in intent_map_rev.items()
-            if (m := NUMBERED_INTENT_RE.match(name)) and m.group(1) == family.group(1)
-        )
+    # Score the command, not the model's label: an older model splits "engage
+    # the autopilot" 50/50 between toggle_autopilot_1 and _2; both mean the
+    # autopilot (the instance is resolved from the words), so sum them.
+    intent_pred = family_of(intent_raw)
+    intent_confidence = sum(
+        probs[idx].item() for idx, name in intent_map_rev.items() if family_of(name) == intent_pred
+    )
 
     slot_pred_indices = torch.argmax(slot_logits, dim=2)[0].cpu().numpy()
     tokens = tokenizer.convert_ids_to_tokens(input_ids[0].cpu().numpy())
 
     extracted_slots = extract_slots(slot_pred_indices, tokens, slot_map_rev)
+    for old, new in (LEGACY_INTENTS[intent_raw][2] if intent_raw in LEGACY_INTENTS else {}).items():
+        if old in extracted_slots:
+            extracted_slots[new] = extracted_slots.pop(old)
 
     if do_postprocess:
         extracted_slots = postprocess_slots(extracted_slots, text_normalized, intent_pred)

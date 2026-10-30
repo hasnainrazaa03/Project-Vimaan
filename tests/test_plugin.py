@@ -352,20 +352,20 @@ def test_com_port_3_rejected_not_silently_com2(sim):
 # ---------------------------------------------------------------------------
 def test_autopilot_on_uses_dedicated_command(sim):
     _, plugin, xp = sim
-    say(plugin, "ap", "toggle_autopilot_1", {"state": "on"})
+    say(plugin, "ap", "toggle_autopilot", {"state": "on"})
     assert xp.commands_fired == ["sim/autopilot/servos_on"]
 
 
 def test_autopilot_off_toggles_only_when_on(sim):
     _, plugin, xp = sim
     xp.datarefs["sim/cockpit2/autopilot/servos_on"] = 1
-    say(plugin, "ap", "toggle_autopilot_1", {"state": "off"})
+    say(plugin, "ap", "toggle_autopilot", {"state": "off"})
     assert xp.commands_fired == ["sim/autopilot/servos_toggle"]
 
 
 def test_autopilot_off_when_already_off_does_nothing(sim):
     _, plugin, xp = sim
-    spoken = say(plugin, "ap", "toggle_autopilot_1", {"state": "off"})
+    spoken = say(plugin, "ap", "toggle_autopilot", {"state": "off"})
     assert xp.commands_fired == []
     assert spoken == ["Autopilot 1 already off"]
 
@@ -373,7 +373,7 @@ def test_autopilot_off_when_already_off_does_nothing(sim):
 def test_autopilot_off_with_unreadable_state_never_blind_toggles(sim):
     _, plugin, xp = sim
     del xp.datarefs["sim/cockpit2/autopilot/servos_on"]
-    spoken = say(plugin, "ap", "toggle_autopilot_1", {"state": "off"})
+    spoken = say(plugin, "ap", "toggle_autopilot", {"state": "off"})
     assert xp.commands_fired == []
     assert spoken == ["Cannot read Autopilot 1 state"]
 
@@ -381,7 +381,7 @@ def test_autopilot_off_with_unreadable_state_never_blind_toggles(sim):
 def test_flight_director_written_directly(sim):
     _, plugin, xp = sim
     xp.datarefs["sim/cockpit2/autopilot/flight_director2_mode"] = 2
-    say(plugin, "fd", "toggle_flight_director_2", {"state": "off"})
+    say(plugin, "fd", "toggle_flight_director", {"state": "off", "instance": "2"})
     assert xp.datarefs["sim/cockpit2/autopilot/flight_director2_mode"] == 0
 
 
@@ -394,7 +394,7 @@ def test_parking_brake_uses_commands(sim):
 def test_flaps_up_retracts_fully(sim):
     _, plugin, xp = sim
     xp.datarefs["sim/cockpit2/controls/flap_handle_request_ratio"] = 0.5
-    say(plugin, "flaps", "toggle_flaps", {"state": "up"})
+    say(plugin, "flaps", "set_flaps", {"position": "up"})
     assert xp.commands_fired == ["sim/flight_controls/flaps_up_full"]
 
 
@@ -428,7 +428,7 @@ def test_gear_up_on_ground_needs_confirmation(sim):
 # ---------------------------------------------------------------------------
 def test_engine_start_holds_starter_until_running(sim):
     _, plugin, xp = sim
-    spoken = say(plugin, "engine", "toggle_engine_1", {"state": "on"})
+    spoken = say(plugin, "engine", "toggle_engine", {"state": "on"})
     assert spoken == ["Starting engine 1"]
     assert "sim/starters/engage_starter_1" in xp.held
     plugin._flight_loop()  # still cranking
@@ -443,7 +443,7 @@ def test_engine_start_holds_starter_until_running(sim):
 def test_engine_start_times_out_and_releases_starter(sim, monkeypatch):
     module, plugin, xp = sim
     monkeypatch.setattr(module, "STARTER_MAX_CRANK_SEC", 0.0)
-    say(plugin, "engine", "toggle_engine_2", {"state": "on"})
+    say(plugin, "engine", "toggle_engine", {"state": "on", "instance": "2"})
     plugin._flight_loop()
     assert xp.held == set()
     assert "did not start" in xp.spoken[-1]
@@ -452,7 +452,7 @@ def test_engine_start_times_out_and_releases_starter(sim, monkeypatch):
 def test_engine_already_running_is_no_op(sim):
     _, plugin, xp = sim
     xp.datarefs["sim/flightmodel/engine/ENGN_running"][0] = 1
-    spoken = say(plugin, "engine", "toggle_engine_1", {"state": "on"})
+    spoken = say(plugin, "engine", "toggle_engine", {"state": "on"})
     assert xp.commands_fired == []
     assert spoken == ["Engine 1 already running"]
 
@@ -460,7 +460,7 @@ def test_engine_already_running_is_no_op(sim):
 def test_plugin_stop_never_leaves_starter_engaged(monkeypatch, tmp_path):
     NLU.clear()
     _, plugin, xp = _load_plugin(monkeypatch, tmp_path)
-    say(plugin, "engine", "toggle_engine_1", {"state": "on"})
+    say(plugin, "engine", "toggle_engine", {"state": "on"})
     plugin.XPluginStop()
     assert xp.held == set()
 
@@ -470,18 +470,51 @@ def test_engine_shutdown_in_flight_needs_confirmation(sim):
     xp.datarefs["sim/flightmodel/engine/ENGN_running"][0] = 1
     xp.datarefs["sim/flightmodel/failures/onground_any"] = 0
     xp.datarefs["sim/flightmodel/position/y_agl"] = 1500.0
-    say(plugin, "engine", "toggle_engine_1", {"state": "off"})
+    say(plugin, "engine", "toggle_engine", {"state": "off"})
     assert xp.commands_fired == []
-    say(plugin, "engine", "toggle_engine_1", {"state": "off"})
+    say(plugin, "engine", "toggle_engine", {"state": "off"})
     assert xp.commands_fired == ["sim/starters/shut_down_1"]
 
 
 def test_engine_2_on_single_engine_aircraft_rejected(sim):
     _, plugin, xp = sim
     xp.datarefs["sim/aircraft/engine/acf_num_engines"] = 1
-    spoken = say(plugin, "engine", "toggle_engine_2", {"state": "on"})
+    spoken = say(plugin, "engine", "toggle_engine", {"state": "on", "instance": "2"})
     assert xp.commands_fired == []
     assert spoken == ["This aircraft has no engine 2"]
+
+
+def test_both_engines_start_together(sim):
+    _, plugin, xp = sim
+    spoken = say(plugin, "both engines", "toggle_engine", {"state": "on", "instance": "both"})
+    assert spoken == ["Starting engine 1", "Starting engine 2"]
+    assert xp.held == {"sim/starters/engage_starter_1", "sim/starters/engage_starter_2"}
+    xp.datarefs["sim/flightmodel/engine/ENGN_running"][:2] = [1, 1]
+    plugin._flight_loop()
+    assert xp.held == set()
+
+
+def test_both_engines_on_single_engine_aircraft(sim):
+    _, plugin, xp = sim
+    xp.datarefs["sim/aircraft/engine/acf_num_engines"] = 1
+    spoken = say(plugin, "both engines", "toggle_engine", {"state": "on", "instance": "both"})
+    assert spoken == ["This aircraft has one engine"] and xp.held == set()
+
+
+def test_shutting_down_engine_two_does_not_confirm_engine_one(sim):
+    _, plugin, xp = sim
+    xp.datarefs["sim/flightmodel/engine/ENGN_running"][:2] = [1, 1]
+    xp.datarefs["sim/flightmodel/failures/onground_any"] = 0
+    xp.datarefs["sim/flightmodel/position/y_agl"] = 1500.0
+    say(plugin, "engine one", "toggle_engine", {"state": "off", "instance": "1"})
+    say(plugin, "engine two", "toggle_engine", {"state": "off", "instance": "2"})
+    assert xp.commands_fired == []  # each still waiting for its own repeat
+
+
+def test_autopilot_two_uses_its_own_binding(sim):
+    _, plugin, xp = sim
+    say(plugin, "autopilot", "toggle_autopilot", {"state": "on", "instance": "2"})
+    assert xp.commands_fired == ["sim/autopilot/servos2_on"]
 
 
 # ---------------------------------------------------------------------------
@@ -511,7 +544,7 @@ def test_command_trace_is_logged_end_to_end(sim):
 def test_command_verification_logged_after_delay(sim, monkeypatch):
     module, plugin, xp = sim
     monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
-    say(plugin, "ap", "toggle_autopilot_1", {"state": "on"})
+    say(plugin, "ap", "toggle_autopilot", {"state": "on"})
     plugin._flight_loop()
     verify = events(plugin, "verify")[-1]
     # The fake sim does not model the servos, so the read-back reports the mismatch.
@@ -524,7 +557,7 @@ def test_command_verification_logged_after_delay(sim, monkeypatch):
     ("text", "intent", "slots"),
     [
         ("70", "set_flight_level", {"flight_level": "70"}),  # in-sim: "seventy"
-        ("city 8 on", "toggle_flight_director_1", {"state": "on"}),  # in-sim
+        ("city 8 on", "toggle_flight_director", {"state": "on"}),  # in-sim
         ("on", "toggle_parking_brake", {"state": "on"}),
     ],
 )
@@ -771,10 +804,10 @@ def test_misheard_command_does_not_cancel_pending_confirmation(sim):
     xp.datarefs["sim/flightmodel/engine/ENGN_running"][0] = 1
     xp.datarefs["sim/flightmodel/failures/onground_any"] = 0
     xp.datarefs["sim/flightmodel/position/y_agl"] = 400.0
-    say(plugin, "engine one off", "toggle_engine_1", {"state": "off"})
+    say(plugin, "engine one off", "toggle_engine", {"state": "off"})
     assert xp.commands_fired == []
-    say(plugin, "engine", "toggle_engine_1", {})  # clipped repeat: rejected
-    say(plugin, "engine one off", "toggle_engine_1", {"state": "off"})
+    say(plugin, "engine", "toggle_engine", {})  # clipped repeat: rejected
+    say(plugin, "engine one off", "toggle_engine", {"state": "off"})
     assert xp.commands_fired == ["sim/starters/shut_down_1"]
 
 
@@ -783,7 +816,7 @@ def test_executed_command_cancels_pending_confirmation(sim):
     xp.datarefs["sim/flightmodel/engine/ENGN_running"][0] = 1
     xp.datarefs["sim/flightmodel/failures/onground_any"] = 0
     xp.datarefs["sim/flightmodel/position/y_agl"] = 400.0
-    say(plugin, "engine one off", "toggle_engine_1", {"state": "off"})
+    say(plugin, "engine one off", "toggle_engine", {"state": "off"})
     say(plugin, "hdg", "set_autopilot_heading", {"degrees": "90"})
-    say(plugin, "engine one off", "toggle_engine_1", {"state": "off"})
+    say(plugin, "engine one off", "toggle_engine", {"state": "off"})
     assert "sim/starters/shut_down_1" not in xp.commands_fired  # asks again

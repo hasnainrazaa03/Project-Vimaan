@@ -104,13 +104,12 @@ VERIFY_DELAY_SEC = 1.0
 # command, toggle. X-Plane has no "servos off" / "fdir off" commands, so "off"
 # uses the toggle, but only after reading the state, so it can never turn a
 # system on.
-TOGGLE_BINDINGS: dict[str, dict[str, Any]] = {
-    c.intent: dict(c.params) for c in COMMANDS if c.handler == "_toggle_binary"
+# intent -> instance ("1"/"2") -> binding.
+TOGGLE_BINDINGS: dict[str, dict[str, dict[str, Any]]] = {
+    c.intent: dict(c.params["instances"]) for c in COMMANDS if c.handler == "_toggle_binary"
 }
-# Engines: starter held until the engine reports running.
-ENGINE_BINDINGS: dict[str, dict[str, Any]] = {
-    c.intent: dict(c.params) for c in COMMANDS if c.handler == "_toggle_engine"
-}
+# Engines: starter held until the engine reports running. instance -> binding.
+ENGINE_BINDINGS: dict[str, dict[str, Any]] = dict(BY_INTENT["toggle_engine"].params["instances"])
 
 DREF_HEADING = "sim/cockpit2/autopilot/heading_dial_deg_mag_pilot"
 DREF_ALTITUDE = "sim/cockpit2/autopilot/altitude_dial_ft"
@@ -656,7 +655,7 @@ class PythonInterface:
             # Commands this aircraft physically can't do are rejected before
             # the safety gate, which would otherwise ask the pilot to confirm
             # "gear up" on a fixed-gear Cessna.
-            not_applicable = self._not_applicable(intent_pred)
+            not_applicable = self._not_applicable(intent_pred, slots)
             if not_applicable:
                 outcome = "rejected"
                 self.tel.event("not_applicable", cmd=cmd, intent=intent_pred, reason=not_applicable)
@@ -885,14 +884,17 @@ class PythonInterface:
             if not ok:
                 self._say(f"{v['label'].replace('_', ' ')} did not respond")
 
-    def _not_applicable(self, intent):
+    def _not_applicable(self, intent, slots=None):
         """Why this aircraft can't perform ``intent``, or None if it can."""
         if intent == "toggle_landing_gear" and self._read_int(DREF_GEAR_RETRACTABLE) == 0:
             return "This aircraft has fixed gear"
-        if intent in ENGINE_BINDINGS:
+        if intent == "toggle_engine":
+            instance = (slots or {}).get("instance", "1")
             num_engines = self._read_int(DREF_NUM_ENGINES)
-            eng = ENGINE_BINDINGS[intent]
-            if num_engines is not None and eng["index"] >= num_engines:
+            if instance == "both" and num_engines is not None and num_engines < 2:
+                return "This aircraft has one engine"
+            eng = ENGINE_BINDINGS.get(instance)
+            if eng is not None and num_engines is not None and eng["index"] >= num_engines:
                 return f"This aircraft has no {eng['label'].lower()}"
         return None
 
@@ -1016,8 +1018,8 @@ class PythonInterface:
         self._say(f"Gear {state}")
         return "executed"
 
-    def _toggle_flaps(self, slots, intent):
-        state = slots.get("state")
+    def _set_flaps(self, slots, intent):
+        state = slots.get("position")
         before = self._read_float(DREF_FLAP_HANDLE)
         if state == "up":
             # "Flaps up" in a cockpit means fully retracted, not one notch.
@@ -1066,11 +1068,15 @@ class PythonInterface:
         if state not in ("on", "off"):
             self._say("On or off?")
             return "rejected"
-        return self._ensure_state(intent, state)
+        instance = slots.get("instance", "1")
+        binding = TOGGLE_BINDINGS[intent].get(instance)
+        if binding is None:
+            self._say(f"There is no {BY_INTENT[intent].display.lower()} {instance}")
+            return "rejected"
+        return self._ensure_state(binding, state)
 
-    def _ensure_state(self, intent, desired):
+    def _ensure_state(self, binding, desired):
         """Move a binary system to ``desired`` ('on'/'off') idempotently."""
-        binding = TOGGLE_BINDINGS[intent]
         label = binding["label"]
         target = 1 if desired == "on" else 0
         raw = self._read_int(binding["dataref"])
@@ -1112,7 +1118,22 @@ class PythonInterface:
         if state not in ("on", "off"):
             self._say("Start or shut down?")
             return "rejected"
-        eng = ENGINE_BINDINGS[intent]
+        instance = slots.get("instance", "1")
+        if instance != "both":
+            return self._engine(ENGINE_BINDINGS[instance], state)
+        num_engines = self._read_int(DREF_NUM_ENGINES) or len(ENGINE_BINDINGS)
+        outcomes = [
+            self._engine(eng, state)
+            for eng in ENGINE_BINDINGS.values()
+            if eng["index"] < num_engines
+        ]
+        for outcome in ("pending", "executed", "failed", "no_op"):
+            if outcome in outcomes:
+                return outcome
+        return "rejected"
+
+    def _engine(self, eng, state):
+        """Start (held starter, driven by the flight loop) or shut down one engine."""
         label = eng["label"]
         running = self._read_array(DREF_ENGINE_RUNNING, eng["index"])
 
@@ -1132,7 +1153,7 @@ class PythonInterface:
         if running == 1:
             self._say(f"{label} already running")
             return "no_op"
-        if intent in self._cranks:
+        if label in self._cranks:
             self._say(f"{label} already starting")
             return "no_op"
         cmd_ref = xp.findCommand(eng["starter"])
@@ -1148,7 +1169,7 @@ class PythonInterface:
             self._say(f"Cannot start {label}")
             return "failed"
         xp.commandBegin(cmd_ref)
-        self._cranks[intent] = {
+        self._cranks[label] = {
             "cmd": self._current_cmd,
             "ref": cmd_ref,
             "started": time.perf_counter(),

@@ -142,7 +142,7 @@ def test_low_confidence_meaning_is_amber():
             "kind": "stage",
             "stage": "nlu",
             "cmd": "c1",
-            "intent": "toggle_flaps",
+            "intent": "set_flaps",
             "slots": {},
             "confidence": 0.4,
         },
