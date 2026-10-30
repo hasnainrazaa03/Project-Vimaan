@@ -39,6 +39,7 @@ PROBLEM_KINDS = {
     "worker_exit",
     "worker_fatal",
     "stt_fallback",
+    "implausible",
 }
 
 

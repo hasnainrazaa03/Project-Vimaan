@@ -109,3 +109,46 @@ def in_range(name: str, value: Any) -> bool:
     """True if ``value`` satisfies the slot's constraint (no wrap/coercion)."""
     v = SLOT_VALIDATORS.get(name)
     return bool(v and v.contains(value))
+
+
+# ---------------------------------------------------------------------------
+# Plausibility guards on the whole utterance (not just one slot value)
+# ---------------------------------------------------------------------------
+# An actionable intent is only acted on when the (normalized) utterance
+# contains one of its command words. In-sim, misrecognised fragments were
+# classified confidently and executed: "seventy" -> flight level 70,
+# "city eight on" -> flight director on. A pilot always names the thing.
+COMMAND_WORDS: dict[str, frozenset[str]] = {
+    "set_autopilot_heading": frozenset({"heading", "turn", "hdg", "degrees", "degree"}),
+    "set_autopilot_altitude": frozenset(
+        {"altitude", "climb", "descend", "feet", "fly", "maintain", "thousand", "alt"}
+    ),
+    "set_flight_level": frozenset({"level", "fl"}),
+    "set_com_frequency": frozenset({"com", "comm", "radio", "frequency", "tune"}),
+    "toggle_landing_gear": frozenset({"gear"}),
+    "toggle_flaps": frozenset({"flaps", "flap"}),
+    "toggle_autopilot_1": frozenset({"autopilot", "pilot", "ap"}),
+    "toggle_autopilot_2": frozenset({"autopilot", "pilot", "ap"}),
+    "toggle_flight_director_1": frozenset({"director", "fd"}),
+    "toggle_flight_director_2": frozenset({"director", "fd"}),
+    "toggle_parking_brake": frozenset({"parking", "brake", "brakes"}),
+    "toggle_engine_1": frozenset({"engine", "engines"}),
+    "toggle_engine_2": frozenset({"engine", "engines"}),
+}
+
+
+def has_command_word(intent: str, text: str) -> bool:
+    """True if ``text`` names what ``intent`` acts on (or the intent has no
+    command-word list)."""
+    words = COMMAND_WORDS.get(intent)
+    if words is None:
+        return True
+    return not words.isdisjoint(text.lower().split())
+
+
+def heading_too_short(value: Any) -> bool:
+    """A heading given as one digit ("heading one") is almost always a
+    clipped "one eighty" / "one two zero": pilots say headings as three
+    digits ("zero zero five"). Ask again instead of turning to 001."""
+    s = str(value).strip()
+    return s.isdigit() and len(s) == 1

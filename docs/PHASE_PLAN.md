@@ -56,7 +56,10 @@ benchmark: Vosk 30/33, Google 32/33 (all Vosk misses safe), 10 ms vs 424 ms.
 S4 remains: re-run the benchmark after more flights; consider the larger
 `vosk-model-en-us-0.22-lgraph` if accented speech underperforms. A330 finding
 for E4: `sim/autopilot/servos2_on` does not engage AP2 on the Laminar A330
-(read-back failed), so Airbus autopilot needs its own binding.
+(read-back failed), so Airbus autopilot needs its own binding. Second A330
+flight: in-flight restart ("engine on") cranked 20 s with mixture 0 (the
+fuel-cutoff lever on a jet) — the jet profile must open the fuel lever and
+wait for N2, not just hold the starter.
 
 ---
 
