@@ -736,6 +736,7 @@ class PythonInterface:
 
     def _finish_self_test(self, results):
         self._self_test_pending = False
+        elapsed_ms = round((time.perf_counter() - self._self_test_started) * 1000, 1)
         self._self_test_started = 0.0
         passed = 0
         for r in results:
@@ -764,7 +765,7 @@ class PythonInterface:
         self.tel.event(
             "stage",
             stage="self_test",
-            ms=round((time.perf_counter() - self._self_test_started) * 1000, 1),
+            ms=elapsed_ms,
             passed=passed,
             total=total,
         )

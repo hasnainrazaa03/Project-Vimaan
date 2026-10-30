@@ -55,3 +55,10 @@ def test_grammar_ends_with_unknown():
     g = grammar()
     assert g[-1] == UNKNOWN and "flaps" in g and "gear" in g
     assert grammar(["a"]) == ["a", UNKNOWN]
+
+
+def test_number_soundalikes_excluded():
+    # In-sim Vosk heard "two" as "do" every time while "do" was allowed.
+    schema = {"ask_time": {"templates": ["do you have the time"], "slots": {}}}
+    assert "do" not in build_vocabulary(schema)
+    assert "do" not in load_vocabulary()

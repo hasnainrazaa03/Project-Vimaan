@@ -39,15 +39,24 @@ impossible outputs.
 
 | Step | What | Done when |
 | --- | --- | --- |
-| **S1** | Save every captured command's audio (`~/Vimaan_Logs/audio/<session>_<cmd>.wav`) with its transcript, outcome and what the pilot meant. Capped in size; off with `VIMAAN_SAVE_AUDIO=0`. | Every flight from now on grows a real-voice test set. |
-| **S2** | `vosk` backend in the voice worker: stream audio into the recogniser during capture; grammar built from the command schema plus number words; model shipped by `install_plugin.py` (download once, SHA-256 checked). | Works with Wi-Fi off; release → action < 400 ms on the bench. |
-| **S3** | `scripts/stt_benchmark.py`: replay the saved WAVs through Google, Vosk-grammar, Vosk-open and (optionally) Whisper; report word error rate on the command, **end-to-end intent+slot accuracy**, and latency. | A table that decides the default with data, not guesses. |
+| ✅ **S1** | Save every captured command's audio (`~/Vimaan_Logs/audio/<session>_<cmd>.wav`) with its transcript, outcome and what the pilot meant. Capped in size; off with `VIMAAN_SAVE_AUDIO=0`. | Every flight from now on grows a real-voice test set. |
+| ✅ **S2** | `vosk` backend in the voice worker: stream audio into the recogniser during capture; grammar built from the command schema plus number words; model shipped by `install_plugin.py` (download once, SHA-256 checked). | Works with Wi-Fi off; release → action < 400 ms on the bench. |
+| ✅ **S3** | `scripts/stt_benchmark.py`: replay the saved WAVs through Google, Vosk-grammar, Vosk-open and (optionally) Whisper; report word error rate on the command, **end-to-end intent+slot accuracy**, and latency. | A table that decides the default with data, not guesses. |
 | **S4** | Make Vosk the default if it matches or beats Google end to end; keep Google selectable. Fallback chain if the grammar rejects everything ("[unk]"): say "say again". | Default switched; runbook updated. |
 
 Risks: grammar too strict for free phrasing (mitigation: grammar is generated
 from the same templates the model trains on, plus filler words; S3 measures
 it); Vosk small-model accuracy on accented speech (S3 measures it; the larger
 `vosk-model-en-us-0.22-lgraph` is the step up, 128 MB).
+
+---
+
+**Status (2026-10-30):** S1–S3 done; Vosk is the default. First real-voice
+benchmark: Vosk 30/33, Google 32/33 (all Vosk misses safe), 10 ms vs 424 ms.
+S4 remains: re-run the benchmark after more flights; consider the larger
+`vosk-model-en-us-0.22-lgraph` if accented speech underperforms. A330 finding
+for E4: `sim/autopilot/servos2_on` does not engage AP2 on the Laminar A330
+(read-back failed), so Airbus autopilot needs its own binding.
 
 ---
 

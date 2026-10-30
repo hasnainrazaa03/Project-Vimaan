@@ -29,7 +29,6 @@ descend
 director
 disable
 disengage
-do
 doing
 down
 eight

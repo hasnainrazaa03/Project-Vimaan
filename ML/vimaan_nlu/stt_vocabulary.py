@@ -33,6 +33,10 @@ NUMBER_WORDS = (
 ).split()
 # Words the normalizer / postprocessor understand that templates don't contain.
 EXTRA_WORDS = "to the and a first second left right both com radio feet".split()
+# Words left out of the grammar because the recogniser hears number words as
+# them: in-sim, "two" came back as "do" every time ("autopilot do on"). "do"
+# only appears in the ask_time template "do you have the time".
+EXCLUDED_WORDS = {"do"}
 _DIGIT_WORDS = dict(enumerate("zero one two three four five six seven eight nine".split()))
 
 
@@ -64,7 +68,7 @@ def build_vocabulary(schema: Mapping[str, Any], phrases: Iterable[str] = ()) -> 
                     words.update(_words(synonym))
     for phrase in phrases:
         words.update(_words(phrase))
-    return sorted(words)
+    return sorted(words - EXCLUDED_WORDS)
 
 
 def load_vocabulary(path: str = VOCABULARY_FILE) -> list[str]:

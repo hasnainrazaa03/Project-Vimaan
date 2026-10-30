@@ -128,6 +128,75 @@ def _convert_decimal_sequence(match: re.Match[str]) -> str:
     return match.group(0)
 
 
+_UNIT_WORDS = {
+    w: str(i) for i, w in enumerate("zero one two three four five six seven eight nine".split())
+}
+_UNIT_WORDS.update({"oh": "0", "niner": "9"})
+_TEEN_WORDS = {
+    w: str(10 + i)
+    for i, w in enumerate(
+        "ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split()
+    )
+}
+_TENS_WORDS = {
+    w: str(20 + 10 * i)
+    for i, w in enumerate("twenty thirty forty fifty sixty seventy eighty ninety".split())
+}
+
+
+def _join_pilot_number_groups(text: str) -> str:
+    """Pilots say numbers in groups that are written side by side, not added:
+    "one eighty" = 180, "two seventy" = 270, "one twenty one" = 121,
+    "one eighteen" = 118, "flight level two forty" = 240. word2number would
+    *add* them ("one eighty" -> 81), which in-sim set the heading to 81.
+
+    A run of spoken digits and two-digit groups (teens, or tens with an
+    optional unit) that contains at least one group and at least two parts is
+    joined. A lone group ("eighty"), a pure digit run ("two seven zero") and
+    anything followed by hundred/thousand (cardinals: "twenty five hundred")
+    are left to the later passes, except "<group> hundred" ("twenty five
+    hundred" = 2500), which word2number gets wrong (200).
+    """
+    words = text.split()
+    out: list[str] = []
+    i = 0
+    while i < len(words):
+        parts: list[str] = []
+        has_group = False
+        j = i
+        while j < len(words):
+            w = words[j]
+            if w in _TEEN_WORDS:
+                parts.append(_TEEN_WORDS[w])
+                has_group, j = True, j + 1
+            elif w in _TENS_WORDS:
+                nxt = words[j + 1] if j + 1 < len(words) else ""
+                if nxt in _UNIT_WORDS and _UNIT_WORDS[nxt] != "0":
+                    parts.append(str(int(_TENS_WORDS[w]) + int(_UNIT_WORDS[nxt])))
+                    j += 2
+                else:
+                    parts.append(_TENS_WORDS[w])
+                    j += 1
+                has_group = True
+            elif w in _UNIT_WORDS:
+                parts.append(_UNIT_WORDS[w])
+                j += 1
+            else:
+                break
+        followed_by_magnitude = j < len(words) and words[j] in _MAGNITUDE_WORDS
+        if has_group and len(parts) == 1 and j < len(words) and words[j] == "hundred":
+            # "twenty five hundred" = 2500 (word2number says 200).
+            out.append(str(int(parts[0]) * 100))
+            i = j + 1
+        elif has_group and len(parts) >= 2 and not followed_by_magnitude:
+            out.append("".join(parts))
+            i = j
+        else:
+            out.append(words[i])
+            i += 1
+    return " ".join(out)
+
+
 def _convert_phonetic_sequence(match: re.Match[str]) -> str:
     return _digits_only(match.group(0).split())
 
@@ -248,6 +317,10 @@ def normalize_aviation_input(text: str) -> str:
     #    tokenised and slot-tagged. Paraphrasers drop the space; real ASR/typing
     #    does too. Digit<->digit glue (e.g. "com 2135.79") is left alone.
     text_lower = re.sub(r"(?<=[a-z])(?=\d)|(?<=\d)(?=[a-z])", " ", text_lower)
+    # 0b. Pilot-style groups: "one eighty" -> "180", "one twenty one" -> "121".
+    #     Before the decimal pass, which would otherwise read "one twenty one
+    #     decimal five" as "one twenty" + "1.5".
+    text_lower = _join_pilot_number_groups(text_lower)
     # 1. Decimals (frequencies): "one one eight decimal seven five" -> "118.75".
     #    Must precede the phonetic pass, which would collapse the integer part.
     text_lower = _DECIMAL_SEQUENCE_RE.sub(_convert_decimal_sequence, text_lower)

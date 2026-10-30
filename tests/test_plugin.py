@@ -488,6 +488,8 @@ def test_self_test_checks_intent_and_slots(sim):
     failed = [e for e in events(plugin, "self_test_probe") if not e["ok"]]
     assert failed[0]["missing_slots"] == ["frequency"]
     assert xp.writes == [] and xp.commands_fired == []  # self-test never actuates
+    (stage,) = [e for e in events(plugin, "stage") if e["stage"] == "self_test"]
+    assert 0 <= stage["ms"] < 5000  # was measured from 0 (in-sim: 376928216 ms)
 
 
 def test_push_to_talk_command_binding(sim, monkeypatch):

@@ -26,6 +26,22 @@ reason.
   Out-of-grammar speech becomes `[unk]` (dropped), so chatter doesn't turn
   into commands.
 
+**Real voice** (first A330 flight, 33 labelled commands, replayed with
+`python scripts/stt_benchmark.py`):
+
+| Recogniser | Right command | Time after key-up |
+| --- | --- | --- |
+| **Vosk, command grammar** | **30 / 33** | 10 ms |
+| Vosk, full vocabulary | 20 / 33 | 46 ms |
+| Google | 32 / 33 | 424 ms |
+
+Vosk's 3 misses were all safe: "AP2 on" heard as "eighty two on" (twice;
+low confidence, asked to repeat) and a stray leading word on "engine two
+off" (executed correctly anyway). Google's labels were the starting point
+for the label file, which flatters Google slightly. The same flight found
+that Vosk hears "two" as "do" (now excluded from the grammar) and that the
+normalizer read "one eighty" as 81 (fixed: pilot number groups).
+
 Measured on 108 synthetic clips (6 macOS voices × 18 commands), right intent
 and slots end to end, through the v11 model:
 
@@ -46,13 +62,19 @@ python scripts/install_plugin.py --xplane "<X-Plane 12>"   # ships the model too
 and `vosk` in XPPython3's Python (see [IN_SIM_TESTING.md](IN_SIM_TESTING.md)
 §2 for installing packages there on Apple Silicon).
 
-## Saved audio
+## Saved audio and the benchmark
 
 Each command's audio is saved to `~/Vimaan_Logs/audio/<session>_<cmd>.wav`
 (16 kHz mono, ~32 KB per second, stops at 500 MB). The file name joins it to
 that session's `events.jsonl`, which holds the transcript and outcome. These
 recordings are how recognisers are compared on real voices (Track S3 in
 [PHASE_PLAN.md](PHASE_PLAN.md)). Turn off with `VIMAAN_SAVE_AUDIO=0`.
+
+```bash
+python scripts/stt_benchmark.py --seed-labels   # Google's guess for new clips -> labels.jsonl
+# review ~/Vimaan_Logs/audio/labels.jsonl: fix what was actually said
+python scripts/stt_benchmark.py --backends vosk,vosk-open,google
+```
 
 ## Other backends
 
