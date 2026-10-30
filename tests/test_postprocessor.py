@@ -174,11 +174,33 @@ class TestCorrectNumberedIntent:
     def test_noop_when_text_agrees(self):
         assert correct_numbered_intent("toggle_engine_2", "shut down engine 2") == "toggle_engine_2"
 
-    def test_noop_when_no_instance_digit(self):
-        # STT dropped the number -> keep the model's guess rather than invent one.
+    def test_defaults_to_instance_1_when_none_named(self):
+        # "autopilot on" names no instance: the model's _1/_2 choice is a coin
+        # flip, so default to the captain-side / only system.
         assert (
             correct_numbered_intent("toggle_engine_1", "shut down the engine") == "toggle_engine_1"
         )
+        assert correct_numbered_intent("toggle_autopilot_2", "engage the autopilot") == (
+            "toggle_autopilot_1"
+        )
+        assert correct_numbered_intent("toggle_flight_director_2", "flight director on") == (
+            "toggle_flight_director_1"
+        )
+
+    def test_ordinal_and_side_words_name_the_instance(self):
+        assert correct_numbered_intent("toggle_engine_1", "shut down right engine") == (
+            "toggle_engine_2"
+        )
+        assert correct_numbered_intent("toggle_autopilot_1", "engage second autopilot") == (
+            "toggle_autopilot_2"
+        )
+        assert correct_numbered_intent("toggle_engine_2", "start the left engine") == (
+            "toggle_engine_1"
+        )
+
+    def test_disconnect_means_off_for_autopilot(self):
+        slots = postprocess_slots({}, "disconnect autopilot", "toggle_autopilot_1")
+        assert slots.get("state") == "off"
 
     def test_noop_for_non_numbered_intent(self):
         assert correct_numbered_intent("toggle_landing_gear", "gear 2 up") == "toggle_landing_gear"

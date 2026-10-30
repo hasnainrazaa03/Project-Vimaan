@@ -2,7 +2,7 @@ import json
 import os
 
 import torch
-from transformers import DistilBertForTokenClassification, DistilBertTokenizerFast
+from transformers import DistilBertTokenizerFast
 from utils import get_latest_model_path
 
 from vimaan_nlu import JointIntentAndSlotModel
@@ -36,9 +36,11 @@ class ModelLoader:
 
         dims = self.load_maps(model_path)
 
-        self.model = JointIntentAndSlotModel(num_intents=dims["intents"], num_slots=dims["slots"])
-
-        self.model.bert_for_slots = DistilBertForTokenClassification.from_pretrained(model_path)
+        # Build straight from the checkpoint: one weight load, and no hub
+        # download of distilbert-base-uncased (the plugin must start offline).
+        self.model = JointIntentAndSlotModel(
+            num_intents=dims["intents"], num_slots=dims["slots"], base_model=model_path
+        )
 
         intent_classifier_path = os.path.join(model_path, "intent_classifier.bin")
         if os.path.exists(intent_classifier_path):

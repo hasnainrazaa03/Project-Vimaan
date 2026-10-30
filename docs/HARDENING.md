@@ -27,9 +27,9 @@ Notes:
 
 ### Outstanding — owner actions
 
-1. **🔴 Revoke the HuggingFace token.** `scratch/token_HF.txt` holds a live `hf_…` token. It was never committed (verified) and `scratch/` is gitignored, but it's a usable credential on disk. Revoke at <https://huggingface.co/settings/tokens>, then delete the file. (Master-plan B-002, still open.)
+1. **✅ RESOLVED (2026-08-22) — HuggingFace token revoked.** The `hf_…` token formerly at `scratch/token_HF.txt` has been revoked at <https://huggingface.co/settings/tokens> and the file deleted from disk. It was never committed (verified) and `scratch/` is gitignored, so there is no history exposure. Closes master-plan **B-002**, the last open item from the Phase 0 audit.
 2. **🟠 Reclaim GitHub's remote LFS storage.** The history rewrite removed the LFS pointers, but GitHub keeps the ~2.2 GB of LFS objects until the repo is deleted/recreated or GitHub Support purges them. Only needed if the LFS quota matters.
-3. **🟠 Collaborators must re-clone.** The force-push rewrote every SHA; Aryan and Vyom should re-clone rather than pull.
+3. **✅ Moot — collaborator re-clone.** The force-push rewrote every SHA, but the only other commit author contributed a single legacy-prototype commit; there are no active collaborators with stale clones.
 
 ### Not done (proposed follow-ups)
 

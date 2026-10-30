@@ -54,6 +54,6 @@ warn_unused_ignores = true
 module = [
     "torch.*", "transformers.*", "numpy", "numpy.*", "sklearn.*",
     "onnxruntime", "onnxruntime.*", "word2number.*", "num2words.*",
-    "speech_recognition", "vosk", "whisper", "sounddevice", "pyaudio", "scipy.*",
+    "speech_recognition", "vosk", "whisper", "sounddevice", "soundfile", "pyaudio", "scipy.*",
 ]
 ignore_missing_imports = true

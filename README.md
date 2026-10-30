@@ -34,7 +34,7 @@
 
 **Project Vimaan** is an experimental AI-driven First Officer for the [X-Plane](https://www.x-plane.com/) flight simulator. The pilot issues a natural-language voice command (e.g. *"climb to flight level two five zero"*), and the system:
 
-1. Captures audio via push-to-talk (`Z` key).
+1. Captures audio while you hold push-to-talk (`Z` key, or a yoke button bound to `vimaan/push_to_talk`).
 2. Transcribes it to text using a speech recognizer.
 3. Parses the text with a custom **joint intent + slot** NLU model (DistilBERT-based).
 4. Maps the structured prediction to an X-Plane command/dataref via [XPPython3](https://xppython3.readthedocs.io/).
@@ -137,20 +137,33 @@ See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for the full map.
 - **Augmentation:** `tuner007/pegasus_paraphrase`, FLAN-T5
 - **Numeric normalization:** `word2number`, `num2words`
 
+**Inference backends**
+- **torch** fp32 (default), optionally **dynamic int8** — ~48% smaller, no measured F1 change
+- **ONNX Runtime** (`VIMAAN_BACKEND=onnx`) — ~2x faster than fp32, verified numerical parity
+
 **Plugin / Simulator**
 - [X-Plane 12](https://www.x-plane.com/) + [XPPython3](https://xppython3.readthedocs.io/)
-- `SpeechRecognition` (Google Web Speech API) — primary
-- `openai-whisper` — alternative path (legacy plugin)
+- `SpeechRecognition` — pluggable backends: Google Web Speech (online, default),
+  or **vosk / whisper / sphinx** offline via `VIMAAN_STT_BACKEND`
 - `sounddevice`, `scipy`, `numpy` — audio capture & resampling
+
+**Dashboard**
+- FastAPI + vanilla JS (no build step), Chart.js for live loss curves
 
 **Tooling**
 - `tqdm`, `scikit-learn`, `matplotlib`
+- `pytest` (361 tests), `ruff`, `mypy`, `pre-commit`, `detect-secrets`, GitHub Actions CI
 
 ---
 
 ## Supported Commands
 
-Current intent set covered by the model:
+The model has **17 intent classes**: the 13 actionable commands below, 3 conversational
+intents (`ask_status_generic`, `ask_time`, `chit_chat_greeting`) that receive a spoken
+acknowledgement rather than a sim command, and an out-of-scope `None` reject class that
+improves precision on real commands.
+
+### Actionable intents (13)
 
 | Intent | Example utterances | Slots |
 | --- | --- | --- |
@@ -165,11 +178,35 @@ Current intent set covered by the model:
 | `toggle_parking_brake` | "parking brake on", "release park brake" | `state` |
 | `toggle_engine_1` / `_2` | "start engine 1", "shut down engine 2" | `state` |
 
-Numeric guards (post-processor):
-- Altitude clamped to **1 000–50 000 ft**
-- Heading clamped to **0–360°**
-- Flight level clamped to **10–430**
-- COM frequency clamped to **118.000–137.000 MHz**
+### Slot validation
+
+Declarative validators in [`ML/vimaan_nlu/validators.py`](ML/vimaan_nlu/validators.py) are the
+single source of truth for slot bounds, and are enforced **at dispatch** before any dataref is
+written:
+
+| Slot | Constraint | On violation |
+| --- | --- | --- |
+| `altitude` | 1,000–50,000 ft | reject |
+| `degrees` | 0–360° | **wrap** (450 → 90) |
+| `flight_level` | 10–430 | reject |
+| `frequency` | 118.000–137.000 MHz | reject |
+| `com_port` | 1–4 | reject |
+| `state` | `on` / `off` / `up` / `down` | reject |
+
+### Safety interlocks
+
+Commands that are irreversible or dangerous **in the current flight context** must be repeated
+to confirm before they execute:
+
+| Command | Gated when | Spoken warning |
+| --- | --- | --- |
+| Gear up | below 1,000 ft AGL | "Confirm gear up, low altitude" |
+| Engine shutdown | airborne | "Confirm engine shutdown in flight" |
+| Parking brake on | ground speed above 5 kt | "Confirm parking brake at speed" |
+
+These **fail safe**: if a relevant dataref is unavailable, the situation is treated as risky and
+gated rather than silently skipped. Predictions below a **0.55 confidence floor** are never
+dispatched at all.
 
 ---
 
@@ -181,7 +218,7 @@ Numeric guards (post-processor):
 - For the plugin:
   - X-Plane 12
   - [XPPython3](https://xppython3.readthedocs.io/) installed in `X-Plane/Resources/plugins/`
-  - PyAudio + a working microphone
+  - A working microphone (captured via `sounddevice`, which bundles PortAudio)
 
 ---
 
@@ -245,6 +282,10 @@ Versioning: every script appends `_vN` to outputs and the trainer writes the nex
 
 ## Running the X-Plane Plugin
 
+> **First time in X-Plane?** Follow [docs/IN_SIM_TESTING.md](docs/IN_SIM_TESTING.md): XPPython3 +
+> dependency setup, a 13-step test flight, and how to read the session logs
+> (`python scripts/vimaan_log_report.py`).
+
 1. Get a model so that `ML/models/vimaan_nlu_model_best/vN/` exists — either
    train one (see above) or download a published checkpoint:
    `scripts/fetch_model.sh` (weights ship as GitHub Release assets, not in the
@@ -279,6 +320,41 @@ python run_visualizations.py    # generate confusion matrix, per-intent F1, etc.
 
 Outputs land in `ML/evaluation/results/` (gitignored): per-version JSON metrics + PNG visualizations.
 
+### Current results — v11 (held-out)
+
+The trainer writes a **stratified 3-way split** (70/15/15) and persists the held-out test rows
+as `holdout_test.jsonl` **inside the checkpoint**, so evaluation measures true generalization
+rather than re-slicing the training file. Every metrics file records which set it used in an
+`eval_set_kind` field.
+
+| Metric | v11 |
+| --- | --- |
+| Eval set | held-out test set, **10,488 unseen rows** |
+| Intent accuracy | **98.86%** |
+| Intent macro-F1 | **0.9669** |
+| Slot pair-F1 | **0.9917** (precision 0.9998 / recall 0.9838) |
+| Cohen's kappa | 0.9863 |
+| Inference latency | **5.9 ms** mean, 6.1 ms p95 (torch, CPU) |
+
+All four numeric-slot intents (`set_autopilot_heading`, `set_autopilot_altitude`,
+`set_flight_level`, `set_com_frequency`) score **F1 1.0000**. The residual error is concentrated
+in the numbered toggle pairs (autopilot / flight-director / engine 1 vs 2) — see
+[docs/ROADMAP.md](docs/ROADMAP.md).
+
+> **Scope of these numbers.** The held-out set is genuine — no train/test overlap — but it is
+> still *synthetic* template output. Real-ASR performance on real speakers is not yet measured;
+> see [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
+
+### Live training monitor
+
+```bash
+python ML/training_monitor.py            # newest run, http://localhost:8788
+```
+
+Tails the trainer's JSONL metrics stream and renders live loss and validation charts. Pure
+standard library — no extra installs, works offline. The same data is also surfaced in the
+web dashboard's Training tab.
+
 ---
 
 ## Project Conventions
@@ -296,6 +372,7 @@ Outputs land in `ML/evaluation/results/` (gitignored): per-version JSON metrics 
 - 🐞 Bugs found while auditing the codebase: [docs/BUGS.md](docs/BUGS.md)
 - 🚀 Planned features and improvements: [docs/ROADMAP.md](docs/ROADMAP.md)
 - ✅ Production checklist: [docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md)
+- ✈️ In-sim testing runbook + log reading: [docs/IN_SIM_TESTING.md](docs/IN_SIM_TESTING.md)
 - 📜 Change history: [CHANGELOG.md](CHANGELOG.md)
 - 🧭 Architecture deep dive: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 

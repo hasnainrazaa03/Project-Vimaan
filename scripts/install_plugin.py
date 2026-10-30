@@ -121,7 +121,10 @@ def main(argv=None) -> int:
             _copy(src, dst, kind)
 
     if not args.dry_run:
-        print("\nDone. Start X-Plane and check Log.txt for '[Vimaan] Model loaded'.")
+        print(
+            "\nDone. Start X-Plane; Vimaan says 'ready' when loaded. Session logs land in "
+            "~/Vimaan_Logs/ — summarise with: python scripts/vimaan_log_report.py"
+        )
     return 0
 
 
