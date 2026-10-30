@@ -14,9 +14,9 @@ Last updated 2026-10-30.
 | # | Phase | State | PR |
 | --- | --- | --- | --- |
 | 0 | In-sim readiness: worker process, verified bindings, telemetry | ✅ merged | #24 |
-| S | Offline speech recognition (Vosk), saved audio, benchmark | ✅ built, flown twice; awaiting merge | #25 |
-| O | In-sim overlay (live transcript, meaning, outcome) | 🟡 built; needs in-sim check | #26 |
-| E0 | Command table: one source of truth (no behaviour change) | ⬜ next | |
+| S | Offline speech recognition (Vosk), saved audio, benchmark | ✅ merged | #25 |
+| O | In-sim overlay (live transcript, meaning, outcome) | ✅ flown (ImGui, 0.55 ms); polish + landing on main | #26, #27 |
+| E0 | Command table: one source of truth (no behaviour change) | 🟡 built, gate passed; needs smoke flight + merge | #28 |
 | E1 | Training data v2 + command families → model **v12** | ⬜ | |
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v13** | ⬜ | |
 | T2 | Tier 2: radios & navigation → **v14** | ⬜ | |
@@ -58,7 +58,7 @@ stop at epoch 6), so each tier gets its own model and its own flight.
 
 Built and flown (A330, twice). Remaining:
 
-- [ ] S4.1 Merge #25.
+- [x] S4.1 Merge #25.
 - [ ] S4.2 After each future flight: `stt_benchmark.py --seed-labels`, correct
   `~/Vimaan_Logs/audio/labels.jsonl` by hand, re-run the comparison. Keep Vosk
   the default while it is within 2 commands of Google per 30 clips and all its
@@ -75,13 +75,16 @@ Built (#26): bottom bar with REC (live words) → HEARD → MEANT → outcome
 NO RESPONSE), fades 6 s after the result; `vimaan/toggle_overlay` cycles
 auto / pinned / off.
 
-- [ ] O.1 Merge #26 (after #25; retarget to `main`).
-- [ ] O.2 In-sim check: the log report's `Overlay:` line says `imgui`; worst
+- [x] O.1 Merge #26. (It merged into `feat/offline-stt` after #25 had landed,
+  so it reaches `main` through #27.)
+- [x] O.2 In-sim check (2026-10-30): ImGui backend, worst draw 0.55 ms, no stalls.
+  Original check: the log report's `Overlay:` line says `imgui`; worst
   draw time < 1 ms; no `sim_stall` / `main_thread_overrun` while it's visible.
   If ImGui fails on Metal it falls back to `native` — acceptable, note it.
-- [ ] O.3 Usability pass in-sim: readable at 1080p and on a pop-out window;
+- [x] O.3 Usability pass: moved to the bottom left; badge pills, outcome
+  stripe, pulsing record dot (#27). Original item: readable at 1080p and on a pop-out window;
   adjust `IMGUI_FONT_SCALE`, width, colours if needed.
-- [ ] O.4 E0 replaces the overlay's hard-coded intent/slot display names with
+- [x] O.4 E0 replaces the overlay's hard-coded intent/slot display names with
   the command table's (step E0.9).
 
 ---
@@ -98,7 +101,13 @@ refactor, proven by the existing tests.
 
 ### Steps
 
-- [ ] **E0.1 Types.** In `commands.py`, frozen dataclasses:
+- [x] **E0.1 Types.** *Done as built:* `Command` + `Slot` dataclasses, with
+  `Range`/`Enum` moved to `slot_types.py`. The richer value types (`Number`
+  with speech rendering, `Choice`, `Instance`, `Digits`, `Frequency`) arrive
+  in E1, where the data generator first needs them, and the binding types
+  (`WriteValue`, `CommandPair`, `CheckedToggle`) in T1 with the first generic
+  handlers. E0 moved the existing binding data (autopilot/FD/engine/COM) into
+  `Command.params` + `Command.bindings`. Original plan: In `commands.py`, frozen dataclasses:
   - Slot types: `Number(lo, hi, step=1, unit=None, wrap=False, min_digits=1)`,
     `Choice(values, synonyms)` (on/off, up/down, modes, lights…),
     `Instance(count, words={"left": 1, "right": 2, "first": 1, …}, all_words=("both", "all"))`,
@@ -113,36 +122,45 @@ refactor, proven by the existing tests.
     `Custom(handler_name)` (engine start, flaps, gear, autopilot).
   - `Intent(name, display, templates, slots, required, command_words,
     binding, readback, verify, safety_rule, self_test, profiles={})`.
-- [ ] **E0.2 Port the 17 intents** exactly as they are (names, templates,
+- [x] **E0.2 Port the 17 intents** exactly as they are (names, templates,
   synonyms, value ranges, read-back wording). Test: a snapshot of today's
   `SCHEMA` equals the one derived from the table.
-- [ ] **E0.3 `config/schema_config.py` becomes a derived view**
+- [x] **E0.3 `config/schema_config.py` becomes a derived view**
   (`SCHEMA = training_schema(COMMANDS)`) so the current generator and
   training scripts run unchanged.
-- [ ] **E0.4 Validators** — `SLOT_VALIDATORS`, `COMMAND_WORDS`,
+- [x] **E0.4 Validators** — `SLOT_VALIDATORS`, `COMMAND_WORDS`,
   `REQUIRED_SLOTS` derived from the table. Existing validator/postprocessor
   tests pass unmodified.
-- [ ] **E0.5 Safety** — each intent names its rule; `safety.py` keeps the rule
+- [x] **E0.5 Safety** — each intent names its rule; `safety.py` keeps the rule
   logic, the intent → rule mapping moves to the table. `test_safety.py` passes.
-- [ ] **E0.6 Read-backs** — wording from the table (`readback="Heading {degrees:digits}"`),
+- [ ] **E0.6 Read-backs** *Deferred to T1:* the existing read-backs carry
+  logic ("already up", digit spelling) and stay in their custom handlers;
+  read-back templates come with the generic handlers. Original plan: — wording from the table (`readback="Heading {degrees:digits}"`),
   formatting helpers in `readback.py`. Plugin tests' spoken strings unchanged.
-- [ ] **E0.7 Plugin dispatch** — `_setup_intent_handlers` is built from the
+- [x] **E0.7 Plugin dispatch** *Done as built:* handler map, required slots,
+  non-actionable replies, autopilot/FD/engine/COM bindings all derived from
+  the table; generic handlers wait for T1 (see E0.1). Original plan: — `_setup_intent_handlers` is built from the
   table. Generic handlers: `_write_value`, `_command_pair`, `_checked_toggle`;
   the existing custom ones (heading, altitude, flight level, COM, gear,
   flaps, parking brake, autopilot/FD, engine) stay as `Custom` until a tier
   replaces them. Read-back verification declared per intent (`verify=`).
-- [ ] **E0.8 Self-test probes** from the table (one per intent that declares
+- [x] **E0.8 Self-test probes** from the table (one per intent that declares
   `self_test=`); still 10/10.
-- [ ] **E0.9 Overlay names** — `overlay_state.INTENT_NAMES` / `SLOT_NAMES`
+- [x] **E0.9 Overlay names** — `overlay_state.INTENT_NAMES` / `SLOT_NAMES`
   replaced by `display` fields from the table.
-- [ ] **E0.10 Dataref checker** — `check_xplane_refs.py` enumerates every
+- [x] **E0.10 Dataref checker** — `check_xplane_refs.py` enumerates every
   binding in the table (plus profile bindings); `fake_xplane.py` gets a test
   that it knows every binding too.
-- [ ] **E0.11 Vocabulary** — `build_stt_vocabulary.py` reads the table
+- [x] **E0.11 Vocabulary** — `build_stt_vocabulary.py` reads the table
   (templates, choice words, synonyms, number words) instead of `SCHEMA`.
-- [ ] **E0.12 Generated reference** — `scripts/build_command_docs.py` writes
+- [x] **E0.12 Generated reference** — `scripts/build_command_docs.py` writes
   `docs/COMMANDS.md` (every command, example phrases, values, sim binding,
   safety rule); a test fails if it's stale.
+
+**Gate E0 result (2026-10-30):** ✅ derived schema identical to v11's
+(fixture test); 4,000 held-out predictions byte-identical; 93/93 X-Plane
+names; all tests, ruff, mypy green. Test changes: the self-test COM probe is
+picked by intent instead of position. Remaining: in-sim smoke flight.
 
 **Gate E0.** All existing tests pass with only import changes; v11 held-out
 predictions identical to before (4,000-row comparison, as done for the number
@@ -260,6 +278,9 @@ Used in every phase of every flight.
 
 Also in T1:
 
+- **Carried from E0:** binding types (`WriteValue`, `CommandPair`,
+  `CheckedToggle`) and generic handlers, and read-back templates in the table
+  (E0.6); the existing custom handlers move onto them where they fit.
 - **Fix: autopilot engage on Airbus.** The A330 replaces
   `sim/autopilot/servos_toggle` / `servos2_toggle` but not `servos_on`, which
   it ignored in flight. Engage/disengage = `CheckedToggle(servos_toggle,

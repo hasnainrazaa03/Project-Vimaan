@@ -551,7 +551,9 @@ def test_self_test_checks_intent_and_slots(sim):
     for text, intent in module.PythonInterface.SELF_TEST_PROBES:
         slots = {s: "1" for s in module.REQUIRED_SLOTS[intent]}
         NLU[text] = (intent, slots, 0.99)
-    text, intent = module.PythonInterface.SELF_TEST_PROBES[7]
+    text, intent = next(
+        p for p in module.PythonInterface.SELF_TEST_PROBES if p[1] == "set_com_frequency"
+    )
     NLU[text] = (intent, {}, 0.99)  # e.g. the COM probe losing its frequency
     plugin._run_self_test()
     plugin._flight_loop()  # worker reply

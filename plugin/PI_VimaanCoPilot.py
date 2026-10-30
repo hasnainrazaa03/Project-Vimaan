@@ -62,6 +62,12 @@ if _ML_PATH not in sys.path:
 
 # Only light, stdlib-backed modules load into X-Plane; the heavy ones live in
 # the worker process.
+from vimaan_nlu.commands import (  # noqa: E402
+    BY_INTENT,
+    COMMANDS,
+    required_slots,
+    self_test_probes,
+)
 from vimaan_nlu.overlay import Overlay  # noqa: E402
 from vimaan_nlu.overlay_state import OverlayState  # noqa: E402
 from vimaan_nlu.readback import spell_digits  # noqa: E402
@@ -92,67 +98,24 @@ STARTER_MAX_CRANK_SEC = 20.0
 # Delay before reading back a dataref a *command* should have changed.
 VERIFY_DELAY_SEC = 1.0
 
-# ---------------------------------------------------------------------------
-# Binary systems: (state dataref, dedicated on cmd, dedicated off cmd, toggle).
-# X-Plane has no "servos off" / "fdir off" commands, so "off" uses the toggle
-# — but only after reading the state, so it can never turn a system on. The
-# flight-director mode datarefs are writable, so FD is set directly.
-# ---------------------------------------------------------------------------
+# Commands (phrasing, values, bindings, handler, safety, self-test) are
+# declared once in vimaan_nlu/commands.py; these are views of that table.
+# Binary systems (autopilot, flight director): state dataref, dedicated on
+# command, toggle. X-Plane has no "servos off" / "fdir off" commands, so "off"
+# uses the toggle, but only after reading the state, so it can never turn a
+# system on.
 TOGGLE_BINDINGS: dict[str, dict[str, Any]] = {
-    "toggle_autopilot_1": {
-        "dataref": "sim/cockpit2/autopilot/servos_on",
-        "on_cmd": "sim/autopilot/servos_on",
-        "off_cmd": None,
-        "toggle": "sim/autopilot/servos_toggle",
-        "label": "Autopilot 1",
-    },
-    "toggle_autopilot_2": {
-        "dataref": "sim/cockpit2/autopilot/servos2_on",
-        "on_cmd": "sim/autopilot/servos2_on",
-        "off_cmd": None,
-        "toggle": "sim/autopilot/servos2_toggle",
-        "label": "Autopilot 2",
-    },
-    "toggle_flight_director_1": {
-        "dataref": "sim/cockpit2/autopilot/flight_director_mode",
-        "writable": True,
-        "on_cmd": "sim/autopilot/fdir_on",
-        "off_cmd": None,
-        "toggle": "sim/autopilot/fdir_toggle",
-        "label": "Flight Director 1",
-    },
-    "toggle_flight_director_2": {
-        "dataref": "sim/cockpit2/autopilot/flight_director2_mode",
-        "writable": True,
-        "on_cmd": "sim/autopilot/fdir2_on",
-        "off_cmd": None,
-        "toggle": "sim/autopilot/fdir2_toggle",
-        "label": "Flight Director 2",
-    },
+    c.intent: dict(c.params) for c in COMMANDS if c.handler == "_toggle_binary"
 }
-
+# Engines: starter held until the engine reports running.
 ENGINE_BINDINGS: dict[str, dict[str, Any]] = {
-    "toggle_engine_1": {
-        "index": 0,
-        "starter": "sim/starters/engage_starter_1",
-        "shutdown": "sim/starters/shut_down_1",
-        "label": "Engine 1",
-    },
-    "toggle_engine_2": {
-        "index": 1,
-        "starter": "sim/starters/engage_starter_2",
-        "shutdown": "sim/starters/shut_down_2",
-        "label": "Engine 2",
-    },
+    c.intent: dict(c.params) for c in COMMANDS if c.handler == "_toggle_engine"
 }
 
 DREF_HEADING = "sim/cockpit2/autopilot/heading_dial_deg_mag_pilot"
 DREF_ALTITUDE = "sim/cockpit2/autopilot/altitude_dial_ft"
 # kHz, supports 8.33 kHz spacing: 118.750 MHz -> 118750.
-DREF_COM_KHZ = {
-    "1": "sim/cockpit2/radios/actuators/com1_frequency_hz_833",
-    "2": "sim/cockpit2/radios/actuators/com2_frequency_hz_833",
-}
+DREF_COM_KHZ: dict[str, str] = dict(BY_INTENT["set_com_frequency"].params["datarefs"])
 DREF_GEAR_HANDLE = "sim/cockpit2/controls/gear_handle_down"
 DREF_GEAR_RETRACTABLE = "sim/aircraft/gear/acf_gear_retract"
 DREF_FLAP_HANDLE = "sim/cockpit2/controls/flap_handle_request_ratio"
@@ -167,21 +130,7 @@ DREF_BATTERY = "sim/cockpit2/electrical/battery_on"
 DREF_PAUSED = "sim/time/paused"
 
 # Slots each actionable intent needs before it can be dispatched (self-test).
-REQUIRED_SLOTS: dict[str, tuple[str, ...]] = {
-    "set_autopilot_heading": ("degrees",),
-    "set_autopilot_altitude": ("altitude",),
-    "set_flight_level": ("flight_level",),
-    "set_com_frequency": ("frequency",),
-    "toggle_landing_gear": ("state",),
-    "toggle_flaps": ("state",),
-    "toggle_autopilot_1": ("state",),
-    "toggle_autopilot_2": ("state",),
-    "toggle_flight_director_1": ("state",),
-    "toggle_flight_director_2": ("state",),
-    "toggle_parking_brake": ("state",),
-    "toggle_engine_1": ("state",),
-    "toggle_engine_2": ("state",),
-}
+REQUIRED_SLOTS: dict[str, tuple[str, ...]] = required_slots()
 
 
 class PythonInterface:
@@ -219,33 +168,17 @@ class PythonInterface:
     # commands); the conversational intents get a short spoken acknowledgement
     # instead of the misleading "Command not found". A None value => stay
     # silent.
-    NON_ACTIONABLE_INTENTS = {
-        "None": None,
-        "ask_status_generic": "All systems nominal",
-        "ask_time": "I cannot read the clock yet",
-        "chit_chat_greeting": "Hello, standing by",
-    }
+    NON_ACTIONABLE_INTENTS = {c.intent: c.reply for c in COMMANDS if not c.actionable}
 
     # Seconds a risky command stays "armed" waiting for the pilot to repeat it
     # as confirmation (Phase 6B safety interlocks).
     CONFIRM_WINDOW_SEC = 12.0
 
     # Canned (utterance, expected intent) pairs for the Ctrl-Z self-test
-    # (Phase 6C): one per actionable intent family, run through text -> NLU
+    # (Phase 6C): declared per command in the table, run through text -> NLU
     # (STT bypassed, nothing actuated). A probe passes only if the intent is
     # the expected one AND every slot its handler needs was extracted.
-    SELF_TEST_PROBES = (
-        ("set heading two seven zero", "set_autopilot_heading"),
-        ("climb to flight level three five zero", "set_flight_level"),
-        ("set altitude one five thousand", "set_autopilot_altitude"),
-        ("gear down", "toggle_landing_gear"),
-        ("flaps up", "toggle_flaps"),
-        ("engage autopilot one", "toggle_autopilot_1"),
-        ("flight director two on", "toggle_flight_director_2"),
-        ("tune com one to one one eight decimal seven five", "set_com_frequency"),
-        ("start engine one", "toggle_engine_1"),
-        ("parking brake on", "toggle_parking_brake"),
-    )
+    SELF_TEST_PROBES = self_test_probes()
 
     # What the pilot hears when a command ends without reaching the sim.
     OUTCOME_SPEECH = {
@@ -384,21 +317,7 @@ class PythonInterface:
             self._say("Voice engine failed. Check the log.")
 
     def _setup_intent_handlers(self):
-        return {
-            "set_autopilot_heading": self._set_heading,
-            "set_autopilot_altitude": self._set_altitude,
-            "set_flight_level": self._set_flight_level,
-            "set_com_frequency": self._set_com_frequency,
-            "toggle_landing_gear": self._toggle_landing_gear,
-            "toggle_flaps": self._toggle_flaps,
-            "toggle_autopilot_1": self._toggle_binary,
-            "toggle_autopilot_2": self._toggle_binary,
-            "toggle_flight_director_1": self._toggle_binary,
-            "toggle_flight_director_2": self._toggle_binary,
-            "toggle_parking_brake": self._toggle_parking_brake,
-            "toggle_engine_1": self._toggle_engine,
-            "toggle_engine_2": self._toggle_engine,
-        }
+        return {c.intent: getattr(self, c.handler) for c in COMMANDS if c.handler}
 
     # ------------------------------------------------------------------
     # XPPython3 plugin hooks

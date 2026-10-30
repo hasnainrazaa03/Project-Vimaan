@@ -4,10 +4,12 @@ import random
 
 from schema_config import SCHEMA
 from utils import get_next_version_path
+from vimaan_nlu.commands import PREFIXES as _PREFIXES
+from vimaan_nlu.commands import SUFFIXES as _SUFFIXES
 
-# PHRASE VARIATIONS (PREFIXES AND SUFFIXES)
-PREFIXES = ["", "please", "could you", "request", "confirm", "go ahead and"]
-SUFFIXES = ["", "now", "immediately", "for me", "if you would"]
+# Phrase variations: defined with the commands (vimaan_nlu/commands.py).
+PREFIXES = list(_PREFIXES)
+SUFFIXES = list(_SUFFIXES)
 
 
 # GENERATION LOGIC
