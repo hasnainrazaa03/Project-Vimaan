@@ -75,7 +75,6 @@ landing
 left
 level
 lights
-like
 longer
 lower
 maintain

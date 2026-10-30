@@ -62,3 +62,4 @@ def test_number_soundalikes_excluded():
     schema = {"ask_time": {"templates": ["do you have the time"], "slots": {}}}
     assert "do" not in build_vocabulary(schema)
     assert "do" not in load_vocabulary()
+    assert "like" not in load_vocabulary()  # in-sim: "flight" heard as "like"
