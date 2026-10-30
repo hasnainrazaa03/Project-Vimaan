@@ -1,0 +1,78 @@
+{"clip": "20261030_002528_c0001.wav", "said": "parking brake off", "heard": "parking the off", "intent": "toggle_parking_brake", "slots": {"state": "off"}}
+{"clip": "20261030_002528_c0002.wav", "said": "flight director one on", "heard": "flight director one on", "intent": "toggle_flight_director", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_002528_c0003.wav", "said": "engine start", "heard": "engine start", "intent": "toggle_engine", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_002528_c0004.wav", "said": "flaps up", "heard": "flaps up", "intent": "set_flaps", "slots": {"position": "up"}}
+{"clip": "20261030_002528_c0005.wav", "said": "autopilot on", "heard": "autopilot on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_002528_c0007.wav", "said": "heading 270", "heard": "heading two seventy", "intent": "set_autopilot_heading", "slots": {"degrees": "270"}}
+{"clip": "20261030_002528_c0008.wav", "said": "heading 270", "heard": "heading two seventy", "intent": "set_autopilot_heading", "slots": {"degrees": "270"}}
+{"clip": "20261030_002528_c0009.wav", "said": "heading 270", "heard": "heading two seven zero", "intent": "set_autopilot_heading", "slots": {"degrees": "270"}}
+{"clip": "20261030_002528_c0010.wav", "said": "heading 270", "heard": "heading two hundred seventy", "intent": "set_autopilot_heading", "slots": {"degrees": "270"}}
+{"clip": "20261030_002528_c0011.wav", "said": "flight level 100", "heard": "flight level one hundred", "intent": "set_flight_level", "slots": {"flight_level": "100"}}
+{"clip": "20261030_002528_c0012.wav", "said": "Gear Up", "heard": "gear up", "intent": "toggle_landing_gear", "slots": {"state": "up"}}
+{"clip": "20261030_002528_c0013.wav", "said": "flight level fifty", "heard": "flight level fifty", "intent": "set_flight_level", "slots": {"flight_level": "50"}}
+{"clip": "20261030_002528_c0017.wav", "said": "heading 180", "heard": "heading one eighty", "intent": "set_autopilot_heading", "slots": {"degrees": "180"}}
+{"clip": "20261030_002528_c0018.wav", "said": "autopilot off", "heard": "autopilot off", "intent": "toggle_autopilot", "slots": {"state": "off", "instance": "1"}}
+{"clip": "20261030_002528_c0019.wav", "said": "heading 180", "heard": "heading one eighty", "intent": "set_autopilot_heading", "slots": {"degrees": "180"}}
+{"clip": "20261030_002528_c0021.wav", "said": "autopilot on", "heard": "autopilot on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_002528_c0022.wav", "said": "engine one off", "heard": "engine one off", "intent": "toggle_engine", "slots": {"state": "off", "instance": "1"}}
+{"clip": "20261030_002528_c0023.wav", "said": "engine one off", "heard": "feet confirm engine one off", "intent": "toggle_engine", "slots": {"state": "off", "instance": "1"}}
+{"clip": "20261030_002528_c0024.wav", "said": "Engine 2 off", "heard": "engine two off", "intent": "toggle_engine", "slots": {"state": "off", "instance": "2"}}
+{"clip": "20261030_002528_c0025.wav", "said": "Engine 2 off", "heard": "eighty engine two off", "intent": "toggle_engine", "slots": {"state": "off", "instance": "2"}}
+{"clip": "20261030_002528_c0026.wav", "said": "autopilot on", "heard": "autopilot on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_002528_c0027.wav", "said": "flaps up", "heard": "flaps up", "intent": "set_flaps", "slots": {"position": "up"}}
+{"clip": "20261030_002528_c0028.wav", "said": "flaps down", "heard": "flaps down", "intent": "set_flaps", "slots": {"position": "down"}}
+{"clip": "20261030_002528_c0029.wav", "said": "flaps down again", "heard": "flaps down down", "intent": "set_flaps", "slots": {"position": "down"}}
+{"clip": "20261030_002528_c0030.wav", "said": "altitude 7,500 ft", "heard": "altitude seven thousand five hundred feet", "intent": "set_autopilot_altitude", "slots": {"altitude": "7500"}}
+{"clip": "20261030_002528_c0031.wav", "said": "heading 180", "heard": "heading one eighty", "intent": "set_autopilot_heading", "slots": {"degrees": "180"}}
+{"clip": "20261030_002528_c0032.wav", "said": "autopilot on", "heard": "autopilot on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_002528_c0033.wav", "said": "autopilot 2 on", "heard": "autopilot two on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "2"}}
+{"clip": "20261030_002528_c0034.wav", "said": "autopilot 2 on", "heard": "autopilot two on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "2"}}
+{"clip": "20261030_002528_c0035.wav", "said": "ap2 on", "heard": "eighty two on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "2"}}
+{"clip": "20261030_002528_c0036.wav", "said": "ap2 on", "heard": "eighty two on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "2"}}
+{"clip": "20261030_002528_c0037.wav", "said": "second autopilot on", "heard": "second autopilot on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "2"}}
+{"clip": "20261030_011221_c0001.wav", "said": "parking brake off", "heard": "parking off", "intent": "toggle_parking_brake", "slots": {"state": "off"}}
+{"clip": "20261030_011221_c0002.wav", "said": "engine start", "heard": "engine start", "intent": "toggle_engine", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_011221_c0004.wav", "said": "flight director on", "heard": "flight director four", "intent": "toggle_flight_director", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_011221_c0006.wav", "said": "flight director on", "heard": "eight director on", "intent": "toggle_flight_director", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_011221_c0007.wav", "said": "gear down", "heard": "gear down", "intent": "toggle_landing_gear", "slots": {"state": "down"}}
+{"clip": "20261030_011221_c0008.wav", "said": "gear up", "heard": "gear up", "intent": "toggle_landing_gear", "slots": {"state": "up"}}
+{"clip": "20261030_011221_c0009.wav", "said": "gear up", "heard": "gear up", "intent": "toggle_landing_gear", "slots": {"state": "up"}}
+{"clip": "20261030_011221_c0010.wav", "said": "autopilot on", "heard": "autopilot on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_011221_c0011.wav", "said": "flight level two forty", "heard": "flight level two forty", "intent": "set_flight_level", "slots": {"flight_level": "240"}}
+{"clip": "20261030_011221_c0012.wav", "said": "heading one eighty", "heard": "heading one eighty", "intent": "set_autopilot_heading", "slots": {"degrees": "180"}}
+{"clip": "20261030_011221_c0014.wav", "said": "heading two seventy", "heard": "heading two seventy", "intent": "set_autopilot_heading", "slots": {"degrees": "270"}}
+{"clip": "20261030_011221_c0015.wav", "said": "flaps down", "heard": "flaps down", "intent": "set_flaps", "slots": {"position": "down"}}
+{"clip": "20261030_011221_c0016.wav", "said": "flaps down", "heard": "flaps down get", "intent": "set_flaps", "slots": {"position": "down"}}
+{"clip": "20261030_011221_c0017.wav", "said": "heading one eighty", "heard": "heading one", "intent": "set_autopilot_heading", "slots": {"degrees": "180"}}
+{"clip": "20261030_011221_c0018.wav", "said": "heading one eighty", "heard": "heading one eighty", "intent": "set_autopilot_heading", "slots": {"degrees": "180"}}
+{"clip": "20261030_011221_c0019.wav", "said": "flight level two forty", "heard": "flight level to what", "intent": "set_flight_level", "slots": {"flight_level": "240"}}
+{"clip": "20261030_011221_c0020.wav", "said": "flight level two forty", "heard": "flight level two forty", "intent": "set_flight_level", "slots": {"flight_level": "240"}}
+{"clip": "20261030_011221_c0021.wav", "said": "flaps up", "heard": "flaps up", "intent": "set_flaps", "slots": {"position": "up"}}
+{"clip": "20261030_011221_c0022.wav", "said": "engine off", "heard": "engine off", "intent": "toggle_engine", "slots": {"state": "off", "instance": "1"}}
+{"clip": "20261030_011221_c0023.wav", "said": "engine off", "heard": "engine off", "intent": "toggle_engine", "slots": {"state": "off", "instance": "1"}}
+{"clip": "20261030_011221_c0024.wav", "said": "engine two off", "heard": "engine two off", "intent": "toggle_engine", "slots": {"state": "off", "instance": "2"}}
+{"clip": "20261030_011221_c0025.wav", "said": "engine two off", "heard": "engine two off", "intent": "toggle_engine", "slots": {"state": "off", "instance": "2"}}
+{"clip": "20261030_011221_c0026.wav", "said": "autopilot on", "heard": "autopilot on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_011221_c0027.wav", "said": "heading one eighty", "heard": "heading one eighty", "intent": "set_autopilot_heading", "slots": {"degrees": "180"}}
+{"clip": "20261030_011221_c0028.wav", "said": "gear down", "heard": "gear down", "intent": "toggle_landing_gear", "slots": {"state": "down"}}
+{"clip": "20261030_011221_c0030.wav", "said": "engine on", "heard": "engine on", "intent": "toggle_engine", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_011221_c0031.wav", "said": "engine two on", "heard": "engine two on", "intent": "toggle_engine", "slots": {"state": "on", "instance": "2"}}
+{"clip": "20261030_011221_c0032.wav", "said": "parking brake on", "heard": "parking bring on engine", "intent": "toggle_parking_brake", "slots": {"state": "on"}}
+{"clip": "20261030_011221_c0033.wav", "said": "parking brake on", "heard": "parking brake on", "intent": "toggle_parking_brake", "slots": {"state": "on"}}
+{"clip": "20261030_145813_c0002.wav", "said": "parking brake off", "heard": "parking request", "intent": "toggle_parking_brake", "slots": {"state": "off"}}
+{"clip": "20261030_145813_c0004.wav", "said": "engine start", "heard": "engine start", "intent": "toggle_engine", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_145813_c0005.wav", "said": "engine two start", "heard": "engine two start", "intent": "toggle_engine", "slots": {"state": "on", "instance": "2"}}
+{"clip": "20261030_145813_c0006.wav", "said": "flight director one on", "heard": "flight director one on", "intent": "toggle_flight_director", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_145813_c0007.wav", "said": "flight director two on", "heard": "flight director two on", "intent": "toggle_flight_director", "slots": {"state": "on", "instance": "2"}}
+{"clip": "20261030_145813_c0008.wav", "said": "flaps down", "heard": "flap down", "intent": "set_flaps", "slots": {"position": "down"}}
+{"clip": "20261030_145813_c0010.wav", "said": "flaps down", "heard": "flaps down", "intent": "set_flaps", "slots": {"position": "down"}}
+{"clip": "20261030_145813_c0011.wav", "said": "autopilot on", "heard": "autopilot on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_145813_c0012.wav", "said": "autopilot on", "heard": "autopilot on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_145813_c0013.wav", "said": "heading two seventy", "heard": "heading two seventy", "intent": "set_autopilot_heading", "slots": {"degrees": "270"}}
+{"clip": "20261030_145813_c0014.wav", "said": "autopilot one on", "heard": "autopilot one on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_145813_c0017.wav", "said": "flight level three hundred", "heard": "flight level three hundred", "intent": "set_flight_level", "slots": {"flight_level": "300"}}
+{"clip": "20261030_145813_c0018.wav", "said": "landing gear up", "heard": "landing gear up", "intent": "toggle_landing_gear", "slots": {"state": "up"}}
+{"clip": "20261030_145813_c0020.wav", "said": "flaps up", "heard": "flaps up", "intent": "set_flaps", "slots": {"position": "up"}}
+{"clip": "20261030_145813_c0021.wav", "said": "flaps up", "heard": "flaps up", "intent": "set_flaps", "slots": {"position": "up"}}
+{"clip": "20261030_145813_c0023.wav", "said": "heading one eighty", "heard": "heading one we feeling", "intent": "set_autopilot_heading", "slots": {"degrees": "180"}}
+{"clip": "20261030_145813_c0024.wav", "said": "heading one eight zero", "heard": "heading one eight zero", "intent": "set_autopilot_heading", "slots": {"degrees": "180"}}
