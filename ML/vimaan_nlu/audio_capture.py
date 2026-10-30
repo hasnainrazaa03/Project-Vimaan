@@ -58,6 +58,7 @@ class PushToTalkRecorder:
         self._lock = threading.Lock()
         self._chunks: list[bytes] = []
         self._frames = 0
+        self._taken = 0  # chunks already handed out by take_new()
         self._stream: Any = None
         self._recording = False
         self._started_at: float | None = None
@@ -116,7 +117,7 @@ class PushToTalkRecorder:
         if self._recording:
             return
         with self._lock:
-            self._chunks, self._frames = [], 0
+            self._chunks, self._frames, self._taken = [], 0, 0
         self.truncated = False
         self.overflows = 0
         self.error = None
@@ -170,6 +171,14 @@ class PushToTalkRecorder:
             self._frames += take
         return available
 
+    def take_new(self) -> bytes:
+        """PCM captured since the previous call (for streaming recognition).
+        Doesn't affect what :meth:`stop` returns."""
+        with self._lock:
+            new = self._chunks[self._taken :]
+            self._taken = len(self._chunks)
+        return b"".join(new)
+
     def stop(self) -> bytes:
         """End the recording and return the captured 16-bit mono PCM.
 
@@ -181,7 +190,7 @@ class PushToTalkRecorder:
         with self._lock:
             stream, self._stream = self._stream, None
             raw = b"".join(self._chunks)
-            self._chunks, self._frames = [], 0
+            self._chunks, self._frames, self._taken = [], 0, 0
         if stream is not None:
             self._run_async(lambda: self._close(stream), "close")
         return raw

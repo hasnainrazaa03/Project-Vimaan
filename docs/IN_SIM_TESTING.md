@@ -31,7 +31,7 @@ into **that** Python, not the project venv.
 In X-Plane: **Plugins → XPPython3 → Pip Package Installer**, then install:
 
 ```
-torch transformers tokenizers safetensors numpy SpeechRecognition sounddevice soundfile word2number
+torch transformers tokenizers safetensors numpy SpeechRecognition sounddevice soundfile vosk word2number
 ```
 
 or, equivalently, from a terminal with XPPython3's own interpreter:
@@ -39,7 +39,7 @@ or, equivalently, from a terminal with XPPython3's own interpreter:
 ```bash
 PY="<X-Plane 12>/Resources/plugins/XPPython3/mac_x64/python3.12/bin/python3.12"
 "$PY" -m pip install torch transformers tokenizers safetensors numpy \
-    SpeechRecognition sounddevice soundfile word2number
+    SpeechRecognition sounddevice soundfile vosk word2number
 ```
 
 > **Apple Silicon gotcha (XPPython3 4.7.x):** the standalone
@@ -73,12 +73,13 @@ which import failed. A missing `sounddevice` only disables the microphone
 ```bash
 X="$HOME/Library/Application Support/Steam/steamapps/common/X-Plane 12"
 python scripts/check_xplane_refs.py --xplane "$X"      # every dataref/command exists
+python scripts/fetch_vosk_model.py                     # offline speech model (once)
 python scripts/install_plugin.py --xplane "$X" --dry-run
 python scripts/install_plugin.py --xplane "$X"
 ```
 
-This copies the plugin, the runtime `ML/` package and the latest model (v11)
-into `Resources/plugins/PythonPlugins/`. The model loads from disk; no network
+This copies the plugin, the runtime `ML/` package, the latest model (v11) and
+the offline speech model into `Resources/plugins/PythonPlugins/`. The model loads from disk; no network
 is needed at startup.
 
 ## 4. First flight: test sequence
@@ -107,7 +108,7 @@ plugin holds the starter until the engine runs (up to 20 s) and says
 "Engine 1 running", or "did not start" with mixture/ignition/battery values in
 the log.
 
-**Voice worker process:** the microphone, Google STT and the model run in a
+**Voice worker process:** the microphone, speech recognition and the model run in a
 separate process started with XPPython3's `xp.pythonExecutable` (logged as
 `worker_spawn`; its own output goes to `~/Vimaan_Logs/vimaan_<ts>.worker.log`).
 Inside X-Plane, Python background threads only run when the sim's main thread
@@ -165,8 +166,10 @@ X-Plane's own logs, for crashes outside Python: `<X-Plane 12>/Log.txt` and
 | No mic permission | `microphone_unavailable`, or capture with `rms` ≈ 0 | System Settings → Privacy & Security → Microphone → enable X-Plane (and Steam, if launched from Steam) |
 | Memory | `peak_rss_mb` on `heartbeat` / `session_end` | X-Plane's whole process (scenery included, ~5 GB in flight); torch + model live in the worker process, not here |
 
-## 6. Switching speech backends
+## 6. Speech recognition
 
-Default is `google` (online, nothing to install). For offline recognition see
-[OFFLINE_STT.md](OFFLINE_STT.md); set `VIMAAN_STT_BACKEND` before launching
-X-Plane. The `stt` stage latency in the report is the number to compare.
+Default is `vosk` (offline, streaming, restricted to the command words);
+`google` is the online alternative. See [OFFLINE_STT.md](OFFLINE_STT.md); set
+`VIMAAN_STT_BACKEND` before launching X-Plane. Every command's audio is saved
+to `~/Vimaan_Logs/audio/` for comparing recognisers on real voices
+(`VIMAAN_SAVE_AUDIO=0` turns it off).

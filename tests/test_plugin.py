@@ -183,6 +183,37 @@ def test_worker_launched_with_xppython3_interpreter(sim):
     assert plugin.worker.env["PYTHONPATH"].startswith(plugin.worker.cwd)
 
 
+def test_worker_defaults_to_offline_stt_and_saves_audio(sim):
+    _, plugin, _ = sim
+    argv = plugin.worker.argv
+    assert argv[argv.index("--stt-backend") + 1] == "vosk"
+    assert argv[argv.index("--save-audio-dir") + 1] == str(plugin.tel.log_dir / "audio")
+    assert argv[argv.index("--audio-prefix") + 1] == f"{plugin.tel.session_id}_"
+
+
+def test_audio_saving_can_be_turned_off(sim, monkeypatch):
+    _, plugin, _ = sim
+    monkeypatch.setattr(plugin, "SAVE_AUDIO", False)
+    assert "--save-audio-dir" not in plugin._worker_argv()
+
+
+def test_stt_fallback_logged(sim):
+    _, plugin, _ = sim
+    plugin._on_worker_message(
+        {
+            "type": "ready",
+            "stt_backend": "google",
+            "stt": {
+                "fallback_from": "vosk",
+                "error": "ModuleNotFoundError: No module named 'vosk'",
+            },
+        }
+    )
+    assert plugin.STT_BACKEND == "google"
+    (ev,) = events(plugin, "stt_fallback")
+    assert ev["requested"] == "vosk" and ev["using"] == "google" and "vosk" in ev["error"]
+
+
 def test_worker_uses_xp_python_executable_when_available(sim, monkeypatch):
     _, plugin, xp = sim
     monkeypatch.setattr(xp, "pythonExecutable", sys.executable, raising=False)

@@ -180,6 +180,67 @@ def test_run_serves_a_pipe_and_exits_on_eof():
     assert types_of(out) == ["pong", "log", "result"]
 
 
+class FakeStream:
+    """Stands in for stt.VoskStream."""
+
+    def __init__(self, text="gear up"):
+        self.text, self.fed, self.fed_bytes, self.begun = text, b"", 0, 0
+
+    def begin(self):
+        self.fed, self.fed_bytes, self.begun = b"", 0, self.begun + 1
+
+    def feed(self, pcm):
+        self.fed += pcm
+        self.fed_bytes += len(pcm)
+
+    def finish(self):
+        return self.text
+
+
+def test_streaming_stt_fed_while_recording(tmp_path):
+    w, out, sd, clock = make_worker(transcript=RuntimeError("batch STT must not run"))
+    w.stream_stt = FakeStream()
+    press_and_feed(w, sd, LOUD[:16000])
+    w.tick()
+    assert w.stream_stt.fed_bytes == 16000  # decoded while the key is held
+    w.handle({"op": "stop", "cmd": "c1"})
+    sd.streams[-1].feed(LOUD[16000:32000])  # arrives during the release tail
+    clock.now += 0.31
+    w.tick()
+    assert w.stream_stt.fed == LOUD[:32000]  # every byte exactly once
+    assert out[-1]["type"] == "result" and out[-1]["text"] == "gear up"
+    assert w.stream_stt.begun == 1
+
+
+def test_audio_saved_per_command(tmp_path):
+    import wave
+
+    w, out, sd, clock = make_worker(tail=0)
+    w.audio_dir, w.audio_prefix = str(tmp_path / "audio"), "20261030_120000_"
+    press_and_feed(w, sd, LOUD[:32000])
+    w.handle({"op": "stop", "cmd": "c1"})
+    captured = next(m for m in out if m["type"] == "captured")
+    path = captured["audio_file"]
+    assert path == str(tmp_path / "audio" / "20261030_120000_c1.wav")
+    with wave.open(path) as f:
+        assert (f.getframerate(), f.getnchannels(), f.getsampwidth()) == (16000, 1, 2)
+        assert f.readframes(10**6) == LOUD[:32000]
+
+
+def test_audio_not_saved_when_off_or_full(tmp_path, monkeypatch):
+    w, out, sd, clock = make_worker(tail=0)
+    press_and_feed(w, sd)
+    w.handle({"op": "stop", "cmd": "c1"})
+    assert next(m for m in out if m["type"] == "captured")["audio_file"] is None
+    monkeypatch.setattr(voice_worker, "MAX_AUDIO_DIR_BYTES", 1000)
+    w.audio_dir = str(tmp_path)
+    out.clear()
+    press_and_feed(w, sd, cmd="c2")
+    w.handle({"op": "stop", "cmd": "c2"})
+    assert next(m for m in out if m["type"] == "captured")["audio_file"] is None
+    assert list(tmp_path.iterdir()) == []
+
+
 # ---------------------------------------------------------------------------
 # WorkerClient against a real (tiny, torch-free) child process
 # ---------------------------------------------------------------------------

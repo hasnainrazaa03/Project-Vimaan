@@ -194,11 +194,14 @@ class PythonInterface:
     # <model>/onnx/model.onnx.
     BACKEND = os.environ.get("VIMAAN_BACKEND", "torch").lower()
 
-    # Speech-to-text backend (Phase 7 / R-09): "google" (online, default),
-    # "vosk" or "whisper" (offline, no network). Override with
-    # VIMAAN_STT_BACKEND. Offline backends need their package + a model
-    # installed; see docs/OFFLINE_STT.md.
-    STT_BACKEND = os.environ.get("VIMAAN_STT_BACKEND", "google").lower()
+    # Speech-to-text backend: "vosk" (offline, streaming, restricted to the
+    # command words; default), "google" (online), "whisper". Override with
+    # VIMAAN_STT_BACKEND. If Vosk can't load, the worker falls back to Google
+    # and logs stt_fallback. See docs/OFFLINE_STT.md.
+    STT_BACKEND = os.environ.get("VIMAAN_STT_BACKEND", "vosk").lower()
+    # Each command's audio is saved under ~/Vimaan_Logs/audio/ so real flights
+    # become a recogniser test set. VIMAAN_SAVE_AUDIO=0 turns it off.
+    SAVE_AUDIO = os.environ.get("VIMAAN_SAVE_AUDIO", "1") != "0"
     WHISPER_MODEL = os.environ.get("VIMAAN_WHISPER_MODEL", "base.en")
 
     # Intents the model can emit that map to no sim command. "None" is a
@@ -317,6 +320,13 @@ class PythonInterface:
         ]
         if not self.USE_QUANTIZED_MODEL:
             argv.append("--no-quantize")
+        if self.SAVE_AUDIO:
+            argv += [
+                "--save-audio-dir",
+                str(self.tel.log_dir / "audio"),
+                "--audio-prefix",
+                f"{self.tel.session_id}_",
+            ]
         return argv
 
     def _start_worker(self):
@@ -554,6 +564,15 @@ class PythonInterface:
                 ms=msg.get("load_ms"),
                 **{k: v for k, v in msg.items() if k not in ("type", "load_ms")},
             )
+            requested, self.STT_BACKEND = self.STT_BACKEND, msg.get("stt_backend", self.STT_BACKEND)
+            if self.STT_BACKEND != requested:
+                self.tel.event(
+                    "stt_fallback",
+                    logging.WARNING,
+                    requested=requested,
+                    using=self.STT_BACKEND,
+                    **(msg.get("stt") or {}),
+                )
             boot = time.perf_counter() - (self._worker_started_at or time.perf_counter())
             self.tel.event("worker_ready", boot_sec=round(boot, 2), restarts=self._worker_restarts)
             self._say("Vimaan AI CoPilot ready")

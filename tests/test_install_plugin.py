@@ -70,6 +70,20 @@ class TestBuildPlan:
         assert by_name["vimaan_nlu"].endswith(os.path.join("PythonPlugins", "ML", "vimaan_nlu"))
         assert os.path.join("vimaan_nlu_model_best", "v10") in by_name["v10"]
 
+    def test_vosk_model_shipped_where_the_worker_looks(self, tmp_path):
+        from vimaan_nlu import stt
+
+        repo, xp = _fake_repo(tmp_path), _fake_xplane(tmp_path)
+        name = os.path.basename(ip.VOSK_MODEL_SUBDIR)
+        assert not any(d.endswith(name) for _, d, _ in ip.build_plan(str(repo), str(xp)))
+        (repo / ip.VOSK_MODEL_SUBDIR).mkdir(parents=True)
+        dests = [d for _, d, _ in ip.build_plan(str(repo), str(xp)) if d.endswith(name)]
+        ml = os.path.join(ip.python_plugins_dir(str(xp)), "ML")
+        rel = os.path.relpath(
+            stt.DEFAULT_VOSK_MODEL, os.path.dirname(os.path.dirname(stt.__file__))
+        )
+        assert dests == [os.path.join(ml, rel)]
+
     def test_specific_model(self, tmp_path):
         repo, xp = _fake_repo(tmp_path), _fake_xplane(tmp_path)
         plan = ip.build_plan(str(repo), str(xp), "v2")

@@ -22,6 +22,9 @@ import sys
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 MODELS_SUBDIR = os.path.join("ML", "models", "vimaan_nlu_model_best")
+# Offline speech model (fetched by scripts/fetch_vosk_model.py). Optional: if
+# it's missing the plugin falls back to Google speech recognition.
+VOSK_MODEL_SUBDIR = os.path.join("ML", "models", "vosk", "vosk-model-small-en-us-0.15")
 
 
 def find_latest_model(models_root: str):
@@ -71,7 +74,7 @@ def build_plan(repo_root: str, xplane_root: str, model_version: str | None = Non
             )
         model_name, model_src = latest
 
-    return [
+    plan = [
         (
             os.path.join(repo_root, "plugin", "PI_VimaanCoPilot.py"),
             os.path.join(dest_root, "PI_VimaanCoPilot.py"),
@@ -85,6 +88,10 @@ def build_plan(repo_root: str, xplane_root: str, model_version: str | None = Non
             "tree",
         ),
     ]
+    vosk_src = os.path.join(repo_root, VOSK_MODEL_SUBDIR)
+    if os.path.isdir(vosk_src):
+        plan.append((vosk_src, os.path.join(dest_root, VOSK_MODEL_SUBDIR), "tree"))
+    return plan
 
 
 def _copy(src: str, dst: str, kind: str) -> None:
@@ -120,6 +127,11 @@ def main(argv=None) -> int:
                 return 2
             _copy(src, dst, kind)
 
+    if not os.path.isdir(os.path.join(REPO_ROOT, VOSK_MODEL_SUBDIR)):
+        print(
+            "\nNOTE: no offline speech model — Vimaan will use Google (online). "
+            "Fetch it with: python scripts/fetch_vosk_model.py"
+        )
     if not args.dry_run:
         print(
             "\nDone. Start X-Plane; Vimaan says 'ready' when loaded. Session logs land in "

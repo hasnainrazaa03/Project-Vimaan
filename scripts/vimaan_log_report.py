@@ -38,6 +38,7 @@ PROBLEM_KINDS = {
     "worker_spawn_failed",
     "worker_exit",
     "worker_fatal",
+    "stt_fallback",
 }
 
 
@@ -105,6 +106,8 @@ def report(path: Path) -> str:
                 f"  voice worker: pid {load.get('pid')}  Python {load.get('python')} @ "
                 f"{load.get('executable')}  ready in {load.get('ms')} ms"
             )
+        if load.get("stt_backend"):
+            w(f"  speech recognition: {load.get('stt_backend')}  {load.get('stt') or ''}")
         if isinstance(load.get("mic"), dict) and load["mic"].get("using"):
             w(f"  microphone: {load['mic'].get('using')!r} of {load['mic'].get('input_devices')}")
     mic = next((e for e in events if e["kind"] == "microphone_ready"), None)
