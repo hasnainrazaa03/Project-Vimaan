@@ -224,6 +224,8 @@ tier only adds data.
 
 **E1 status (2026-10-30):** v17 passes all six gates after a one-line scorer fix (the COM 1 default for an unspoken port now applies to the prediction as well as the expected action); see `gate.json` beside the model. Not installed: X-Plane stays on v11 until #27 and #28 merge, and v17 also needs this branch's plugin code. Known misses: 5 of 490 explicit-port COM rows tune COM 1 ("frequency … on com two" with a one-digit decimal; v11 got all 490 right), "parking bring on engine" starts engine 1, "fly at one thousand" is rejected.
 
+**Unresolved: COM 2 regression on v17.** Passing the aggregate gates does not clear it. v17 is for controlled test flights only, not general use, until this is fixed and re-validated. Before relying on v17 for COM tuning, say the affected "frequency … on com two" phrases in a controlled setup and check the radio read-back; if it tunes COM 1, switch back to v11 for that test.
+
 **Gate E1.** Template-held-out intent ≥ 98.5%, slot F1 ≥ 0.99 for every intent;
 no regression on v11 held-out, gold, or real-voice clips; ≥ 95% of negatives
 rejected; NLU p95 < 25 ms.
