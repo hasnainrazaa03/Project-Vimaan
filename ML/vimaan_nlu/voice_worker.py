@@ -21,7 +21,8 @@ Requests (``op``):
     ping                 reply ``pong``
     quit                 exit
 Replies (``type``):
-    ready, fatal, recording, captured, result, error, selftest, pong, log
+    ready, fatal, recording, partial, captured, result, error, selftest, pong, log
+    (``partial`` = live transcript while recording, streaming backends only)
 
 EOF on stdin (the plugin or X-Plane went away) makes the worker exit.
 """
@@ -54,6 +55,8 @@ RELEASE_TAIL_SEC = 0.3
 # become a test set for comparing recognisers (scripts/stt_benchmark.py).
 # Saving stops once the folder holds this much.
 MAX_AUDIO_DIR_BYTES = 500 * 1024 * 1024
+# Live transcript for the overlay: at most this often, only when it changed.
+PARTIAL_INTERVAL_SEC = 0.1
 
 
 class WavRecorder:
@@ -170,6 +173,8 @@ class VoiceWorker:
                 self.stream_stt.begin()
             self.rec = {
                 "cmd": cmd,
+                "partial": "",
+                "partial_at": 0.0,
                 "t_start": self.clock(),
                 "released_at": None,
                 "announced": False,
@@ -234,6 +239,7 @@ class VoiceWorker:
         self.recorder.poll()
         if self.stream_stt is not None:
             self.stream_stt.feed(self.recorder.take_new())
+            self._send_partial(rec)
         released = rec["released_at"]
         if released is not None:
             if self.clock() - released >= self.release_tail_sec:
@@ -295,6 +301,16 @@ class VoiceWorker:
         self._predict_and_reply(
             cmd, text, stt_ms=round((self.clock() - t) * 1000, 1), audio=audio_sec
         )
+
+    def _send_partial(self, rec: dict[str, Any]) -> None:
+        now = self.clock()
+        if now - rec["partial_at"] < PARTIAL_INTERVAL_SEC:
+            return
+        rec["partial_at"] = now
+        text = self.stream_stt.partial() if hasattr(self.stream_stt, "partial") else ""
+        if text and text != rec["partial"]:
+            rec["partial"] = text
+            self.send({"type": "partial", "cmd": rec["cmd"], "text": text})
 
     def _save_audio(self, cmd: Any, raw: bytes) -> str | None:
         if not self.audio_dir or not raw:

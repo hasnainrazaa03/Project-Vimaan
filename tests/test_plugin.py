@@ -214,6 +214,49 @@ def test_stt_fallback_logged(sim):
     assert ev["requested"] == "vosk" and ev["using"] == "google" and "vosk" in ev["error"]
 
 
+def test_overlay_shows_the_command(sim):
+    _, plugin, xp = sim
+    assert events(plugin, "overlay_start")[-1]["backend"] == "native"
+    STT["next"] = "set heading two seven zero"
+    NLU["set heading two seven zero"] = ("set_autopilot_heading", {"degrees": "270"}, 0.99)
+    plugin.OnPressCallback(None)
+    plugin._flight_loop()
+    plugin._on_worker_message({"type": "partial", "cmd": plugin._active["cmd"], "text": "set head"})
+    plugin._flight_loop()
+    assert xp.draw_windows() == ["REC", "set head"]
+    plugin.sd.streams[-1].feed(b"\x40\x1f\xc0\xe0" * 8000)
+    plugin.OnReleaseCallback(None)
+    plugin._flight_loop()
+    screen = xp.draw_windows()
+    assert screen[:2] == ["HEARD", '"set heading two seven zero"']
+    assert "MEANT" in screen and "Heading   hdg 270" in screen
+    assert "DONE" in screen and "Heading two seven zero" in screen
+
+
+def test_overlay_toggle_cycles_modes(sim):
+    _, plugin, xp = sim
+    handler = xp.custom_commands["vimaan/toggle_overlay"]
+    handler(None, xp.CommandBegin, None)
+    plugin._flight_loop()
+    assert plugin.overlay_state.mode == "pinned" and xp.draw_windows() == [
+        "VIMAAN",
+        "Overlay pinned",
+    ]
+    handler(None, xp.CommandBegin, None)
+    plugin._flight_loop()
+    assert plugin.overlay_state.mode == "off" and xp.draw_windows() == []
+    assert [e["mode"] for e in events(plugin, "overlay_mode")] == ["pinned", "off"]
+
+
+def test_overlay_can_be_disabled(monkeypatch, tmp_path):
+    monkeypatch.setenv("VIMAAN_OVERLAY", "off")
+    module, plugin, xp = _load_plugin(monkeypatch, tmp_path)
+    try:
+        assert plugin.overlay is None and xp.windows == {}
+    finally:
+        plugin.XPluginStop()
+
+
 def test_worker_uses_xp_python_executable_when_available(sim, monkeypatch):
     _, plugin, xp = sim
     monkeypatch.setattr(xp, "pythonExecutable", sys.executable, raising=False)

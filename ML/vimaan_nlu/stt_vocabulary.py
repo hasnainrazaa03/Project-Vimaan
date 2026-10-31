@@ -33,10 +33,11 @@ NUMBER_WORDS = (
 ).split()
 # Words the normalizer / postprocessor understand that templates don't contain.
 EXTRA_WORDS = "to the and a first second left right both com radio feet".split()
-# Words left out of the grammar because the recogniser hears number words as
-# them: in-sim, "two" came back as "do" every time ("autopilot do on"). "do"
-# only appears in the ask_time template "do you have the time".
-EXCLUDED_WORDS = {"do"}
+# Words left out of the grammar because the recogniser hears command words
+# as them. In-sim: "two" came back as "do" every time ("autopilot do on"), and
+# "flight" as "like" ("like director one on"). Both only appear in
+# conversational templates ("do you have the time", "what's the weather like").
+EXCLUDED_WORDS = {"do", "like"}
 _DIGIT_WORDS = dict(enumerate("zero one two three four five six seven eight nine".split()))
 
 

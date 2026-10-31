@@ -114,6 +114,9 @@ class Telemetry:
         self._events: TextIO = open(self.events_path, "a", encoding="utf-8", buffering=1)
         self._faults: TextIO | None = None
         self._mirror = mirror
+        # Called with every event record (e.g. the in-sim overlay). A listener
+        # that raises is dropped from the log line, never from the session.
+        self._listeners: list[Callable[[dict[str, Any]], None]] = []
 
         self.logger = logger or self._make_logger()
         self.counters: dict[str, int] = {
@@ -196,7 +199,16 @@ class Telemetry:
         self.log(f"[{kind}] {summary}".rstrip(), level)
         if "traceback" in fields:
             self.log(str(fields["traceback"]), level)
+        for listener in self._listeners:
+            try:
+                listener(record)
+            except Exception as exc:
+                self.log(f"[listener_error] {type(exc).__name__}: {exc}", logging.WARNING)
         return record
+
+    def subscribe(self, listener: Callable[[dict[str, Any]], None]) -> None:
+        """Call ``listener(record)`` for every future event."""
+        self._listeners.append(listener)
 
     def log(self, message: str, level: int = logging.INFO) -> None:
         self.logger.log(level, message)

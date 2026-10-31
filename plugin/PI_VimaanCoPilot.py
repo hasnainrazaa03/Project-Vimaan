@@ -62,6 +62,8 @@ if _ML_PATH not in sys.path:
 
 # Only light, stdlib-backed modules load into X-Plane; the heavy ones live in
 # the worker process.
+from vimaan_nlu.overlay import Overlay  # noqa: E402
+from vimaan_nlu.overlay_state import OverlayState  # noqa: E402
 from vimaan_nlu.readback import spell_digits  # noqa: E402
 from vimaan_nlu.safety import (  # noqa: E402
     ConfirmationGate,
@@ -206,6 +208,10 @@ class PythonInterface:
     # Each command's audio is saved under ~/Vimaan_Logs/audio/ so real flights
     # become a recogniser test set. VIMAAN_SAVE_AUDIO=0 turns it off.
     SAVE_AUDIO = os.environ.get("VIMAAN_SAVE_AUDIO", "1") != "0"
+    # In-sim overlay (live transcript, what was understood, outcome):
+    # "auto" (show on activity, then fade), "pinned" or "off". Cycle in-sim
+    # with the vimaan/toggle_overlay command.
+    OVERLAY_MODE = os.environ.get("VIMAAN_OVERLAY", "auto").lower()
     WHISPER_MODEL = os.environ.get("VIMAAN_WHISPER_MODEL", "base.en")
 
     # Intents the model can emit that map to no sim command. "None" is a
@@ -291,6 +297,11 @@ class PythonInterface:
         # Safety interlocks (Phase 6B): risky commands must be repeated to confirm.
         self._confirm_gate = ConfirmationGate(window_sec=self.CONFIRM_WINDOW_SEC)
         self.intent_to_command = self._setup_intent_handlers()
+        # The overlay follows the telemetry stream: everything it shows is
+        # also in events.jsonl (except live partial transcripts).
+        self.overlay_state = OverlayState(mode=self.OVERLAY_MODE)
+        self.tel.subscribe(self.overlay_state.on_event)
+        self.overlay: Overlay | None = None
         self._start_worker()
 
     # ------------------------------------------------------------------
@@ -407,6 +418,10 @@ class PythonInterface:
         # Bindable commands, so push-to-talk can live on a yoke button.
         self._register_command("vimaan/push_to_talk", "Vimaan: push to talk", self._on_ptt_command)
         self._register_command("vimaan/self_test", "Vimaan: run self test", self._on_self_test_cmd)
+        self._register_command(
+            "vimaan/toggle_overlay", "Vimaan: overlay auto / pinned / off", self._on_overlay_cmd
+        )
+        self._start_overlay()
 
         # Flight loop: worker replies, dispatch, verification, engine cranks.
         self._flight_loop_id = xp.createFlightLoop(self._flight_loop, phase=1)
@@ -422,6 +437,9 @@ class PythonInterface:
         # Never leave a starter engaged.
         for engine in list(self._cranks):
             self._end_crank(engine, "plugin_stop")
+        if self.overlay is not None:
+            self.overlay.stop()
+            self.overlay = None
         for cmd_ref, handler in self._commands:
             xp.unregisterCommandHandler(cmd_ref, handler, 1, None)
         self._commands = []
@@ -445,6 +463,28 @@ class PythonInterface:
 
     def XPluginReceiveMessage(self, inFromWho, inMessage, inParam):
         pass
+
+    def _start_overlay(self):
+        if self.overlay_state.mode == "off":
+            self.tel.event("overlay_start", backend=None, mode="off")
+            return
+        overlay = Overlay(xp, self.overlay_state, log=self.tel.log)
+        try:
+            backend = overlay.start()
+        except Exception as exc:
+            self.tel.error("overlay_failed", exc)
+            return
+        self.overlay = overlay
+        self.tel.event("overlay_start", backend=backend, mode=self.overlay_state.mode)
+
+    def _on_overlay_cmd(self, cmd_ref, phase, refcon):
+        if phase == xp.CommandBegin:
+            mode = self.overlay_state.cycle_mode()
+            if self.overlay is None and mode != "off":
+                self._start_overlay()
+            self.overlay_state.notice(f"Overlay {mode}")
+            self.tel.event("overlay_mode", mode=mode)
+        return 1
 
     def _register_command(self, name, description, handler):
         cmd_ref = xp.createCommand(name, description)
@@ -544,12 +584,17 @@ class PythonInterface:
                 self._end_command("timeout")
             self._service_cranks()
             self._service_verifications()
+            if self.overlay is not None:
+                self.overlay.update()
         except Exception as exc:  # never let the flight loop die
             self.tel.error("flight_loop_error", exc)
         self.tel.tick(
             busy_ms=(time.perf_counter() - t0) * 1000,
             pending_verifications=len(self._verifications),
             paused=self._read_int(DREF_PAUSED),
+            overlay_draw_ms_max=None
+            if self.overlay is None
+            else round(self.overlay.draw_ms_max, 3),
         )
         if self._active is not None or self._self_test_pending:
             return -1.0  # every frame while a reply is due: act on it immediately
@@ -584,6 +629,8 @@ class PythonInterface:
             self.tel.event("worker_fatal", logging.ERROR, **msg)
             self.ready = False
             self._say("Vimaan could not load its model. Check the log.")
+        elif kind == "partial" and mine:
+            self.overlay_state.on_partial(cmd, msg.get("text", ""))
         elif kind == "recording" and mine:
             self.tel.event("mic_open", cmd=cmd, open_ms=msg.get("open_ms"))
         elif kind == "captured" and active is not None and mine:

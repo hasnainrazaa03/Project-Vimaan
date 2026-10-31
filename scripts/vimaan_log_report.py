@@ -182,6 +182,13 @@ def report(path: Path) -> str:
     if end:
         w("")
         w(f"Peak RSS: {end.get('peak_rss_mb')} MB")
+    overlay = next((e for e in events if e["kind"] == "overlay_start"), None)
+    if overlay:
+        draws = [
+            e["overlay_draw_ms_max"] for e in events if e.get("overlay_draw_ms_max") is not None
+        ]
+        worst = f"{max(draws):.2f} ms" if draws else "-"
+        w(f"Overlay: {overlay.get('backend')} ({overlay.get('mode')}), worst draw {worst}")
     return "\n".join(out)
 
 
