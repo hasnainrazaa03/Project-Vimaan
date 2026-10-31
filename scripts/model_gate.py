@@ -164,7 +164,7 @@ def score_rows(run, rows: list[dict[str, Any]]) -> dict[str, Any]:
         c = by_intent[want_intent]
         c["n"] += 1
         c["intent_ok"] += p["intent"] == want_intent
-        got = p["slots"] if p["intent"] == want_intent else {}
+        got = effective_action(want_intent, p["slots"]) if p["intent"] == want_intent else {}
         for name, value in want.items():
             if same_value(name, got.get(name), value):
                 c["tp"] += 1

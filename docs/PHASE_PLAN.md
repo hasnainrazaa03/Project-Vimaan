@@ -17,7 +17,7 @@ Last updated 2026-10-30.
 | S | Offline speech recognition (Vosk), saved audio, benchmark | ✅ merged | #25 |
 | O | In-sim overlay (live transcript, meaning, outcome) | ✅ flown (ImGui, 0.55 ms); polish + landing on main | #26, #27 |
 | E0 | Command table: one source of truth (no behaviour change) | 🟡 built, gate passed; needs smoke flight + merge | #28 |
-| E1 | Training data v2 + command families → next model | 🟡 built; model gate not passed yet (see E1 status) | |
+| E1 | Training data v2 + command families → **v17** | 🟡 all gates pass; awaiting #27, #28, E1 PR and a flight | |
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v13** | ⬜ | |
 | T2 | Tier 2: radios & navigation → **v14** | ⬜ | |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v15** | ⬜ | |
@@ -222,7 +222,7 @@ tier only adds data.
 - [ ] **E1.10 Gate v12**; ONNX export + int8 quantization still work.
 - [ ] **E1.11 Install + fly** the E0 checklist again, plus "both engines".
 
-**E1 status (2026-10-30):** v17 is the one agreed retrain (headings above 360 rejected, two-digit headings added, gate 2 scored by the action taken). It passes gates 2–6 and fails gate 1 on `set_com_frequency` slot F1 (0.901). The gate adds the COM 1 default to the expected slots but not to the prediction, so this looks like a scoring error: scored with the default on both sides, v17 gets 0.9967 (read-only check, gate unchanged). Five held-out rows ("frequency … on com two") do tune COM 1 and are a real miss. Waiting on a decision; X-Plane stays on v11, and install with `--model v11` until a model passes. #27 and #28 must merge before any test flight.
+**E1 status (2026-10-30):** v17 passes all six gates after a one-line scorer fix (the COM 1 default for an unspoken port now applies to the prediction as well as the expected action); see `gate.json` beside the model. Not installed: X-Plane stays on v11 until #27 and #28 merge, and v17 also needs this branch's plugin code. Known misses: 5 of 490 explicit-port COM rows tune COM 1 ("frequency … on com two" with a one-digit decimal; v11 got all 490 right), "parking bring on engine" starts engine 1, "fly at one thousand" is rejected.
 
 **Gate E1.** Template-held-out intent ≥ 98.5%, slot F1 ≥ 0.99 for every intent;
 no regression on v11 held-out, gold, or real-voice clips; ≥ 95% of negatives
