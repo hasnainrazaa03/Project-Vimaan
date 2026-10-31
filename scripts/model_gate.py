@@ -1,15 +1,22 @@
 """Model gate: may this model replace the previous one? (docs/PHASE_PLAN.md)
 
 Runs a candidate and a baseline model through the same checks and prints
-PASS/FAIL per gate; writes ``gate.json`` next to the candidate.
+PASS/FAIL per gate, with raw counts and failing examples; writes ``gate.json``
+next to the candidate.
 
 Gates
 -----
 1. **New phrasings** — the candidate's held-out split (templates it never
    trained on): per-intent accuracy >= 98.5% and slot F1 >= 0.99.
-2. **No regression on old data** — the baseline's own held-out file: the
-   candidate is within 0.5 point of the baseline.
-3. **Gold utterances** (tests/test_gold_nlu.py) all right.
+2. **Old data, judged by the action taken** — the baseline's held-out file.
+   Denominator: rows whose expected command is actionable (the same rows for
+   both models). Each row ends as right (the plugin would perform the expected
+   action), rejected (it would not act) or wrong (it would act differently).
+   right rate = right / denominator. Passes when the candidate's right rate is
+   within 0.5 percentage points of the baseline's AND its wrong count is no
+   higher. The old label-based accuracy is reported separately and decides nothing.
+3. **Gold utterances** (tests/test_gold_nlu.py) all right, and its fragments
+   never acted on.
 4. **Real voice** (tests/fixtures/real_voice.jsonl, what Vosk heard in
    flight): no more wrong actions than the baseline, and at least as many right.
 5. **Negatives** — fragments / word salad / chatter in the held-out split:
@@ -18,7 +25,7 @@ Gates
 
 Usage::
 
-    python scripts/model_gate.py v12 --baseline v11
+    python scripts/model_gate.py v17 --baseline v11
 """
 
 from __future__ import annotations
@@ -43,7 +50,7 @@ NUMERIC = {"degrees", "altitude", "flight_level", "frequency", "com_port"}
 
 INTENT_ACC_MIN = 0.985
 SLOT_F1_MIN = 0.99
-OLD_DATA_TOLERANCE = 0.005
+RIGHT_RATE_TOLERANCE = 0.005  # 0.5 percentage points
 NEGATIVE_REJECT_MIN = 0.95
 P95_MS_MAX = 25.0
 
@@ -72,8 +79,18 @@ def load(version: str):
 # ---------------------------------------------------------------------------
 # What the plugin would do with a prediction (mirrors _execute_command)
 # ---------------------------------------------------------------------------
-def decision(p: dict[str, Any]) -> tuple[str, dict[str, str]]:
-    """("act", slots) when the plugin would act on it, else (reason, {})."""
+def effective_action(intent: str, slots: dict[str, Any]) -> dict[str, Any]:
+    """The slots the plugin acts with: no port spoken means COM 1
+    (``_set_com_frequency``). Used for predictions and expectations alike."""
+    out = dict(slots)
+    if intent == "set_com_frequency" and not out.get("com_port"):
+        out["com_port"] = "1"
+    return out
+
+
+def decision(p: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """("act", effective slots) when the plugin would act on it, else (reason, {}).
+    Only the slots the command declares count: its handler ignores stray ones."""
     from vimaan_nlu.commands import command, required_slots
     from vimaan_nlu.validators import has_command_word, heading_too_short, validate_slot
 
@@ -90,10 +107,16 @@ def decision(p: dict[str, Any]) -> tuple[str, dict[str, str]]:
     for name in required_slots().get(intent, ()):
         if not slots.get(name):
             return f"missing_{name}", {}
-    for name, value in slots.items():
-        if not validate_slot(name, value)[1]:
+    for name in cmd.slots:
+        if name in slots and not validate_slot(name, slots[name])[1]:
             return f"invalid_{name}", {}
-    return "act", slots
+    action = effective_action(intent, slots)
+    if intent == "set_com_frequency" and str(action["com_port"]) not in cmd.params["datarefs"]:
+        return "no_such_port", {}
+    instances = cmd.params.get("instances")
+    if instances and intent != "toggle_engine" and action.get("instance", "1") not in instances:
+        return "no_such_instance", {}
+    return "act", action
 
 
 def same_value(name: str, a: Any, b: Any) -> bool:
@@ -127,7 +150,7 @@ def canonical_expected(row: dict[str, Any]) -> tuple[str, dict[str, str]]:
     norm = normalize_aviation_input(row["text"])
     slots = canonicalize_choices(slots, norm, intent)
     slots = resolve_instance(slots, norm, intent)
-    return intent, slots
+    return intent, effective_action(intent, slots)
 
 
 # ---------------------------------------------------------------------------
@@ -167,51 +190,65 @@ def score_rows(run, rows: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
+def judge(run, text: str, want_intent: str, want: dict[str, Any]) -> tuple[str, str]:
+    """(right | rejected | wrong, what happened)."""
+    p = run(text)
+    verdict, action = decision(p)
+    if verdict != "act":
+        return "rejected", verdict
+    ok = p["intent"] == want_intent and all(
+        same_value(k, action.get(k), v) for k, v in want.items()
+    )
+    return ("right" if ok else "wrong"), f"{p['intent']} {action}"
+
+
 def real_voice(run) -> dict[str, Any]:
     rows = [json.loads(line) for line in open(ROOT / "tests" / "fixtures" / "real_voice.jsonl")]
     result: Counter[str] = Counter()
-    wrong = []
+    examples: dict[str, list[str]] = {"rejected": [], "wrong": []}
     for r in rows:
-        p = run(r["heard"]) if r["heard"] else None
-        if p is None:
-            result["safe"] += 1
-            continue
-        verdict, slots = decision(p)
-        if verdict != "act":
-            result["safe"] += 1
-        elif p["intent"] == r["intent"] and all(
-            same_value(k, slots.get(k), v) for k, v in r["slots"].items()
-        ):
-            result["right"] += 1
-        else:
-            result["wrong"] += 1
-            wrong.append(f"{r['heard']!r} -> {p['intent']} {slots} (said {r['said']!r})")
-    return {**result, "n": len(rows), "wrong_examples": wrong}
+        want = effective_action(r["intent"], r["slots"])
+        outcome, detail = (
+            judge(run, r["heard"], r["intent"], want)
+            if r["heard"]
+            else ("rejected", "nothing heard")
+        )
+        result[outcome] += 1
+        if outcome != "right":
+            examples[outcome].append(f"said {r['said']!r} heard {r['heard']!r} -> {detail}")
+    return {
+        "n": len(rows),
+        "right": result["right"],
+        "rejected": result["rejected"],
+        "wrong": result["wrong"],
+        "examples": examples,
+    }
 
 
-def acted(run, rows: list[dict[str, Any]]) -> Counter[str]:
-    """Right / rejected / wrong through the plugin's decision rules, on rows
-    whose expected command is actionable. Reported alongside gate 2; it does
-    not change the gate's verdict."""
+def actions(run, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Gate 2: outcome of every row whose expected command is actionable."""
     from vimaan_nlu.commands import command
 
-    out: Counter[str] = Counter()
-    for row in rows:
+    outcomes: dict[str, str] = {}
+    details: dict[str, str] = {}
+    for i, row in enumerate(rows):
         want_intent, want = canonical_expected(row)
         cmd = command(want_intent)
         if cmd is None or not cmd.actionable:
             continue
-        p = run(row["text"])
-        verdict, slots = decision(p)
-        if verdict != "act":
-            out["rejected"] += 1
-        elif p["intent"] == want_intent and all(
-            same_value(k, slots.get(k), v) for k, v in want.items()
-        ):
-            out["right"] += 1
-        else:
-            out["wrong"] += 1
-    return out
+        key = f"{i}|{row['text']}"
+        outcomes[key], details[key] = judge(run, row["text"], want_intent, want)
+    counts = Counter(outcomes.values())
+    n = len(outcomes)
+    return {
+        "n": n,
+        "right": counts["right"],
+        "rejected": counts["rejected"],
+        "wrong": counts["wrong"],
+        "right_rate": counts["right"] / n if n else 0.0,
+        "outcomes": outcomes,
+        "details": details,
+    }
 
 
 def negatives(run, rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -219,13 +256,14 @@ def negatives(run, rows: list[dict[str, Any]]) -> dict[str, Any]:
     acted = [r["text"] for r in neg if decision(run(r["text"]))[0] == "act"]
     return {
         "n": len(neg),
+        "acted_count": len(acted),
         "rejected": 1 - len(acted) / len(neg) if neg else 1.0,
         "acted": acted[:15],
     }
 
 
 def gold(run) -> dict[str, Any]:
-    from test_gold_nlu import GOLD
+    from test_gold_nlu import GOLD, MUST_NOT_ACT
 
     bad = []
     for text, intent, slots in GOLD:
@@ -234,7 +272,8 @@ def gold(run) -> dict[str, Any]:
             not same_value(k, p["slots"].get(k), v) for k, v in slots.items()
         ):
             bad.append(f"{text!r} -> {p['intent']} {p['slots']}")
-    return {"n": len(GOLD), "failed": bad}
+    acted = [t for t in MUST_NOT_ACT if decision(run(t))[0] == "act"]
+    return {"n": len(GOLD), "failed": bad, "fragments": len(MUST_NOT_ACT), "fragments_acted": acted}
 
 
 def latency(run, texts: list[str]) -> float:
@@ -254,7 +293,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("candidate")
     parser.add_argument("--baseline", required=True)
-    parser.add_argument("--limit", type=int, default=6000, help="max held-out rows per set")
+    parser.add_argument("--limit", type=int, default=None, help="max held-out rows per set")
     args = parser.parse_args(argv)
 
     cand_dir, base_dir = MODELS / args.candidate, MODELS / args.baseline
@@ -262,11 +301,9 @@ def main(argv: list[str] | None = None) -> int:
     old_rows = read_jsonl(base_dir / "holdout_test.jsonl")[: args.limit]
     cand, base = load(args.candidate), load(args.baseline)
 
-    report: dict[str, Any] = {"candidate": args.candidate, "baseline": args.baseline}
     gates: list[tuple[str, bool, str]] = []
 
-    new_c = score_rows(cand, new_rows)
-    new_b = score_rows(base, new_rows)
+    new_c, new_b = score_rows(cand, new_rows), score_rows(base, new_rows)
     weak = {
         i: v
         for i, v in new_c.items()
@@ -277,84 +314,126 @@ def main(argv: list[str] | None = None) -> int:
         (
             "1 new phrasings",
             not weak,
-            f"intent {new_c['_all']['intent_acc']:.4f} slot F1 {new_c['_all']['slot_f1']:.4f} "
-            f"(baseline {new_b['_all']['intent_acc']:.4f} / {new_b['_all']['slot_f1']:.4f})"
+            f"n={new_c['_all']['n']} intent {new_c['_all']['intent_acc']:.4f} "
+            f"slot F1 {new_c['_all']['slot_f1']:.4f} (baseline "
+            f"{new_b['_all']['intent_acc']:.4f} / {new_b['_all']['slot_f1']:.4f})"
             + (f"; below bar: {sorted(weak)}" if weak else ""),
         )
     )
-    old_c = score_rows(cand, old_rows)
-    old_b = score_rows(base, old_rows)
-    ok = old_c["_all"]["intent_acc"] >= old_b["_all"]["intent_acc"] - OLD_DATA_TOLERANCE
+
+    act_c, act_b = actions(cand, old_rows), actions(base, old_rows)
+    rate_ok = act_c["right_rate"] >= act_b["right_rate"] - RIGHT_RATE_TOLERANCE
+    wrong_ok = act_c["wrong"] <= act_b["wrong"]
     gates.append(
         (
             "2 old data",
-            ok,
-            f"intent {old_c['_all']['intent_acc']:.4f} vs baseline {old_b['_all']['intent_acc']:.4f}; "
-            f"slot F1 {old_c['_all']['slot_f1']:.4f} vs {old_b['_all']['slot_f1']:.4f}",
+            rate_ok and wrong_ok,
+            f"n={act_c['n']} right/rejected/wrong {act_c['right']}/{act_c['rejected']}/{act_c['wrong']} "
+            f"rate {act_c['right_rate']:.2%}; baseline "
+            f"{act_b['right']}/{act_b['rejected']}/{act_b['wrong']} rate {act_b['right_rate']:.2%} "
+            f"(rate {'ok' if rate_ok else 'LOW'}, wrong {'ok' if wrong_ok else 'HIGH'})",
         )
     )
-    acted_c, acted_b = acted(cand, old_rows), acted(base, old_rows)
+    label_c, label_b = score_rows(cand, old_rows), score_rows(base, old_rows)
+
     g = gold(cand)
-    gates.append(("3 gold", not g["failed"], f"{g['n'] - len(g['failed'])}/{g['n']} {g['failed']}"))
-    rv_c, rv_b = real_voice(cand), real_voice(base)
-    ok = rv_c.get("wrong", 0) <= rv_b.get("wrong", 0) and rv_c.get("right", 0) >= rv_b.get(
-        "right", 0
+    gates.append(
+        (
+            "3 gold",
+            not g["failed"] and not g["fragments_acted"],
+            f"{g['n'] - len(g['failed'])}/{g['n']} right {g['failed']}; "
+            f"{g['fragments'] - len(g['fragments_acted'])}/{g['fragments']} fragments "
+            f"not acted on {g['fragments_acted']}",
+        )
     )
+
+    rv_c, rv_b = real_voice(cand), real_voice(base)
     gates.append(
         (
             "4 real voice",
-            ok,
-            f"right {rv_c.get('right', 0)} safe {rv_c.get('safe', 0)} wrong {rv_c.get('wrong', 0)} "
-            f"(baseline {rv_b.get('right', 0)}/{rv_b.get('safe', 0)}/{rv_b.get('wrong', 0)})",
+            rv_c["wrong"] <= rv_b["wrong"] and rv_c["right"] >= rv_b["right"],
+            f"n={rv_c['n']} right/rejected/wrong {rv_c['right']}/{rv_c['rejected']}/{rv_c['wrong']} "
+            f"(baseline {rv_b['right']}/{rv_b['rejected']}/{rv_b['wrong']})",
         )
     )
+
     neg_c, neg_b = negatives(cand, new_rows), negatives(base, new_rows)
     gates.append(
         (
             "5 negatives",
             neg_c["rejected"] >= NEGATIVE_REJECT_MIN,
-            f"{neg_c['rejected']:.3f} rejected of {neg_c['n']} (baseline {neg_b['rejected']:.3f})",
+            f"{neg_c['n'] - neg_c['acted_count']}/{neg_c['n']} rejected "
+            f"({neg_c['rejected']:.1%}; baseline {neg_b['rejected']:.1%})",
         )
     )
+
     p95 = latency(cand, [r["text"] for r in new_rows[:300]])
     gates.append(("6 latency", p95 < P95_MS_MAX, f"p95 {p95:.1f} ms"))
 
-    report.update(
-        {
-            "new_phrasings": {"candidate": new_c, "baseline": new_b},
-            "old_data": {
-                "candidate": old_c["_all"],
-                "baseline": old_b["_all"],
-                "acted_candidate": dict(acted_c),
-                "acted_baseline": dict(acted_b),
-            },
-            "gold": g,
-            "real_voice": {"candidate": rv_c, "baseline": rv_b},
-            "negatives": {"candidate": neg_c, "baseline": neg_b},
-            "latency_p95_ms": p95,
-            "gates": {name: {"pass": ok, "detail": d} for name, ok, d in gates},
-        }
-    )
+    def lost(status: str) -> list[str]:
+        return [
+            f"{key.split('|', 1)[1]!r} -> {act_c['details'][key]}"
+            for key, outcome in act_c["outcomes"].items()
+            if outcome == status and act_b["outcomes"][key] == "right"
+        ]
+
+    def wrong_rows(act: dict[str, Any]) -> list[str]:
+        return [
+            f"{key.split('|', 1)[1]!r} -> {act['details'][key]}"
+            for key, outcome in act["outcomes"].items()
+            if outcome == "wrong"
+        ]
+
+    report: dict[str, Any] = {
+        "candidate": args.candidate,
+        "baseline": args.baseline,
+        "new_phrasings": {"candidate": new_c, "baseline": new_b},
+        "old_data_actions": {
+            "candidate": {k: v for k, v in act_c.items() if k not in ("outcomes", "details")},
+            "baseline": {k: v for k, v in act_b.items() if k not in ("outcomes", "details")},
+            "candidate_wrong": wrong_rows(act_c),
+            "baseline_wrong": wrong_rows(act_b),
+            "baseline_right_candidate_rejected": lost("rejected"),
+            "baseline_right_candidate_wrong": lost("wrong"),
+        },
+        "old_data_labels_information_only": {
+            "candidate": label_c["_all"],
+            "baseline": label_b["_all"],
+        },
+        "gold": g,
+        "real_voice": {"candidate": rv_c, "baseline": rv_b},
+        "negatives": {"candidate": neg_c, "baseline": neg_b},
+        "latency_p95_ms": p95,
+        "gates": {name: {"pass": ok, "detail": d} for name, ok, d in gates},
+    }
     (cand_dir / "gate.json").write_text(json.dumps(report, indent=1))
 
     print(f"\nModel gate: {args.candidate} vs {args.baseline}\n")
     for name, ok, detail in gates:
         print(f"  {'PASS' if ok else 'FAIL'}  {name:<16} {detail}")
     print(
-        f"\n  old data through the plugin's rules (information only): "
-        f"right/rejected/wrong {acted_c['right']}/{acted_c['rejected']}/{acted_c['wrong']} "
-        f"vs baseline {acted_b['right']}/{acted_b['rejected']}/{acted_b['wrong']}"
+        f"\n  old data, label-based score (information only, decides nothing): intent "
+        f"{label_c['_all']['intent_acc']:.4f} vs baseline {label_b['_all']['intent_acc']:.4f}; "
+        f"slot F1 {label_c['_all']['slot_f1']:.4f} vs {label_b['_all']['slot_f1']:.4f}; "
+        f"n={label_c['_all']['n']}"
     )
     print("\n  per intent (new phrasings): intent acc / slot F1")
     for intent, v in new_c.items():
         if not intent.startswith("_"):
             print(f"    {intent:<26} {v['intent_acc']:.3f} / {v['slot_f1']:.3f}  (n={v['n']})")
-    if rv_c.get("wrong_examples"):
-        print("\n  real voice, wrong actions:")
-        for w in rv_c["wrong_examples"]:
-            print(f"    {w}")
-    if neg_c["acted"]:
-        print("\n  negatives acted on (sample):", neg_c["acted"])
+    for title, items in (
+        ("old data: baseline right, candidate WRONG", lost("wrong")),
+        ("old data: baseline right, candidate rejected", lost("rejected")),
+        ("old data: candidate wrong (all)", wrong_rows(act_c)),
+        ("old data: baseline wrong (all)", wrong_rows(act_b)),
+        ("real voice: candidate wrong", rv_c["examples"]["wrong"]),
+        ("real voice: baseline wrong", rv_b["examples"]["wrong"]),
+        ("real voice: candidate rejected", rv_c["examples"]["rejected"]),
+        ("negatives acted on", neg_c["acted"]),
+    ):
+        print(f"\n  {title}: {len(items)}")
+        for item in items[:40]:
+            print(f"    {item}")
     passed = all(ok for _, ok, _ in gates)
     print(f"\n  {'ALL GATES PASS' if passed else 'GATE FAILED'}  -> {cand_dir / 'gate.json'}")
     return 0 if passed else 1

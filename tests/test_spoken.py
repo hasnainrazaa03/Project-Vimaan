@@ -18,7 +18,8 @@ def reads_as(text: str, context: str, expected: str) -> bool:
 
 
 def test_renderers():
-    assert spoken.heading(90) == ["zero nine zero", "zero niner zero"]
+    assert spoken.heading(90) == ["zero nine zero", "zero niner zero", "ninety"]
+    assert spoken.heading(7) == ["zero zero seven"]  # no one-digit form
     assert "two seventy" in spoken.heading(270) and "two hundred seventy" in spoken.heading(270)
     assert spoken.altitude(15000) == ["fifteen thousand", "one five thousand"]
     assert "twenty five hundred" in spoken.altitude(2500)

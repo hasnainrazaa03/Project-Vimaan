@@ -569,6 +569,28 @@ def test_fragment_without_command_word_not_executed(sim, text, intent, slots):
     assert events(plugin, "implausible")[-1]["reason"] == "no_command_word"
 
 
+@pytest.mark.parametrize("value", ["361", "450", "2040"])
+def test_out_of_range_heading_never_reaches_the_sim(sim, value):
+    _, plugin, xp = sim
+    spoken = say(plugin, "heading", "set_autopilot_heading", {"degrees": value})
+    assert spoken == ["Invalid heading value"] and xp.writes == []
+
+
+@pytest.mark.parametrize(
+    ("value", "written"), [("000", 0.0), ("080", 80.0), ("80", 80.0), ("360", 360.0)]
+)
+def test_valid_heading_boundaries_written(sim, value, written):
+    _, plugin, xp = sim
+    say(plugin, "heading", "set_autopilot_heading", {"degrees": value})
+    assert xp.writes[-1] == ("sim/cockpit2/autopilot/heading_dial_deg_mag_pilot", written)
+
+
+def test_com_with_no_port_spoken_tunes_com_1(sim):
+    _, plugin, xp = sim  # the behaviour the gate scores: documented default
+    say(plugin, "tune", "set_com_frequency", {"frequency": "121.5"})
+    assert xp.writes[-1] == ("sim/cockpit2/radios/actuators/com1_frequency_hz_833", 121500)
+
+
 def test_one_digit_heading_asks_again(sim):
     _, plugin, xp = sim
     # in-sim: "heading one eighty" with the last word lost -> heading 001

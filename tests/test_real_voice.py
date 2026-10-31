@@ -30,5 +30,5 @@ def test_latest_model_on_real_voice():
         pytest.skip("no trained model checkout")
     latest = max((d for d in os.listdir(models) if d[1:].isdigit()), key=lambda d: int(d[1:]))
     result = model_gate.real_voice(model_gate.load(latest))
-    assert result.get("wrong", 0) <= V11_WRONG, result["wrong_examples"]
-    assert result.get("right", 0) >= V11_RIGHT
+    assert result["wrong"] <= V11_WRONG, result["examples"]["wrong"]
+    assert result["right"] >= V11_RIGHT

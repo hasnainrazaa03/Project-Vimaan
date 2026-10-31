@@ -37,7 +37,20 @@ GOLD = [
         {"com_port": "1", "frequency": "118.75"},
     ),
     ("what time is it", "ask_time", {}),
+    # Two-digit headings, and a stray number that must not replace the value.
+    ("change heading to eighty", "set_autopilot_heading", {"degrees": "80"}),
+    ("change heading to eighty for me", "set_autopilot_heading", {"degrees": "80"}),
+    ("heading forty five", "set_autopilot_heading", {"degrees": "45"}),
+    ("heading zero eight zero", "set_autopilot_heading", {"degrees": "080"}),
+    ("eighty fly heading one eight four", "set_autopilot_heading", {"degrees": "184"}),
+    ("altitude two thousand", "set_autopilot_altitude", {"altitude": "2000"}),
+    ("gear up", "toggle_landing_gear", {"state": "up"}),
+    ("tune com two to one two one decimal five", "set_com_frequency", {"com_port": "2"}),
 ]
+
+# Bare numbers and fragments must never be acted on (scripts/model_gate.py
+# checks these through the plugin's decision rules).
+MUST_NOT_ACT = ["eighty", "seventy", "forty five", "eighty two on", "two forty", "on", "down"]
 
 
 @pytest.fixture(scope="session")

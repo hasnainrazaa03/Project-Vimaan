@@ -10,7 +10,6 @@ from vimaan_nlu.validators import (
     Enum,
     Range,
     in_range,
-    slot_validator,
     validate_slot,
 )
 
@@ -42,9 +41,10 @@ class TestRange:
         value, ok, reason = Range(1000, 50000).validate("80000")
         assert not ok and value is None and "out of range" in reason
 
-    def test_validate_wrap(self):
-        value, ok, reason = Range(0, 360, wrap=True).validate("450")
-        assert ok and value == "90" and "wrapped" in reason
+    def test_exact_checks_the_raw_number(self):
+        r = Range(0, 360, exact=True)
+        assert r.contains("360") and not r.contains("360.9") and not r.contains("-0.5")
+        assert r.validate("360.9")[1] is False
 
     def test_float_range_keeps_decimals(self):
         r = Range(118.0, 137.0, integer=False)
@@ -82,15 +82,15 @@ class TestSlotRegistry:
         assert not in_range("flight_level", "9")
         assert not in_range("flight_level", "431")
 
-    def test_heading_wraps_via_validate_but_contains_is_strict(self):
-        # contains() (used by selection) is strict; validate() wraps.
-        assert not in_range("degrees", "450")
-        value, ok, _ = validate_slot("degrees", "450")
-        assert ok and value == "90"
+    @pytest.mark.parametrize("value", ["0", "1", "90", "090", "270", "359", "360"])
+    def test_valid_headings_accepted(self, value):
+        coerced, ok, _ = validate_slot("degrees", value)
+        assert ok and int(coerced) == int(value)
 
-    def test_expected_slots_present(self):
-        for name in ("altitude", "degrees", "flight_level", "frequency", "com_port", "state"):
-            assert slot_validator(name) is not None
+    @pytest.mark.parametrize("value", ["361", "450", "720", "2040", "360.9", "-1", "abc"])
+    def test_out_of_range_headings_rejected_never_wrapped(self, value):
+        coerced, ok, _ = validate_slot("degrees", value)
+        assert not ok and coerced is None
 
 
 class TestBoundsMatchReadme:

@@ -921,9 +921,8 @@ class PythonInterface:
         if not degrees:
             self._say("Heading value missing")
             return "rejected"
-        # Validators enforce the documented ranges before we touch a dataref
-        # (heading wraps into 0-360; the others reject out-of-range values so a
-        # mis-decoded number can't be written to the sim).
+        # Validators enforce the documented ranges before we touch a dataref,
+        # so a mis-decoded number can't be written to the sim.
         value, ok, reason = validate_slot("degrees", degrees)
         if not ok:
             self.tel.event(

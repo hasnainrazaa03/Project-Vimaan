@@ -46,6 +46,7 @@ HOLDOUT_TEMPLATE_SHARE = 0.15
 NOISE_SHARE = 0.2
 NEGATIVE_SHARE = 0.1  # of the actionable rows
 CONVERSATION_ROWS = 400  # per conversational intent
+TWO_DIGIT_HEADING_SHARE = 0.15  # "change heading to eighty", beside three-digit forms
 
 INSTANCE_SAY = {"1": "one", "2": "two"}
 INSTANCE_ORD = {"1": ("first", "left"), "2": ("second", "right")}
@@ -110,6 +111,8 @@ def _altitude(rng: random.Random) -> int:
 def render_number(kind: str, rng: random.Random) -> str:
     """A spoken rendering of a random value of ``kind``."""
     if kind == "heading":
+        if rng.random() < TWO_DIGIT_HEADING_SHARE:
+            return spoken.two_digit(rng.randrange(10, 100))
         return rng.choice(spoken.heading(rng.randrange(0, 360)))
     if kind == "altitude":
         return rng.choice(spoken.altitude(_altitude(rng)))

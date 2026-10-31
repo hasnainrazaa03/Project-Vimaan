@@ -77,6 +77,8 @@ def heading(deg: int) -> list[str]:
         out.append(g)
     if deg >= 100 and deg % 10 == 0:
         out.append(cardinal(deg))  # "two hundred seventy"
+    if 10 <= deg < 100:
+        out.append(two_digit(deg))  # "change heading to eighty"
     return list(dict.fromkeys(out))
 
 

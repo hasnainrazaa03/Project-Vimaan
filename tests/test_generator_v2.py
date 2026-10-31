@@ -53,7 +53,11 @@ def test_every_command_and_negatives_present(data):
     actionable = {c.intent for c in COMMANDS if c.actionable}
     commands = sum(1 for r in rows if r["intent"] in actionable)
     assert len(negatives) >= 0.09 * commands
-    assert not [k for k in stats if k.startswith("dropped:") and k != "dropped:negative_collides"]
+    # A stray word fused onto a value ("eighty fifty degrees" -> 8050) can't be
+    # labelled and is dropped; that must stay rare.
+    for key, count in stats.items():
+        if key.startswith("dropped:") and key != "dropped:negative_collides":
+            assert count < 0.01 * 300, key
 
 
 def test_noise_is_applied_and_real(data):
@@ -77,6 +81,15 @@ def test_brake_heard_as_the_is_in_the_data(data):
     misheard = [r for r in rows if r["noise"] == "mishear"]
     assert misheard and all(r["intent"] == "toggle_parking_brake" for r in misheard)
     assert all("parking the" in r["text"] for r in misheard)
+
+
+def test_two_digit_headings_beside_three_digit_ones(data):
+    rows, _ = data
+    values = [r["slots"]["degrees"] for r in rows if r["intent"] == "set_autopilot_heading"]
+    two = [v for v in values if len(v) == 2]
+    three = [v for v in values if len(v) == 3]
+    assert len(two) > 0.1 * len(values) and len(three) > 0.6 * len(values)
+    assert all(len(v) in (2, 3) for v in values)
 
 
 def test_deterministic():
