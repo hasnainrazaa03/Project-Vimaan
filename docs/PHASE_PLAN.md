@@ -222,7 +222,7 @@ tier only adds data.
 - [ ] **E1.10 Gate v12**; ONNX export + int8 quantization still work.
 - [ ] **E1.11 Install + fly** the E0 checklist again, plus "both engines".
 
-**E1 status (2026-10-30):** v12–v15 trained, none has passed every gate, so nothing is installed and X-Plane still runs v11. Install with `--model v11` until one passes: the installer otherwise takes the highest version. Gate 2 as written cannot pass without teaching fragments to be commands, which contradicts E1.3; waiting on a decision. Version numbers here run ahead of the labels in the status board.
+**E1 status (2026-10-30):** v12–v16 trained. v16 passes gates 1, 3, 4, 5, 6 (real voice: 70 right, 8 safe, 0 wrong; v11: 70, 7, 1) and fails gate 2 (97.70% vs 99.45%, bar 98.95%), so nothing is installed and X-Plane still runs v11. Known gap in v16: "change heading to eighty" is rejected, because the generator only says headings as three digits; add two-digit headings before the next retrain. Install with `--model v11` until one passes: the installer otherwise takes the highest version. Gate 2 as written cannot pass without teaching fragments to be commands, which contradicts E1.3; waiting on a decision. Version numbers here run ahead of the labels in the status board.
 
 **Gate E1.** Template-held-out intent ≥ 98.5%, slot F1 ≥ 0.99 for every intent;
 no regression on v11 held-out, gold, or real-voice clips; ≥ 95% of negatives
