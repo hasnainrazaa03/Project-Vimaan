@@ -62,6 +62,7 @@ if _ML_PATH not in sys.path:
 
 # Only light, stdlib-backed modules load into X-Plane; the heavy ones live in
 # the worker process.
+from vimaan_nlu.ambiguity import two_or_to  # noqa: E402
 from vimaan_nlu.commands import (  # noqa: E402
     BY_INTENT,
     COMMANDS,
@@ -95,8 +96,44 @@ WORKER_MAX_RESTARTS = 3
 
 # Engine start: hold the starter until the engine reports running, up to this.
 STARTER_MAX_CRANK_SEC = 20.0
-# Delay before reading back a dataref a *command* should have changed.
+# Delay before reading back a dataref a command or write should have changed.
 VERIFY_DELAY_SEC = 1.0
+# After a target or radio is set, record the aircraft this many seconds later:
+# a changed target is not the same as an aircraft that followed it.
+FOLLOW_UP_SEC = (0.0, 10.0, 30.0)
+# How often to look for autopilot changes nobody asked Vimaan for.
+STATE_WATCH_SEC = 1.0
+
+# What the aircraft is doing, logged as aircraft_state.
+STATE_FLOATS = {
+    "heading_actual": "sim/cockpit2/gauges/indicators/heading_AHARS_deg_mag_pilot",
+    "altitude_actual": "sim/cockpit2/gauges/indicators/altitude_ft_pilot",
+    "vs_actual": "sim/cockpit2/gauges/indicators/vvi_fpm_pilot",
+    "ias_actual": "sim/cockpit2/gauges/indicators/airspeed_kts_pilot",
+    "heading_target": "sim/cockpit2/autopilot/heading_dial_deg_mag_pilot",
+    "altitude_target": "sim/cockpit2/autopilot/altitude_dial_ft",
+}
+STATE_RADIOS = {
+    "com1_active": "sim/cockpit2/radios/actuators/com1_frequency_hz_833",
+    "com1_standby": "sim/cockpit2/radios/actuators/com1_standby_frequency_hz_833",
+    "com2_active": "sim/cockpit2/radios/actuators/com2_frequency_hz_833",
+    "com2_standby": "sim/cockpit2/radios/actuators/com2_standby_frequency_hz_833",
+}
+AUTOPILOT_STATE = {
+    "servos_on": "sim/cockpit2/autopilot/servos_on",
+    "autopilot_on": "sim/cockpit2/autopilot/autopilot_on",
+    "flight_director": "sim/cockpit2/autopilot/flight_director_mode",
+    "lateral_mode": "sim/cockpit2/autopilot/heading_mode",
+    "vertical_mode": "sim/cockpit2/autopilot/altitude_mode",
+    "heading_status": "sim/cockpit2/autopilot/heading_status",
+    "nav_status": "sim/cockpit2/autopilot/nav_status",
+    "approach_status": "sim/cockpit2/autopilot/approach_status",
+    "altitude_hold_status": "sim/cockpit2/autopilot/altitude_hold_status",
+    "altitude_armed": "sim/cockpit2/autopilot/altitude_hold_armed",
+    "vs_status": "sim/cockpit2/autopilot/vvi_status",
+    "speed_status": "sim/cockpit2/autopilot/speed_status",
+}
+DREF_AIRCRAFT_ICAO = "sim/aircraft/view/acf_ICAO"
 
 # Commands (phrasing, values, bindings, handler, safety, self-test) are
 # declared once in vimaan_nlu/commands.py; these are views of that table.
@@ -104,13 +141,12 @@ VERIFY_DELAY_SEC = 1.0
 # command, toggle. X-Plane has no "servos off" / "fdir off" commands, so "off"
 # uses the toggle, but only after reading the state, so it can never turn a
 # system on.
-TOGGLE_BINDINGS: dict[str, dict[str, Any]] = {
-    c.intent: dict(c.params) for c in COMMANDS if c.handler == "_toggle_binary"
+# intent -> instance ("1"/"2") -> binding.
+TOGGLE_BINDINGS: dict[str, dict[str, dict[str, Any]]] = {
+    c.intent: dict(c.params["instances"]) for c in COMMANDS if c.handler == "_toggle_binary"
 }
-# Engines: starter held until the engine reports running.
-ENGINE_BINDINGS: dict[str, dict[str, Any]] = {
-    c.intent: dict(c.params) for c in COMMANDS if c.handler == "_toggle_engine"
-}
+# Engines: starter held until the engine reports running. instance -> binding.
+ENGINE_BINDINGS: dict[str, dict[str, Any]] = dict(BY_INTENT["toggle_engine"].params["instances"])
 
 DREF_HEADING = "sim/cockpit2/autopilot/heading_dial_deg_mag_pilot"
 DREF_ALTITUDE = "sim/cockpit2/autopilot/altitude_dial_ft"
@@ -226,6 +262,11 @@ class PythonInterface:
         # Deferred main-thread work: dataref read-backs and starter cranks.
         self._verifications: list[dict[str, Any]] = []
         self._cranks: dict[str, dict[str, Any]] = {}
+        self._follow_ups: list[dict[str, Any]] = []
+        self._autopilot_state: dict[str, Any] | None = None
+        self._aircraft: str | None = None
+        self._next_state_watch = 0.0
+        self._last_action: dict[str, Any] | None = None
 
         # Safety interlocks (Phase 6B): risky commands must be repeated to confirm.
         self._confirm_gate = ConfirmationGate(window_sec=self.CONFIRM_WINDOW_SEC)
@@ -503,6 +544,8 @@ class PythonInterface:
                 self._end_command("timeout")
             self._service_cranks()
             self._service_verifications()
+            self._service_follow_ups()
+            self._watch_state()
             if self.overlay is not None:
                 self.overlay.update()
         except Exception as exc:  # never let the flight loop die
@@ -652,11 +695,20 @@ class PythonInterface:
                 )
                 self._say("Say the heading as three digits")
                 return
+            # "to" and "two" sound the same, so don't guess between two targets.
+            either = two_or_to(intent_pred, text)
+            if either:
+                outcome = "ambiguous"
+                self.tel.event(
+                    "ambiguous", cmd=cmd, intent=intent_pred, as_two=either[0], as_to=either[1]
+                )
+                self._say(self._which_value(intent_pred, *either))
+                return
 
             # Commands this aircraft physically can't do are rejected before
             # the safety gate, which would otherwise ask the pilot to confirm
             # "gear up" on a fixed-gear Cessna.
-            not_applicable = self._not_applicable(intent_pred)
+            not_applicable = self._not_applicable(intent_pred, slots)
             if not_applicable:
                 outcome = "rejected"
                 self.tel.event("not_applicable", cmd=cmd, intent=intent_pred, reason=not_applicable)
@@ -802,8 +854,17 @@ class PythonInterface:
             self.tel.event("dataref_read_error", logging.WARNING, dataref=name, error=repr(exc))
             return None
 
+    @staticmethod
+    def _which_value(intent, as_two, as_to):
+        if intent == "set_autopilot_altitude":
+            return f"Altitude {as_to} or {as_two} feet? Say it again without the word to."
+        name = "Heading" if intent == "set_autopilot_heading" else "Flight level"
+        a, b = (spell_digits(f"{int(v):03d}") for v in (as_to, as_two))
+        return f"{name} {a} or {b}? Say all three digits."
+
     def _write(self, name, value, is_float=True):
-        """Write a dataref and read it straight back. Returns True on success."""
+        """Write a dataref and read it straight back. Returns True on success.
+        Same-frame only: ``_hold_check`` confirms the value later."""
         dref = self._find(name)
         if not dref:
             self.tel.event(
@@ -853,7 +914,85 @@ class PythonInterface:
         self.tel.event("sim_command", cmd=self._current_cmd, command=command_path, ok=True)
         return True
 
-    def _expect(self, label, read, expected, delay=None):
+    def _hold_check(self, label, name, value, is_float=True, modulo=None):
+        """Did a written value stay? The read-back in ``_write`` is in the same
+        frame, so it can't tell if the sim or aircraft replaced it. Also records
+        the aircraft now and shortly after, to compare target with response."""
+        read = self._read_float if is_float else self._read_int
+
+        def current():
+            actual = read(name)
+            return actual % modulo if actual is not None and modulo else actual
+
+        self._expect(label, current, value % modulo if modulo else value, tolerance=0.5)
+        now = time.perf_counter()
+        self._last_action = {"cmd": self._current_cmd, "t": now}
+        for after in FOLLOW_UP_SEC:
+            self._follow_ups.append(
+                {"cmd": self._current_cmd, "label": label, "after_sec": after, "due": now + after}
+            )
+        self._service_follow_ups()
+
+    def _aircraft_state(self):
+        state: dict[str, Any] = {}
+        for key, name in STATE_FLOATS.items():
+            value = self._read_float(name)
+            state[key] = None if value is None else round(value, 1)
+        for key, name in {**STATE_RADIOS, **AUTOPILOT_STATE}.items():
+            state[key] = self._read_int(name)
+        return state
+
+    def _service_follow_ups(self):
+        now = time.perf_counter()
+        due = [f for f in self._follow_ups if f["due"] <= now]
+        if not due:
+            return
+        self._follow_ups = [f for f in self._follow_ups if f["due"] > now]
+        state = self._aircraft_state()
+        for f in due:
+            self.tel.event(
+                "aircraft_state", cmd=f["cmd"], after=f["label"], after_sec=f["after_sec"], **state
+            )
+
+    def _watch_state(self):
+        """Log autopilot changes as they happen, including ones Vimaan didn't
+        make, with the time since Vimaan's last action. The log can't tell a
+        panel button from the aircraft dropping out; this narrows it down."""
+        now = time.perf_counter()
+        if now < self._next_state_watch:
+            return
+        self._next_state_watch = now + STATE_WATCH_SEC
+        self._log_aircraft_type()
+        state = {key: self._read_int(name) for key, name in AUTOPILOT_STATE.items()}
+        previous, self._autopilot_state = self._autopilot_state, state
+        if previous is None or previous == state:
+            return
+        last = self._last_action
+        self.tel.event(
+            "autopilot_state_change",
+            changed={k: [previous[k], state[k]] for k in state if previous[k] != state[k]},
+            last_vimaan_cmd=last["cmd"] if last else None,
+            sec_since_vimaan_action=round(now - last["t"], 1) if last else None,
+            **state,
+        )
+
+    def _log_aircraft_type(self):
+        dref = self._find(DREF_AIRCRAFT_ICAO)
+        if not dref:
+            return
+        try:
+            text = xp.getDatas(dref)  # type: ignore[attr-defined]
+            icao = (text or "").strip("\x00 ")
+        except Exception as exc:
+            self.tel.event(
+                "dataref_read_error", logging.WARNING, dataref=DREF_AIRCRAFT_ICAO, error=repr(exc)
+            )
+            return
+        if icao and icao != self._aircraft:
+            self._aircraft = icao
+            self.tel.event("aircraft", icao=icao, num_engines=self._read_int(DREF_NUM_ENGINES))
+
+    def _expect(self, label, read, expected, delay=None, tolerance=None):
         """After a command, check the sim actually changed; say so if it didn't
         (in-sim the A330 ignored "autopilot on" while Vimaan had said "on")."""
         self._verifications.append(
@@ -862,6 +1001,7 @@ class PythonInterface:
                 "label": label,
                 "read": read,
                 "expected": expected,
+                "tolerance": tolerance,
                 "due": time.perf_counter() + (VERIFY_DELAY_SEC if delay is None else delay),
             }
         )
@@ -872,7 +1012,10 @@ class PythonInterface:
         self._verifications = [v for v in self._verifications if v["due"] > now]
         for v in due:
             actual = v["read"]()
-            ok = actual == v["expected"]
+            if v.get("tolerance") is not None and actual is not None:
+                ok = abs(actual - v["expected"]) <= v["tolerance"]
+            else:
+                ok = actual == v["expected"]
             self.tel.event(
                 "verify",
                 logging.INFO if ok else logging.WARNING,
@@ -885,14 +1028,17 @@ class PythonInterface:
             if not ok:
                 self._say(f"{v['label'].replace('_', ' ')} did not respond")
 
-    def _not_applicable(self, intent):
+    def _not_applicable(self, intent, slots=None):
         """Why this aircraft can't perform ``intent``, or None if it can."""
         if intent == "toggle_landing_gear" and self._read_int(DREF_GEAR_RETRACTABLE) == 0:
             return "This aircraft has fixed gear"
-        if intent in ENGINE_BINDINGS:
+        if intent == "toggle_engine":
+            instance = (slots or {}).get("instance", "1")
             num_engines = self._read_int(DREF_NUM_ENGINES)
-            eng = ENGINE_BINDINGS[intent]
-            if num_engines is not None and eng["index"] >= num_engines:
+            if instance == "both" and num_engines is not None and num_engines < 2:
+                return "This aircraft has one engine"
+            eng = ENGINE_BINDINGS.get(instance)
+            if eng is not None and num_engines is not None and eng["index"] >= num_engines:
                 return f"This aircraft has no {eng['label'].lower()}"
         return None
 
@@ -919,9 +1065,8 @@ class PythonInterface:
         if not degrees:
             self._say("Heading value missing")
             return "rejected"
-        # Validators enforce the documented ranges before we touch a dataref
-        # (heading wraps into 0-360; the others reject out-of-range values so a
-        # mis-decoded number can't be written to the sim).
+        # Validators enforce the documented ranges before we touch a dataref,
+        # so a mis-decoded number can't be written to the sim.
         value, ok, reason = validate_slot("degrees", degrees)
         if not ok:
             self.tel.event(
@@ -933,6 +1078,7 @@ class PythonInterface:
         if not self._write(DREF_HEADING, v):
             self._say("Cannot set heading")
             return "failed"
+        self._hold_check("Heading", DREF_HEADING, v, modulo=360)
         self._say(f"Heading {spell_digits(f'{int(v):03d}')}")
         return "executed"
 
@@ -952,6 +1098,7 @@ class PythonInterface:
         if not self._write(DREF_ALTITUDE, v):
             self._say("Cannot set altitude")
             return "failed"
+        self._hold_check("Altitude", DREF_ALTITUDE, v)
         self._say(f"Altitude {int(v)} feet")
         return "executed"
 
@@ -974,6 +1121,7 @@ class PythonInterface:
         if not self._write(DREF_ALTITUDE, float(value) * 100):
             self._say("Cannot set flight level")
             return "failed"
+        self._hold_check("Flight level", DREF_ALTITUDE, float(value) * 100)
         self._say(f"Flight level {spell_digits(int(float(value)))}")
         return "executed"
 
@@ -997,6 +1145,7 @@ class PythonInterface:
         if not self._write(DREF_COM_KHZ[port], khz, is_float=False):
             self._say(f"Cannot tune COM {port}")
             return "failed"
+        self._hold_check(f"COM {port}", DREF_COM_KHZ[port], khz, is_float=False)
         self._say(f"COM {port} set to {spell_digits(fval)}")
         return "executed"
 
@@ -1016,8 +1165,8 @@ class PythonInterface:
         self._say(f"Gear {state}")
         return "executed"
 
-    def _toggle_flaps(self, slots, intent):
-        state = slots.get("state")
+    def _set_flaps(self, slots, intent):
+        state = slots.get("position")
         before = self._read_float(DREF_FLAP_HANDLE)
         if state == "up":
             # "Flaps up" in a cockpit means fully retracted, not one notch.
@@ -1066,11 +1215,15 @@ class PythonInterface:
         if state not in ("on", "off"):
             self._say("On or off?")
             return "rejected"
-        return self._ensure_state(intent, state)
+        instance = slots.get("instance", "1")
+        binding = TOGGLE_BINDINGS[intent].get(instance)
+        if binding is None:
+            self._say(f"There is no {BY_INTENT[intent].display.lower()} {instance}")
+            return "rejected"
+        return self._ensure_state(binding, state)
 
-    def _ensure_state(self, intent, desired):
+    def _ensure_state(self, binding, desired):
         """Move a binary system to ``desired`` ('on'/'off') idempotently."""
-        binding = TOGGLE_BINDINGS[intent]
         label = binding["label"]
         target = 1 if desired == "on" else 0
         raw = self._read_int(binding["dataref"])
@@ -1112,7 +1265,22 @@ class PythonInterface:
         if state not in ("on", "off"):
             self._say("Start or shut down?")
             return "rejected"
-        eng = ENGINE_BINDINGS[intent]
+        instance = slots.get("instance", "1")
+        if instance != "both":
+            return self._engine(ENGINE_BINDINGS[instance], state)
+        num_engines = self._read_int(DREF_NUM_ENGINES) or len(ENGINE_BINDINGS)
+        outcomes = [
+            self._engine(eng, state)
+            for eng in ENGINE_BINDINGS.values()
+            if eng["index"] < num_engines
+        ]
+        for outcome in ("pending", "executed", "failed", "no_op"):
+            if outcome in outcomes:
+                return outcome
+        return "rejected"
+
+    def _engine(self, eng, state):
+        """Start (held starter, driven by the flight loop) or shut down one engine."""
         label = eng["label"]
         running = self._read_array(DREF_ENGINE_RUNNING, eng["index"])
 
@@ -1132,7 +1300,7 @@ class PythonInterface:
         if running == 1:
             self._say(f"{label} already running")
             return "no_op"
-        if intent in self._cranks:
+        if label in self._cranks:
             self._say(f"{label} already starting")
             return "no_op"
         cmd_ref = xp.findCommand(eng["starter"])
@@ -1148,7 +1316,7 @@ class PythonInterface:
             self._say(f"Cannot start {label}")
             return "failed"
         xp.commandBegin(cmd_ref)
-        self._cranks[intent] = {
+        self._cranks[label] = {
             "cmd": self._current_cmd,
             "ref": cmd_ref,
             "started": time.perf_counter(),

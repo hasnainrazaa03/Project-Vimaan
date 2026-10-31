@@ -30,6 +30,7 @@ OUTCOME_BADGE: dict[str, tuple[str, str]] = {
     "no_op": ("NO CHANGE", "ok"),
     "pending": ("WORKING", "accent"),
     "safety_hold": ("CONFIRM?", "warn"),
+    "ambiguous": ("WHICH?", "warn"),
     "low_confidence": ("REPEAT", "warn"),
     "rejected": ("REJECTED", "warn"),
     "non_actionable": ("INFO", "muted"),
@@ -64,7 +65,7 @@ def describe_intent(intent: str) -> str:
 def describe_slots(slots: dict[str, Any]) -> str:
     parts = []
     for name, value in slots.items():
-        if name == "state":
+        if str(value).isalpha():  # on / up / both
             parts.append(str(value).upper())
         else:
             parts.append(f"{SLOT_DISPLAY.get(name, name.replace('_', ' '))} {value}")

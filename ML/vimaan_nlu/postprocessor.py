@@ -3,63 +3,19 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .commands import INSTANCE_WORDS, choice_synonyms, command
 from .validators import in_range
 
-# Per-intent action-verb / literal -> canonical `state`, mirrored from
-# config/schema_config.py (kept inline so the runtime/plugin stays self-contained
-# — must stay in sync with the schema synonyms). Intent-awareness is the fix for
-# the biggest slot-recall hole: the generator writes verbs like "engage",
-# "deploy", "ignite", "release" into the text but stores the canonical label
-# ("on"/"down"/...), which the aligner never tagged. It is also why the map must
-# be per-intent: "set" implies ON only for the parking brake, and up/down apply
-# only to gear/flaps — a global map would mislabel "set flaps up".
-STATE_SYNONYMS: dict[str, dict[str, list[str]]] = {
-    "toggle_landing_gear": {
-        "up": ["raise", "retract", "stow"],
-        "down": ["lower", "extend", "deploy", "drop"],
-    },
-    "toggle_flaps": {"up": ["retract", "raise"], "down": ["extend", "lower", "deploy"]},
-    "toggle_autopilot_1": {
-        "on": ["engage", "activate"],
-        "off": ["disengage", "deactivate", "disconnect"],
-    },
-    "toggle_autopilot_2": {
-        "on": ["engage", "activate"],
-        "off": ["disengage", "deactivate", "disconnect"],
-    },
-    "toggle_flight_director_1": {"on": ["enable", "activate"], "off": ["disable", "deactivate"]},
-    "toggle_flight_director_2": {"on": ["enable", "activate"], "off": ["disable", "deactivate"]},
-    "toggle_parking_brake": {"on": ["engage", "set"], "off": ["release", "disengage"]},
-    "toggle_engine_1": {
-        "on": ["start", "ignite"],
-        "off": ["stop", "shut down", "shut", "cut", "kill"],
-    },
-    "toggle_engine_2": {
-        "on": ["start", "ignite"],
-        "off": ["stop", "shut down", "shut", "cut", "kill"],
-    },
-}
+# Verbs that imply a choice ("raise" -> gear up, "disconnect" -> autopilot
+# off), per intent and slot, from the command table. Per intent because "set"
+# means ON only for the parking brake and up/down apply only to gear/flaps.
+CHOICE_SYNONYMS: dict[str, dict[str, dict[str, tuple[str, ...]]]] = choice_synonyms()
 
-# Generic verbs valid across every toggle intent.
-_GENERIC_STATE: dict[str, list[str]] = {
-    "on": ["turn on", "switch on"],
-    "off": ["turn off", "switch off"],
+# Generic verbs valid for every on/off choice.
+_GENERIC_STATE: dict[str, tuple[str, ...]] = {
+    "on": ("turn on", "switch on"),
+    "off": ("turn off", "switch off"),
 }
-
-# Intents whose `state` slot may be implied by an action verb ("raise the gear"
-# -> up). Derived from STATE_SYNONYMS so it can never drift out of sync.
-IMPLICIT_STATE_INTENTS = frozenset(STATE_SYNONYMS)
-
-# Flat verb -> state map (backward-compatible export; derived, so it stays in
-# sync). Safe to flatten because no verb maps to two different states.
-ACTION_STATE_MAP = {
-    verb: canon
-    for mapping in STATE_SYNONYMS.values()
-    for canon, verbs in mapping.items()
-    for verb in verbs
-}
-ACTION_STATE_MAP.update({v: "on" for v in _GENERIC_STATE["on"]})
-ACTION_STATE_MAP.update({v: "off" for v in _GENERIC_STATE["off"]})
 
 
 def extract_numbers_from_text(text: str) -> list[str]:
@@ -109,63 +65,20 @@ def extract_digit_sequence_frequency(text: str) -> str | None:
     return None
 
 
-# Numbered toggle intents whose instance (1/2) is stated explicitly in the
-# utterance. The model occasionally confuses the variants (engine 1<->2,
-# FD 1<->2, AP 1<->2); the spoken number is authoritative, so we trust it.
-NUMBERED_INTENT_RE = re.compile(r"^(toggle_(?:autopilot|flight_director|engine))_(\d+)$")
+def _build_matchers(synonyms: dict[str, tuple[str, ...]]) -> list[tuple[re.Pattern[str], str]]:
+    """Compiled (regex, canonical) matchers for one choice slot.
 
-
-# Ordinal / side words that name an instance without a digit.
-_INSTANCE_WORDS = {"first": "1", "left": "1", "second": "2", "right": "2"}
-
-
-def correct_numbered_intent(intent: str | None, normalized_text: str | None) -> str | None:
-    """Pick the engine/AP/FD variant from the instance the pilot actually named.
-
-    For ``toggle_engine_N`` / ``toggle_autopilot_N`` / ``toggle_flight_director_N``:
-    an explicit instance in the utterance ("2", "second", "right") wins over
-    the model's choice. When no instance is named ("autopilot on"), the model
-    has nothing to go on and splits between _1 and _2 at low confidence, so we
-    default to instance 1 (the captain-side / only system on most aircraft).
-    No-op for other intents, so it is safe to apply unconditionally.
-    """
-    if not intent:
-        return intent
-    match = NUMBERED_INTENT_RE.match(intent)
-    if not match:
-        return intent
-    base, predicted = match.group(1), match.group(2)
-    text = normalized_text or ""
-    spoken = re.findall(r"\b([12])\b", text)
-    if spoken:
-        instance = spoken[0]
-    else:
-        named = [
-            _INSTANCE_WORDS[w] for w in re.findall(r"\b[a-z]+\b", text) if w in _INSTANCE_WORDS
-        ]
-        instance = named[0] if named else "1"
-    if instance != predicted:
-        return f"{base}_{instance}"
-    return intent
-
-
-def _build_state_matchers(intent: str) -> list[tuple[re.Pattern[str], str]]:
-    """Compiled (regex, canonical) matchers for a toggle intent.
-
-    Verbs match as a STEM PREFIX (``\\bengag`` -> engage/engaged/engaging/engages,
-    ``\\bdeploy`` -> deploy/deployed/deploying) because the paraphraser inflects
-    them heavily; a whole-word match would miss "engaged"/"deploying". The short
-    literals on/off/up/down instead match as WHOLE WORDS so ``\\bon\\b`` never
-    fires inside "one". Verbs are tried first, longest first (so "disengage"
-    wins over "engage" and "shut down" over "shut")."""
+    Verbs match as a STEM PREFIX (``\\bengag`` -> engage/engaged/engaging) so
+    inflections still count; the short literals on/off/up/down match as WHOLE
+    WORDS so ``\\bon\\b`` never fires inside "one". Verbs are tried first,
+    longest first (so "disengage" wins over "engage", "shut down" over "shut")."""
     verbs: list[tuple[str, str]] = []
     literals: list[tuple[str, str]] = []
-    for canon, syns in STATE_SYNONYMS[intent].items():
+    for canon, syns in synonyms.items():
         literals.append((canon, canon))
         verbs.extend((v, canon) for v in syns)
-        verbs.extend((v, canon) for v in _GENERIC_STATE.get(canon, []))
+        verbs.extend((v, canon) for v in _GENERIC_STATE.get(canon, ()))
     verbs.sort(key=lambda c: len(c[0]), reverse=True)
-
     matchers: list[tuple[re.Pattern[str], str]] = []
     for verb, canon in verbs:
         stem = verb[:-1] if verb.endswith("e") else verb  # drop trailing e for -ing forms
@@ -175,29 +88,53 @@ def _build_state_matchers(intent: str) -> list[tuple[re.Pattern[str], str]]:
     return matchers
 
 
-_STATE_MATCHERS = {intent: _build_state_matchers(intent) for intent in STATE_SYNONYMS}
+_MATCHERS = {
+    intent: {slot: _build_matchers(syns) for slot, syns in slots.items()}
+    for intent, slots in CHOICE_SYNONYMS.items()
+}
 
 
-def add_implicit_state(
+def _match_choice(matchers: list[tuple[re.Pattern[str], str]], text: str) -> str | None:
+    for rx, canon in matchers:
+        if rx.search(text):
+            return canon
+    return None
+
+
+def canonicalize_choices(
     slots: dict[str, Any], original_text: str, intent: str | None
 ) -> dict[str, Any]:
-    """Fill a missing ``state`` slot from an action verb / literal in the text.
+    """Turn each choice slot into its canonical value, filling it from the
+    text when the model didn't tag it: the model tags the word spoken
+    ("raise", "disconnect"); the plugin needs "up" / "off"."""
+    for slot, matchers in _MATCHERS.get(intent or "", {}).items():
+        value = slots.get(slot)
+        found = _match_choice(matchers, str(value).lower()) if value else None
+        if found is None:
+            found = _match_choice(matchers, original_text.lower())
+        if found is not None:
+            slots[slot] = found
+    return slots
 
-    Only for toggle intents, only when the model didn't already extract a state.
-    Intent-aware: ``set`` implies ON only for the parking brake and ``down``
-    never applies to an autopilot.
-    """
-    matchers = _STATE_MATCHERS.get(intent) if intent is not None else None
-    if matchers is None:
-        return slots
-    if slots.get("state"):
-        return slots
 
-    text_lower = original_text.lower()
-    for rx, canon in matchers:
-        if rx.search(text_lower):
-            slots["state"] = canon
-            return slots
+# Backward-compatible name: fill a missing state/position from the text.
+add_implicit_state = canonicalize_choices
+
+
+def resolve_instance(
+    slots: dict[str, Any], original_text: str, intent: str | None
+) -> dict[str, Any]:
+    """Which engine / autopilot / flight director: the tagged word ("two",
+    "second", "both") or, if none was tagged, the first one named in the
+    text; defaults to 1 (captain-side / the only system on most aircraft)."""
+    cmd = command(intent or "")
+    if cmd is None or "instance" not in cmd.slots:
+        return slots
+    tagged = str(slots.get("instance", "")).lower().split()
+    named = [INSTANCE_WORDS[w] for w in tagged if w in INSTANCE_WORDS]
+    if not named:
+        named = [INSTANCE_WORDS[w] for w in original_text.lower().split() if w in INSTANCE_WORDS]
+    slots["instance"] = named[0] if named else "1"
     return slots
 
 
@@ -230,6 +167,12 @@ def postprocess_slots(
                     break
 
         if slot_name in ["altitude", "degrees", "flight_level", "com_port"]:
+            # The model tagged a valid number that was really said: keep it.
+            # Searching for "the first number in range" instead let a stray
+            # word win: "eighty fly heading one eight four" -> heading 80
+            # (Vosk does insert a leading "eighty", seen in flight).
+            if slot_str in numbers and in_range(slot_name, slot_str):
+                continue
             if len(numbers) > 0:
                 if slot_name == "altitude":
                     for num in numbers:
@@ -256,6 +199,7 @@ def postprocess_slots(
                             break
 
     if intent:
-        slots = add_implicit_state(slots, original_text, intent)
+        slots = canonicalize_choices(slots, original_text, intent)
+        slots = resolve_instance(slots, original_text, intent)
 
     return slots

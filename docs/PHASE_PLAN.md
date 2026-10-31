@@ -17,7 +17,7 @@ Last updated 2026-10-30.
 | S | Offline speech recognition (Vosk), saved audio, benchmark | ✅ merged | #25 |
 | O | In-sim overlay (live transcript, meaning, outcome) | ✅ flown (ImGui, 0.55 ms); polish + landing on main | #26, #27 |
 | E0 | Command table: one source of truth (no behaviour change) | 🟡 built, gate passed; needs smoke flight + merge | #28 |
-| E1 | Training data v2 + command families → model **v12** | ⬜ | |
+| E1 | Training data v2 + command families → **v17** | 🟡 all gates pass; awaiting #27, #28, E1 PR and a flight | |
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v13** | ⬜ | |
 | T2 | Tier 2: radios & navigation → **v14** | ⬜ | |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v15** | ⬜ | |
@@ -177,7 +177,7 @@ tier only adds data.
 
 ### Steps
 
-- [ ] **E1.1 Spoken-number renderer** (`ML/data/spoken.py`, unit-tested):
+- [x] **E1.1 Spoken-number renderer** (`ML/data/spoken.py`, unit-tested):
   every value type renders the ways pilots say it —
   digit-by-digit ("two seven zero"), pilot groups ("two seventy",
   "one eighty"), cardinals ("seven thousand five hundred",
@@ -186,21 +186,21 @@ tier only adds data.
   flight levels ("flight level two four zero", "FL two forty"). The
   normalizer must turn every rendering back into the right digits: a
   property test renders each value every way and round-trips it.
-- [ ] **E1.2 Templates**: ≥15 per intent from the table — imperative
+- [x] **E1.2 Templates**: ≥15 per intent from the table — imperative
   ("gear up"), ATC/pilot phrasing ("set heading two seven zero",
   "fly heading…"), polite, terse ("flaps fifteen"), with the value first or
   last. The Pegasus/Flan-T5 paraphrase stage is dropped.
-- [ ] **E1.3 Negatives** (the `None` class), ~10% of the data:
+- [x] **E1.3 Negatives** (the `None` class), ~10% of the data:
   out-of-scope chatter; command-word salad without a coherent command
   (seen in-sim: "you parking me the are"); fragments ("seventy", "on",
   "eighty two on"); questions about unsupported things.
-- [ ] **E1.4 Recognition noise** on ~20% of rows, from real logs: to/two,
+- [ ] **E1.4 Recognition noise** *Partly done:* stray leading word, dropped filler word, "the" for "brake". Not done: to/two and for/four (they change the number, so the row is no longer labelled correctly and the round-trip check drops it); do/two (removed from the grammar instead); dropped trailing word. Original plan: on ~20% of rows, from real logs: to/two,
   for/four, do/two, a spurious leading word ("feet engine two off"), a
   dropped trailing word, "the" for "brake".
-- [ ] **E1.5 Splits**: hold out whole *templates* (≈15% per intent) for the
+- [x] **E1.5 Splits**: hold out whole *templates* (≈15% per intent) for the
   held-out set, so the score measures generalisation to new phrasing, not
   memorised rows. Also keep v11's held-out file for comparison.
-- [ ] **E1.6 Command families** (labels change, so it belongs with this
+- [x] **E1.6 Command families** (labels change, so it belongs with this
   retrain):
   - `toggle_engine_1/2` → `toggle_engine {engine: 1|2|both, state}`
   - `toggle_autopilot_1/2` → `toggle_autopilot {unit: 1|2, state}`
@@ -210,10 +210,10 @@ tier only adds data.
   Update postprocessor (drop `NUMBERED_INTENT_RE` / family-confidence
   summing in `inference.py`), plugin handlers (engine "both" = sequence),
   safety tokens, overlay names, gold tests.
-- [ ] **E1.7 Real-voice set as a test**: `tests/test_real_voice.py`
+- [x] **E1.7 Real-voice set as a test**: `tests/test_real_voice.py`
   (`requires_torch`) runs `labels.jsonl` transcripts through NLU and the
   plugin's command-word guard; v12 must not lose a clip v11 got right.
-- [ ] **E1.8 Gate script** `scripts/model_gate.py vNEW --baseline vOLD`:
+- [x] **E1.8 Gate script** `scripts/model_gate.py vNEW --baseline vOLD`:
   per-intent accuracy and slot F1 on the template-held-out set; v11 held-out
   regression; gold NLU; real-voice clips; negatives (share that ends as
   `None`, low confidence or no command word); NLU p95 latency. Prints PASS/FAIL
@@ -221,6 +221,12 @@ tier only adds data.
 - [ ] **E1.9 Train v12** (`--max-length 40`, same DistilBERT, MPS).
 - [ ] **E1.10 Gate v12**; ONNX export + int8 quantization still work.
 - [ ] **E1.11 Install + fly** the E0 checklist again, plus "both engines".
+
+**E1 status (2026-10-30):** v17 passes all six gates after a one-line scorer fix (the COM 1 default for an unspoken port now applies to the prediction as well as the expected action); see `gate.json` beside the model. Not installed: X-Plane stays on v11 until #27 and #28 merge, and v17 also needs this branch's plugin code. Known misses: 5 of 490 explicit-port COM rows tune COM 1 ("frequency … on com two" with a one-digit decimal; v11 got all 490 right), "parking bring on engine" starts engine 1, "fly at one thousand" is rejected.
+
+**v17 flight and follow-up (2026-10-30):** five commands set a wrong target because "to" and "two" tie in recognition ("altitude to 1,000" → 21,000), on v11 too. Added on this branch, not flown: ask when both readings are valid and differ; delayed read-back of written values; logging of modes, actual heading and altitude, COM values, autopilot changes and aircraft type. Re-scored with no retraining, thresholds unchanged: all six gates pass; real voice 91/26/1 for both models on 118 clips. X-Plane is back on v11. Open: COM 1 observation unexplained (inconclusive), autopilot off between 702 s and 854 s unexplained, "heading to seven zero" can set 270 because digit answers skip the check, "two five hundred" takes 2,500 because 500 is below the minimum.
+
+**Unresolved: COM 2 regression on v17.** Passing the aggregate gates does not clear it. v17 is for controlled test flights only, not general use, until this is fixed and re-validated. Before relying on v17 for COM tuning, say the affected "frequency … on com two" phrases in a controlled setup and check the radio read-back; if it tunes COM 1, switch back to v11 for that test.
 
 **Gate E1.** Template-held-out intent ≥ 98.5%, slot F1 ≥ 0.99 for every intent;
 no regression on v11 held-out, gold, or real-voice clips; ≥ 95% of negatives

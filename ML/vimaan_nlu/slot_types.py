@@ -14,15 +14,14 @@ class Range:
     """An inclusive numeric range.
 
     ``integer`` compares the value as an int (matching the historical
-    ``int(float(num))`` checks in the postprocessor). ``wrap`` wraps an
-    out-of-range value modulo the upper bound (headings: 450 -> 90) instead of
-    rejecting it.
+    ``int(float(num))`` checks in the postprocessor). ``exact`` bounds-checks
+    the raw number instead of the truncated one, so 360.9 is above 360.
     """
 
     lo: float
     hi: float
     integer: bool = True
-    wrap: bool = False
+    exact: bool = False
 
     def _num(self, value: Any) -> float | None:
         try:
@@ -34,20 +33,20 @@ class Range:
     def _fmt(self, v: float) -> str:
         return str(int(v)) if self.integer else str(v)
 
+    def _within(self, value: Any, v: float) -> bool:
+        return self.lo <= (float(value) if self.exact else v) <= self.hi
+
     def contains(self, value: Any) -> bool:
         v = self._num(value)
-        return v is not None and self.lo <= v <= self.hi
+        return v is not None and self._within(value, v)
 
     def validate(self, value: Any) -> tuple[str | None, bool, str]:
         """Return ``(coerced_value | None, ok, reason)``."""
         v = self._num(value)
         if v is None:
             return None, False, "not a number"
-        if self.lo <= v <= self.hi:
+        if self._within(value, v):
             return self._fmt(v), True, "in range"
-        if self.wrap:
-            wrapped = v % self.hi
-            return self._fmt(wrapped), True, f"wrapped into [0, {self._fmt(self.hi)}]"
         return None, False, f"out of range [{self._fmt(self.lo)}, {self._fmt(self.hi)}]"
 
 

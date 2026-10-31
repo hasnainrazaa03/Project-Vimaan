@@ -240,6 +240,22 @@ class TestPilotNumberGroups:
         assert normalize_aviation_input(text) == expected
 
 
+class TestDecimalFollowedByWords:
+    """Found by the v2 generator's round-trip check: the decimal pass ate the
+    space after the frequency, so the word after it fused onto the number."""
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("tune one two one decimal five on com two", "tune 121.5 on com 2"),
+            ("put one two seven point six two five in com one", "put 127.625 in com 1"),
+            ("one one eight decimal seven five please", "118.75 please"),
+        ],
+    )
+    def test_space_kept(self, text, expected):
+        assert normalize_aviation_input(text) == expected
+
+
 class TestGoogleMishearings:
     """Seen in the first in-sim session (Google Web Speech)."""
 

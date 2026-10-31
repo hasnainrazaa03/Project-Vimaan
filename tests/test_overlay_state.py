@@ -108,6 +108,7 @@ def test_failed_readback_is_red():
     ("outcome", "badge", "tone"),
     [
         ("safety_hold", "CONFIRM?", "warn"),
+        ("ambiguous", "WHICH?", "warn"),
         ("rejected", "REJECTED", "warn"),
         ("not_understood", "NOT HEARD", "error"),
         ("timeout", "TIMEOUT", "error"),
@@ -142,7 +143,7 @@ def test_low_confidence_meaning_is_amber():
             "kind": "stage",
             "stage": "nlu",
             "cmd": "c1",
-            "intent": "toggle_flaps",
+            "intent": "set_flaps",
             "slots": {},
             "confidence": 0.4,
         },

@@ -3,6 +3,7 @@ these tests hold it to that and to what it replaced."""
 
 import json
 import os
+import re
 import sys
 
 import pytest
@@ -15,10 +16,14 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 
-def test_training_schema_unchanged_from_v11():
-    # E0 is a refactor: the generator must see exactly the schema v11 was trained on.
+def test_every_v11_intent_still_understood():
+    # Older models (v11) emit pre-family names; the legacy map must cover them
+    # so the plugin can still run such a model.
     with open(os.path.join(ROOT, "tests", "fixtures", "schema_v11.json")) as fh:
-        assert commands.training_schema() == json.load(fh)
+        v11_intents = json.load(fh)
+    for intent in v11_intents:
+        family = commands.LEGACY_INTENTS[intent][0] if intent in commands.LEGACY_INTENTS else intent
+        assert family in commands.BY_INTENT, intent
 
 
 def test_intents_unique():
@@ -36,8 +41,12 @@ def test_actionable_command_is_complete(c):
         assert slot in SLOT_VALIDATORS, f"{slot} has no validator"
     for rule in c.safety:
         assert rule in RULES
+    assert len(c.templates) >= 15, "E1: at least 15 phrasings per command"
     for template in c.templates:
-        assert any("{" + s + "}" in template for s in c.slots), template
+        used = re.findall(r"\{(\w+)\}", template)
+        bases = {re.sub(r"_(verb|ord)$", "", u) for u in used}
+        assert bases, f"no slot in {template!r}"
+        assert bases <= set(c.slots), f"unknown placeholder in {template!r}"
 
 
 def test_non_actionable_commands_have_no_handler_bits():
