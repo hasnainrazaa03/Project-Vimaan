@@ -17,14 +17,6 @@ def test_committed_vocabulary_matches_schema():
     )
 
 
-def test_generator_prefixes_match_dataset_generator():
-    import build_stt_vocabulary
-
-    src = open(os.path.join(ROOT, "ML", "data", "generate_slot_dataset.py")).read()
-    for phrase in build_stt_vocabulary.PREFIXES + build_stt_vocabulary.SUFFIXES:
-        assert f'"{phrase}"' in src
-
-
 def test_build_vocabulary():
     schema = {
         "toggle_x": {

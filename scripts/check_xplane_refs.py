@@ -9,6 +9,9 @@ Usage::
 
     python scripts/check_xplane_refs.py --xplane "/path/to/X-Plane 12"
     python scripts/check_xplane_refs.py --xplane ... plugin/PI_VimaanCoPilot.py tests/fake_xplane.py
+
+Besides the source files, every binding declared in the command table
+(``ML/vimaan_nlu/commands.py``) is checked.
 """
 
 from __future__ import annotations
@@ -17,8 +20,10 @@ import argparse
 import os
 import re
 import sys
+from collections.abc import Mapping
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, os.path.join(REPO_ROOT, "ML"))
 DEFAULT_SOURCES = ("plugin/PI_VimaanCoPilot.py", "tests/fake_xplane.py")
 NAME_RE = re.compile(r"[\"'](sim/[A-Za-z0-9_/\[\]]+)[\"']")
 
@@ -51,6 +56,25 @@ def names_in(path: str) -> set[str]:
     return {n for n in names if not n.endswith(("_", "/"))}
 
 
+def table_names() -> set[str]:
+    """Every X-Plane name the command table declares (bindings + handler params)."""
+    from vimaan_nlu.commands import COMMANDS
+
+    names: set[str] = set()
+
+    def collect(value: object) -> None:
+        if isinstance(value, str) and value.startswith("sim/"):
+            names.add(value)
+        elif isinstance(value, Mapping):
+            for v in value.values():
+                collect(v)
+
+    for c in COMMANDS:
+        names.update(c.bindings)
+        collect(c.params)
+    return names
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--xplane", required=True, help="X-Plane 12 root folder")
@@ -59,15 +83,17 @@ def main(argv: list[str] | None = None) -> int:
 
     datarefs, commands = load_names(args.xplane)
     missing = 0
-    for src in args.sources:
-        path = src if os.path.isabs(src) else os.path.join(REPO_ROOT, src)
-        for name in sorted(names_in(path)):
+    sources = {
+        src: names_in(src if os.path.isabs(src) else os.path.join(REPO_ROOT, src))
+        for src in args.sources
+    }
+    sources["command table"] = table_names()
+    for src, names in sources.items():
+        for name in sorted(names):
             if name not in datarefs and name not in commands:
                 print(f"MISSING  {name}  ({src})")
                 missing += 1
-    total = sum(
-        len(names_in(s if os.path.isabs(s) else os.path.join(REPO_ROOT, s))) for s in args.sources
-    )
+    total = sum(len(names) for names in sources.values())
     print(f"{total - missing}/{total} names found in X-Plane's DataRefs.txt / Commands.txt")
     return 1 if missing else 0
 

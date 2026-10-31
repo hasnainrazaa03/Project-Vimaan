@@ -19,6 +19,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from vimaan_nlu.commands import SLOT_DISPLAY, command
+
 HOLD_SEC = 6.0  # how long the result stays up after a command finishes
 MODES = ("auto", "pinned", "off")  # auto: shows on activity, then fades
 
@@ -40,33 +42,6 @@ OUTCOME_BADGE: dict[str, tuple[str, str]] = {
     "timeout": ("TIMEOUT", "error"),
 }
 
-# Display names until E0's command table provides them.
-INTENT_NAMES: dict[str, str] = {
-    "set_autopilot_heading": "Heading",
-    "set_autopilot_altitude": "Altitude",
-    "set_flight_level": "Flight level",
-    "set_com_frequency": "COM frequency",
-    "toggle_landing_gear": "Landing gear",
-    "toggle_flaps": "Flaps",
-    "toggle_autopilot_1": "Autopilot 1",
-    "toggle_autopilot_2": "Autopilot 2",
-    "toggle_flight_director_1": "Flight director 1",
-    "toggle_flight_director_2": "Flight director 2",
-    "toggle_parking_brake": "Parking brake",
-    "toggle_engine_1": "Engine 1",
-    "toggle_engine_2": "Engine 2",
-    "None": "Not a command",
-    "ask_status_generic": "Status question",
-    "ask_time": "Time question",
-    "chit_chat_greeting": "Greeting",
-}
-SLOT_NAMES: dict[str, str] = {
-    "degrees": "hdg",
-    "altitude": "alt",
-    "flight_level": "FL",
-    "frequency": "freq",
-    "com_port": "COM",
-}
 REASONS: dict[str, str] = {
     "no_command_word": "no command word heard",
     "one_digit_heading": "heading needs three digits",
@@ -82,7 +57,8 @@ class Line:
 
 
 def describe_intent(intent: str) -> str:
-    return INTENT_NAMES.get(intent, intent.replace("_", " ").capitalize())
+    cmd = command(intent)
+    return cmd.display if cmd else intent.replace("_", " ").capitalize()
 
 
 def describe_slots(slots: dict[str, Any]) -> str:
@@ -91,7 +67,7 @@ def describe_slots(slots: dict[str, Any]) -> str:
         if name == "state":
             parts.append(str(value).upper())
         else:
-            parts.append(f"{SLOT_NAMES.get(name, name.replace('_', ' '))} {value}")
+            parts.append(f"{SLOT_DISPLAY.get(name, name.replace('_', ' '))} {value}")
     return "  ".join(parts)
 
 
