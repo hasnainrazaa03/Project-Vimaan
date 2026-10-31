@@ -36,6 +36,22 @@ DEFAULT_DATAREFS: dict[str, Any] = {
     "sim/flightmodel/position/groundspeed": 0.0,
     "sim/flightmodel/failures/onground_any": 1,
     "sim/cockpit2/gauges/indicators/airspeed_kts_pilot": 0.0,
+    "sim/cockpit2/gauges/indicators/heading_AHARS_deg_mag_pilot": 0.0,
+    "sim/cockpit2/gauges/indicators/altitude_ft_pilot": 0.0,
+    "sim/cockpit2/gauges/indicators/vvi_fpm_pilot": 0.0,
+    "sim/cockpit2/radios/actuators/com1_standby_frequency_hz_833": 122800,
+    "sim/cockpit2/radios/actuators/com2_standby_frequency_hz_833": 122800,
+    "sim/cockpit2/autopilot/autopilot_on": 0,
+    "sim/cockpit2/autopilot/heading_mode": 0,
+    "sim/cockpit2/autopilot/altitude_mode": 3,
+    "sim/cockpit2/autopilot/heading_status": 0,
+    "sim/cockpit2/autopilot/nav_status": 0,
+    "sim/cockpit2/autopilot/approach_status": 0,
+    "sim/cockpit2/autopilot/altitude_hold_status": 0,
+    "sim/cockpit2/autopilot/altitude_hold_armed": 0,
+    "sim/cockpit2/autopilot/vvi_status": 0,
+    "sim/cockpit2/autopilot/speed_status": 0,
+    "sim/aircraft/view/acf_ICAO": "BE58",
 }
 
 KNOWN_COMMANDS = {
@@ -151,6 +167,7 @@ def make_xp() -> types.ModuleType:
         createFlightLoop,
     ):
         setattr(xp, fn.__name__, fn)
+    xp.getDatas = lambda ref, offset=0, count=-1: str(xp.datarefs[ref])
     xp.getDatavi = getDatav
     xp.getDatavf = getDatav
     # Windows + 2D drawing (the overlay). Windows are recorded; drawing calls

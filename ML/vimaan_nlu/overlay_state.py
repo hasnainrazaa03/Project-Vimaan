@@ -30,6 +30,7 @@ OUTCOME_BADGE: dict[str, tuple[str, str]] = {
     "no_op": ("NO CHANGE", "ok"),
     "pending": ("WORKING", "accent"),
     "safety_hold": ("CONFIRM?", "warn"),
+    "ambiguous": ("WHICH?", "warn"),
     "low_confidence": ("REPEAT", "warn"),
     "rejected": ("REJECTED", "warn"),
     "non_actionable": ("INFO", "muted"),

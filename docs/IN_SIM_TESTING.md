@@ -138,6 +138,10 @@ before launch. Drawn with ImGui (bundled with XPPython3), falling back to
 X-Plane's own text if ImGui can't load; the log report shows which, and the
 worst draw time per frame.
 
+**"To" and "two":** they sound the same, so avoid "to" before a value. Say "altitude one thousand" and "heading zero one zero". When both readings of a heading, altitude or flight level are valid and differ, Vimaan changes nothing and asks which you meant (overlay: WHICH?). Heading and flight level given as all three digits ("two seven zero") are taken as digits, which means "heading to seven zero" can still set 270.
+
+**Target vs aircraft:** commands set targets and don't engage autopilot modes. `aircraft_state` events record modes, actual heading and altitude, and COM values when a target or radio is set and 10 s and 30 s later; `autopilot_state_change` records changes Vimaan didn't make. The log report shows both.
+
 **Push-to-talk on a yoke button:** Settings → Joystick → search `vimaan` →
 bind **Vimaan: push to talk** (and optionally **Vimaan: run self test**).
 

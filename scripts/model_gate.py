@@ -91,6 +91,7 @@ def effective_action(intent: str, slots: dict[str, Any]) -> dict[str, Any]:
 def decision(p: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     """("act", effective slots) when the plugin would act on it, else (reason, {}).
     Only the slots the command declares count: its handler ignores stray ones."""
+    from vimaan_nlu.ambiguity import two_or_to
     from vimaan_nlu.commands import command, required_slots
     from vimaan_nlu.validators import has_command_word, heading_too_short, validate_slot
 
@@ -104,6 +105,8 @@ def decision(p: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         return "no_command_word", {}
     if intent == "set_autopilot_heading" and heading_too_short(slots.get("degrees")):
         return "one_digit_heading", {}
+    if two_or_to(intent, p.get("original_text") or ""):
+        return "ambiguous_two", {}
     for name in required_slots().get(intent, ()):
         if not slots.get(name):
             return f"missing_{name}", {}
@@ -205,6 +208,7 @@ def judge(run, text: str, want_intent: str, want: dict[str, Any]) -> tuple[str, 
 def real_voice(run) -> dict[str, Any]:
     rows = [json.loads(line) for line in open(ROOT / "tests" / "fixtures" / "real_voice.jsonl")]
     result: Counter[str] = Counter()
+    sessions: dict[str, Counter[str]] = defaultdict(Counter)
     examples: dict[str, list[str]] = {"rejected": [], "wrong": []}
     for r in rows:
         want = effective_action(r["intent"], r["slots"])
@@ -214,9 +218,11 @@ def real_voice(run) -> dict[str, Any]:
             else ("rejected", "nothing heard")
         )
         result[outcome] += 1
+        sessions[r["clip"][:15]][outcome] += 1
         if outcome != "right":
             examples[outcome].append(f"said {r['said']!r} heard {r['heard']!r} -> {detail}")
     return {
+        "by_session": {k: dict(v) for k, v in sorted(sessions.items())},
         "n": len(rows),
         "right": result["right"],
         "rejected": result["rejected"],
@@ -435,6 +441,15 @@ def main(argv: list[str] | None = None) -> int:
         for item in items[:40]:
             print(f"    {item}")
     passed = all(ok for _, ok, _ in gates)
+    print("\n  real voice by flight (right/rejected/wrong), candidate vs baseline:")
+    for session, counts in rv_c["by_session"].items():
+        base_counts = rv_b["by_session"][session]
+        print(
+            f"    {session}: "
+            + "/".join(str(counts.get(k, 0)) for k in ("right", "rejected", "wrong"))
+            + " vs "
+            + "/".join(str(base_counts.get(k, 0)) for k in ("right", "rejected", "wrong"))
+        )
     print(f"\n  {'ALL GATES PASS' if passed else 'GATE FAILED'}  -> {cand_dir / 'gate.json'}")
     return 0 if passed else 1
 

@@ -76,3 +76,43 @@
 {"clip": "20261030_145813_c0021.wav", "said": "flaps up", "heard": "flaps up", "intent": "set_flaps", "slots": {"position": "up"}}
 {"clip": "20261030_145813_c0023.wav", "said": "heading one eighty", "heard": "heading one we feeling", "intent": "set_autopilot_heading", "slots": {"degrees": "180"}}
 {"clip": "20261030_145813_c0024.wav", "said": "heading one eight zero", "heard": "heading one eight zero", "intent": "set_autopilot_heading", "slots": {"degrees": "180"}}
+{"clip": "20261030_215104_c0001.wav", "said": "gear down", "heard": "gear down", "intent": "toggle_landing_gear", "slots": {"state": "down"}}
+{"clip": "20261030_215104_c0002.wav", "said": "tune com one to one one eight decimal seven five", "heard": "doing com one two one one eight decimal seven five", "intent": "set_com_frequency", "slots": {"com_port": "1", "frequency": "118.75"}}
+{"clip": "20261030_215104_c0003.wav", "said": "set com two to one two one decimal seven five", "heard": "set com two go one the one decimal seven five", "intent": "set_com_frequency", "slots": {"com_port": "2", "frequency": "121.75"}}
+{"clip": "20261030_215104_c0004.wav", "said": "tune com two to one two one decimal seven five", "heard": "one co one decimal seven five", "intent": "set_com_frequency", "slots": {"com_port": "2", "frequency": "121.75"}}
+{"clip": "20261030_215104_c0005.wav", "said": "tune com two to one two one decimal seven five", "heard": "the on com two both one two one seven five", "intent": "set_com_frequency", "slots": {"com_port": "2", "frequency": "121.75"}}
+{"clip": "20261030_215104_c0006.wav", "said": "tune com two to one two one decimal seven five", "heard": "doing com two to one two one decimal seven five", "intent": "set_com_frequency", "slots": {"com_port": "2", "frequency": "121.75"}}
+{"clip": "20261030_215104_c0008.wav", "said": "set com one frequency to one two one decimal eight zero", "heard": "set on one frequency two one two one eight zero", "intent": "set_com_frequency", "slots": {"com_port": "1", "frequency": "121.80"}}
+{"clip": "20261030_215104_c0009.wav", "said": "com one frequency one two one decimal eight zero", "heard": "com one frequency one two one decimal eight zero", "intent": "set_com_frequency", "slots": {"com_port": "1", "frequency": "121.80"}}
+{"clip": "20261030_215104_c0010.wav", "said": "com one set to one two zero decimal seven five", "heard": "one set down one doing zero decimal seven five", "intent": "set_com_frequency", "slots": {"com_port": "1", "frequency": "120.75"}}
+{"clip": "20261030_215104_c0011.wav", "said": "frequency one to one two zero decimal seven five", "heard": "frequency one two one two zero decimal seven five", "intent": "set_com_frequency", "slots": {"com_port": "1", "frequency": "120.75"}}
+{"clip": "20261030_215104_c0012.wav", "said": "frequency one thirty three decimal one zero on com two", "heard": "frequency one thirty three decimal one zero on com two", "intent": "set_com_frequency", "slots": {"com_port": "2", "frequency": "133.10"}}
+{"clip": "20261030_215104_c0014.wav", "said": "frequency one thirty three decimal two five on com one", "heard": "frequency one thirty three decimal two five on com one", "intent": "set_com_frequency", "slots": {"com_port": "1", "frequency": "133.25"}}
+{"clip": "20261030_215104_c0015.wav", "said": "parking brake off", "heard": "parking brake off", "intent": "toggle_parking_brake", "slots": {"state": "off"}}
+{"clip": "20261030_215104_c0016.wav", "said": "gear up", "heard": "gear up", "intent": "toggle_landing_gear", "slots": {"state": "up"}}
+{"clip": "20261030_215104_c0017.wav", "said": "gear up", "heard": "gear up", "intent": "toggle_landing_gear", "slots": {"state": "up"}}
+{"clip": "20261030_215104_c0018.wav", "said": "flaps up", "heard": "flaps up", "intent": "set_flaps", "slots": {"position": "up"}}
+{"clip": "20261030_215104_c0019.wav", "said": "flaps down", "heard": "flaps down", "intent": "set_flaps", "slots": {"position": "down"}}
+{"clip": "20261030_215104_c0020.wav", "said": "autopilot on", "heard": "autopilot on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_215104_c0021.wav", "said": "autopilot off", "heard": "autopilot off", "intent": "toggle_autopilot", "slots": {"state": "off", "instance": "1"}}
+{"clip": "20261030_215104_c0022.wav", "said": "autopilot off", "heard": "autopilot off", "intent": "toggle_autopilot", "slots": {"state": "off", "instance": "1"}}
+{"clip": "20261030_215104_c0023.wav", "said": "autopilot on", "heard": "autopilot on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_215104_c0024.wav", "said": "heading zero three zero", "heard": "heading zero three zero", "intent": "set_autopilot_heading", "slots": {"degrees": "030"}}
+{"clip": "20261030_215104_c0026.wav", "said": "autopilot off", "heard": "autopilot off", "intent": "toggle_autopilot", "slots": {"state": "off", "instance": "1"}}
+{"clip": "20261030_215104_c0027.wav", "said": "autopilot on", "heard": "autopilot on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_215104_c0028.wav", "said": "set altitude to one thousand feet", "heard": "set altitude two one thousand feet", "intent": "set_autopilot_altitude", "slots": {"altitude": "1000"}}
+{"clip": "20261030_215104_c0029.wav", "said": "set altitude one thousand feet", "heard": "set altitude one thousand feet", "intent": "set_autopilot_altitude", "slots": {"altitude": "1000"}}
+{"clip": "20261030_215104_c0030.wav", "said": "set heading to twenty degrees", "heard": "set heading two twenty degrees", "intent": "set_autopilot_heading", "slots": {"degrees": "20"}}
+{"clip": "20261030_215104_c0031.wav", "said": "set heading to ten degrees", "heard": "set heading two ten degrees", "intent": "set_autopilot_heading", "slots": {"degrees": "10"}}
+{"clip": "20261030_215104_c0032.wav", "said": "set heading ten degrees", "heard": "set heading ten degrees", "intent": "set_autopilot_heading", "slots": {"degrees": "10"}}
+{"clip": "20261030_215104_c0033.wav", "said": "autopilot on", "heard": "autopilot on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_215104_c0034.wav", "said": "set altitude one thousand", "heard": "set altitude one thousand", "intent": "set_autopilot_altitude", "slots": {"altitude": "1000"}}
+{"clip": "20261030_215104_c0038.wav", "said": "set altitude twenty one thousand feet", "heard": "set altitude twenty one thousand feet", "intent": "set_autopilot_altitude", "slots": {"altitude": "21000"}}
+{"clip": "20261030_215104_c0039.wav", "said": "set heading zero", "heard": "set heading zero", "intent": "set_autopilot_heading", "slots": {"degrees": "0"}}
+{"clip": "20261030_215104_c0040.wav", "said": "set heading zero degrees", "heard": "set heading zero degrees", "intent": "set_autopilot_heading", "slots": {"degrees": "0"}}
+{"clip": "20261030_215104_c0041.wav", "said": "set heading one eighty degrees", "heard": "set heading one eighty degrees", "intent": "set_autopilot_heading", "slots": {"degrees": "180"}}
+{"clip": "20261030_215104_c0042.wav", "said": "set heading to ten degrees", "heard": "set heading two ten degrees", "intent": "set_autopilot_heading", "slots": {"degrees": "10"}}
+{"clip": "20261030_215104_c0043.wav", "said": "set altitude to five thousand feet", "heard": "set altitude two five thousand feet", "intent": "set_autopilot_altitude", "slots": {"altitude": "5000"}}
+{"clip": "20261030_215104_c0044.wav", "said": "set heading one eighty degrees", "heard": "set heading one eighty degrees", "intent": "set_autopilot_heading", "slots": {"degrees": "180"}}
+{"clip": "20261030_215104_c0045.wav", "said": "set heading to ninety degrees", "heard": "set heading go ninety degrees", "intent": "set_autopilot_heading", "slots": {"degrees": "90"}}
+{"clip": "20261030_215104_c0046.wav", "said": "altitude one thousand feet", "heard": "altitude one thousand feet", "intent": "set_autopilot_altitude", "slots": {"altitude": "1000"}}

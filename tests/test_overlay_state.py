@@ -108,6 +108,7 @@ def test_failed_readback_is_red():
     ("outcome", "badge", "tone"),
     [
         ("safety_hold", "CONFIRM?", "warn"),
+        ("ambiguous", "WHICH?", "warn"),
         ("rejected", "REJECTED", "warn"),
         ("not_understood", "NOT HEARD", "error"),
         ("timeout", "TIMEOUT", "error"),

@@ -591,6 +591,165 @@ def test_com_with_no_port_spoken_tunes_com_1(sim):
     assert xp.writes[-1] == ("sim/cockpit2/radios/actuators/com1_frequency_hz_833", 121500)
 
 
+# ---------------------------------------------------------------------------
+# "to" vs "two": the five wrong commands from the v17 test flight
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("heard", "intent", "slots", "question"),
+    [
+        (
+            "set altitude two one thousand feet",
+            "set_autopilot_altitude",
+            {"altitude": "21000"},
+            "Altitude 1000 or 21000 feet? Say it again without the word to.",
+        ),
+        (
+            "set altitude two five thousand feet",
+            "set_autopilot_altitude",
+            {"altitude": "25000"},
+            "Altitude 5000 or 25000 feet? Say it again without the word to.",
+        ),
+        (
+            "set heading two twenty degrees",
+            "set_autopilot_heading",
+            {"degrees": "220"},
+            "Heading zero two zero or two two zero? Say all three digits.",
+        ),
+        (
+            "set heading two ten degrees",
+            "set_autopilot_heading",
+            {"degrees": "210"},
+            "Heading zero one zero or two one zero? Say all three digits.",
+        ),
+        (
+            "flight level two forty",
+            "set_flight_level",
+            {"flight_level": "240"},
+            "Flight level zero four zero or two four zero? Say all three digits.",
+        ),
+    ],
+)
+def test_ambiguous_target_asks_and_changes_nothing(sim, heard, intent, slots, question):
+    _, plugin, xp = sim
+    assert say(plugin, heard, intent, slots) == [question]
+    assert xp.writes == [] and xp.commands_fired == []
+    assert events(plugin, "command_done")[-1]["outcome"] == "ambiguous"
+    assert events(plugin, "ambiguous")[-1]["intent"] == intent
+
+
+@pytest.mark.parametrize(
+    ("heard", "intent", "slots", "dataref", "value"),
+    [
+        (
+            "heading two seven zero",
+            "set_autopilot_heading",
+            {"degrees": "270"},
+            "sim/cockpit2/autopilot/heading_dial_deg_mag_pilot",
+            270.0,
+        ),
+        (
+            "set altitude one thousand feet",
+            "set_autopilot_altitude",
+            {"altitude": "1000"},
+            "sim/cockpit2/autopilot/altitude_dial_ft",
+            1000.0,
+        ),
+        (
+            "set altitude twenty one thousand feet",
+            "set_autopilot_altitude",
+            {"altitude": "21000"},
+            "sim/cockpit2/autopilot/altitude_dial_ft",
+            21000.0,
+        ),
+    ],
+)
+def test_clear_answers_set_the_target(sim, heard, intent, slots, dataref, value):
+    _, plugin, xp = sim
+    say(plugin, heard, intent, slots)
+    assert xp.writes[-1] == (dataref, value)
+
+
+# ---------------------------------------------------------------------------
+# Delayed read-back, and target vs what the aircraft did
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("port", "dataref", "other"),
+    [
+        (
+            "1",
+            "sim/cockpit2/radios/actuators/com1_frequency_hz_833",
+            "sim/cockpit2/radios/actuators/com2_frequency_hz_833",
+        ),
+        (
+            "2",
+            "sim/cockpit2/radios/actuators/com2_frequency_hz_833",
+            "sim/cockpit2/radios/actuators/com1_frequency_hz_833",
+        ),
+    ],
+)
+def test_com_value_is_checked_again_later(sim, monkeypatch, port, dataref, other):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    before = xp.datarefs[other]
+    say(plugin, "com", "set_com_frequency", {"frequency": "118.75", "com_port": port})
+    assert xp.datarefs[dataref] == 118750 and xp.datarefs[other] == before
+    plugin._flight_loop()
+    verify = events(plugin, "verify")[-1]
+    assert verify["label"] == f"COM {port}" and verify["ok"] is True and verify["actual"] == 118750
+
+
+def test_radio_that_does_not_keep_the_value_is_reported(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    say(plugin, "com", "set_com_frequency", {"frequency": "118.75", "com_port": "1"})
+    xp.datarefs["sim/cockpit2/radios/actuators/com1_frequency_hz_833"] = 122800
+    plugin._flight_loop()
+    assert events(plugin, "verify")[-1]["ok"] is False
+    assert xp.spoken[-1] == "COM 1 did not respond"
+
+
+def test_heading_360_held_as_0_is_not_a_failure(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    say(plugin, "heading", "set_autopilot_heading", {"degrees": "360"})
+    xp.datarefs["sim/cockpit2/autopilot/heading_dial_deg_mag_pilot"] = 0.0
+    plugin._flight_loop()
+    assert events(plugin, "verify")[-1]["ok"] is True
+
+
+def test_aircraft_recorded_after_a_target_changes(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "FOLLOW_UP_SEC", (0.0, 0.0))
+    xp.datarefs["sim/cockpit2/gauges/indicators/altitude_ft_pilot"] = 4200.0
+    xp.datarefs["sim/cockpit2/autopilot/altitude_hold_status"] = 2
+    say(plugin, "altitude", "set_autopilot_altitude", {"altitude": "5000"})
+    first = events(plugin, "aircraft_state")[0]
+    assert first["after"] == "Altitude" and first["altitude_target"] == 5000.0
+    assert first["altitude_actual"] == 4200.0 and first["altitude_hold_status"] == 2
+
+
+def test_autopilot_change_vimaan_did_not_make_is_logged(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "STATE_WATCH_SEC", 0.0)
+    plugin._next_state_watch = 0.0  # the fixture's first loop already armed it
+    plugin._flight_loop()
+    xp.datarefs["sim/cockpit2/autopilot/servos_on"] = 1
+    xp.datarefs["sim/cockpit2/autopilot/heading_mode"] = 1
+    plugin._flight_loop()
+    change = events(plugin, "autopilot_state_change")[-1]
+    assert change["changed"] == {"servos_on": [0, 1], "lateral_mode": [0, 1]}
+    assert change["last_vimaan_cmd"] is None
+
+
+def test_aircraft_type_logged_once(sim, monkeypatch):
+    module, plugin, _ = sim
+    monkeypatch.setattr(module, "STATE_WATCH_SEC", 0.0)
+    plugin._next_state_watch = 0.0
+    plugin._flight_loop()
+    plugin._flight_loop()
+    assert [e["icao"] for e in events(plugin, "aircraft")] == ["BE58"]
+
+
 def test_one_digit_heading_asks_again(sim):
     _, plugin, xp = sim
     # in-sim: "heading one eighty" with the last word lost -> heading 001

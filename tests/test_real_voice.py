@@ -15,9 +15,9 @@ import pytest
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
-# v11 on this set: 70 right, 7 safely rejected, 1 wrong
-# ("parking bring on engine" -> engine 1 start).
-V11_RIGHT, V11_WRONG = 70, 1
+# v11 on this set (118 clips, "to"/"two" check applied): 91 right, 26 safely
+# rejected, 1 wrong ("parking bring on engine" -> engine 1 start).
+V11_RIGHT, V11_WRONG = 91, 1
 
 
 @pytest.mark.requires_torch

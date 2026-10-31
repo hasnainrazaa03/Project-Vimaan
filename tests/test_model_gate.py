@@ -45,3 +45,16 @@ def test_explicit_com_two_tuned_as_com_1_stays_wrong():
     tagged = fake({"frequency": "133.1", "com_port": "2"})
     assert f1(tagged, row) == 1.0
     assert model_gate.judge(tagged, row["text"], COM, want)[0] == "right"
+
+
+def test_gate_counts_an_ambiguous_target_as_not_acted_on():
+    p = {
+        "intent": "set_autopilot_altitude",
+        "slots": {"altitude": "21000"},
+        "confidence": 0.99,
+        "normalized_text": "set altitude 21000 feet",
+        "original_text": "set altitude two one thousand feet",
+    }
+    assert model_gate.decision(p) == ("ambiguous_two", {})
+    p["original_text"] = "set altitude twenty one thousand feet"
+    assert model_gate.decision(p)[0] == "act"
