@@ -167,6 +167,12 @@ def postprocess_slots(
                     break
 
         if slot_name in ["altitude", "degrees", "flight_level", "com_port"]:
+            # The model tagged a valid number that was really said: keep it.
+            # Searching for "the first number in range" instead let a stray
+            # word win: "eighty fly heading one eight four" -> heading 80
+            # (Vosk does insert a leading "eighty", seen in flight).
+            if slot_str in numbers and in_range(slot_name, slot_str):
+                continue
             if len(numbers) > 0:
                 if slot_name == "altitude":
                     for num in numbers:

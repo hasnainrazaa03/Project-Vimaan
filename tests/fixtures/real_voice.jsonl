@@ -32,7 +32,7 @@
 {"clip": "20261030_002528_c0037.wav", "said": "second autopilot on", "heard": "second autopilot on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "2"}}
 {"clip": "20261030_011221_c0001.wav", "said": "parking brake off", "heard": "parking off", "intent": "toggle_parking_brake", "slots": {"state": "off"}}
 {"clip": "20261030_011221_c0002.wav", "said": "engine start", "heard": "engine start", "intent": "toggle_engine", "slots": {"state": "on", "instance": "1"}}
-{"clip": "20261030_011221_c0004.wav", "said": "flight director on", "heard": "flight director four", "intent": "toggle_flight_director", "slots": {"state": "on", "instance": "1"}}
+{"clip": "20261030_011221_c0004.wav", "said": "flight director on", "heard": "flight director", "intent": "toggle_flight_director", "slots": {"state": "on", "instance": "1"}}
 {"clip": "20261030_011221_c0006.wav", "said": "flight director on", "heard": "eight director on", "intent": "toggle_flight_director", "slots": {"state": "on", "instance": "1"}}
 {"clip": "20261030_011221_c0007.wav", "said": "gear down", "heard": "gear down", "intent": "toggle_landing_gear", "slots": {"state": "down"}}
 {"clip": "20261030_011221_c0008.wav", "said": "gear up", "heard": "gear up", "intent": "toggle_landing_gear", "slots": {"state": "up"}}

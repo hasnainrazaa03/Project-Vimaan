@@ -22,6 +22,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -161,9 +162,12 @@ def wrap(text: str, rng: random.Random) -> str:
 
 
 def add_noise(text: str, protected: set[str], rng: random.Random) -> tuple[str, str]:
-    """Recognition noise from real logs: a stray leading word, or a dropped
-    filler word. Never touches slot words."""
+    """Recognition noise from real logs: a mishearing, a stray leading word,
+    or a dropped filler word. Never touches slot words."""
     words = text.split()
+    # Heard in flight: "parking the off" for "parking brake off".
+    if "parking brake" in text and rng.random() < 0.4:
+        return text.replace("parking brake", "parking the", 1), "mishear"
     if rng.random() < 0.5:
         return f"{rng.choice(LEADING_NOISE)} {text}", "lead"
     droppable = [i for i, w in enumerate(words) if w in DROPPABLE and w not in protected]
@@ -186,15 +190,21 @@ def label(text: str, surfaces: dict[str, str]) -> dict[str, str] | None:
     return slots
 
 
-def holdout_templates(c: Command, rng: random.Random) -> set[str]:
+def holdout_templates(c: Command) -> set[str]:
+    """Held-out templates, picked by a stable hash of the template: adding a
+    phrasing elsewhere must not reshuffle them, or scores from different
+    dataset versions can't be compared."""
     n = max(2, math.ceil(len(c.templates) * HOLDOUT_TEMPLATE_SHARE))
-    return set(rng.sample(sorted(c.templates), n))
+    ranked = sorted(
+        c.templates, key=lambda t: hashlib.sha256(f"{c.intent}|{t}".encode()).hexdigest()
+    )
+    return set(ranked[:n])
 
 
 def command_rows(
     c: Command, per_intent: int, rng: random.Random, stats: Counter[str]
 ) -> list[dict[str, Any]]:
-    held = holdout_templates(c, rng)
+    held = holdout_templates(c)
     rows = []
     attempts = 0
     while len(rows) < per_intent and attempts < per_intent * 5:

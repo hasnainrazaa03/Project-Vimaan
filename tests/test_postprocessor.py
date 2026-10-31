@@ -108,6 +108,21 @@ class TestPostprocessSlots:
         out = postprocess_slots(slots, "heading 270")
         assert out["degrees"] == "270"
 
+    @pytest.mark.parametrize(
+        ("slot", "value", "text"),
+        [
+            ("degrees", "184", "80 fly heading 184"),
+            ("degrees", "060", "80 please new heading 060"),
+            ("altitude", "7500", "5000 climb to 7500 feet"),
+            ("flight_level", "240", "240 flight level 350 please"),
+            ("com_port", "2", "1 tune com 2 121.5"),
+        ],
+    )
+    def test_valid_tagged_number_beats_a_stray_one(self, slot, value, text):
+        # Found by the model gate: the model tagged the right number and the
+        # postprocessor replaced it with the first in-range number in the text.
+        assert postprocess_slots({slot: value}, text)[slot] == value
+
     def test_flight_level_picks_realistic_value(self):
         slots = {"flight_level": "0"}
         # last realistic FL value 10..430 selected (extractor scans reversed)

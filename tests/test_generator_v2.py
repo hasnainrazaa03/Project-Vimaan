@@ -1,5 +1,6 @@
 """Training data v2 (ML/data/generate_v2.py): properties every dataset must have."""
 
+import dataclasses
 import re
 from collections import defaultdict
 
@@ -62,6 +63,20 @@ def test_noise_is_applied_and_real(data):
     assert 0.1 < len(noisy) / len(actionable) < 0.3
     leads = [r for r in noisy if r["noise"] == "lead"]
     assert all(r["text"].split()[0] in generate_v2.LEADING_NOISE for r in leads)
+
+
+def test_holdout_stable_when_phrasings_are_added():
+    c = next(c for c in COMMANDS if c.intent == "toggle_engine")
+    grown = dataclasses.replace(c, templates=(*c.templates, "a new phrasing {state}"))
+    held, held_grown = generate_v2.holdout_templates(c), generate_v2.holdout_templates(grown)
+    assert len(held & held_grown) >= len(held) - 1
+
+
+def test_brake_heard_as_the_is_in_the_data(data):
+    rows, _ = data
+    misheard = [r for r in rows if r["noise"] == "mishear"]
+    assert misheard and all(r["intent"] == "toggle_parking_brake" for r in misheard)
+    assert all("parking the" in r["text"] for r in misheard)
 
 
 def test_deterministic():

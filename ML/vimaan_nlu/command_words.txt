@@ -9,6 +9,7 @@ are
 arrive
 at
 autopilot
+away
 beautiful
 both
 brake
@@ -30,6 +31,7 @@ current
 cut
 deactivate
 decimal
+degree
 degrees
 deploy
 descend
@@ -81,6 +83,7 @@ hi
 how
 hundred
 hungry
+i
 if
 ignite
 immediately
@@ -162,6 +165,7 @@ until
 up
 update
 vimaan
+want
 we
 weather
 what

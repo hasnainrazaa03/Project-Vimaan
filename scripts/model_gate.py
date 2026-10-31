@@ -155,6 +155,8 @@ def score_rows(run, rows: list[dict[str, Any]]) -> dict[str, Any]:
         precision = c["tp"] / (c["tp"] + c["fp"]) if c["tp"] + c["fp"] else 1.0
         recall = c["tp"] / (c["tp"] + c["fn"]) if c["tp"] + c["fn"] else 1.0
         f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+        if c["tp"] + c["fn"] == 0:
+            f1 = 1.0  # this intent has no slots to find; F1 is undefined, not 0
         out[intent] = {"n": c["n"], "intent_acc": c["intent_ok"] / c["n"], "slot_f1": f1}
     total = sum(v["n"] for v in out.values())
     out["_all"] = {
@@ -185,6 +187,31 @@ def real_voice(run) -> dict[str, Any]:
             result["wrong"] += 1
             wrong.append(f"{r['heard']!r} -> {p['intent']} {slots} (said {r['said']!r})")
     return {**result, "n": len(rows), "wrong_examples": wrong}
+
+
+def acted(run, rows: list[dict[str, Any]]) -> Counter[str]:
+    """Right / rejected / wrong through the plugin's decision rules, on rows
+    whose expected command is actionable. Reported alongside gate 2; it does
+    not change the gate's verdict."""
+    from vimaan_nlu.commands import command
+
+    out: Counter[str] = Counter()
+    for row in rows:
+        want_intent, want = canonical_expected(row)
+        cmd = command(want_intent)
+        if cmd is None or not cmd.actionable:
+            continue
+        p = run(row["text"])
+        verdict, slots = decision(p)
+        if verdict != "act":
+            out["rejected"] += 1
+        elif p["intent"] == want_intent and all(
+            same_value(k, slots.get(k), v) for k, v in want.items()
+        ):
+            out["right"] += 1
+        else:
+            out["wrong"] += 1
+    return out
 
 
 def negatives(run, rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -266,6 +293,7 @@ def main(argv: list[str] | None = None) -> int:
             f"slot F1 {old_c['_all']['slot_f1']:.4f} vs {old_b['_all']['slot_f1']:.4f}",
         )
     )
+    acted_c, acted_b = acted(cand, old_rows), acted(base, old_rows)
     g = gold(cand)
     gates.append(("3 gold", not g["failed"], f"{g['n'] - len(g['failed'])}/{g['n']} {g['failed']}"))
     rv_c, rv_b = real_voice(cand), real_voice(base)
@@ -294,7 +322,12 @@ def main(argv: list[str] | None = None) -> int:
     report.update(
         {
             "new_phrasings": {"candidate": new_c, "baseline": new_b},
-            "old_data": {"candidate": old_c["_all"], "baseline": old_b["_all"]},
+            "old_data": {
+                "candidate": old_c["_all"],
+                "baseline": old_b["_all"],
+                "acted_candidate": dict(acted_c),
+                "acted_baseline": dict(acted_b),
+            },
             "gold": g,
             "real_voice": {"candidate": rv_c, "baseline": rv_b},
             "negatives": {"candidate": neg_c, "baseline": neg_b},
@@ -307,6 +340,11 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\nModel gate: {args.candidate} vs {args.baseline}\n")
     for name, ok, detail in gates:
         print(f"  {'PASS' if ok else 'FAIL'}  {name:<16} {detail}")
+    print(
+        f"\n  old data through the plugin's rules (information only): "
+        f"right/rejected/wrong {acted_c['right']}/{acted_c['rejected']}/{acted_c['wrong']} "
+        f"vs baseline {acted_b['right']}/{acted_b['rejected']}/{acted_b['wrong']}"
+    )
     print("\n  per intent (new phrasings): intent acc / slot F1")
     for intent, v in new_c.items():
         if not intent.startswith("_"):
