@@ -670,6 +670,99 @@ def test_clear_answers_set_the_target(sim, heard, intent, slots, dataref, value)
 
 
 # ---------------------------------------------------------------------------
+# Bare-number replies to "to or two?" (2nd v17 flight: "one thousand" and
+# "zero" were ignored without a word)
+# ---------------------------------------------------------------------------
+ALT_DIAL = "sim/cockpit2/autopilot/altitude_dial_ft"
+HDG_DIAL = "sim/cockpit2/autopilot/heading_dial_deg_mag_pilot"
+ASK_ALT = ("set altitude two one thousand feet", "set_autopilot_altitude", {"altitude": "21000"})
+ASK_HDG = ("set heading two twenty degrees", "set_autopilot_heading", {"degrees": "220"})
+
+
+@pytest.mark.parametrize(
+    ("question", "reply", "dataref", "value"),
+    [
+        (ASK_ALT, "one thousand", ALT_DIAL, 1000.0),  # c0004
+        (ASK_ALT, "twenty one thousand feet", ALT_DIAL, 21000.0),
+        (ASK_HDG, "zero two zero", HDG_DIAL, 20.0),
+        (ASK_HDG, "two two zero", HDG_DIAL, 220.0),
+    ],
+)
+def test_reply_with_an_offered_value_sets_it(sim, question, reply, dataref, value):
+    _, plugin, xp = sim
+    say(plugin, *question)
+    say(plugin, reply)
+    assert xp.writes == [(dataref, value)]
+    assert events(plugin, "command_done")[-1]["outcome"] == "executed"
+    answered = events(plugin, "answered")[-1]
+    assert answered["intent"] == question[1] and answered["reply_to"] == "c9999"
+
+
+def test_reply_naming_neither_value_changes_nothing(sim):
+    _, plugin, xp = sim
+    say(plugin, *ASK_HDG)
+    assert say(plugin, "zero") == ["Say it with the word heading"]  # c0010
+    assert xp.writes == []
+    assert events(plugin, "implausible")[-1]["reason"] == "not_offered"
+    # The question stays open: a clear reply still works.
+    say(plugin, "zero two zero")
+    assert xp.writes == [(HDG_DIAL, 20.0)]
+
+
+def test_reply_with_the_same_doubt_asks_again(sim):
+    _, plugin, xp = sim
+    question = say(plugin, *ASK_HDG)
+    assert say(plugin, "two twenty") == question  # 220, or "to twenty"
+    assert xp.writes == []
+
+
+def test_bare_number_with_no_question_is_answered(sim):
+    _, plugin, xp = sim
+    assert say(plugin, "one thousand", "set_autopilot_altitude", {"altitude": "1000"}) == [
+        "Say the full command"
+    ]
+    assert xp.writes == []
+    assert events(plugin, "implausible")[-1]["reason"] == "bare_number"
+
+
+def test_reply_after_the_window_is_not_taken(sim, monkeypatch):
+    _, plugin, xp = sim
+    monkeypatch.setattr(plugin, "QUESTION_WINDOW_SEC", 0.0)
+    say(plugin, *ASK_ALT)
+    assert say(plugin, "one thousand") == ["Say the full command"]
+    assert xp.writes == []
+
+
+def test_executed_command_closes_the_question(sim):
+    _, plugin, xp = sim
+    say(plugin, *ASK_ALT)
+    say(plugin, "altitude one thousand feet", "set_autopilot_altitude", {"altitude": "1000"})
+    assert say(plugin, "twenty one thousand") == ["Say the full command"]
+    assert xp.writes == [(ALT_DIAL, 1000.0)]
+
+
+def test_altitude_to_below_the_minimum_asks(sim):
+    _, plugin, xp = sim
+    # 2nd v17 flight c0013: said "altitude to five hundred", 2,500 was set.
+    assert say(
+        plugin, "altitude two five hundred", "set_autopilot_altitude", {"altitude": "2500"}
+    ) == ["Altitude 500 or 2500 feet? Say it again without the word to."]
+    assert xp.writes == []
+    assert say(plugin, "five hundred") == ["Altitude out of range"]
+    assert xp.writes == []
+    say(plugin, "two thousand five hundred")
+    assert xp.writes == [(ALT_DIAL, 2500.0)]
+
+
+def test_flight_level_read_back_keeps_the_leading_zero(sim):
+    _, plugin, _ = sim
+    # 2nd v17 flight: "flight level zero four zero" was read back "four zero".
+    assert say(
+        plugin, "flight level zero four zero", "set_flight_level", {"flight_level": "040"}
+    ) == ["Flight level zero four zero"]
+
+
+# ---------------------------------------------------------------------------
 # Delayed read-back, and target vs what the aircraft did
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize(
@@ -739,6 +832,22 @@ def test_autopilot_change_vimaan_did_not_make_is_logged(sim, monkeypatch):
     change = events(plugin, "autopilot_state_change")[-1]
     assert change["changed"] == {"servos_on": [0, 1], "lateral_mode": [0, 1]}
     assert change["last_vimaan_cmd"] is None
+
+
+def test_autopilot_change_names_the_command_that_ran_last(sim, monkeypatch):
+    # 2nd v17 flight: only target writes counted, so "autopilot on" 0.6 s
+    # before a change was logged as "c0019, 357 s earlier".
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "STATE_WATCH_SEC", 0.0)
+    plugin._next_state_watch = 0.0
+    say(plugin, "altitude", "set_autopilot_altitude", {"altitude": "5000"})
+    plugin._flight_loop()
+    say(plugin, "ap", "toggle_autopilot", {"state": "on"})
+    xp.datarefs["sim/cockpit2/autopilot/servos_on"] = 1
+    plugin._flight_loop()
+    change = events(plugin, "autopilot_state_change")[-1]
+    assert change["last_vimaan_intent"] == "toggle_autopilot"
+    assert change["sec_since_vimaan_action"] < 1.0
 
 
 def test_aircraft_type_logged_once(sim, monkeypatch):

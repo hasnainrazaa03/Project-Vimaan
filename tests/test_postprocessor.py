@@ -7,6 +7,7 @@ from vimaan_nlu.postprocessor import (
     canonicalize_choices,
     extract_digit_sequence_frequency,
     extract_numbers_from_text,
+    port_from_text,
     postprocess_slots,
     resolve_instance,
 )
@@ -221,3 +222,46 @@ class TestResolveInstance:
     def test_handles_empty(self):
         assert resolve_instance({}, "engine 2", "") == {}
         assert instance("") == "1"
+
+
+COM = "set_com_frequency"
+
+
+class TestPortFromText:
+    """An untagged COM port is read from the text (the v17 COM 2 regression:
+    "frequency 133.1 on com 2" tuned COM 1, in flight)."""
+
+    @pytest.mark.parametrize(
+        ("text", "port"),
+        [
+            ("frequency 133.1 on com 2", "2"),  # 2nd v17 flight c0018
+            ("frequency 121.5 on com 1", "1"),
+            ("com 2 frequency 121.5", "2"),
+            ("tune comm 2 to 121.5", "2"),
+            ("set radio 2 to 121.5", "2"),
+        ],
+    )
+    def test_named_port_fills_a_missing_one(self, text, port):
+        assert port_from_text({"frequency": "121.5"}, text, COM)["com_port"] == port
+
+    def test_tagged_port_is_never_overridden(self):
+        slots = {"frequency": "121.5", "com_port": "1"}
+        assert port_from_text(slots, "frequency 121.5 on com 2", COM)["com_port"] == "1"
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "tune 121.5",  # no port named: the plugin's COM 1 default applies
+            "com 121.5",  # "com 1" is the start of the frequency, not a port
+            "set com 1 to 121.5 on com 2",  # two ports named: not guessed
+        ],
+    )
+    def test_no_single_port_named_leaves_it_untagged(self, text):
+        assert "com_port" not in port_from_text({"frequency": "121.5"}, text, COM)
+
+    def test_only_commands_with_a_port(self):
+        assert port_from_text({}, "engine on com 2", "toggle_engine") == {}
+
+    def test_runs_in_postprocess_slots(self):
+        slots = postprocess_slots({"frequency": "133.1"}, "frequency 133.1 on com 2", COM)
+        assert slots == {"frequency": "133.1", "com_port": "2"}

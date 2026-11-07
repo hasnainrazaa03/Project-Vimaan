@@ -1,7 +1,7 @@
 """vimaan_nlu.ambiguity: a target that depends on hearing "to" or "two"."""
 
 import pytest
-from vimaan_nlu.ambiguity import two_or_to
+from vimaan_nlu.ambiguity import bare_number, chosen, two_or_to
 
 HEADING, ALTITUDE, LEVEL = "set_autopilot_heading", "set_autopilot_altitude", "set_flight_level"
 
@@ -70,8 +70,53 @@ def test_other_commands_never_ask(intent, heard):
     assert two_or_to(intent, heard) is None
 
 
-def test_known_gap_low_altitude_reading_is_not_offered():
-    # "to five hundred" heard as "two five hundred": 500 is below the 1,000 ft
-    # minimum, so only one reading is valid and 2,500 is taken. Pinned so a
-    # change here is deliberate.
-    assert two_or_to(ALTITUDE, "set altitude two five hundred") is None
+def test_low_altitude_reading_is_offered_even_below_the_minimum():
+    # 2nd v17 flight c0013: "altitude to five hundred" heard as "two five
+    # hundred" set 2,500 because 500 failed the 1,000 ft minimum. Now asked;
+    # a reply of 500 is then refused as out of range, out loud.
+    assert two_or_to(ALTITUDE, "altitude two five hundred") == ("2500", "500")
+    assert two_or_to(LEVEL, "flight level two five") == ("25", "5")
+
+
+def test_impossible_two_reading_is_not_offered():
+    # 250,000 ft is no reading of anything: only "to fifty thousand" works.
+    assert two_or_to(ALTITUDE, "altitude two fifty thousand") is None
+
+
+@pytest.mark.parametrize(
+    ("heard", "value"),
+    [
+        ("one thousand", "1000"),  # 2nd v17 flight c0004
+        ("zero", "0"),  # c0010
+        ("zero two zero", "020"),
+        ("twenty one thousand feet", "21000"),
+        ("two two zero degrees", "220"),
+        ("uh five hundred", "500"),
+    ],
+)
+def test_bare_number(heard, value):
+    assert bare_number(heard) == value
+
+
+@pytest.mark.parametrize(
+    "heard",
+    ["", "altitude one thousand", "one two one decimal five", "heading", "gear down", "70"],
+)
+def test_not_a_bare_number(heard):
+    assert bare_number(heard) is None
+
+
+@pytest.mark.parametrize(
+    ("offered", "heard", "pick"),
+    [
+        (("1000", "21000"), "one thousand", "1000"),
+        (("1000", "21000"), "twenty one thousand feet", "21000"),
+        (("20", "220"), "zero two zero", "20"),
+        (("20", "220"), "two two zero", "220"),
+        (("20", "220"), "zero", None),  # c0010: neither value, never guessed
+        (("1000", "21000"), "two thousand", None),
+        (("1000", "21000"), "altitude one thousand", None),  # not bare: normal path
+    ],
+)
+def test_chosen_only_names_an_offered_value(offered, heard, pick):
+    assert chosen(offered, heard) == pick

@@ -62,7 +62,7 @@ if _ML_PATH not in sys.path:
 
 # Only light, stdlib-backed modules load into X-Plane; the heavy ones live in
 # the worker process.
-from vimaan_nlu.ambiguity import two_or_to  # noqa: E402
+from vimaan_nlu.ambiguity import TARGET_SLOTS, bare_number, chosen, two_or_to  # noqa: E402
 from vimaan_nlu.commands import (  # noqa: E402
     BY_INTENT,
     COMMANDS,
@@ -96,6 +96,12 @@ WORKER_MAX_RESTARTS = 3
 
 # Engine start: hold the starter until the engine reports running, up to this.
 STARTER_MAX_CRANK_SEC = 20.0
+# What the pilot must say with a number to make it a command, per "to or two?" target.
+COMMAND_NOUN = {
+    "set_autopilot_altitude": "altitude",
+    "set_autopilot_heading": "heading",
+    "set_flight_level": "flight level",
+}
 # Delay before reading back a dataref a command or write should have changed.
 VERIFY_DELAY_SEC = 1.0
 # After a target or radio is set, record the aircraft this many seconds later:
@@ -209,6 +215,9 @@ class PythonInterface:
     # Seconds a risky command stays "armed" waiting for the pilot to repeat it
     # as confirmation (Phase 6B safety interlocks).
     CONFIRM_WINDOW_SEC = 12.0
+    # After "Altitude 1000 or 21000 feet?", a bare-number reply within this
+    # long is taken as the answer, if it is one of the two values offered.
+    QUESTION_WINDOW_SEC = 12.0
 
     # Canned (utterance, expected intent) pairs for the Ctrl-Z self-test
     # (Phase 6C): declared per command in the table, run through text -> NLU
@@ -267,6 +276,7 @@ class PythonInterface:
         self._aircraft: str | None = None
         self._next_state_watch = 0.0
         self._last_action: dict[str, Any] | None = None
+        self._question: dict[str, Any] | None = None  # the open "to or two?" question
 
         # Safety interlocks (Phase 6B): risky commands must be repeated to confirm.
         self._confirm_gate = ConfirmationGate(window_sec=self.CONFIRM_WINDOW_SEC)
@@ -662,6 +672,12 @@ class PythonInterface:
             )
             intent_pred, slots = result["intent"], result["slots"]
 
+            # A number on its own ("one thousand") names no command: it can
+            # only be the answer to an open "to or two?" question.
+            if bare_number(text) is not None:
+                outcome = self._answer_question(cmd, text)
+                return
+
             if result["confidence"] < self.CONFIDENCE_FLOOR:
                 outcome = "low_confidence"
                 self._say("Please repeat that")
@@ -699,48 +715,9 @@ class PythonInterface:
             either = two_or_to(intent_pred, text)
             if either:
                 outcome = "ambiguous"
-                self.tel.event(
-                    "ambiguous", cmd=cmd, intent=intent_pred, as_two=either[0], as_to=either[1]
-                )
-                self._say(self._which_value(intent_pred, *either))
+                self._ask(cmd, intent_pred, *either)
                 return
-
-            # Commands this aircraft physically can't do are rejected before
-            # the safety gate, which would otherwise ask the pilot to confirm
-            # "gear up" on a fixed-gear Cessna.
-            not_applicable = self._not_applicable(intent_pred, slots)
-            if not_applicable:
-                outcome = "rejected"
-                self.tel.event("not_applicable", cmd=cmd, intent=intent_pred, reason=not_applicable)
-                self._say(not_applicable)
-                return
-
-            # Safety interlock: gate irreversible/dangerous commands on a
-            # confirmation (repeat the command) when risky in the current flight
-            # context. Fails safe if the relevant datarefs are unavailable.
-            ctx = self._read_safety_context()
-            verdict = evaluate_safety(intent_pred, slots, ctx)
-            token = command_token(intent_pred, slots)
-            if verdict.requires_confirmation and not self._confirm_gate.confirm(token):
-                self._confirm_gate.arm(token)
-                outcome = "safety_hold"
-                self.tel.event(
-                    "safety_hold",
-                    logging.WARNING,
-                    cmd=cmd,
-                    rule=verdict.rule,
-                    fail_safe=verdict.fail_safe,
-                    context=ctx.__dict__,
-                )
-                self._say(f"{verdict.message}. Repeat to confirm.")
-                return
-            with self.tel.stage("dispatch", cmd=cmd, intent=intent_pred) as res:
-                outcome = handler(slots, intent_pred) or "executed"
-                res["outcome"] = outcome
-            # A different command that actually ran cancels a pending
-            # confirmation; a misheard or incomplete one ("engine") must not.
-            if outcome == "executed":
-                self._confirm_gate.clear()
+            outcome = self._dispatch(cmd, intent_pred, slots)
         except Exception as exc:
             self.tel.error("execute_error", exc, cmd=cmd, text=text)
             self._say("Command execution failed")
@@ -752,6 +729,94 @@ class PythonInterface:
                     (time.perf_counter() - job["t_release"]) * 1000, 1
                 )
             self.tel.command_done(cmd, outcome, job["t_press"], text=text, **extra)
+
+    def _ask(self, cmd, intent, as_two, as_to):
+        """Ask which target was meant, and keep the question open for a reply."""
+        self.tel.event("ambiguous", cmd=cmd, intent=intent, as_two=as_two, as_to=as_to)
+        self._question = {
+            "cmd": cmd,
+            "intent": intent,
+            "offered": (as_to, as_two),
+            "expires": time.perf_counter() + self.QUESTION_WINDOW_SEC,
+        }
+        self._say(self._which_value(intent, as_two, as_to))
+
+    def _answer_question(self, cmd, text):
+        """A bare number: act on it only when it is one of the two values just
+        offered. Anything else gets told what to say, never silence (in flight
+        "one thousand" and "zero" were ignored without a word)."""
+        q = self._question
+        value = bare_number(text)
+        if q is None or time.perf_counter() >= q["expires"]:
+            self._question = None
+            self.tel.event("implausible", cmd=cmd, reason="bare_number", value=value)
+            self._say("Say the full command")
+            return "rejected"
+        # The reply can carry the same doubt: "two twenty" for 020 or 220.
+        if two_or_to(q["intent"], text):
+            self.tel.event("ambiguous", cmd=cmd, intent=q["intent"], reply_to=q["cmd"])
+            as_to, as_two = q["offered"]
+            self._say(self._which_value(q["intent"], as_two, as_to))
+            return "ambiguous"
+        choice = chosen(q["offered"], text)
+        if choice is None:
+            self.tel.event(
+                "implausible",
+                cmd=cmd,
+                reason="not_offered",
+                value=value,
+                offered=list(q["offered"]),
+            )
+            self._say(f"Say it with the word {COMMAND_NOUN[q['intent']]}")
+            return "rejected"
+        slots = {TARGET_SLOTS[q["intent"]]: choice}
+        self.tel.event("answered", cmd=cmd, reply_to=q["cmd"], intent=q["intent"], slots=slots)
+        return self._dispatch(cmd, q["intent"], slots)
+
+    def _dispatch(self, cmd, intent, slots):
+        """Aircraft check, safety interlock, then the handler. Returns the outcome."""
+        # Commands this aircraft physically can't do are rejected before
+        # the safety gate, which would otherwise ask the pilot to confirm
+        # "gear up" on a fixed-gear Cessna.
+        not_applicable = self._not_applicable(intent, slots)
+        if not_applicable:
+            self.tel.event("not_applicable", cmd=cmd, intent=intent, reason=not_applicable)
+            self._say(not_applicable)
+            return "rejected"
+
+        # Safety interlock: gate irreversible/dangerous commands on a
+        # confirmation (repeat the command) when risky in the current flight
+        # context. Fails safe if the relevant datarefs are unavailable.
+        ctx = self._read_safety_context()
+        verdict = evaluate_safety(intent, slots, ctx)
+        token = command_token(intent, slots)
+        if verdict.requires_confirmation and not self._confirm_gate.confirm(token):
+            self._confirm_gate.arm(token)
+            self.tel.event(
+                "safety_hold",
+                logging.WARNING,
+                cmd=cmd,
+                rule=verdict.rule,
+                fail_safe=verdict.fail_safe,
+                context=ctx.__dict__,
+            )
+            self._say(f"{verdict.message}. Repeat to confirm.")
+            return "safety_hold"
+        handler = self.intent_to_command[intent]
+        with self.tel.stage("dispatch", cmd=cmd, intent=intent) as res:
+            outcome = handler(slots, intent) or "executed"
+            res["outcome"] = outcome
+        if outcome in ("executed", "pending"):
+            # What the autopilot watch blames a mode change on: every command
+            # that reached the sim, not only the ones that set a target.
+            self._last_action = {"cmd": cmd, "intent": intent, "t": time.perf_counter()}
+        # A different command that actually ran cancels a pending
+        # confirmation and the open "to or two?" question; a misheard or
+        # incomplete one ("engine") must not.
+        if outcome == "executed":
+            self._confirm_gate.clear()
+            self._question = None
+        return outcome
 
     # ------------------------------------------------------------------
     # Diagnostics
@@ -926,7 +991,6 @@ class PythonInterface:
 
         self._expect(label, current, value % modulo if modulo else value, tolerance=0.5)
         now = time.perf_counter()
-        self._last_action = {"cmd": self._current_cmd, "t": now}
         for after in FOLLOW_UP_SEC:
             self._follow_ups.append(
                 {"cmd": self._current_cmd, "label": label, "after_sec": after, "due": now + after}
@@ -972,6 +1036,7 @@ class PythonInterface:
             "autopilot_state_change",
             changed={k: [previous[k], state[k]] for k in state if previous[k] != state[k]},
             last_vimaan_cmd=last["cmd"] if last else None,
+            last_vimaan_intent=last["intent"] if last else None,
             sec_since_vimaan_action=round(now - last["t"], 1) if last else None,
             **state,
         )
@@ -1122,7 +1187,7 @@ class PythonInterface:
             self._say("Cannot set flight level")
             return "failed"
         self._hold_check("Flight level", DREF_ALTITUDE, float(value) * 100)
-        self._say(f"Flight level {spell_digits(int(float(value)))}")
+        self._say(f"Flight level {spell_digits(f'{int(float(value)):03d}')}")
         return "executed"
 
     def _set_com_frequency(self, slots, intent):

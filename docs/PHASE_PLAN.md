@@ -226,7 +226,16 @@ tier only adds data.
 
 **v17 flight and follow-up (2026-10-30):** five commands set a wrong target because "to" and "two" tie in recognition ("altitude to 1,000" → 21,000), on v11 too. Added on this branch, not flown: ask when both readings are valid and differ; delayed read-back of written values; logging of modes, actual heading and altitude, COM values, autopilot changes and aircraft type. Re-scored with no retraining, thresholds unchanged: all six gates pass; real voice 91/26/1 for both models on 118 clips. X-Plane is back on v11. Open: COM 1 observation unexplained (inconclusive), autopilot off between 702 s and 854 s unexplained, "heading to seven zero" can set 270 because digit answers skip the check, "two five hundred" takes 2,500 because 500 is below the minimum.
 
-**Unresolved: COM 2 regression on v17.** Passing the aggregate gates does not clear it. v17 is for controlled test flights only, not general use, until this is fixed and re-validated. Before relying on v17 for COM tuning, say the affected "frequency … on com two" phrases in a controlled setup and check the radio read-back; if it tunes COM 1, switch back to v11 for that test.
+**Second v17 flight and fixes (2026-11-07):** session `20261107_010639`, Baron, 39 commands, 0 main-thread overruns (six sim stalls during a flight reload). The to/two ask worked 3 of 3. COM 1 held 118.750 at +1, +10 and +30 s. Heading followed the bug with HDG on (88.6° → 179.9°). ALT hold held altitude, but on the Baron pressing ALT replaces the selected altitude with the current one, so a voice altitude target never drives the aircraft. "Frequency 133.1 on com two" tuned COM 1 in flight. Cause: that phrasing is a held-out template, v17 left the port untagged, and the postprocessor only corrected tagged ports. Fixed on this branch with no retraining and thresholds unchanged:
+- a port named once in the text fills an untagged one;
+- a bare-number reply to the to/two question is acted on only when it is one of the two values offered, within 12 s, and any other bare number is answered aloud;
+- "two five hundred" now asks (500 or 2,500) instead of setting 2,500;
+- autopilot-change logging names the last command that reached the sim;
+- the flight level is read back as three digits.
+
+Re-gated: all six pass. The only change is COM slot F1, 0.9967 → 1.0000, and all five "on com two" flight phrases now give COM 2. Old data, gold, real voice, negatives and the v11 baseline are unchanged.
+
+**Unresolved: COM 2 regression on v17**, fixed offline and not yet flown. It stays open until the five "frequency … on com two" phrases tune COM 2 in flight. Still open: "heading to seven zero" sets 270 (an acoustic tie; say headings without "to"), "parking bring on engine" starts engine 1, and the autopilot went off at about 87 kt during stall practice with no Vimaan command (cause unconfirmed).
 
 **Gate E1.** Template-held-out intent ≥ 98.5%, slot F1 ≥ 0.99 for every intent;
 no regression on v11 held-out, gold, or real-voice clips; ≥ 95% of negatives

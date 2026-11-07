@@ -138,7 +138,9 @@ before launch. Drawn with ImGui (bundled with XPPython3), falling back to
 X-Plane's own text if ImGui can't load; the log report shows which, and the
 worst draw time per frame.
 
-**"To" and "two":** they sound the same, so avoid "to" before a value. Say "altitude one thousand" and "heading zero one zero". When both readings of a heading, altitude or flight level are valid and differ, Vimaan changes nothing and asks which you meant (overlay: WHICH?). Heading and flight level given as all three digits ("two seven zero") are taken as digits, which means "heading to seven zero" can still set 270.
+**"To" and "two":** they sound the same, so avoid "to" before a value. Say "altitude one thousand" and "heading zero one zero". When both readings of a heading, altitude or flight level are valid and differ, Vimaan changes nothing and asks which you meant (overlay: WHICH?). You can answer with the number alone ("one thousand", "zero two zero"). It is used only if it is one of the two values offered and you reply within 12 seconds. Any other number on its own is answered with "Say the full command" or "Say it with the word heading", and nothing changes. Heading and flight level given as all three digits ("two seven zero") are taken as digits, which means "heading to seven zero" can still set 270.
+
+**Baron autopilot:** HDG follows the heading bug, so a voice heading turns the aircraft once HDG is on. ALT holds the altitude you are at, and pressing it replaces the selected altitude with the current one. A voice altitude is only a number on the display until there is a mode that climbs or descends to it.
 
 **Target vs aircraft:** commands set targets and don't engage autopilot modes. `aircraft_state` events record modes, actual heading and altitude, and COM values when a target or radio is set and 10 s and 30 s later; `autopilot_state_change` records changes Vimaan didn't make. The log report shows both.
 

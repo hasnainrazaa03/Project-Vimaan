@@ -46,6 +46,8 @@ OUTCOME_BADGE: dict[str, tuple[str, str]] = {
 REASONS: dict[str, str] = {
     "no_command_word": "no command word heard",
     "one_digit_heading": "heading needs three digits",
+    "bare_number": "a number alone is not a command",
+    "not_offered": "not one of the two values offered",
 }
 
 
@@ -136,6 +138,11 @@ class OverlayState:
             self.intent = ev.get("intent")
             self.slots = dict(ev.get("slots") or {})
             self.confidence = ev.get("confidence")
+        elif kind == "answered":
+            # A bare-number reply to "to or two?": show what it was taken as.
+            self.intent = ev.get("intent")
+            self.slots = dict(ev.get("slots") or {})
+            self.confidence = None
         elif kind == "implausible":
             self.reason = REASONS.get(ev.get("reason", ""), ev.get("reason"))
         elif kind == "slot_rejected":

@@ -4,7 +4,8 @@ The two words sound the same. In-sim, Vosk scored both readings of "set altitude
 to one thousand" identically and printed "two", which is also a correct way to
 say 21,000, so the wrong target was set with no sign of doubt. Nothing in the
 transcript can settle it, so when both readings are valid and different the
-plugin asks instead of picking one.
+plugin asks instead of picking one. A bare-number reply to that question
+("one thousand") is accepted only when it is one of the two values offered.
 
 Pure Python: it works on the transcript, before anything reaches the sim.
 """
@@ -38,7 +39,11 @@ def _as_number(words: list[str]) -> str | None:
 
 
 def two_or_to(intent: str, text: str) -> tuple[str, str] | None:
-    """(value if "two", value if "to") when both are valid and different, else None."""
+    """(value if "two", value if "to") when they differ and the "two" reading is
+    valid, else None. The "to" reading may be out of range: "altitude to five
+    hundred" is heard as "two five hundred", and setting 2,500 because 500 is
+    below the minimum hides the mishearing (seen in flight). Asked, the pilot
+    hears both and a reply of 500 is then refused as out of range."""
     slot = TARGET_SLOTS.get(intent)
     if slot is None:
         return None
@@ -57,6 +62,31 @@ def two_or_to(intent: str, text: str) -> tuple[str, str] | None:
         as_two, as_to = _as_number(["two", *run]), _as_number(run)
         if as_two is None or as_to is None or int(as_two) == int(as_to):
             continue
-        if validate_slot(slot, as_two)[1] and validate_slot(slot, as_to)[1]:
+        if validate_slot(slot, as_two)[1]:
             return as_two, as_to
+    return None
+
+
+# Words a pilot may add around a bare number reply ("one thousand feet").
+_REPLY_FILLER = {"feet", "foot", "ft", "degrees", "degree", "please", "uh", "um", "er"}
+
+
+def bare_number(text: str) -> str | None:
+    """The number, when the utterance is nothing but one ("one thousand",
+    "zero two zero"): no command word, so on its own it means nothing."""
+    words = [w for w in text.lower().split() if w not in _REPLY_FILLER]
+    if not words or any(w not in _NUMBER_WORDS for w in words):
+        return None
+    return _as_number(words)
+
+
+def chosen(offered: tuple[str, str], text: str) -> str | None:
+    """Which of the two offered values a bare reply names, or None.
+    Compared as numbers: "zero two zero" names 20."""
+    value = bare_number(text)
+    if value is None:
+        return None
+    for option in offered:
+        if int(option) == int(value):
+            return option
     return None
