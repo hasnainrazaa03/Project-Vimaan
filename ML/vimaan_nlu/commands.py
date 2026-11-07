@@ -191,6 +191,10 @@ def _autopilot_unit(n: str) -> dict[str, Any]:
         "on_cmd": f"sim/autopilot/servos{s}_on",
         "off_cmd": None,
         "toggle": f"sim/autopilot/servos{s}_toggle",
+        # The panel's AP button is the toggle, and every aircraft honours it;
+        # the A330 ignored servos_on in flight. With the state readable, the
+        # toggle is pressed only when a change is needed.
+        "prefer_toggle": True,
         "label": f"Autopilot {n}",
     }
 

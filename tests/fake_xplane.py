@@ -52,7 +52,29 @@ DEFAULT_DATAREFS: dict[str, Any] = {
     "sim/cockpit2/autopilot/vvi_status": 0,
     "sim/cockpit2/autopilot/speed_status": 0,
     "sim/aircraft/view/acf_ICAO": "BE58",
+    # What X-Plane 12.4.3 reports for the Laminar Baron 58.
+    "sim/aircraft/view/acf_author": "Tom Kyler/Jim Gregory",
+    "sim/aircraft/view/acf_descrip": "Beechcraft Baron 58",
+    "sim/aircraft/prop/acf_en_type": [1] * 16,
+    "sim/aircraft/controls/acf_flap_detents": 2,
+    "sim/aircraft/controls/acf_flap_dn": [0.0, 13.0, 30.0, 27.0] + [0.0] * 6,
+    "sim/aircraft/autopilot/preconfigured_ap_type": 0,
+    "sim/aircraft/autopilot/single_axis_autopilot": 0,
+    "sim/aircraft/view/acf_Vso": 74.0,
+    "sim/aircraft/view/acf_Vfe": 122.0,
+    "sim/aircraft/view/acf_Vno": 195.0,
+    "sim/aircraft/view/acf_Vne": 223.0,
+    "sim/aircraft/view/acf_Mmo": 0.0,
+    "sim/cockpit2/engine/actuators/mixture_ratio": [1.0] * 16,
+    "sim/cockpit2/engine/indicators/N1_percent": [0.0] * 16,
+    "sim/cockpit2/engine/indicators/N2_percent": [0.0] * 16,
 }
+
+# xp.getNthAircraftModel(0): (file name, full path).
+AIRCRAFT_MODEL = (
+    "Baron_58.acf",
+    "/X-Plane 12/Aircraft/Laminar Research/Beechcraft Baron 58/Baron_58.acf",
+)
 
 KNOWN_COMMANDS = {
     "sim/autopilot/servos_on",
@@ -87,6 +109,9 @@ def make_xp() -> types.ModuleType:
     xp.custom_commands = {}  # name -> handler
     xp.hotkeys = []
     xp.flight_loops = []
+    # command name -> fn(xp): what the command does to the sim, for tests that
+    # need an aircraft to respond (or to ignore a command, by leaving it out).
+    xp.effects = {}
 
     xp.VK_Z, xp.DownFlag, xp.UpFlag, xp.ControlFlag = 90, 1, 2, 4
     xp.CommandBegin, xp.CommandContinue, xp.CommandEnd = 0, 1, 2
@@ -123,10 +148,14 @@ def make_xp() -> types.ModuleType:
 
     def commandOnce(ref):
         xp.commands_fired.append(ref)
+        if ref in xp.effects:
+            xp.effects[ref](xp)
 
     def commandBegin(ref):
         xp.held.add(ref)
         xp.commands_fired.append(ref + ":begin")
+        if ref in xp.effects:
+            xp.effects[ref](xp)
 
     def commandEnd(ref):
         xp.held.discard(ref)
@@ -168,8 +197,19 @@ def make_xp() -> types.ModuleType:
     ):
         setattr(xp, fn.__name__, fn)
     xp.getDatas = lambda ref, offset=0, count=-1: str(xp.datarefs[ref])
+    xp.aircraft_model = AIRCRAFT_MODEL
+    xp.getNthAircraftModel = lambda index: xp.aircraft_model
     xp.getDatavi = getDatav
     xp.getDatavf = getDatav
+
+    def setDatav(ref, values, offset=0, count=-1):
+        arr = xp.datarefs[ref]
+        for i, v in enumerate(values[: None if count < 0 else count]):
+            arr[offset + i] = v
+        xp.writes.append((f"{ref}[{offset}]", values[0] if values else None))
+
+    xp.setDatavf = setDatav
+    xp.setDatavi = setDatav
     # Windows + 2D drawing (the overlay). Windows are recorded; drawing calls
     # are recorded as (text, x, y, rgb) so tests can read the screen.
     xp.windows = {}  # id -> {"geom", "visible", "draw", "title", ...}

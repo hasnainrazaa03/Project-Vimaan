@@ -350,10 +350,37 @@ def test_com_port_3_rejected_not_silently_com2(sim):
 # ---------------------------------------------------------------------------
 # Binary systems
 # ---------------------------------------------------------------------------
-def test_autopilot_on_uses_dedicated_command(sim):
-    _, plugin, xp = sim
+def test_autopilot_on_presses_the_checked_toggle(sim):
+    _, plugin, xp = sim  # state read as off, so the toggle turns it on
+    say(plugin, "ap", "toggle_autopilot", {"state": "on"})
+    assert xp.commands_fired == ["sim/autopilot/servos_toggle"]
+
+
+def test_autopilot_on_with_unreadable_state_uses_the_explicit_command(sim):
+    _, plugin, xp = sim  # a blind toggle could turn it off
+    del xp.datarefs["sim/cockpit2/autopilot/servos_on"]
     say(plugin, "ap", "toggle_autopilot", {"state": "on"})
     assert xp.commands_fired == ["sim/autopilot/servos_on"]
+
+
+@pytest.mark.parametrize(("instance", "suffix"), [("1", ""), ("2", "2")])
+def test_autopilot_engages_on_an_aircraft_that_ignores_servos_on(
+    sim, monkeypatch, instance, suffix
+):
+    # In flight the A330 ignored servos_on (and servos2_on) but honours the
+    # panel toggle. Simulate exactly that and check the read-back passes.
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    dataref = f"sim/cockpit2/autopilot/servos{suffix}_on"
+    xp.effects[f"sim/autopilot/servos{suffix}_toggle"] = lambda x: x.datarefs.__setitem__(
+        dataref, 1 - x.datarefs[dataref]
+    )
+    assert say(plugin, "ap", "toggle_autopilot", {"state": "on", "instance": instance}) == [
+        f"Autopilot {instance} on"
+    ]
+    plugin._flight_loop()
+    assert xp.datarefs[dataref] == 1
+    assert events(plugin, "verify")[-1]["ok"] is True
 
 
 def test_autopilot_off_toggles_only_when_on(sim):
@@ -501,6 +528,125 @@ def test_both_engines_on_single_engine_aircraft(sim):
     assert spoken == ["This aircraft has one engine"] and xp.held == set()
 
 
+# ---------------------------------------------------------------------------
+# Engine start by engine type (from X-Plane's acf_en_type, never the name)
+# ---------------------------------------------------------------------------
+STARTER_1 = "sim/starters/engage_starter_1"
+FUEL_LEVER = "sim/cockpit2/engine/actuators/mixture_ratio"
+N1 = "sim/cockpit2/engine/indicators/N1_percent"
+N2 = "sim/cockpit2/engine/indicators/N2_percent"
+RUNNING = "sim/flightmodel/engine/ENGN_running"
+
+
+def load_aircraft(plugin, xp, engine_type, commands=()):
+    """Switch the fake sim to another aircraft and let the plugin notice."""
+    xp.datarefs["sim/aircraft/prop/acf_en_type"] = [engine_type] * 16
+    for name in commands:
+        xp.custom_commands[name] = None
+    xp.aircraft_model = ("other.acf", f"/Aircraft/Other {engine_type}/other.acf")
+    plugin._next_state_watch = 0.0
+    plugin._flight_loop()
+    return plugin.profile
+
+
+def test_jet_start_opens_fuel_once_the_core_turns(sim):
+    _, plugin, xp = sim
+    assert load_aircraft(plugin, xp, 7).engine_start == "jet"
+    xp.datarefs[FUEL_LEVER][0] = 0.0  # fuel cutoff, as the A330 was in flight
+    assert say(plugin, "engine", "toggle_engine", {"state": "on"}) == ["Starting engine 1"]
+    plugin._flight_loop()
+    assert xp.datarefs[FUEL_LEVER][0] == 0.0  # N2 still 0: no fuel yet
+    xp.datarefs[N2][0] = 22.0
+    plugin._flight_loop()
+    assert xp.datarefs[FUEL_LEVER][0] == 1.0
+    assert events(plugin, "fuel_on")[-1]["method"] == "write"
+    xp.datarefs[RUNNING][0] = 1
+    xp.datarefs[N2][0] = 35.0  # lit, but below the starter cutout: keep cranking
+    plugin._flight_loop()
+    assert STARTER_1 in xp.held
+    xp.datarefs[N2][0] = 58.0
+    plugin._flight_loop()
+    assert xp.held == set() and xp.spoken[-1] == "Engine 1 running"
+    end = events(plugin, "crank_end")[-1]
+    assert end["start_type"] == "jet" and end["fuel_on"] is True and end["peak_core_pct"] == 58.0
+
+
+def test_jet_start_uses_the_aircraft_fuel_lever_when_it_has_one(sim):
+    _, plugin, xp = sim
+    levers = (
+        "laminar/B738/engines/condition_lever_1_idle",
+        "laminar/B738/engines/condition_lever_2_idle",
+    )
+    profile = load_aircraft(plugin, xp, 7, commands=levers)
+    assert "b738_condition_levers" in profile.overrides
+    xp.datarefs[FUEL_LEVER][0] = 0.0
+    say(plugin, "engine", "toggle_engine", {"state": "on"})
+    xp.datarefs[N2][0] = 25.0
+    plugin._flight_loop()
+    assert levers[0] in xp.commands_fired
+    assert events(plugin, "fuel_on")[-1]["method"] == levers[0]
+
+
+def test_jet_that_never_spools_says_what_to_check(sim, monkeypatch):
+    module, plugin, xp = sim
+    load_aircraft(plugin, xp, 7)
+    monkeypatch.setattr(module, "TURBINE_MAX_CRANK_SEC", 0.0)
+    say(plugin, "engine", "toggle_engine", {"state": "on"})
+    plugin._flight_loop()
+    assert xp.held == set()
+    assert xp.spoken[-1] == (
+        "Engine 1 did not spool up. N2 reached 0 percent. Check bleed air and the engine start switch."
+    )
+
+
+def test_jet_that_spools_but_never_lights(sim):
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 7)
+    say(plugin, "engine", "toggle_engine", {"state": "on"})
+    xp.datarefs[N2][0] = 24.0
+    plugin._flight_loop()
+    plugin._cranks["Engine 1"]["max_sec"] = 0.0  # this start's limit runs out
+    plugin._flight_loop()
+    assert xp.spoken[-1] == (
+        "Engine 1 did not light. N2 reached 24 percent. Check fuel and ignition."
+    )
+
+
+def test_turboprop_start_watches_the_gas_generator(sim):
+    _, plugin, xp = sim
+    assert load_aircraft(plugin, xp, 9).engine_start == "turboprop"  # King Air C90B
+    xp.datarefs[FUEL_LEVER][0] = 0.0
+    say(plugin, "engine", "toggle_engine", {"state": "on"})
+    xp.datarefs[N1][0] = 14.0  # past the 13% at which a PT6 gets fuel
+    plugin._flight_loop()
+    assert xp.datarefs[FUEL_LEVER][0] == 1.0
+
+
+def test_electric_engine_has_no_starter(sim):
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 3)
+    assert say(plugin, "engine", "toggle_engine", {"state": "on"}) == [
+        "Engine 1 is electric and has no starter"
+    ]
+    assert xp.held == set()
+
+
+def test_aircraft_profile_logged_with_what_xplane_reports(sim):
+    _, plugin, _ = sim
+    (event,) = events(plugin, "aircraft")
+    assert event["icao"] == "BE58" and event["key"] == "Beechcraft_Baron_58__Baron_58"
+    assert event["engine_kind"] == "piston" and event["engines"] == 2
+    assert event["flap_notch_degrees"] == [0.0, 13.0, 30.0]
+    assert event["v_speeds"]["vfe"] == 122.0 and event["overrides"] == []
+
+
+def test_switching_aircraft_rebuilds_the_profile(sim):
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 7)
+    kinds = [e["engine_kind"] for e in events(plugin, "aircraft")]
+    assert kinds == ["piston", "jet"]
+
+
 def test_shutting_down_engine_two_does_not_confirm_engine_one(sim):
     _, plugin, xp = sim
     xp.datarefs["sim/flightmodel/engine/ENGN_running"][:2] = [1, 1]
@@ -514,7 +660,7 @@ def test_shutting_down_engine_two_does_not_confirm_engine_one(sim):
 def test_autopilot_two_uses_its_own_binding(sim):
     _, plugin, xp = sim
     say(plugin, "autopilot", "toggle_autopilot", {"state": "on", "instance": "2"})
-    assert xp.commands_fired == ["sim/autopilot/servos2_on"]
+    assert xp.commands_fired == ["sim/autopilot/servos2_toggle"]
 
 
 # ---------------------------------------------------------------------------
