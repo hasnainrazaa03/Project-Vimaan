@@ -41,6 +41,7 @@ OUTCOME_BADGE: dict[str, tuple[str, str]] = {
     "mic_error": ("MIC ERROR", "error"),
     "stt_service_error": ("STT ERROR", "error"),
     "timeout": ("TIMEOUT", "error"),
+    "cancelled": ("CANCELLED", "muted"),
 }
 
 REASONS: dict[str, str] = {
@@ -138,7 +139,7 @@ class OverlayState:
             self.intent = ev.get("intent")
             self.slots = dict(ev.get("slots") or {})
             self.confidence = ev.get("confidence")
-        elif kind == "answered":
+        elif kind in ("answered", "safety_override"):
             # A bare-number reply to "to or two?": show what it was taken as.
             self.intent = ev.get("intent")
             self.slots = dict(ev.get("slots") or {})

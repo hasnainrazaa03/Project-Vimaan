@@ -72,6 +72,7 @@ from vimaan_nlu.commands import (  # noqa: E402
 )
 from vimaan_nlu.overlay import Overlay  # noqa: E402
 from vimaan_nlu.overlay_state import OverlayState  # noqa: E402
+from vimaan_nlu.pilot_replies import pilot_reply  # noqa: E402
 from vimaan_nlu.readback import spell_digits  # noqa: E402
 from vimaan_nlu.safety import (  # noqa: E402
     ConfirmationGate,
@@ -309,6 +310,7 @@ class PythonInterface:
         self._next_state_watch = 0.0
         self._last_action: dict[str, Any] | None = None
         self._question: dict[str, Any] | None = None  # the open "to or two?" question
+        self._held: dict[str, Any] | None = None  # the command a safety rule is holding
 
         # Safety interlocks (Phase 6B): risky commands must be repeated to confirm.
         self._confirm_gate = ConfirmationGate(window_sec=self.CONFIRM_WINDOW_SEC)
@@ -704,6 +706,13 @@ class PythonInterface:
             )
             intent_pred, slots = result["intent"], result["slots"]
 
+            # "Override" / "cancel" answer Vimaan; they name no system, so
+            # they are matched on the words and never reach the model.
+            reply = pilot_reply(text)
+            if reply is not None:
+                outcome = self._pilot_reply(cmd, reply)
+                return
+
             # A number on its own ("one thousand") names no command: it can
             # only be the answer to an open "to or two?" question.
             if bare_number(text) is not None:
@@ -805,8 +814,46 @@ class PythonInterface:
         self.tel.event("answered", cmd=cmd, reply_to=q["cmd"], intent=q["intent"], slots=slots)
         return self._dispatch(cmd, q["intent"], slots)
 
-    def _dispatch(self, cmd, intent, slots):
-        """Aircraft check, safety interlock, then the handler. Returns the outcome."""
+    def _pilot_reply(self, cmd, reply):
+        """Override the held command, or cancel what is pending."""
+        held = self._held if self._confirm_gate.pending_token() else None
+        if reply == "override":
+            if held is None:
+                self.tel.event("override_ignored", cmd=cmd, reason="nothing_held")
+                self._say("Nothing to override")
+                return "rejected"
+            self._confirm_gate.clear()
+            self._held = None
+            self.tel.event(
+                "safety_override",
+                logging.WARNING,
+                cmd=cmd,
+                held_cmd=held["cmd"],
+                rule=held["rule"],
+                intent=held["intent"],
+                slots=held["slots"],
+            )
+            self._say("Override")
+            skip = (*held["skip"], held["rule"])
+            return self._dispatch(cmd, held["intent"], held["slots"], skip=skip)
+        dropped = []
+        if held is not None:
+            dropped.append(held["intent"])
+        if self._question is not None and time.perf_counter() < self._question["expires"]:
+            dropped.append(self._question["intent"])
+        self._confirm_gate.clear()
+        self._held = None
+        self._question = None
+        if not dropped:
+            self._say("Nothing to cancel")
+            return "no_op"
+        self.tel.event("cancelled", cmd=cmd, dropped=dropped)
+        self._say("Cancelled")
+        return "cancelled"
+
+    def _dispatch(self, cmd, intent, slots, skip=()):
+        """Aircraft check, safety interlock, then the handler. Returns the outcome.
+        ``skip``: safety rules the pilot overrode for this command."""
         # Commands this aircraft physically can't do are rejected before
         # the safety gate, which would otherwise ask the pilot to confirm
         # "gear up" on a fixed-gear Cessna.
@@ -820,10 +867,19 @@ class PythonInterface:
         # confirmation (repeat the command) when risky in the current flight
         # context. Fails safe if the relevant datarefs are unavailable.
         ctx = self._read_safety_context()
-        verdict = evaluate_safety(intent, slots, ctx)
+        verdict = evaluate_safety(intent, slots, ctx, skip=skip)
         token = command_token(intent, slots)
         if verdict.requires_confirmation and not self._confirm_gate.confirm(token):
             self._confirm_gate.arm(token)
+            # ``skip`` carries rules already overridden for this command, so a
+            # second rule's hold can't bring the first one back.
+            self._held = {
+                "cmd": cmd,
+                "intent": intent,
+                "slots": dict(slots),
+                "rule": verdict.rule,
+                "skip": tuple(skip),
+            }
             self.tel.event(
                 "safety_hold",
                 logging.WARNING,
@@ -832,7 +888,7 @@ class PythonInterface:
                 fail_safe=verdict.fail_safe,
                 context=ctx.__dict__,
             )
-            self._say(f"{verdict.message}. Repeat to confirm.")
+            self._say(f"{verdict.message}. Say override, or repeat to confirm.")
             return "safety_hold"
         handler = self.intent_to_command[intent]
         with self.tel.stage("dispatch", cmd=cmd, intent=intent) as res:
@@ -847,6 +903,7 @@ class PythonInterface:
         # incomplete one ("engine") must not.
         if outcome == "executed":
             self._confirm_gate.clear()
+            self._held = None
             self._question = None
         return outcome
 

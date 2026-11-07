@@ -445,9 +445,102 @@ def test_gear_up_on_ground_needs_confirmation(sim):
     _, plugin, xp = sim
     spoken = say(plugin, "gear", "toggle_landing_gear", {"state": "up"})
     assert xp.commands_fired == []
-    assert "Repeat to confirm" in spoken[-1]
+    assert spoken == ["Confirm gear up, low altitude. Say override, or repeat to confirm."]
     say(plugin, "gear", "toggle_landing_gear", {"state": "up"})
     assert xp.commands_fired == ["sim/flight_controls/landing_gear_up"]
+
+
+# ---------------------------------------------------------------------------
+# Override and cancel
+# ---------------------------------------------------------------------------
+GEAR_UP = "sim/flight_controls/landing_gear_up"
+
+
+@pytest.mark.parametrize("word", ["override", "confirm", "affirmative"])
+def test_override_executes_the_held_command(sim, word):
+    _, plugin, xp = sim
+    say(plugin, "gear", "toggle_landing_gear", {"state": "up"})  # held: on the ground
+    assert say(plugin, word) == ["Override", "Gear up"]
+    assert xp.commands_fired == [GEAR_UP]
+    override = events(plugin, "safety_override")[-1]
+    assert (
+        override["rule"] == "gear_up_low_altitude" and override["intent"] == "toggle_landing_gear"
+    )
+    assert events(plugin, "command_done")[-1]["outcome"] == "executed"
+
+
+def test_override_with_nothing_held(sim):
+    _, plugin, xp = sim
+    assert say(plugin, "override") == ["Nothing to override"]
+    assert xp.commands_fired == []
+
+
+def test_override_after_the_window_does_nothing(sim, monkeypatch):
+    _, plugin, xp = sim
+    monkeypatch.setattr(plugin._confirm_gate, "_window", -1.0)
+    say(plugin, "gear", "toggle_landing_gear", {"state": "up"})
+    assert say(plugin, "override") == ["Nothing to override"]
+    assert xp.commands_fired == []
+
+
+def test_override_skips_only_the_rule_it_overrides(sim, monkeypatch):
+    module, plugin, xp = sim
+    # Another rule that also applies to gear up: overriding the first must
+    # not wave this one through.
+    real = module.evaluate_safety
+
+    def two_rules(intent, slots, ctx, skip=()):
+        verdict = real(intent, slots, ctx, skip=skip)
+        if verdict.requires_confirmation or "second_rule" in skip:
+            return verdict
+        from vimaan_nlu.safety import SafetyVerdict
+
+        return SafetyVerdict(True, "Confirm second rule", "second_rule")
+
+    monkeypatch.setattr(module, "evaluate_safety", two_rules)
+    say(plugin, "gear", "toggle_landing_gear", {"state": "up"})
+    assert say(plugin, "override") == [
+        "Override",
+        "Confirm second rule. Say override, or repeat to confirm.",
+    ]
+    assert xp.commands_fired == []
+    say(plugin, "override")
+    assert xp.commands_fired == [GEAR_UP]
+
+
+def test_cancel_drops_the_held_command(sim):
+    _, plugin, xp = sim
+    say(plugin, "gear", "toggle_landing_gear", {"state": "up"})
+    assert say(plugin, "cancel") == ["Cancelled"]
+    assert events(plugin, "command_done")[-1]["outcome"] == "cancelled"
+    say(plugin, "gear", "toggle_landing_gear", {"state": "up"})  # held again, not confirmed
+    assert xp.commands_fired == []
+    assert say(plugin, "override") == ["Override", "Gear up"]
+
+
+def test_cancel_closes_the_to_or_two_question(sim):
+    _, plugin, xp = sim
+    say(
+        plugin,
+        "set altitude two one thousand feet",
+        "set_autopilot_altitude",
+        {"altitude": "21000"},
+    )
+    assert say(plugin, "negative") == ["Cancelled"]
+    assert say(plugin, "one thousand") == ["Say the full command"]
+    assert xp.writes == []
+
+
+def test_cancel_with_nothing_pending(sim):
+    _, plugin, _ = sim
+    assert say(plugin, "cancel") == ["Nothing to cancel"]
+
+
+def test_validator_refusals_cannot_be_overridden(sim):
+    _, plugin, xp = sim
+    say(plugin, "heading", "set_autopilot_heading", {"degrees": "450"})
+    assert say(plugin, "override") == ["Nothing to override"]
+    assert xp.writes == []
 
 
 # ---------------------------------------------------------------------------
