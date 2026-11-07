@@ -159,6 +159,12 @@ differs from both on 56 texts, none of them wrong. Switching the plugin to ONNX 
 of those right that int8 rejects. In flight the model takes 10–25 ms of the ~330 ms between end of speech and
 action, so the backend is not the bottleneck. Report: `vN/onnx/parity.json` (gitignored).
 
+**Unpadded input (Tier 1 A7).** `predict()` now truncates at the length the model was trained
+at (`train_manifest.json`, v17: 40) and doesn't pad a single utterance. int8 p50 went from 8.7 to
+**4.4 ms**, and gate p95 from 9.7 to 5.9 ms. Every v17 gate number is unchanged. Padding mattered
+for int8 because dynamic quantization takes its activation range from the whole tensor, padding
+included. The old behaviour is `predict(..., max_length=32, pad_to_max_length=True)`.
+
 ---
 
 ## 4. Plugin lifecycle

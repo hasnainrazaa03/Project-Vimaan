@@ -11,7 +11,10 @@ Usage::
     python scripts/check_xplane_refs.py --xplane ... plugin/PI_VimaanCoPilot.py tests/fake_xplane.py
 
 Besides the source files, every binding declared in the command table
-(``ML/vimaan_nlu/commands.py``) is checked.
+(``ML/vimaan_nlu/commands.py``) is checked, and so are the aircraft-specific
+controls the profile overrides use (``ML/vimaan_nlu/aircraft.py``, e.g.
+``laminar/A333/...``): those exist only in an aircraft's own scripts, so they
+are checked against what the aircraft in ``Aircraft/`` create.
 """
 
 from __future__ import annotations
@@ -24,8 +27,15 @@ from collections.abc import Mapping
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 sys.path.insert(0, os.path.join(REPO_ROOT, "ML"))
-DEFAULT_SOURCES = ("plugin/PI_VimaanCoPilot.py", "tests/fake_xplane.py")
+DEFAULT_SOURCES = (
+    "plugin/PI_VimaanCoPilot.py",
+    "tests/fake_xplane.py",
+    "ML/vimaan_nlu/aircraft.py",
+    "ML/vimaan_nlu/probe.py",
+)
 NAME_RE = re.compile(r"[\"'](sim/[A-Za-z0-9_/\[\]]+)[\"']")
+# create_command("laminar/A333/autopilot/a_thr_toggle", ...) in an xlua script.
+CREATED_RE = re.compile(r"create_command\(\s*[\"']([^\"']+)[\"']")
 
 
 def load_names(xplane_root: str) -> tuple[set[str], set[str]]:
@@ -54,6 +64,18 @@ def names_in(path: str) -> set[str]:
             prefix = template.split("{")[0]
             names.update(prefix + v for v in values)
     return {n for n in names if not n.endswith(("_", "/"))}
+
+
+def aircraft_commands(xplane_root: str) -> set[str]:
+    """Commands the installed aircraft create in their xlua scripts."""
+    created: set[str] = set()
+    for folder, _dirs, files in os.walk(os.path.join(xplane_root, "Aircraft")):
+        for fname in files:
+            if fname.endswith(".lua"):
+                path = os.path.join(folder, fname)
+                with open(path, encoding="utf-8", errors="replace") as fh:
+                    created.update(CREATED_RE.findall(fh.read()))
+    return created
 
 
 def table_names() -> set[str]:
@@ -95,7 +117,18 @@ def main(argv: list[str] | None = None) -> int:
                 missing += 1
     total = sum(len(names) for names in sources.values())
     print(f"{total - missing}/{total} names found in X-Plane's DataRefs.txt / Commands.txt")
-    return 1 if missing else 0
+
+    from vimaan_nlu.aircraft import override_names
+
+    created = aircraft_commands(args.xplane)
+    own = override_names()
+    absent = [n for n in own if n not in created]
+    for name in absent:
+        print(f"MISSING  {name}  (no installed aircraft creates it)")
+    print(
+        f"{len(own) - len(absent)}/{len(own)} aircraft-specific controls found in aircraft scripts"
+    )
+    return 1 if missing or absent else 0
 
 
 if __name__ == "__main__":

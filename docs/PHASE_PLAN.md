@@ -328,38 +328,42 @@ An aircraft never seen before gets layers 1, 2 and 5 automatically, and layer 4 
 
 ### Part A — profiles and fixes (PR 1, no retraining)
 
-- [ ] **A1 Research record** (`docs/AIRCRAFT_PROFILES.md`). Every Tier 1 control, with its source: X-Plane 12.4.3 `DataRefs.txt` / `Commands.txt`, the aircraft's xlua scripts, and the POH. *Verified 2026-11-07:*
+- [x] **A1 Research record** (`docs/AIRCRAFT_PROFILES.md`). Every Tier 1 control, with its source: X-Plane 12.4.3 `DataRefs.txt` / `Commands.txt`, the aircraft's xlua scripts, and the POH. *Verified 2026-11-07:*
   - all Tier 1 names exist;
   - the Baron autopilot has no VS mode, no altitude capture and no A/T;
   - the 737 uses the standard autopilot commands;
   - the A330 wraps servos, altitude hold, NAV, approach, knots/Mach and baro STD, and adds knob push/pull and A/THR commands.
-- [ ] **A2 `vimaan_nlu/aircraft.py`** (pure Python, unit-tested):
+- [x] **A2 `vimaan_nlu/aircraft.py`** (pure Python, unit-tested):
   - `AircraftInfo` (identity plus layer-2 capabilities);
   - an override table (layer 3), each override declaring the command it requires;
   - `resolve(info, available_commands, probe)` returns a `Profile`.
   - The plugin logs the identity, the capabilities and the resolved profile on every aircraft load.
-- [ ] **A3 Autopilot engage on every aircraft:** read `servos_on`; if it needs changing, press `servos_toggle` and verify. The A330 ignored `servos_on` in flight but wraps the toggle. Use the explicit `servos_on` command only when the state can't be read.
-- [ ] **A4 Engine start by engine type:**
+- [x] **A3 Autopilot engage on every aircraft:** read `servos_on`; if it needs changing, press `servos_toggle` and verify. The A330 ignored `servos_on` in flight but wraps the toggle. Use the explicit `servos_on` command only when the state can't be read.
+- [x] **A4 Engine start by engine type:**
   - Piston: hold the starter until the engine runs (as now).
   - Jet: starter on, open the fuel (`mixture_ratio` → 1) once N2 passes 20%, hold until it runs, 60 s limit.
   - Turboprop: the same, with N1 / Ng.
   - Electric: no starter, so say so.
   - N1/N2 is logged at every step, and a failure says which step stalled.
-- [ ] **A5 Override and cancel** (matched on the transcript, never sent to the model):
+- [x] **A5 Override and cancel** (matched on the transcript, never sent to the model):
   - "override" / "confirm" / "affirmative" executes the command a safety rule is holding, and the pilot hears which rule was overridden.
   - "cancel" / "negative" / "disregard" clears a held command or an open "to or two?" question.
   - Validators and "not on this aircraft" refusals can't be overridden; they are impossible values, not risks.
   - The words are added to the recognizer's grammar.
-- [ ] **A6 Probe** (`vimaan/probe_aircraft`, bound to a key, never voice; `vimaan/probe_stop`).
+- [x] **A6 Probe** (`vimaan/probe_aircraft`, bound to a key, never voice; `vimaan/probe_stop`).
   - The first press records identity, capabilities and which candidate controls exist, with nothing actuated. Each later press runs **one** step.
   - A step snapshots the autopilot, presses one control or writes one dial, reads back after 2 s, classifies it (works / no change / missing), and restores the previous state.
   - Restoring means pressing the button for the previous mode (mode datarefs are read-only without an override) and writing old dial values back.
   - If restoring fails, the probe stops and says so.
   - Airborne steps need autopilot on and 1,500 ft AGL; ground steps (flaps) need the parking brake set.
   - The results file is layer 4.
-- [ ] **A7 Model input length from the model's manifest** (v17 trained at 40, runtime 32), with dynamic padding. Measure the gate before and after: decisions must not change.
-- [ ] **A8 `check_xplane_refs.py`** also checks aircraft-specific names (`laminar/...`) against that aircraft's scripts.
-- [ ] **A9 Tests** (fake sim per profile), docs, PR. The owner merges.
+- [x] **A7 Model input length from the model's manifest** (v17 trained at 40, runtime 32), with dynamic padding. Measure the gate before and after: decisions must not change. *Done:*
+  - On all 15,305 gate texts, int8 decisions change on 28, and all 28 keep their outcome: 27 rejected either way (for a different reason), 1 right either way.
+  - p50 8.7 → 4.4 ms.
+  - Gate re-run: every v17 number unchanged except p95, 9.7 → 5.9 ms.
+  - v11 as the fallback: unchanged on old data and real voice; on new phrasings, intent 91.64% → 91.56%.
+- [x] **A8 `check_xplane_refs.py`** also checks aircraft-specific names (`laminar/...`) against that aircraft's scripts. *Done:* 223/223 X-Plane names, 8/8 aircraft-specific controls.
+- [ ] **A9 Tests** (fake sim per profile), docs, PR. The owner merges. *Tests and docs done (1,124 tests); PR open.*
 
 **Research flight (after A):** run the probe on the Baron, 737 and A330, plus one aircraft with no override (King Air C90B, a turboprop, or Citation X, a jet). Also check engine start by type on the ground. The results set Part B's per-aircraft data.
 

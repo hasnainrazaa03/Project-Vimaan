@@ -198,8 +198,51 @@ def report(path: Path) -> str:
         for e in changes:
             w(
                 f"  t={e.get('t')}s {e.get('changed')}  last Vimaan action "
-                f"{e.get('last_vimaan_cmd')} {e.get('sec_since_vimaan_action')}s earlier"
+                f"{e.get('last_vimaan_cmd')} {e.get('last_vimaan_intent') or ''} "
+                f"{e.get('sec_since_vimaan_action')}s earlier"
             )
+    for e in (e for e in events if e["kind"] == "aircraft"):
+        w("")
+        w(
+            f"Aircraft t={e.get('t')}s: {e.get('icao')} ({e.get('key')}) "
+            f"{e.get('engines')} x {e.get('engine_kind')}, start {e.get('engine_start')}, "
+            f"flap notches {e.get('flap_notch_degrees')}, autopilot {e.get('autopilot')}, "
+            f"overrides {e.get('overrides')}, probed steps {e.get('probed_steps')}"
+        )
+    starts = [e for e in events if e["kind"] in ("crank_begin", "fuel_on", "crank_end")]
+    if starts:
+        w("")
+        w("Engine starts:")
+        for e in starts:
+            if e["kind"] == "crank_begin":
+                detail = f"begin {e.get('start_type')} fuel lever {e.get('fuel_lever')} core {e.get('core_pct')}%"
+            elif e["kind"] == "fuel_on":
+                detail = f"fuel on at {e.get('core_pct')}% via {e.get('method')}"
+            else:
+                detail = (
+                    f"end {e.get('result')} after {e.get('crank_sec')}s, peak core "
+                    f"{e.get('peak_core_pct')}%, fuel on {e.get('fuel_on')}"
+                )
+            w(f"  t={e.get('t')}s {e.get('engine')} {detail}")
+    probe_steps = [e for e in events if e["kind"] in ("probe_start", "probe_step", "probe_end")]
+    if probe_steps:
+        w("")
+        w("Aircraft probe:")
+        for e in probe_steps:
+            if e["kind"] == "probe_start":
+                w(
+                    f"  t={e.get('t')}s start ({e.get('where')}, {e.get('steps')} steps) {e.get('aircraft')}"
+                )
+            elif e["kind"] == "probe_step":
+                flag = "" if e.get("restored") else "  NOT RESTORED"
+                w(f"  {e.get('role'):<22} {e.get('verdict'):<12} {e.get('changed')}{flag}")
+            else:
+                w(f"  t={e.get('t')}s end: {e.get('reason')} -> {e.get('path')}")
+    overrides = [e for e in events if e["kind"] in ("safety_override", "cancelled")]
+    for e in overrides:
+        w(
+            f"  t={e.get('t')}s {e['kind']} {e.get('rule') or e.get('dropped')} {e.get('intent') or ''}"
+        )
     end = next((e for e in reversed(events) if e["kind"] in ("session_end", "heartbeat")), None)
     if end:
         w("")

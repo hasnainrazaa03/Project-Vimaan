@@ -147,6 +147,15 @@ worst draw time per frame.
 **Push-to-talk on a yoke button:** Settings → Joystick → search `vimaan` →
 bind **Vimaan: push to talk** (and optionally **Vimaan: run self test**).
 
+## 4b. Probing a new aircraft
+
+To find out which controls an aircraft honours (Tier 1), run the probe once
+on the ground and once in the air. It is pilot-paced, one key press per step,
+and puts everything back after each step. Key bindings, steps and what to
+expect are in [AIRCRAFT_PROFILES.md](AIRCRAFT_PROFILES.md#running-the-probe).
+Results land in `~/Vimaan_Logs/aircraft/` and are used from the next load of
+that aircraft.
+
 ## 5. Reading what happened
 
 ```bash

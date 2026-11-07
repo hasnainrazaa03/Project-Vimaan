@@ -17,6 +17,7 @@ class ModelLoader:
         self.slot_map: dict = {}
         self.intent_map_rev: dict = {}
         self.slot_map_rev: dict = {}
+        self.max_length: int | None = None
 
     def load_maps(self, model_path):
         with open(f"{model_path}/intent_map.json") as f:
@@ -94,7 +95,22 @@ class ModelLoader:
 
     def load_tokenizer(self, model_path):
         self.tokenizer = DistilBertTokenizerFast.from_pretrained(model_path)
-        return {"tokenizer_loaded": True}
+        # Truncate where the model was trained to (v17: 40), not at a fixed
+        # constant: predict() reads tokenizer.model_max_length.
+        self.max_length = self.trained_max_length(model_path)
+        self.tokenizer.model_max_length = self.max_length
+        return {"tokenizer_loaded": True, "max_length": self.max_length}
+
+    @staticmethod
+    def trained_max_length(model_path):
+        from vimaan_nlu.inference import DEFAULT_MAX_LENGTH
+
+        try:
+            with open(os.path.join(model_path, "train_manifest.json")) as f:
+                value = json.load(f).get("hyperparams", {}).get("max_length")
+        except (OSError, ValueError):
+            return DEFAULT_MAX_LENGTH
+        return value if isinstance(value, int) and 0 < value <= 512 else DEFAULT_MAX_LENGTH
 
     def load_onnx_backend(self, model_path):
         """Load maps + tokenizer and wrap the exported ONNX graph as the model.
