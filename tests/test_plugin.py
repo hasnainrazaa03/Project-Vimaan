@@ -1349,3 +1349,217 @@ def test_executed_command_cancels_pending_confirmation(sim):
     say(plugin, "hdg", "set_autopilot_heading", {"degrees": "90"})
     say(plugin, "engine one off", "toggle_engine", {"state": "off"})
     assert "sim/starters/shut_down_1" not in xp.commands_fired  # asks again
+
+
+# ---------------------------------------------------------------------------
+# Aircraft probe (pilot-paced, one step per key press)
+# ---------------------------------------------------------------------------
+AP = "sim/cockpit2/autopilot/"
+BARO = "sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot"
+
+
+def press_probe(plugin, xp):
+    before = len(xp.spoken)
+    plugin._on_probe_cmd(None, xp.CommandBegin, None)
+    return xp.spoken[before:]
+
+
+def settle(plugin, xp, loops=3):
+    before = len(xp.spoken)
+    for _ in range(loops):
+        plugin._flight_loop()
+    return xp.spoken[before:]
+
+
+@pytest.fixture
+def probing(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module.probe, "SETTLE_SEC", 0.0)
+    return module, plugin, xp
+
+
+def airborne(xp, autopilot=True):
+    xp.datarefs["sim/flightmodel/failures/onground_any"] = 0
+    xp.datarefs["sim/flightmodel/position/y_agl"] = 1000.0  # ~3,300 ft
+    xp.datarefs["sim/flightmodel/position/groundspeed"] = 70.0
+    xp.datarefs[AP + "servos_on"] = int(autopilot)
+    xp.datarefs[AP + "heading_mode"], xp.datarefs[AP + "heading_status"] = 1, 2
+    xp.datarefs[AP + "altitude_mode"], xp.datarefs[AP + "altitude_hold_status"] = 6, 2
+
+
+def toggle_heading(x):
+    on = x.datarefs[AP + "heading_mode"] == 1
+    x.datarefs[AP + "heading_mode"], x.datarefs[AP + "heading_status"] = (0, 0) if on else (1, 2)
+
+
+def go_to(plugin, role):
+    plugin._probe["index"] = [s.role for s in plugin._probe["steps"]].index(role)
+
+
+def test_probe_needs_a_stable_aircraft(probing):
+    _, plugin, xp = probing
+    xp.datarefs["sim/flightmodel/position/groundspeed"] = 8.0  # taxiing
+    assert press_probe(plugin, xp) == [
+        "The probe needs the aircraft stopped on the ground, or airborne above fifteen hundred feet"
+    ]
+    assert plugin._probe is None
+
+
+def test_ground_probe_measures_and_saves(probing):
+    _, plugin, xp = probing
+    xp.datarefs["sim/flightmodel/controls/parkbrake"] = 1.0
+    xp.effects["sim/instruments/barometer_std"] = lambda x: x.datarefs.__setitem__(BARO, 29.92)
+    assert press_probe(plugin, xp) == [
+        "Probe ready. 3 ground steps. Press again for altimeter standard."
+    ]
+    press_probe(plugin, xp)
+    assert settle(plugin, xp) == ["Altimeter standard: works. Next, altimeter setting."]
+    assert xp.datarefs[BARO] == pytest.approx(30.12)  # put back
+    press_probe(plugin, xp)
+    assert settle(plugin, xp) == ["Altimeter setting: works. Next, flap handle."]
+    press_probe(plugin, xp)
+    assert settle(plugin, xp) == ["Flap handle: works.", "Probe complete. Results saved."]
+    assert xp.datarefs["sim/cockpit2/controls/flap_handle_request_ratio"] == 0.0
+    saved = json.loads(
+        (plugin.tel.log_dir / "aircraft" / "Beechcraft_Baron_58__Baron_58.json").read_text()
+    )
+    assert saved["steps"] == {"baro_std": "works", "dial_baro": "works", "flap_handle": "works"}
+    assert saved["aircraft"]["icao"] == "BE58" and saved["end"] == "complete"
+    assert plugin.profile.supports("flap_handle") is True
+
+
+def test_ground_steps_need_the_parking_brake(probing):
+    _, plugin, xp = probing
+    press_probe(plugin, xp)
+    assert press_probe(plugin, xp) == ["Set the parking brake first"]
+    assert xp.commands_fired == []
+
+
+def test_air_probe_presses_a_mode_and_puts_it_back(probing):
+    _, plugin, xp = probing
+    airborne(xp)
+    xp.effects["sim/autopilot/heading"] = toggle_heading
+    assert press_probe(plugin, xp)[0].startswith("Probe ready. 15 air steps.")
+    press_probe(plugin, xp)
+    assert settle(plugin, xp) == ["Heading mode: works. Next, nav mode."]
+    assert xp.commands_fired == ["sim/autopilot/heading", "sim/autopilot/heading"]
+    assert xp.datarefs[AP + "heading_mode"] == 1
+
+
+def test_restoring_presses_the_previous_mode_when_toggling_back_isnt_enough(probing):
+    # V/S pressed again drops to pitch mode, not back to ALT hold: the probe
+    # then presses altitude hold.
+    _, plugin, xp = probing
+    airborne(xp)
+
+    def vertical_speed(x):
+        x.datarefs[AP + "altitude_mode"] = 3 if x.datarefs[AP + "altitude_mode"] == 4 else 4
+
+    xp.effects["sim/autopilot/vertical_speed"] = vertical_speed
+    xp.effects["sim/autopilot/altitude_hold"] = lambda x: x.datarefs.__setitem__(
+        AP + "altitude_mode", 6
+    )
+    press_probe(plugin, xp)
+    go_to(plugin, "mode_vertical_speed")
+    press_probe(plugin, xp)
+    assert settle(plugin, xp, loops=4) == ["Vertical speed mode: works. Next, level change."]
+    assert xp.commands_fired == [
+        "sim/autopilot/vertical_speed",
+        "sim/autopilot/vertical_speed",
+        "sim/autopilot/altitude_hold",
+    ]
+    assert xp.datarefs[AP + "altitude_mode"] == 6
+
+
+def test_no_change_and_missing_controls(probing):
+    _, plugin, xp = probing
+    airborne(xp)
+    xp.missing_commands.add("sim/autopilot/vnav")
+    press_probe(plugin, xp)
+    go_to(plugin, "mode_nav")
+    press_probe(plugin, xp)
+    assert settle(plugin, xp) == ["Nav mode: no change. Next, approach mode."]
+    go_to(plugin, "mode_vnav")
+    assert press_probe(plugin, xp) == ["V NAV: not on this aircraft. Next, autothrottle."]
+    assert "sim/autopilot/vnav" not in xp.commands_fired
+
+
+def test_probe_stops_when_it_cannot_restore(probing):
+    _, plugin, xp = probing
+    airborne(xp)
+
+    def heading_off_for_good(x):
+        x.datarefs[AP + "heading_mode"], x.datarefs[AP + "heading_status"] = 0, 0
+
+    xp.effects["sim/autopilot/heading"] = heading_off_for_good
+    press_probe(plugin, xp)
+    press_probe(plugin, xp)
+    assert settle(plugin, xp, loops=4) == [
+        "Probe stopped. Heading mode did not restore. Check the autopilot."
+    ]
+    assert plugin._probe is None
+    step = [e for e in events(plugin, "probe_step") if e["role"] == "mode_heading"][-1]
+    assert step["restored"] is False and step["left_changed"]["lateral_mode"] == [1, 0]
+
+
+def test_air_steps_need_the_autopilot_on(probing):
+    _, plugin, xp = probing
+    airborne(xp, autopilot=False)
+    press_probe(plugin, xp)
+    assert press_probe(plugin, xp) == ["Turn the autopilot on first"]
+    assert xp.commands_fired == []
+
+
+def test_probe_stop_saves_what_was_measured(probing):
+    _, plugin, xp = probing
+    airborne(xp)
+    press_probe(plugin, xp)
+    go_to(plugin, "mode_nav")
+    press_probe(plugin, xp)
+    settle(plugin, xp)
+    plugin._on_probe_stop_cmd(None, xp.CommandBegin, None)
+    assert xp.spoken[-1] == "Probe stopped. Results saved."
+    assert plugin.profile.supports("mode_nav") is False
+
+
+def test_a_saved_probe_is_used_the_next_time_the_aircraft_loads(probing):
+    _, plugin, xp = probing
+    folder = plugin.tel.log_dir / "aircraft"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "Other_7__other.json").write_text(
+        json.dumps({"steps": {"mode_vertical_speed": "no_change", "mode_heading": "works"}})
+    )
+    profile = load_aircraft(plugin, xp, 7)
+    assert profile.supports("mode_vertical_speed") is False
+    assert profile.supports("mode_heading") is True
+
+
+def test_probe_error_stops_it_cleanly(probing, monkeypatch):
+    _, plugin, xp = probing
+    airborne(xp)
+    press_probe(plugin, xp)
+    press_probe(plugin, xp)
+    monkeypatch.setattr(plugin, "_probe_state", lambda: 1 / 0)
+    assert settle(plugin, xp, loops=1) == ["Probe stopped by an error. Check the autopilot."]
+    assert plugin._probe is None
+
+
+def test_std_toggle_is_pressed_again_when_restoring(probing):
+    # 737-style STD: a toggle that remembers the setting.
+    _, plugin, xp = probing
+    xp.datarefs["sim/flightmodel/controls/parkbrake"] = 1.0
+    remembered = {}
+
+    def std_toggle(x):
+        if "qnh" in remembered:
+            x.datarefs[BARO] = remembered.pop("qnh")
+        else:
+            remembered["qnh"] = x.datarefs[BARO]
+            x.datarefs[BARO] = 29.92
+
+    xp.effects["sim/instruments/barometer_std"] = std_toggle
+    press_probe(plugin, xp)
+    press_probe(plugin, xp)
+    assert settle(plugin, xp)[0] == "Altimeter standard: works. Next, altimeter setting."
+    assert xp.commands_fired.count("sim/instruments/barometer_std") == 2
+    assert remembered == {} and xp.datarefs[BARO] == pytest.approx(30.12)

@@ -1,0 +1,249 @@
+"""The aircraft probe: measure which controls work on the loaded aircraft.
+
+Manuals don't say whether an aircraft honours X-Plane's generic commands
+beyond its own buttons (does the Baron, which has no V/S button, accept
+``sim/autopilot/vertical_speed``?). The probe finds out on the aircraft, for
+*any* aircraft, and saves the answer per aircraft file. That file is layer 4 of
+``vimaan_nlu.aircraft``: Vimaan says "not on this aircraft" for a measured
+"no change" instead of pressing it and hoping.
+
+The pilot runs it: one key press per step, with the aircraft stable. A step
+snapshots the autopilot, presses one control or writes one value, reads back
+after a pause, classifies the result, and restores the previous state by
+pressing the control again and, if a mode is still different, the control for
+the mode that was on before. Mode datarefs can't be written without an
+autopilot override, so restoring is done with buttons. If restoring fails,
+the probe stops and says so.
+
+Pure Python: the plugin does the reading, pressing and timing.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Any
+
+SETTLE_SEC = 2.0  # how long a step waits before reading back
+AIR_MIN_AGL_FT = 1500.0
+
+# State the probe reads: key -> (dataref, is_float).
+STATE: Mapping[str, tuple[str, bool]] = {
+    "servos_on": ("sim/cockpit2/autopilot/servos_on", False),
+    "lateral_mode": ("sim/cockpit2/autopilot/heading_mode", False),
+    "vertical_mode": ("sim/cockpit2/autopilot/altitude_mode", False),
+    "heading_status": ("sim/cockpit2/autopilot/heading_status", False),
+    "nav_status": ("sim/cockpit2/autopilot/nav_status", False),
+    "approach_status": ("sim/cockpit2/autopilot/approach_status", False),
+    "backcourse_status": ("sim/cockpit2/autopilot/backcourse_status", False),
+    "gpss_status": ("sim/cockpit2/autopilot/gpss_status", False),
+    "altitude_hold_status": ("sim/cockpit2/autopilot/altitude_hold_status", False),
+    "altitude_armed": ("sim/cockpit2/autopilot/altitude_hold_armed", False),
+    "vs_status": ("sim/cockpit2/autopilot/vvi_status", False),
+    "speed_status": ("sim/cockpit2/autopilot/speed_status", False),
+    "vnav_status": ("sim/cockpit2/autopilot/vnav_status", False),
+    "autothrottle_enabled": ("sim/cockpit2/autopilot/autothrottle_enabled", False),
+    "autothrottle_on": ("sim/cockpit2/autopilot/autothrottle_on", False),
+    "airspeed_is_mach": ("sim/cockpit2/autopilot/airspeed_is_mach", False),
+    "speed_dial": ("sim/cockpit2/autopilot/airspeed_dial_kts_mach", True),
+    "vs_dial": ("sim/cockpit2/autopilot/vvi_dial_fpm", True),
+    "altitude_dial": ("sim/cockpit2/autopilot/altitude_dial_ft", True),
+    "baro": ("sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot", True),
+    "flap_handle": ("sim/cockpit2/controls/flap_handle_request_ratio", True),
+}
+# What must be back as it was after a step (modes, armed states, A/T, units).
+RESTORE_KEYS = (
+    "servos_on",
+    "lateral_mode",
+    "vertical_mode",
+    "nav_status",
+    "approach_status",
+    "backcourse_status",
+    "altitude_armed",
+    "autothrottle_enabled",
+    "airspeed_is_mach",
+)
+# The control that selects a mode, for putting the previous mode back.
+LATERAL_ROLES = {1: "mode_heading", 2: "mode_nav", 13: "mode_gpss"}
+VERTICAL_ROLES = {
+    4: "mode_vertical_speed",
+    5: "mode_level_change",
+    6: "mode_altitude_hold",
+    9: "mode_vnav",
+}
+STANDARD_BARO_INHG = 29.92
+
+
+@dataclass(frozen=True)
+class Step:
+    role: str  # a vimaan_nlu.aircraft role; also the result key
+    label: str  # spoken
+    where: str  # "air" | "ground"
+    watch: tuple[str, ...] = ()  # STATE keys a working control changes
+    write: str | None = None  # STATE key to write instead of pressing a command
+    delta: float = 0.0  # written value = current + delta
+    tolerance: float = 0.5  # a write "held" within this
+
+
+STEPS: tuple[Step, ...] = (
+    Step("mode_heading", "heading mode", "air", ("heading_status", "lateral_mode")),
+    Step("mode_nav", "nav mode", "air", ("nav_status", "lateral_mode")),
+    Step("mode_approach", "approach mode", "air", ("approach_status",)),
+    Step("mode_back_course", "back course", "air", ("backcourse_status",)),
+    Step("mode_gpss", "GPS steering", "air", ("gpss_status", "lateral_mode")),
+    Step("mode_altitude_hold", "altitude hold", "air", ("altitude_hold_status", "vertical_mode")),
+    Step("mode_altitude_arm", "altitude arm", "air", ("altitude_armed",)),
+    Step("mode_vertical_speed", "vertical speed mode", "air", ("vs_status", "vertical_mode")),
+    Step("mode_level_change", "level change", "air", ("speed_status", "vertical_mode")),
+    Step("mode_vnav", "V NAV", "air", ("vnav_status", "vertical_mode")),
+    Step("autothrottle_toggle", "autothrottle", "air", ("autothrottle_enabled", "autothrottle_on")),
+    Step("knots_mach_toggle", "knots and Mach", "air", ("airspeed_is_mach",)),
+    Step("dial_speed", "speed dial", "air", write="speed_dial", delta=5.0),
+    Step("dial_vertical_speed", "vertical speed dial", "air", write="vs_dial", delta=100.0),
+    Step("dial_altitude", "altitude dial", "air", write="altitude_dial", delta=100.0),
+    Step("baro_std", "altimeter standard", "ground", ("baro",)),
+    Step("dial_baro", "altimeter setting", "ground", write="baro", delta=0.10, tolerance=0.005),
+    # Written as one notch of travel at runtime (1 / detents).
+    Step("flap_handle", "flap handle", "ground", write="flap_handle", tolerance=0.01),
+)
+
+
+def steps_for(where: str) -> tuple[Step, ...]:
+    return tuple(s for s in STEPS if s.where == where)
+
+
+def situation(
+    on_ground: bool | None, agl_ft: float | None, ground_speed_kt: float | None
+) -> str | None:
+    """Which set of steps the aircraft is in a state to run: "ground" when
+    stopped on the ground, "air" when airborne at a safe height, else None."""
+    if on_ground and ground_speed_kt is not None and ground_speed_kt < 1.0:
+        return "ground"
+    if on_ground is False and agl_ft is not None and agl_ft >= AIR_MIN_AGL_FT:
+        return "air"
+    return None
+
+
+def ready_for(step: Step, state: Mapping[str, Any], parking_brake: bool | None) -> str | None:
+    """Why ``step`` can't run now, or None when it can."""
+    if step.where == "air" and state.get("servos_on") != 1:
+        return "Turn the autopilot on first"
+    if step.where == "ground" and not parking_brake:
+        return "Set the parking brake first"
+    return None
+
+
+def write_value(step: Step, state: Mapping[str, Any], flap_detents: int | None) -> float | None:
+    if step.write is None:
+        return None
+    if step.write == "flap_handle":
+        return 1.0 / flap_detents if flap_detents else None
+    current = state.get(step.write)
+    return None if current is None else float(current) + step.delta
+
+
+def _same(key: str, a: Any, b: Any) -> bool:
+    if a is None or b is None:
+        return a == b
+    if STATE[key][1]:
+        return abs(float(a) - float(b)) < 1e-3
+    return a == b
+
+
+def classify(
+    step: Step,
+    before: Mapping[str, Any],
+    after: Mapping[str, Any],
+    found: bool,
+    written: float | None = None,
+) -> str:
+    """works / no_change / missing / inconclusive."""
+    if step.write is not None:
+        if written is None:
+            return "inconclusive"
+        held = after.get(step.write)
+        return (
+            "works" if held is not None and abs(held - written) <= step.tolerance else "no_change"
+        )
+    if not found:
+        return "missing"
+    if step.role == "baro_std":
+        was_std = before.get("baro") is not None and abs(before["baro"] - STANDARD_BARO_INHG) < 0.01
+        now_std = after.get("baro") is not None and abs(after["baro"] - STANDARD_BARO_INHG) < 0.01
+        if was_std:
+            return "inconclusive"  # already standard: pressing it shows nothing
+        return "works" if now_std else "no_change"
+    changed = any(not _same(k, before.get(k), after.get(k)) for k in step.watch)
+    return "works" if changed else "no_change"
+
+
+def restored(step: Step, before: Mapping[str, Any], now: Mapping[str, Any]) -> bool:
+    keys = (
+        RESTORE_KEYS
+        + ((step.write,) if step.write else ())
+        + (("baro",) if step.role == "baro_std" else ())
+    )
+    return all(_same(k, before.get(k), now.get(k)) for k in keys)
+
+
+def mode_fix(before: Mapping[str, Any], now: Mapping[str, Any]) -> list[str]:
+    """Controls that put the previous lateral/vertical mode back."""
+    roles = []
+    if now.get("lateral_mode") != before.get("lateral_mode"):
+        role = LATERAL_ROLES.get(before.get("lateral_mode"))  # type: ignore[arg-type]
+        if role:
+            roles.append(role)
+    if now.get("vertical_mode") != before.get("vertical_mode"):
+        role = VERTICAL_ROLES.get(before.get("vertical_mode"))  # type: ignore[arg-type]
+        if role:
+            roles.append(role)
+    return roles
+
+
+def changes(before: Mapping[str, Any], after: Mapping[str, Any]) -> dict[str, list[Any]]:
+    return {
+        k: [before.get(k), after.get(k)] for k in STATE if not _same(k, before.get(k), after.get(k))
+    }
+
+
+# ---------------------------------------------------------------------------
+# Results file (one per aircraft file)
+# ---------------------------------------------------------------------------
+VERDICTS = ("works", "no_change", "missing")
+
+
+def results_path(folder: str, key: str) -> str:
+    return os.path.join(folder, f"{key}.json")
+
+
+def load_results(path: str) -> dict[str, str]:
+    """role -> verdict, from a saved probe (empty when there is none). Only
+    definite verdicts count; "inconclusive" and skipped steps are left out."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    steps = data.get("steps", {}) if isinstance(data, dict) else {}
+    return {k: v for k, v in steps.items() if v in VERDICTS}
+
+
+def save_results(path: str, record: Mapping[str, Any]) -> None:
+    """Merge with an earlier probe of the same aircraft (a ground run and an
+    air run each fill in their own steps), then write atomically."""
+    previous: dict[str, Any] = {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            previous = json.load(fh)
+    except (OSError, ValueError):
+        pass
+    merged = dict(record)
+    merged["steps"] = {**previous.get("steps", {}), **record.get("steps", {})}
+    merged["details"] = [*previous.get("details", []), *record.get("details", [])][-200:]
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(merged, fh, indent=1, sort_keys=True)
+    os.replace(tmp, path)

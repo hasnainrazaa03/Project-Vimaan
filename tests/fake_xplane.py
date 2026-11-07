@@ -68,6 +68,16 @@ DEFAULT_DATAREFS: dict[str, Any] = {
     "sim/cockpit2/engine/actuators/mixture_ratio": [1.0] * 16,
     "sim/cockpit2/engine/indicators/N1_percent": [0.0] * 16,
     "sim/cockpit2/engine/indicators/N2_percent": [0.0] * 16,
+    # Autopilot state the aircraft probe reads.
+    "sim/cockpit2/autopilot/backcourse_status": 0,
+    "sim/cockpit2/autopilot/gpss_status": 0,
+    "sim/cockpit2/autopilot/vnav_status": 0,
+    "sim/cockpit2/autopilot/autothrottle_enabled": 0,
+    "sim/cockpit2/autopilot/autothrottle_on": 0,
+    "sim/cockpit2/autopilot/airspeed_is_mach": 0,
+    "sim/cockpit2/autopilot/airspeed_dial_kts_mach": 150.0,
+    "sim/cockpit2/autopilot/vvi_dial_fpm": 0.0,
+    "sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot": 30.12,
 }
 
 # xp.getNthAircraftModel(0): (file name, full path).
@@ -96,6 +106,22 @@ KNOWN_COMMANDS = {
     "sim/starters/engage_starter_2",
     "sim/starters/shut_down_1",
     "sim/starters/shut_down_2",
+    # Autopilot modes and the rest of the probe's standard controls.
+    "sim/autopilot/heading",
+    "sim/autopilot/NAV",
+    "sim/autopilot/approach",
+    "sim/autopilot/back_course",
+    "sim/autopilot/gpss",
+    "sim/autopilot/altitude_hold",
+    "sim/autopilot/altitude_arm",
+    "sim/autopilot/vertical_speed",
+    "sim/autopilot/level_change",
+    "sim/autopilot/vnav",
+    "sim/autopilot/autothrottle_on",
+    "sim/autopilot/autothrottle_off",
+    "sim/autopilot/autothrottle_toggle",
+    "sim/autopilot/knots_mach_toggle",
+    "sim/instruments/barometer_std",
 }
 
 
@@ -119,7 +145,12 @@ def make_xp() -> types.ModuleType:
     def findDataRef(name):
         return name if name in xp.datarefs else None
 
+    # Commands this test aircraft doesn't have, though X-Plane does.
+    xp.missing_commands = set()
+
     def findCommand(name):
+        if name in xp.missing_commands:
+            return None
         if name in KNOWN_COMMANDS or name in xp.custom_commands:
             return name
         return None
