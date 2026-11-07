@@ -15,18 +15,23 @@ Last updated 2026-10-30.
 | --- | --- | --- | --- |
 | 0 | In-sim readiness: worker process, verified bindings, telemetry | ✅ merged | #24 |
 | S | Offline speech recognition (Vosk), saved audio, benchmark | ✅ merged | #25 |
-| O | In-sim overlay (live transcript, meaning, outcome) | ✅ flown (ImGui, 0.55 ms); polish + landing on main | #26, #27 |
-| E0 | Command table: one source of truth (no behaviour change) | 🟡 built, gate passed; needs smoke flight + merge | #28 |
-| E1 | Training data v2 + command families → **v17** | 🟡 all gates pass; awaiting #27, #28, E1 PR and a flight | |
-| T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v13** | ⬜ | |
-| T2 | Tier 2: radios & navigation → **v14** | ⬜ | |
-| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v15** | ⬜ | |
-| T4 | Tier 4: questions (read-only) → **v16** | ⬜ | |
+| O | In-sim overlay (live transcript, meaning, outcome) | ✅ merged and flown (ImGui, worst draw 1.1 ms) | #26, #27 |
+| E0 | Command table: one source of truth (no behaviour change) | ✅ merged; smoke-flown on v11 | #28 |
+| E1 | Training data v2 + command families → **v17** | 🟡 all gates and ONNX parity pass; flown twice; installed for general use; awaiting merge | #29 |
+| T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v18** | ⬜ next | |
+| T2 | Tier 2: radios & navigation → **v19** | ⬜ | |
+| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v20** | ⬜ | |
+| T4 | Tier 4: questions (read-only) → **v21** | ⬜ | |
 | L | Later: relative commands, two commands in one breath, checklists, add-on aircraft profiles | ⬜ | |
 
 Measured so far (in-sim, Vosk): speech end → action **p50 330 ms**;
 recognition 2–3 ms; model ~11 ms; 0 frame stalls. Real-voice benchmark
-(33 labelled clips): Vosk 30/33, Google 32/33.
+(33 labelled clips): Vosk 30/33, Google 32/33. Real-voice gate set: 118
+hand-labelled clips from five flights; v17 and v11 both 91 right / 26
+rejected / 1 wrong.
+
+Model versions: E1 was planned as v12; v12–v16 were intermediate runs and
+v17 is the result, so the tiers continue from v18.
 
 ---
 
@@ -169,7 +174,7 @@ autopilot.
 
 ---
 
-## Phase E1: training data v2 + command families → v12
+## Phase E1: training data v2 + command families → v17
 
 **Goal.** Replace the data pipeline before adding commands, and prove the new
 model is at least as good as v11 on the *same* commands. Then every later
@@ -218,9 +223,15 @@ tier only adds data.
   regression; gold NLU; real-voice clips; negatives (share that ends as
   `None`, low confidence or no command word); NLU p95 latency. Prints PASS/FAIL
   per gate and writes `gate.json` next to the model.
-- [ ] **E1.9 Train v12** (`--max-length 40`, same DistilBERT, MPS).
-- [ ] **E1.10 Gate v12**; ONNX export + int8 quantization still work.
-- [ ] **E1.11 Install + fly** the E0 checklist again, plus "both engines".
+- [x] **E1.9 Train** *Done as v17* (`--max-length 40`, same DistilBERT, MPS; v12–v16 were intermediate runs).
+- [x] **E1.10 Gate; ONNX export + int8 quantization still work.** *Done (2026-11-07):*
+  - all six gates pass (`gate.json`);
+  - ONNX export works (opset 17, 253 MB, 10/10 logit argmax parity);
+  - `scripts/backend_parity.py` runs all 15,305 gate texts through torch int8, torch fp32 and ONNX. ONNX makes the same decision as fp32 on every text.
+  - int8 quantization is really applied, not a silent fp32 fallback. It decides 56 texts differently: int8 6 right / 50 rejected, ONNX 8 / 48, 0 wrong for either.
+  - Latency p50: ONNX 3.3–4.1 ms, fp32 6.2–7.2 ms, int8 8.7–9.1 ms. int8 is slower on qnnpack, as it was on v9.
+  - The longest text is 21 tokens, so the runtime's 32-token limit (v17 trained at 40) truncates nothing.
+- [ ] **E1.11 Install + fly** the E0 checklist again, plus "both engines". *Mostly done:* two controlled v17 flights (2026-10-30, 2026-11-07); installed for general use on 2026-11-07, by the owner's decision. Still to fly: the five "frequency … on com two" phrases (fixed offline) and "both engines". Both go into the T1 flight.
 
 **E1 status (2026-10-30):** v17 passes all six gates after a one-line scorer fix (the COM 1 default for an unspoken port now applies to the prediction as well as the expected action); see `gate.json` beside the model. Not installed: X-Plane stays on v11 until #27 and #28 merge, and v17 also needs this branch's plugin code. Known misses: 5 of 490 explicit-port COM rows tune COM 1 ("frequency … on com two" with a one-digit decimal; v11 got all 490 right), "parking bring on engine" starts engine 1, "fly at one thousand" is rejected.
 
@@ -276,7 +287,7 @@ specific to each tier.
 
 ---
 
-## Tier 1: autopilot core + aircraft profiles → v13
+## Tier 1: autopilot core + aircraft profiles → v18
 
 Used in every phase of every flight.
 
@@ -329,7 +340,7 @@ and off on the A330 (the fix) · "both engines" start on the ground (jet).
 
 ---
 
-## Tier 2: radios and navigation → v14
+## Tier 2: radios and navigation → v19
 
 | Intent | Slots | Say | Binding | Verify | Safety |
 | --- | --- | --- | --- | --- | --- |
@@ -351,7 +362,7 @@ confirm.
 
 ---
 
-## Tier 3: switches by phase of flight → v15
+## Tier 3: switches by phase of flight → v20
 
 | Intent | Slots | Say | Binding | Verify | Safety |
 | --- | --- | --- | --- | --- | --- |
@@ -372,7 +383,7 @@ shutdown.
 
 ---
 
-## Tier 4: questions (read-only) → v16
+## Tier 4: questions (read-only) → v21
 
 | Intent | Answer from | Spoken |
 | --- | --- | --- |

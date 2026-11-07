@@ -144,6 +144,21 @@ return {"intent": intent, "slots": slots, "confidence": softmax_max}
 ONNX is **~2.0× faster** with **10/10 argmax parity** (max logit diff 3.9e-5).
 Re-run: `python ML/export_onnx.py --model-path ML/models/vimaan_nlu_model_best/v11`.
 
+**v17 check (E1.10, 2026-11-07)**, same machine, 40 reps × 10 commands, two rounds:
+
+| backend | p50 | p95 | size | cold start |
+|---|---|---|---|---|
+| torch int8 (plugin default) | 8.7–9.1 ms | 10.0–15.1 ms | built at load, no file | — |
+| torch fp32 | 6.2–7.2 ms | 7.2–8.4 ms | 253 MB | — |
+| **onnx** | **3.3–4.1 ms** | **3.8–5.4 ms** | 253 MB | 72 ms |
+
+**Decision parity:** `python scripts/backend_parity.py v17 --baseline v11` runs every text the
+model gate uses (15,305 unique) through all three backends and compares what the plugin would
+do with each prediction (`model_gate.decision`). ONNX matches fp32 on every text. int8
+differs from both on 56 texts, none of them wrong. Switching the plugin to ONNX would make 2
+of those right that int8 rejects. In flight the model takes 10–25 ms of the ~330 ms between end of speech and
+action, so the backend is not the bottleneck. Report: `vN/onnx/parity.json` (gitignored).
+
 ---
 
 ## 4. Plugin lifecycle
