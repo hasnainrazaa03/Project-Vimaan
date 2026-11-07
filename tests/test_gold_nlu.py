@@ -23,21 +23,34 @@ GOLD = [
     ("set altitude twelve thousand", "set_autopilot_altitude", {}),
     ("gear up", "toggle_landing_gear", {"state": "up"}),
     ("lower the landing gear", "toggle_landing_gear", {"state": "down"}),
-    ("flaps down", "toggle_flaps", {"state": "down"}),
-    ("retract flaps", "toggle_flaps", {"state": "up"}),
-    ("engage autopilot one", "toggle_autopilot_1", {"state": "on"}),
-    ("autopilot two off", "toggle_autopilot_2", {"state": "off"}),
-    ("flight director one on", "toggle_flight_director_1", {"state": "on"}),
+    ("flaps down", "set_flaps", {"position": "down"}),
+    ("retract flaps", "set_flaps", {"position": "up"}),
+    ("engage autopilot one", "toggle_autopilot", {"state": "on", "instance": "1"}),
+    ("autopilot two off", "toggle_autopilot", {"state": "off", "instance": "2"}),
+    ("flight director one on", "toggle_flight_director", {"state": "on", "instance": "1"}),
     ("parking brake on", "toggle_parking_brake", {"state": "on"}),
-    ("start engine one", "toggle_engine_1", {"state": "on"}),
-    ("shut down engine two", "toggle_engine_2", {"state": "off"}),
+    ("start engine one", "toggle_engine", {"state": "on", "instance": "1"}),
+    ("shut down engine two", "toggle_engine", {"state": "off", "instance": "2"}),
     (
         "tune com one to one one eight decimal seven five",
         "set_com_frequency",
         {"com_port": "1", "frequency": "118.75"},
     ),
     ("what time is it", "ask_time", {}),
+    # Two-digit headings, and a stray number that must not replace the value.
+    ("change heading to eighty", "set_autopilot_heading", {"degrees": "80"}),
+    ("change heading to eighty for me", "set_autopilot_heading", {"degrees": "80"}),
+    ("heading forty five", "set_autopilot_heading", {"degrees": "45"}),
+    ("heading zero eight zero", "set_autopilot_heading", {"degrees": "080"}),
+    ("eighty fly heading one eight four", "set_autopilot_heading", {"degrees": "184"}),
+    ("altitude two thousand", "set_autopilot_altitude", {"altitude": "2000"}),
+    ("gear up", "toggle_landing_gear", {"state": "up"}),
+    ("tune com two to one two one decimal five", "set_com_frequency", {"com_port": "2"}),
 ]
+
+# Bare numbers and fragments must never be acted on (scripts/model_gate.py
+# checks these through the plugin's decision rules).
+MUST_NOT_ACT = ["eighty", "seventy", "forty five", "eighty two on", "two forty", "on", "down"]
 
 
 @pytest.fixture(scope="session")

@@ -130,9 +130,11 @@ def evaluate_safety(intent: str, slots: dict, ctx: SafetyContext) -> SafetyVerdi
 
 def command_token(intent: str, slots: dict) -> str:
     """Stable identity for a command so a *repeat* of the same command confirms
-    it. Keyed on intent + the action slot (robust to minor STT variation)."""
+    it. Keyed on intent + which unit + the action (robust to minor STT
+    variation): "engine two off" must not confirm a pending "engine one off"."""
     slots = slots or {}
-    return f"{intent}:{slots.get('state', '')}"
+    action = slots.get("state") or slots.get("position", "")
+    return f"{intent}:{slots.get('instance', '')}:{action}"
 
 
 class ConfirmationGate:

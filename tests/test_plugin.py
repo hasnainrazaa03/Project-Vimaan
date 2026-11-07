@@ -352,20 +352,20 @@ def test_com_port_3_rejected_not_silently_com2(sim):
 # ---------------------------------------------------------------------------
 def test_autopilot_on_uses_dedicated_command(sim):
     _, plugin, xp = sim
-    say(plugin, "ap", "toggle_autopilot_1", {"state": "on"})
+    say(plugin, "ap", "toggle_autopilot", {"state": "on"})
     assert xp.commands_fired == ["sim/autopilot/servos_on"]
 
 
 def test_autopilot_off_toggles_only_when_on(sim):
     _, plugin, xp = sim
     xp.datarefs["sim/cockpit2/autopilot/servos_on"] = 1
-    say(plugin, "ap", "toggle_autopilot_1", {"state": "off"})
+    say(plugin, "ap", "toggle_autopilot", {"state": "off"})
     assert xp.commands_fired == ["sim/autopilot/servos_toggle"]
 
 
 def test_autopilot_off_when_already_off_does_nothing(sim):
     _, plugin, xp = sim
-    spoken = say(plugin, "ap", "toggle_autopilot_1", {"state": "off"})
+    spoken = say(plugin, "ap", "toggle_autopilot", {"state": "off"})
     assert xp.commands_fired == []
     assert spoken == ["Autopilot 1 already off"]
 
@@ -373,7 +373,7 @@ def test_autopilot_off_when_already_off_does_nothing(sim):
 def test_autopilot_off_with_unreadable_state_never_blind_toggles(sim):
     _, plugin, xp = sim
     del xp.datarefs["sim/cockpit2/autopilot/servos_on"]
-    spoken = say(plugin, "ap", "toggle_autopilot_1", {"state": "off"})
+    spoken = say(plugin, "ap", "toggle_autopilot", {"state": "off"})
     assert xp.commands_fired == []
     assert spoken == ["Cannot read Autopilot 1 state"]
 
@@ -381,7 +381,7 @@ def test_autopilot_off_with_unreadable_state_never_blind_toggles(sim):
 def test_flight_director_written_directly(sim):
     _, plugin, xp = sim
     xp.datarefs["sim/cockpit2/autopilot/flight_director2_mode"] = 2
-    say(plugin, "fd", "toggle_flight_director_2", {"state": "off"})
+    say(plugin, "fd", "toggle_flight_director", {"state": "off", "instance": "2"})
     assert xp.datarefs["sim/cockpit2/autopilot/flight_director2_mode"] == 0
 
 
@@ -394,7 +394,7 @@ def test_parking_brake_uses_commands(sim):
 def test_flaps_up_retracts_fully(sim):
     _, plugin, xp = sim
     xp.datarefs["sim/cockpit2/controls/flap_handle_request_ratio"] = 0.5
-    say(plugin, "flaps", "toggle_flaps", {"state": "up"})
+    say(plugin, "flaps", "set_flaps", {"position": "up"})
     assert xp.commands_fired == ["sim/flight_controls/flaps_up_full"]
 
 
@@ -428,7 +428,7 @@ def test_gear_up_on_ground_needs_confirmation(sim):
 # ---------------------------------------------------------------------------
 def test_engine_start_holds_starter_until_running(sim):
     _, plugin, xp = sim
-    spoken = say(plugin, "engine", "toggle_engine_1", {"state": "on"})
+    spoken = say(plugin, "engine", "toggle_engine", {"state": "on"})
     assert spoken == ["Starting engine 1"]
     assert "sim/starters/engage_starter_1" in xp.held
     plugin._flight_loop()  # still cranking
@@ -443,7 +443,7 @@ def test_engine_start_holds_starter_until_running(sim):
 def test_engine_start_times_out_and_releases_starter(sim, monkeypatch):
     module, plugin, xp = sim
     monkeypatch.setattr(module, "STARTER_MAX_CRANK_SEC", 0.0)
-    say(plugin, "engine", "toggle_engine_2", {"state": "on"})
+    say(plugin, "engine", "toggle_engine", {"state": "on", "instance": "2"})
     plugin._flight_loop()
     assert xp.held == set()
     assert "did not start" in xp.spoken[-1]
@@ -452,7 +452,7 @@ def test_engine_start_times_out_and_releases_starter(sim, monkeypatch):
 def test_engine_already_running_is_no_op(sim):
     _, plugin, xp = sim
     xp.datarefs["sim/flightmodel/engine/ENGN_running"][0] = 1
-    spoken = say(plugin, "engine", "toggle_engine_1", {"state": "on"})
+    spoken = say(plugin, "engine", "toggle_engine", {"state": "on"})
     assert xp.commands_fired == []
     assert spoken == ["Engine 1 already running"]
 
@@ -460,7 +460,7 @@ def test_engine_already_running_is_no_op(sim):
 def test_plugin_stop_never_leaves_starter_engaged(monkeypatch, tmp_path):
     NLU.clear()
     _, plugin, xp = _load_plugin(monkeypatch, tmp_path)
-    say(plugin, "engine", "toggle_engine_1", {"state": "on"})
+    say(plugin, "engine", "toggle_engine", {"state": "on"})
     plugin.XPluginStop()
     assert xp.held == set()
 
@@ -470,18 +470,51 @@ def test_engine_shutdown_in_flight_needs_confirmation(sim):
     xp.datarefs["sim/flightmodel/engine/ENGN_running"][0] = 1
     xp.datarefs["sim/flightmodel/failures/onground_any"] = 0
     xp.datarefs["sim/flightmodel/position/y_agl"] = 1500.0
-    say(plugin, "engine", "toggle_engine_1", {"state": "off"})
+    say(plugin, "engine", "toggle_engine", {"state": "off"})
     assert xp.commands_fired == []
-    say(plugin, "engine", "toggle_engine_1", {"state": "off"})
+    say(plugin, "engine", "toggle_engine", {"state": "off"})
     assert xp.commands_fired == ["sim/starters/shut_down_1"]
 
 
 def test_engine_2_on_single_engine_aircraft_rejected(sim):
     _, plugin, xp = sim
     xp.datarefs["sim/aircraft/engine/acf_num_engines"] = 1
-    spoken = say(plugin, "engine", "toggle_engine_2", {"state": "on"})
+    spoken = say(plugin, "engine", "toggle_engine", {"state": "on", "instance": "2"})
     assert xp.commands_fired == []
     assert spoken == ["This aircraft has no engine 2"]
+
+
+def test_both_engines_start_together(sim):
+    _, plugin, xp = sim
+    spoken = say(plugin, "both engines", "toggle_engine", {"state": "on", "instance": "both"})
+    assert spoken == ["Starting engine 1", "Starting engine 2"]
+    assert xp.held == {"sim/starters/engage_starter_1", "sim/starters/engage_starter_2"}
+    xp.datarefs["sim/flightmodel/engine/ENGN_running"][:2] = [1, 1]
+    plugin._flight_loop()
+    assert xp.held == set()
+
+
+def test_both_engines_on_single_engine_aircraft(sim):
+    _, plugin, xp = sim
+    xp.datarefs["sim/aircraft/engine/acf_num_engines"] = 1
+    spoken = say(plugin, "both engines", "toggle_engine", {"state": "on", "instance": "both"})
+    assert spoken == ["This aircraft has one engine"] and xp.held == set()
+
+
+def test_shutting_down_engine_two_does_not_confirm_engine_one(sim):
+    _, plugin, xp = sim
+    xp.datarefs["sim/flightmodel/engine/ENGN_running"][:2] = [1, 1]
+    xp.datarefs["sim/flightmodel/failures/onground_any"] = 0
+    xp.datarefs["sim/flightmodel/position/y_agl"] = 1500.0
+    say(plugin, "engine one", "toggle_engine", {"state": "off", "instance": "1"})
+    say(plugin, "engine two", "toggle_engine", {"state": "off", "instance": "2"})
+    assert xp.commands_fired == []  # each still waiting for its own repeat
+
+
+def test_autopilot_two_uses_its_own_binding(sim):
+    _, plugin, xp = sim
+    say(plugin, "autopilot", "toggle_autopilot", {"state": "on", "instance": "2"})
+    assert xp.commands_fired == ["sim/autopilot/servos2_on"]
 
 
 # ---------------------------------------------------------------------------
@@ -511,7 +544,7 @@ def test_command_trace_is_logged_end_to_end(sim):
 def test_command_verification_logged_after_delay(sim, monkeypatch):
     module, plugin, xp = sim
     monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
-    say(plugin, "ap", "toggle_autopilot_1", {"state": "on"})
+    say(plugin, "ap", "toggle_autopilot", {"state": "on"})
     plugin._flight_loop()
     verify = events(plugin, "verify")[-1]
     # The fake sim does not model the servos, so the read-back reports the mismatch.
@@ -524,7 +557,7 @@ def test_command_verification_logged_after_delay(sim, monkeypatch):
     ("text", "intent", "slots"),
     [
         ("70", "set_flight_level", {"flight_level": "70"}),  # in-sim: "seventy"
-        ("city 8 on", "toggle_flight_director_1", {"state": "on"}),  # in-sim
+        ("city 8 on", "toggle_flight_director", {"state": "on"}),  # in-sim
         ("on", "toggle_parking_brake", {"state": "on"}),
     ],
 )
@@ -534,6 +567,296 @@ def test_fragment_without_command_word_not_executed(sim, text, intent, slots):
     assert spoken == ["Please repeat that"]
     assert xp.writes == [] and xp.commands_fired == []
     assert events(plugin, "implausible")[-1]["reason"] == "no_command_word"
+
+
+@pytest.mark.parametrize("value", ["361", "450", "2040"])
+def test_out_of_range_heading_never_reaches_the_sim(sim, value):
+    _, plugin, xp = sim
+    spoken = say(plugin, "heading", "set_autopilot_heading", {"degrees": value})
+    assert spoken == ["Invalid heading value"] and xp.writes == []
+
+
+@pytest.mark.parametrize(
+    ("value", "written"), [("000", 0.0), ("080", 80.0), ("80", 80.0), ("360", 360.0)]
+)
+def test_valid_heading_boundaries_written(sim, value, written):
+    _, plugin, xp = sim
+    say(plugin, "heading", "set_autopilot_heading", {"degrees": value})
+    assert xp.writes[-1] == ("sim/cockpit2/autopilot/heading_dial_deg_mag_pilot", written)
+
+
+def test_com_with_no_port_spoken_tunes_com_1(sim):
+    _, plugin, xp = sim  # the behaviour the gate scores: documented default
+    say(plugin, "tune", "set_com_frequency", {"frequency": "121.5"})
+    assert xp.writes[-1] == ("sim/cockpit2/radios/actuators/com1_frequency_hz_833", 121500)
+
+
+# ---------------------------------------------------------------------------
+# "to" vs "two": the five wrong commands from the v17 test flight
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("heard", "intent", "slots", "question"),
+    [
+        (
+            "set altitude two one thousand feet",
+            "set_autopilot_altitude",
+            {"altitude": "21000"},
+            "Altitude 1000 or 21000 feet? Say it again without the word to.",
+        ),
+        (
+            "set altitude two five thousand feet",
+            "set_autopilot_altitude",
+            {"altitude": "25000"},
+            "Altitude 5000 or 25000 feet? Say it again without the word to.",
+        ),
+        (
+            "set heading two twenty degrees",
+            "set_autopilot_heading",
+            {"degrees": "220"},
+            "Heading zero two zero or two two zero? Say all three digits.",
+        ),
+        (
+            "set heading two ten degrees",
+            "set_autopilot_heading",
+            {"degrees": "210"},
+            "Heading zero one zero or two one zero? Say all three digits.",
+        ),
+        (
+            "flight level two forty",
+            "set_flight_level",
+            {"flight_level": "240"},
+            "Flight level zero four zero or two four zero? Say all three digits.",
+        ),
+    ],
+)
+def test_ambiguous_target_asks_and_changes_nothing(sim, heard, intent, slots, question):
+    _, plugin, xp = sim
+    assert say(plugin, heard, intent, slots) == [question]
+    assert xp.writes == [] and xp.commands_fired == []
+    assert events(plugin, "command_done")[-1]["outcome"] == "ambiguous"
+    assert events(plugin, "ambiguous")[-1]["intent"] == intent
+
+
+@pytest.mark.parametrize(
+    ("heard", "intent", "slots", "dataref", "value"),
+    [
+        (
+            "heading two seven zero",
+            "set_autopilot_heading",
+            {"degrees": "270"},
+            "sim/cockpit2/autopilot/heading_dial_deg_mag_pilot",
+            270.0,
+        ),
+        (
+            "set altitude one thousand feet",
+            "set_autopilot_altitude",
+            {"altitude": "1000"},
+            "sim/cockpit2/autopilot/altitude_dial_ft",
+            1000.0,
+        ),
+        (
+            "set altitude twenty one thousand feet",
+            "set_autopilot_altitude",
+            {"altitude": "21000"},
+            "sim/cockpit2/autopilot/altitude_dial_ft",
+            21000.0,
+        ),
+    ],
+)
+def test_clear_answers_set_the_target(sim, heard, intent, slots, dataref, value):
+    _, plugin, xp = sim
+    say(plugin, heard, intent, slots)
+    assert xp.writes[-1] == (dataref, value)
+
+
+# ---------------------------------------------------------------------------
+# Bare-number replies to "to or two?" (2nd v17 flight: "one thousand" and
+# "zero" were ignored without a word)
+# ---------------------------------------------------------------------------
+ALT_DIAL = "sim/cockpit2/autopilot/altitude_dial_ft"
+HDG_DIAL = "sim/cockpit2/autopilot/heading_dial_deg_mag_pilot"
+ASK_ALT = ("set altitude two one thousand feet", "set_autopilot_altitude", {"altitude": "21000"})
+ASK_HDG = ("set heading two twenty degrees", "set_autopilot_heading", {"degrees": "220"})
+
+
+@pytest.mark.parametrize(
+    ("question", "reply", "dataref", "value"),
+    [
+        (ASK_ALT, "one thousand", ALT_DIAL, 1000.0),  # c0004
+        (ASK_ALT, "twenty one thousand feet", ALT_DIAL, 21000.0),
+        (ASK_HDG, "zero two zero", HDG_DIAL, 20.0),
+        (ASK_HDG, "two two zero", HDG_DIAL, 220.0),
+    ],
+)
+def test_reply_with_an_offered_value_sets_it(sim, question, reply, dataref, value):
+    _, plugin, xp = sim
+    say(plugin, *question)
+    say(plugin, reply)
+    assert xp.writes == [(dataref, value)]
+    assert events(plugin, "command_done")[-1]["outcome"] == "executed"
+    answered = events(plugin, "answered")[-1]
+    assert answered["intent"] == question[1] and answered["reply_to"] == "c9999"
+
+
+def test_reply_naming_neither_value_changes_nothing(sim):
+    _, plugin, xp = sim
+    say(plugin, *ASK_HDG)
+    assert say(plugin, "zero") == ["Say it with the word heading"]  # c0010
+    assert xp.writes == []
+    assert events(plugin, "implausible")[-1]["reason"] == "not_offered"
+    # The question stays open: a clear reply still works.
+    say(plugin, "zero two zero")
+    assert xp.writes == [(HDG_DIAL, 20.0)]
+
+
+def test_reply_with_the_same_doubt_asks_again(sim):
+    _, plugin, xp = sim
+    question = say(plugin, *ASK_HDG)
+    assert say(plugin, "two twenty") == question  # 220, or "to twenty"
+    assert xp.writes == []
+
+
+def test_bare_number_with_no_question_is_answered(sim):
+    _, plugin, xp = sim
+    assert say(plugin, "one thousand", "set_autopilot_altitude", {"altitude": "1000"}) == [
+        "Say the full command"
+    ]
+    assert xp.writes == []
+    assert events(plugin, "implausible")[-1]["reason"] == "bare_number"
+
+
+def test_reply_after_the_window_is_not_taken(sim, monkeypatch):
+    _, plugin, xp = sim
+    monkeypatch.setattr(plugin, "QUESTION_WINDOW_SEC", 0.0)
+    say(plugin, *ASK_ALT)
+    assert say(plugin, "one thousand") == ["Say the full command"]
+    assert xp.writes == []
+
+
+def test_executed_command_closes_the_question(sim):
+    _, plugin, xp = sim
+    say(plugin, *ASK_ALT)
+    say(plugin, "altitude one thousand feet", "set_autopilot_altitude", {"altitude": "1000"})
+    assert say(plugin, "twenty one thousand") == ["Say the full command"]
+    assert xp.writes == [(ALT_DIAL, 1000.0)]
+
+
+def test_altitude_to_below_the_minimum_asks(sim):
+    _, plugin, xp = sim
+    # 2nd v17 flight c0013: said "altitude to five hundred", 2,500 was set.
+    assert say(
+        plugin, "altitude two five hundred", "set_autopilot_altitude", {"altitude": "2500"}
+    ) == ["Altitude 500 or 2500 feet? Say it again without the word to."]
+    assert xp.writes == []
+    assert say(plugin, "five hundred") == ["Altitude out of range"]
+    assert xp.writes == []
+    say(plugin, "two thousand five hundred")
+    assert xp.writes == [(ALT_DIAL, 2500.0)]
+
+
+def test_flight_level_read_back_keeps_the_leading_zero(sim):
+    _, plugin, _ = sim
+    # 2nd v17 flight: "flight level zero four zero" was read back "four zero".
+    assert say(
+        plugin, "flight level zero four zero", "set_flight_level", {"flight_level": "040"}
+    ) == ["Flight level zero four zero"]
+
+
+# ---------------------------------------------------------------------------
+# Delayed read-back, and target vs what the aircraft did
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("port", "dataref", "other"),
+    [
+        (
+            "1",
+            "sim/cockpit2/radios/actuators/com1_frequency_hz_833",
+            "sim/cockpit2/radios/actuators/com2_frequency_hz_833",
+        ),
+        (
+            "2",
+            "sim/cockpit2/radios/actuators/com2_frequency_hz_833",
+            "sim/cockpit2/radios/actuators/com1_frequency_hz_833",
+        ),
+    ],
+)
+def test_com_value_is_checked_again_later(sim, monkeypatch, port, dataref, other):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    before = xp.datarefs[other]
+    say(plugin, "com", "set_com_frequency", {"frequency": "118.75", "com_port": port})
+    assert xp.datarefs[dataref] == 118750 and xp.datarefs[other] == before
+    plugin._flight_loop()
+    verify = events(plugin, "verify")[-1]
+    assert verify["label"] == f"COM {port}" and verify["ok"] is True and verify["actual"] == 118750
+
+
+def test_radio_that_does_not_keep_the_value_is_reported(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    say(plugin, "com", "set_com_frequency", {"frequency": "118.75", "com_port": "1"})
+    xp.datarefs["sim/cockpit2/radios/actuators/com1_frequency_hz_833"] = 122800
+    plugin._flight_loop()
+    assert events(plugin, "verify")[-1]["ok"] is False
+    assert xp.spoken[-1] == "COM 1 did not respond"
+
+
+def test_heading_360_held_as_0_is_not_a_failure(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    say(plugin, "heading", "set_autopilot_heading", {"degrees": "360"})
+    xp.datarefs["sim/cockpit2/autopilot/heading_dial_deg_mag_pilot"] = 0.0
+    plugin._flight_loop()
+    assert events(plugin, "verify")[-1]["ok"] is True
+
+
+def test_aircraft_recorded_after_a_target_changes(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "FOLLOW_UP_SEC", (0.0, 0.0))
+    xp.datarefs["sim/cockpit2/gauges/indicators/altitude_ft_pilot"] = 4200.0
+    xp.datarefs["sim/cockpit2/autopilot/altitude_hold_status"] = 2
+    say(plugin, "altitude", "set_autopilot_altitude", {"altitude": "5000"})
+    first = events(plugin, "aircraft_state")[0]
+    assert first["after"] == "Altitude" and first["altitude_target"] == 5000.0
+    assert first["altitude_actual"] == 4200.0 and first["altitude_hold_status"] == 2
+
+
+def test_autopilot_change_vimaan_did_not_make_is_logged(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "STATE_WATCH_SEC", 0.0)
+    plugin._next_state_watch = 0.0  # the fixture's first loop already armed it
+    plugin._flight_loop()
+    xp.datarefs["sim/cockpit2/autopilot/servos_on"] = 1
+    xp.datarefs["sim/cockpit2/autopilot/heading_mode"] = 1
+    plugin._flight_loop()
+    change = events(plugin, "autopilot_state_change")[-1]
+    assert change["changed"] == {"servos_on": [0, 1], "lateral_mode": [0, 1]}
+    assert change["last_vimaan_cmd"] is None
+
+
+def test_autopilot_change_names_the_command_that_ran_last(sim, monkeypatch):
+    # 2nd v17 flight: only target writes counted, so "autopilot on" 0.6 s
+    # before a change was logged as "c0019, 357 s earlier".
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "STATE_WATCH_SEC", 0.0)
+    plugin._next_state_watch = 0.0
+    say(plugin, "altitude", "set_autopilot_altitude", {"altitude": "5000"})
+    plugin._flight_loop()
+    say(plugin, "ap", "toggle_autopilot", {"state": "on"})
+    xp.datarefs["sim/cockpit2/autopilot/servos_on"] = 1
+    plugin._flight_loop()
+    change = events(plugin, "autopilot_state_change")[-1]
+    assert change["last_vimaan_intent"] == "toggle_autopilot"
+    assert change["sec_since_vimaan_action"] < 1.0
+
+
+def test_aircraft_type_logged_once(sim, monkeypatch):
+    module, plugin, _ = sim
+    monkeypatch.setattr(module, "STATE_WATCH_SEC", 0.0)
+    plugin._next_state_watch = 0.0
+    plugin._flight_loop()
+    plugin._flight_loop()
+    assert [e["icao"] for e in events(plugin, "aircraft")] == ["BE58"]
 
 
 def test_one_digit_heading_asks_again(sim):
@@ -771,10 +1094,10 @@ def test_misheard_command_does_not_cancel_pending_confirmation(sim):
     xp.datarefs["sim/flightmodel/engine/ENGN_running"][0] = 1
     xp.datarefs["sim/flightmodel/failures/onground_any"] = 0
     xp.datarefs["sim/flightmodel/position/y_agl"] = 400.0
-    say(plugin, "engine one off", "toggle_engine_1", {"state": "off"})
+    say(plugin, "engine one off", "toggle_engine", {"state": "off"})
     assert xp.commands_fired == []
-    say(plugin, "engine", "toggle_engine_1", {})  # clipped repeat: rejected
-    say(plugin, "engine one off", "toggle_engine_1", {"state": "off"})
+    say(plugin, "engine", "toggle_engine", {})  # clipped repeat: rejected
+    say(plugin, "engine one off", "toggle_engine", {"state": "off"})
     assert xp.commands_fired == ["sim/starters/shut_down_1"]
 
 
@@ -783,7 +1106,7 @@ def test_executed_command_cancels_pending_confirmation(sim):
     xp.datarefs["sim/flightmodel/engine/ENGN_running"][0] = 1
     xp.datarefs["sim/flightmodel/failures/onground_any"] = 0
     xp.datarefs["sim/flightmodel/position/y_agl"] = 400.0
-    say(plugin, "engine one off", "toggle_engine_1", {"state": "off"})
+    say(plugin, "engine one off", "toggle_engine", {"state": "off"})
     say(plugin, "hdg", "set_autopilot_heading", {"degrees": "90"})
-    say(plugin, "engine one off", "toggle_engine_1", {"state": "off"})
+    say(plugin, "engine one off", "toggle_engine", {"state": "off"})
     assert "sim/starters/shut_down_1" not in xp.commands_fired  # asks again

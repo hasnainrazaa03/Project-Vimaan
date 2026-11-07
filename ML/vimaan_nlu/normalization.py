@@ -118,14 +118,18 @@ def _group_form_repl(match: re.Match[str]) -> str:
 
 
 def _convert_decimal_sequence(match: re.Match[str]) -> str:
-    parts = re.split(r"\b(?:point|decimal)\b", match.group(0))
+    text = match.group(0)
+    # The pattern also consumes the space after the last digit word; keep it,
+    # or "decimal five on com two" becomes "121.5on com 2".
+    trailing = text[len(text.rstrip(" -")) :]
+    parts = re.split(r"\b(?:point|decimal)\b", text)
     result_parts = [_digits_only(p.split()) for p in parts]
     result_parts = [p for p in result_parts if p]
     if len(result_parts) == 2:
-        return result_parts[0] + "." + result_parts[1]
+        return result_parts[0] + "." + result_parts[1] + trailing
     if len(result_parts) == 1:
-        return result_parts[0]
-    return match.group(0)
+        return result_parts[0] + trailing
+    return text
 
 
 _UNIT_WORDS = {

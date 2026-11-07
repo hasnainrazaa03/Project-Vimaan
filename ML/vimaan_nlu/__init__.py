@@ -27,12 +27,12 @@ from .normalization import (
     normalize_slot_value,
 )
 from .postprocessor import (
-    ACTION_STATE_MAP,
     add_implicit_state,
-    correct_numbered_intent,
+    canonicalize_choices,
     extract_digit_sequence_frequency,
     extract_numbers_from_text,
     postprocess_slots,
+    resolve_instance,
 )
 from .readback import spell_digits
 from .validators import (
@@ -50,10 +50,10 @@ __all__ = [
     "normalize_dataset_item",
     "normalize_dataset",
     "PHONETIC_MAP",
-    "ACTION_STATE_MAP",
     "postprocess_slots",
     "add_implicit_state",
-    "correct_numbered_intent",
+    "canonicalize_choices",
+    "resolve_instance",
     "extract_digit_sequence_frequency",
     "extract_numbers_from_text",
     "SLOT_VALIDATORS",

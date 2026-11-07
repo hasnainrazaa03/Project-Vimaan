@@ -108,6 +108,7 @@ def test_failed_readback_is_red():
     ("outcome", "badge", "tone"),
     [
         ("safety_hold", "CONFIRM?", "warn"),
+        ("ambiguous", "WHICH?", "warn"),
         ("rejected", "REJECTED", "warn"),
         ("not_understood", "NOT HEARD", "error"),
         ("timeout", "TIMEOUT", "error"),
@@ -142,7 +143,7 @@ def test_low_confidence_meaning_is_amber():
             "kind": "stage",
             "stage": "nlu",
             "cmd": "c1",
-            "intent": "toggle_flaps",
+            "intent": "set_flaps",
             "slots": {},
             "confidence": 0.4,
         },
@@ -202,3 +203,38 @@ def test_notice_does_not_interrupt_a_recording():
 def test_describe_slots():
     assert describe_slots({"com_port": "1", "frequency": "118.75"}) == "COM 1  freq 118.75"
     assert describe_slots({"state": "on"}) == "ON"
+
+
+def test_answered_reply_shows_what_it_was_taken_as():
+    s = OverlayState(Clock())
+    run(
+        s,
+        {"kind": "ptt_press", "cmd": "c2"},
+        {"kind": "ptt_release", "cmd": "c2"},
+        {"kind": "stage", "stage": "stt", "cmd": "c2", "text": "one thousand", "backend": "vosk"},
+        {"kind": "stage", "stage": "nlu", "cmd": "c2", "intent": "None", "confidence": 1.0},
+        {
+            "kind": "answered",
+            "cmd": "c2",
+            "reply_to": "c1",
+            "intent": "set_autopilot_altitude",
+            "slots": {"altitude": "1000"},
+        },
+        {"kind": "speak", "cmd": "c2", "text": "Altitude 1000 feet"},
+        {"kind": "command_done", "cmd": "c2", "outcome": "executed"},
+    )
+    _, meant, outcome = s.lines()
+    assert meant.text.endswith("alt 1000") and meant.detail == ""
+    assert outcome.badge == "DONE"
+
+
+def test_bare_number_reason_shown():
+    s = OverlayState(Clock())
+    run(
+        s,
+        {"kind": "ptt_press", "cmd": "c1"},
+        {"kind": "implausible", "cmd": "c1", "reason": "not_offered"},
+        {"kind": "speak", "cmd": "c1", "text": "Say it with the word heading"},
+        {"kind": "command_done", "cmd": "c1", "outcome": "rejected"},
+    )
+    assert s.lines()[-1].text == "Say it with the word heading  (not one of the two values offered)"

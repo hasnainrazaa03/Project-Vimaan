@@ -40,6 +40,7 @@ PROBLEM_KINDS = {
     "worker_fatal",
     "stt_fallback",
     "implausible",
+    "ambiguous",
 }
 
 
@@ -178,6 +179,27 @@ def report(path: Path) -> str:
         if e.get("traceback"):
             w("    " + e["traceback"].strip().splitlines()[-1])
 
+    follow = [e for e in events if e["kind"] == "aircraft_state"]
+    if follow:
+        w("")
+        w("Target vs aircraft (seconds after the target or radio was set):")
+        for e in follow:
+            w(
+                f"  {e.get('cmd')} {e.get('after')} +{e.get('after_sec'):.0f}s: "
+                f"hdg {e.get('heading_actual')} (target {e.get('heading_target')})  "
+                f"alt {e.get('altitude_actual')} (target {e.get('altitude_target')})  "
+                f"vs {e.get('vs_actual')}  COM1 {e.get('com1_active')}  COM2 {e.get('com2_active')}  "
+                f"servos {e.get('servos_on')} lat {e.get('lateral_mode')} vert {e.get('vertical_mode')}"
+            )
+    changes = [e for e in events if e["kind"] == "autopilot_state_change"]
+    if changes:
+        w("")
+        w("Autopilot state changes (includes ones Vimaan didn't make):")
+        for e in changes:
+            w(
+                f"  t={e.get('t')}s {e.get('changed')}  last Vimaan action "
+                f"{e.get('last_vimaan_cmd')} {e.get('sec_since_vimaan_action')}s earlier"
+            )
     end = next((e for e in reversed(events) if e["kind"] in ("session_end", "heartbeat")), None)
     if end:
         w("")

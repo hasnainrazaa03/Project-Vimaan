@@ -7,7 +7,7 @@ The constraints themselves are declared in the command table
   utterance, so the bounds live in one place instead of as literals scattered
   across the selection loops.
 - the plugin / dashboard can call :func:`validate_slot` for explicit
-  accept / wrap / reject feedback before acting on a value. Phase 6B's safety
+  accept / reject feedback before acting on a value. Phase 6B's safety
   interlocks build on this.
 
 Pure-Python (no torch), so it imports anywhere the package does.
@@ -57,7 +57,7 @@ def validate_slot(name: str, value: Any) -> tuple[Any, bool, str]:
 
 
 def in_range(name: str, value: Any) -> bool:
-    """True if ``value`` satisfies the slot's constraint (no wrap/coercion)."""
+    """True if ``value`` satisfies the slot's constraint."""
     v = SLOT_VALIDATORS.get(name)
     return bool(v and v.contains(value))
 

@@ -92,7 +92,13 @@ def train_model(
     with open(dataset_path, encoding="utf-8") as f:
         data = [json.loads(line) for line in f if line.strip()]
 
-    data = normalize_dataset(data)
+    # v2 rows (ML/data/generate_v2.py) already carry slot values exactly as
+    # they appear in the normalized text ("090", "121.5", "raise"), and say
+    # which rows belong to held-out phrasings. Re-normalizing their values
+    # would break that ("090" -> "90" no longer matches the text).
+    v2 = bool(data) and all(r.get("v") == 2 for r in data)
+    if not v2:
+        data = normalize_dataset(data)
 
     # 3-way split: 70% train / 15% val (early stopping) / 15% held-out TEST.
     # The test split is never trained or early-stopped on and is saved with the
@@ -105,8 +111,14 @@ def train_model(
         except ValueError:  # a class too small to stratify
             return train_test_split(rows, test_size=frac, random_state=seed)
 
-    train_data, temp_data = _split(data, 0.30)
-    val_data, test_data = _split(temp_data, 0.50)
+    if v2:
+        # Test = rows from held-out templates (new phrasings); validation is a
+        # random 15% of the rest.
+        test_data = [r for r in data if r.get("split") == "test"]
+        train_data, val_data = _split([r for r in data if r.get("split") != "test"], 0.15)
+    else:
+        train_data, temp_data = _split(data, 0.30)
+        val_data, test_data = _split(temp_data, 0.50)
     print(f"Split: train {len(train_data)}, val {len(val_data)}, held-out test {len(test_data)}")
 
     intents = sorted(list(set(item["intent"] for item in data)))

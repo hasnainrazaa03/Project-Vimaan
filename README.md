@@ -187,7 +187,7 @@ written:
 | Slot | Constraint | On violation |
 | --- | --- | --- |
 | `altitude` | 1,000–50,000 ft | reject |
-| `degrees` | 0–360° | **wrap** (450 → 90) |
+| `degrees` | 0–360° | reject (2040 is refused, never wrapped) |
 | `flight_level` | 10–430 | reject |
 | `frequency` | 118.000–137.000 MHz | reject |
 | `com_port` | 1–4 | reject |

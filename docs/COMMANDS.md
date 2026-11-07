@@ -8,19 +8,16 @@ Hold push-to-talk (Z), say the command, release.
 
 | Command | Say | Values | Needs the word | Asks to confirm | X-Plane |
 | --- | --- | --- | --- | --- | --- |
-| Heading | "set heading two seven zero"<br>"change heading to two seven zero"<br>"turn to two seven zero degrees" | hdg 0–360 | degree, degrees, hdg, heading, turn | — | `sim/cockpit2/autopilot/heading_dial_deg_mag_pilot` |
-| Altitude | "set altitude seven thousand"<br>"climb to seven thousand feet"<br>"descend to seven thousand feet" | alt 1000–50000 | alt, altitude, climb, descend, feet, fly, maintain, thousand | — | `sim/cockpit2/autopilot/altitude_dial_ft` |
-| Flight level | "climb to flight level three five zero"<br>"maintain flight level three five zero"<br>"request flight level three five zero" | FL 10–430 | fl, level | — | `sim/cockpit2/autopilot/altitude_dial_ft` |
-| COM frequency | "set com one to one two one decimal five"<br>"tune com one one two one decimal five"<br>"frequency one two one decimal five on com one" | COM 1–4; freq 118.0–137.0 | com, comm, frequency, radio, tune | — | `sim/cockpit2/radios/actuators/com1_frequency_hz_833`<br>`sim/cockpit2/radios/actuators/com2_frequency_hz_833` |
-| Landing gear | "gear up"<br>"up landing gear"<br>"landing gear up" | up / down | gear | gear up below 1,000 ft AGL | `sim/cockpit2/controls/gear_handle_down`<br>`sim/aircraft/gear/acf_gear_retract`<br>`sim/flight_controls/landing_gear_up`<br>`sim/flight_controls/landing_gear_down` |
-| Flaps | "flaps up"<br>"up flaps"<br>"set flaps up" | up / down | flap, flaps | — | `sim/cockpit2/controls/flap_handle_request_ratio`<br>`sim/flight_controls/flaps_up_full`<br>`sim/flight_controls/flaps_down` |
-| Autopilot 1 | "autopilot 1 on"<br>"on autopilot 1"<br>"ap one on" | on / off | ap, autopilot, pilot | — | `sim/cockpit2/autopilot/servos_on`<br>`sim/autopilot/servos_on`<br>`sim/autopilot/servos_toggle` |
-| Autopilot 2 | "autopilot 2 on"<br>"on autopilot 2"<br>"ap two on" | on / off | ap, autopilot, pilot | — | `sim/cockpit2/autopilot/servos2_on`<br>`sim/autopilot/servos2_on`<br>`sim/autopilot/servos2_toggle` |
-| Flight director 1 | "flight director 1 on"<br>"on flight director 1"<br>"fd one on" | on / off | director, fd | — | `sim/cockpit2/autopilot/flight_director_mode`<br>`sim/autopilot/fdir_on`<br>`sim/autopilot/fdir_toggle` |
-| Flight director 2 | "flight director 2 on"<br>"on flight director 2"<br>"fd two on" | on / off | director, fd | — | `sim/cockpit2/autopilot/flight_director2_mode`<br>`sim/autopilot/fdir2_on`<br>`sim/autopilot/fdir2_toggle` |
-| Parking brake | "parking brake on"<br>"on parking brake" | on / off | brake, brakes, parking | set above 5 kt ground speed | `sim/flightmodel/controls/parkbrake`<br>`sim/flight_controls/park_brake_set`<br>`sim/flight_controls/park_brake_release` |
-| Engine 1 | "engine 1 on"<br>"on engine 1" | on / off | engine, engines | shutdown while airborne | `sim/starters/engage_starter_1`<br>`sim/starters/shut_down_1` |
-| Engine 2 | "engine 2 on"<br>"on engine 2" | on / off | engine, engines | shutdown while airborne | `sim/starters/engage_starter_2`<br>`sim/starters/shut_down_2` |
+| Heading | "heading two seven zero"<br>"set heading two seven zero"<br>"set the heading to two seven zero" | hdg 0–360 | degree, degrees, hdg, heading, turn | — | `sim/cockpit2/autopilot/heading_dial_deg_mag_pilot` |
+| Altitude | "altitude seven thousand"<br>"set altitude seven thousand"<br>"set the altitude to seven thousand feet" | alt 1000–50000 | alt, altitude, climb, descend, feet, fly, maintain, thousand | — | `sim/cockpit2/autopilot/altitude_dial_ft` |
+| Flight level | "flight level three five zero"<br>"climb to flight level three five zero"<br>"descend to flight level three five zero" | FL 10–430 | fl, level | — | `sim/cockpit2/autopilot/altitude_dial_ft` |
+| COM frequency | "com one one two one decimal five"<br>"tune com one one two one decimal five"<br>"tune com one to one two one decimal five" | COM 1–4; freq 118.0–137.0 | com, comm, frequency, radio, tune | — | `sim/cockpit2/radios/actuators/com1_frequency_hz_833`<br>`sim/cockpit2/radios/actuators/com2_frequency_hz_833` |
+| Landing gear | "gear up"<br>"landing gear up"<br>"gear up please" | up / down | gear | gear up below 1,000 ft AGL | `sim/cockpit2/controls/gear_handle_down`<br>`sim/aircraft/gear/acf_gear_retract`<br>`sim/flight_controls/landing_gear_up`<br>`sim/flight_controls/landing_gear_down` |
+| Flaps | "flaps up"<br>"flaps up please"<br>"set flaps up" | position | flap, flaps | — | `sim/cockpit2/controls/flap_handle_request_ratio`<br>`sim/flight_controls/flaps_up_full`<br>`sim/flight_controls/flaps_down` |
+| Autopilot | "autopilot on"<br>"autopilot 1 on"<br>"ap on" | instance; on / off | ap, autopilot, pilot | — | `sim/cockpit2/autopilot/servos_on`<br>`sim/autopilot/servos_on`<br>`sim/autopilot/servos_toggle`<br>`sim/cockpit2/autopilot/servos2_on`<br>`sim/autopilot/servos2_on`<br>`sim/autopilot/servos2_toggle` |
+| Flight director | "flight director on"<br>"flight director 1 on"<br>"fd on" | instance; on / off | director, fd | — | `sim/cockpit2/autopilot/flight_director_mode`<br>`sim/autopilot/fdir_on`<br>`sim/autopilot/fdir_toggle`<br>`sim/cockpit2/autopilot/flight_director2_mode`<br>`sim/autopilot/fdir2_on`<br>`sim/autopilot/fdir2_toggle` |
+| Parking brake | "parking brake on"<br>"parking brake on please"<br>"{state_verb} the parking brake" | on / off | brake, brakes, parking | set above 5 kt ground speed | `sim/flightmodel/controls/parkbrake`<br>`sim/flight_controls/park_brake_set`<br>`sim/flight_controls/park_brake_release` |
+| Engine | "{state_verb} engine 1"<br>"{state_verb} number 1"<br>"{state_verb} the {instance_ord} engine" | instance; on / off | engine, engines, number | shutdown while airborne | `sim/starters/engage_starter_1`<br>`sim/starters/shut_down_1`<br>`sim/starters/engage_starter_2`<br>`sim/starters/shut_down_2` |
 
 ## Conversation
 
