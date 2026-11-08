@@ -51,6 +51,7 @@ DEFAULT_DATAREFS: dict[str, Any] = {
     "sim/cockpit2/autopilot/altitude_hold_status": 0,
     "sim/cockpit2/autopilot/altitude_hold_armed": 0,
     "sim/cockpit2/autopilot/vvi_status": 0,
+    "sim/cockpit2/autopilot/fms_vnav": 0,
     "sim/cockpit2/autopilot/speed_status": 0,
     "sim/aircraft/view/acf_ICAO": "BE58",
     # What X-Plane 12.4.3 reports for the Laminar Baron 58.
@@ -124,6 +125,8 @@ KNOWN_COMMANDS = {
     "sim/autopilot/autothrottle_toggle",
     "sim/autopilot/knots_mach_toggle",
     "sim/instruments/barometer_std",
+    "sim/instruments/barometer_up",
+    "sim/instruments/barometer_down",
 }
 
 

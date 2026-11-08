@@ -161,3 +161,42 @@ def test_airbus_settings_one_two_three():
     a333 = AircraftInfo(flap_detents=4, flap_degrees=(0.0, 10.0, 15.0, 20.0, 35.0))
     profile = resolve(a333, A333_COMMANDS.__contains__)
     assert [profile.flap_notch(n) for n in (1, 2, 3, 5)] == [1, 2, 3, None]
+
+
+def test_files_mention_finds_an_autothrottle_in_the_acf_scripts_or_objects(tmp_path):
+    from vimaan_nlu.aircraft import files_mention
+
+    def plane(name, files):
+        d = tmp_path / name
+        for rel, text in files.items():
+            f = d / rel
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(text)
+        return str(d / "plane.acf")
+
+    assert (
+        files_mention(plane("jet", {"plane.acf": "P sim/cockpit2/autopilot/AutoThrottle_on"}))
+        is True
+    )
+    md82 = plane(
+        "md82", {"plane.acf": "x", "objects/panel.obj": "ANIM sim/autopilot/autothrottle_toggle"}
+    )
+    assert files_mention(md82) is True
+    baron = plane("baron", {"plane.acf": "x", "plugins/xlua/scripts/a.lua": "throttle_ratio"})
+    assert files_mention(baron) is False
+    # Liveries are skipped; a missing folder is unknown.
+    livery = plane("livery", {"plane.acf": "x", "liveries/red/objects/x.obj": "autothrottle"})
+    assert files_mention(livery) is False
+    assert files_mention(str(tmp_path / "nowhere" / "x.acf")) is None
+
+
+def test_own_controls_measured_as_no_change_are_tried_not_refused():
+    from vimaan_nlu.aircraft import AircraftInfo, resolve
+
+    b738 = {"laminar/B738/autopilot/cmd_a_press", "laminar/B738/autopilot/hdg_sel_press"}
+    probed = {"mode_vnav": "no_change", "mode_nav": "no_change"}
+    p = resolve(AircraftInfo(), lambda n: n in b738 or n.startswith("sim/"), probed)
+    assert p.supports("mode_vnav") is None  # the 737's own VNAV button: try, verify
+    assert p.supports("mode_nav") is None  # also its own (VOR/LOC)
+    generic = resolve(AircraftInfo(), lambda n: n.startswith("sim/"), probed)
+    assert generic.supports("mode_vnav") is False

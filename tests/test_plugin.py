@@ -1657,7 +1657,7 @@ def test_vertical_speed_direction_from_the_selected_altitude(sim):
     xp.datarefs["sim/cockpit2/autopilot/altitude_dial_ft"] = 9000.0
     xp.datarefs["sim/cockpit2/gauges/indicators/altitude_ft_pilot"] = 5000.0
     assert say(plugin, "vertical speed", "set_vertical_speed", {"vs": "800"}) == [
-        "Climb 800 feet per minute"
+        "Climb 800 feet per minute, to 9000"  # and the selected altitude is captured
     ]
 
 
@@ -1738,8 +1738,64 @@ def test_autothrottle_on(sim):
 def test_airbus_athr_uses_its_own_button(sim):
     _, plugin, xp = sim
     aircraft(plugin, xp, commands=A333)
+    xp.datarefs[AP + "autothrottle_enabled"] = -1  # A/THR off (not even armed)
     say(plugin, "auto throttle", "toggle_autothrottle", {"state": "on"})
     assert xp.commands_fired == ["laminar/A333/autopilot/a_thr_toggle"]
+
+
+def test_airbus_athr_armed_counts_as_on(sim):
+    # A/THR flips -1 (off) and 0 (armed); armed is on.
+    _, plugin, xp = sim
+    aircraft(plugin, xp, commands=A333)
+    xp.datarefs[AP + "autothrottle_enabled"] = 0
+    assert say(plugin, "auto throttle", "toggle_autothrottle", {"state": "on"}) == [
+        "Autothrottle already on"
+    ]
+
+
+def test_airbus_athr_that_wont_disarm_explains_the_levers(sim, monkeypatch):
+    # At FLX/MCT/TOGA the A330's script holds A/THR at armed every frame.
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    aircraft(plugin, xp, commands=A333)
+    xp.datarefs[AP + "autothrottle_enabled"] = 0
+    say(plugin, "auto throttle", "toggle_autothrottle", {"state": "off"})
+    plugin._flight_loop()
+    assert xp.spoken[-1] == (
+        "Autothrottle did not respond. A/THR stays armed while the thrust levers are at "
+        "FLX, MCT or TOGA. Move them to CL."
+    )
+
+
+def test_no_autothrottle_where_the_aircrafts_files_have_none(sim):
+    # X-Plane's own autothrottle "worked" in the Baron and King Air probes.
+    _, plugin, xp = sim
+    aircraft(plugin, xp, engine_type=1)
+    plugin._athr_scan = (plugin.profile.info.acf_path, False)
+    assert say(plugin, "auto throttle", "toggle_autothrottle", {"state": "on"}) == [
+        "This aircraft has no autothrottle"
+    ]
+    assert xp.commands_fired == []
+
+
+def test_an_aircrafts_own_athr_button_is_used_even_if_the_scan_found_nothing(sim):
+    _, plugin, xp = sim
+    aircraft(plugin, xp, commands=A333)
+    plugin._athr_scan = (plugin.profile.info.acf_path, False)
+    xp.datarefs[AP + "autothrottle_enabled"] = -1
+    say(plugin, "auto throttle", "toggle_autothrottle", {"state": "on"})
+    assert xp.commands_fired == ["laminar/A333/autopilot/a_thr_toggle"]
+
+
+def test_the_aircraft_file_scan_runs_off_the_main_thread_and_is_logged(sim, monkeypatch, tmp_path):
+    module, plugin, xp = sim
+    acf = tmp_path / "Jet" / "jet.acf"
+    acf.parent.mkdir()
+    acf.write_text("P sim/cockpit2/autopilot/autothrottle_enabled\n")
+    plugin._athr_scan = (str(acf), None)
+    plugin._scan_aircraft_files(str(acf))
+    assert plugin._athr_scan == (str(acf), True)
+    assert events(plugin, "aircraft_files")[-1]["autothrottle_shown"] is True
 
 
 def test_autothrottle_probed_absent(sim):
@@ -1751,7 +1807,7 @@ def test_autothrottle_probed_absent(sim):
     )
     aircraft(plugin, xp, engine_type=1)
     assert say(plugin, "auto throttle", "toggle_autothrottle", {"state": "on"}) == [
-        "No autothrottle on this aircraft"
+        "This aircraft has no autothrottle"
     ]
 
 
@@ -2233,3 +2289,191 @@ def test_a_bare_name_the_model_understood_is_left_to_the_model(sim):
     spoken = say(plugin, "heading", "set_autopilot_heading", {"degrees": "361"})
     assert spoken == ["Invalid heading value"]
     assert events(plugin, "bare_command") == []
+
+
+# ---------------------------------------------------------------------------
+# Part B: FMS modes, altimeter by knob steps, altitude capture
+# ---------------------------------------------------------------------------
+def probe_file(plugin, steps, key="Other_7__other"):
+    folder = plugin.tel.log_dir / "aircraft"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{key}.json").write_text(json.dumps({"steps": steps}))
+
+
+def test_737_vnav_without_a_flight_plan_says_so(sim, monkeypatch):
+    # The probe saw the 737's VNAV button do nothing (no route in the FMC);
+    # it's the aircraft's own button, so it's tried, and the failure explained.
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    probe_file(plugin, {"mode_vnav": "no_change"})
+    aircraft(plugin, xp, commands=B738_MCP)
+    assert say(plugin, "v nav", "set_autopilot_mode", {"mode": "v nav"}) == ["V NAV on"]
+    assert xp.commands_fired == ["laminar/B738/autopilot/vnav_press"]
+    plugin._flight_loop()
+    assert xp.spoken[-1] == "V NAV did not engage. It needs a flight plan in the F M C."
+
+
+def test_generic_vnav_measured_as_nothing_is_refused(sim):
+    # The Baron: sim/autopilot/vnav did nothing, and it has no button for it.
+    _, plugin, xp = sim
+    probe_file(plugin, {"mode_vnav": "no_change"}, key="Other_1__other")
+    aircraft(plugin, xp, engine_type=1)
+    assert say(plugin, "v nav", "set_autopilot_mode", {"mode": "v nav"}) == [
+        "V NAV mode is not available on this aircraft"
+    ]
+
+
+def test_a330_managed_modes_push_the_fcu_knobs(sim):
+    _, plugin, xp = sim
+    knobs = (
+        "laminar/A333/autopilot/altitude_knob_push",
+        "laminar/A333/autopilot/heading_knob_push",
+    )
+    aircraft(plugin, xp, commands=A333 + knobs)
+    say(plugin, "v nav", "set_autopilot_mode", {"mode": "v nav"})
+    say(plugin, "l nav", "set_autopilot_mode", {"mode": "l nav"})
+    assert xp.commands_fired == [
+        "laminar/A333/autopilot/altitude_knob_push",
+        "laminar/A333/autopilot/heading_knob_push",
+    ]
+    # Managed vertical is read from fms_vnav, not the sim's vnav_status.
+    assert plugin.profile.status_dataref("mode_vnav", "x") == "sim/cockpit2/autopilot/fms_vnav"
+
+
+def knob(step):
+    def turn(sign):
+        def press(x):
+            x.datarefs[BARO] = round(x.datarefs[BARO] + sign * step, 4)
+
+        return press
+
+    return turn
+
+
+@pytest.mark.parametrize(("step", "final"), [(0.01, 29.92), (0.0295, 29.9135)])
+def test_altimeter_by_knob_steps_where_writes_dont_hold(sim, step, final):
+    # The 737 put a written setting back; its knob (barometer up/down) works.
+    _, plugin, xp = sim
+    probe_file(plugin, {"dial_baro": "no_change"})
+    aircraft(plugin, xp)
+    turn = knob(step)
+    xp.effects["sim/instruments/barometer_up"] = turn(1)
+    xp.effects["sim/instruments/barometer_down"] = turn(-1)
+    assert say(plugin, "altimeter", "set_altimeter", {"pressure": "2992"}) == []
+    spoken = settle(plugin, xp, loops=40)
+    assert spoken == ["Altimeter two niner niner two"]
+    assert xp.datarefs[BARO] == pytest.approx(final, abs=1e-4)
+    end = events(plugin, "baro_step_end")[-1]
+    assert end["ok"] and end["presses"] >= 6 and plugin._baro_step is None
+
+
+def test_altimeter_knob_that_does_nothing_is_reported(sim):
+    _, plugin, xp = sim
+    probe_file(plugin, {"dial_baro": "no_change"})
+    aircraft(plugin, xp)
+    say(plugin, "altimeter", "set_altimeter", {"pressure": "2992"})
+    assert settle(plugin, xp, loops=12) == [
+        "Altimeter not set: the knob did not move it. It reads three zero one two."
+    ]
+
+
+def climbing_with_vs(xp, actual=5000.0, target=9000.0):
+    xp.datarefs["sim/flightmodel/failures/onground_any"] = 0
+    xp.datarefs[AP + "servos_on"] = 1
+    xp.datarefs["sim/cockpit2/autopilot/altitude_dial_ft"] = target
+    xp.datarefs["sim/cockpit2/gauges/indicators/altitude_ft_pilot"] = actual
+
+    def vs_mode(x):
+        x.datarefs[AP + "altitude_mode"], x.datarefs[AP + "vvi_status"] = 4, 2
+
+    xp.effects["sim/autopilot/vertical_speed"] = vs_mode
+
+
+def test_vertical_speed_arms_the_aircrafts_own_capture(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "ARM_CAPTURE_DELAY_SEC", 0.0)
+    climbing_with_vs(xp)
+    say(plugin, "vertical speed", "set_vertical_speed", {"vs": "800", "direction": "up"})
+    plugin._flight_loop()
+    assert xp.commands_fired == ["sim/autopilot/vertical_speed", "sim/autopilot/altitude_arm"]
+
+
+def test_capture_already_armed_by_the_aircraft_is_left_alone(sim, monkeypatch):
+    # The 737 arms it when V/S engages; the arm command would toggle it off.
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "ARM_CAPTURE_DELAY_SEC", 0.0)
+    climbing_with_vs(xp)
+    xp.datarefs[AP + "altitude_hold_armed"] = 1
+    say(plugin, "vertical speed", "set_vertical_speed", {"vs": "800", "direction": "up"})
+    plugin._flight_loop()
+    assert "sim/autopilot/altitude_arm" not in xp.commands_fired
+
+
+def test_no_capture_says_how_to_level_off(sim):
+    # Option (a): the probe said altitude arm does nothing, Vimaan's capture off.
+    _, plugin, xp = sim
+    probe_file(plugin, {"mode_altitude_arm": "no_change"})
+    aircraft(plugin, xp)
+    climbing_with_vs(xp)
+    assert say(
+        plugin, "vertical speed", "set_vertical_speed", {"vs": "800", "direction": "up"}
+    ) == [
+        "Climb 800 feet per minute. This aircraft can't capture altitude. Say altitude hold at 9000"
+    ]
+
+
+def test_vimaan_capture_presses_altitude_hold_near_the_target(sim):
+    # Option (b), switched on with its key.
+    _, plugin, xp = sim
+    probe_file(plugin, {"mode_altitude_arm": "no_change"})
+    aircraft(plugin, xp)
+    climbing_with_vs(xp)
+    plugin._on_capture_cmd(None, xp.CommandBegin, None)
+    assert xp.spoken[-1] == "Vimaan altitude capture on"
+    assert say(
+        plugin, "vertical speed", "set_vertical_speed", {"vs": "800", "direction": "up"}
+    ) == ["Climb 800 feet per minute. Leveling off at 9000"]
+    plugin._flight_loop()
+    assert "sim/autopilot/altitude_hold" not in xp.commands_fired  # 4,000 ft to go
+    xp.datarefs["sim/cockpit2/gauges/indicators/altitude_ft_pilot"] = 8940.0
+    xp.datarefs["sim/flightmodel/position/vh_ind_fpm"] = 800.0  # band = 80 ft
+    assert settle(plugin, xp, loops=1) == ["Altitude hold, 9000"]
+    assert xp.commands_fired[-1] == "sim/autopilot/altitude_hold"
+    assert events(plugin, "capture_end")[-1]["ok"] is True
+
+
+def test_vimaan_capture_stands_down_when_the_pilot_changes_mode(sim):
+    _, plugin, xp = sim
+    probe_file(plugin, {"mode_altitude_arm": "no_change"})
+    aircraft(plugin, xp)
+    climbing_with_vs(xp)
+    plugin._capture_enabled = True
+    say(plugin, "vertical speed", "set_vertical_speed", {"vs": "800", "direction": "up"})
+    xp.datarefs[AP + "altitude_mode"] = 6  # the pilot pressed ALT
+    assert settle(plugin, xp, loops=1) == ["Altitude capture cancelled, mode changed"]
+    assert plugin._capture is None
+
+
+def test_cancel_drops_vimaan_capture(sim):
+    _, plugin, xp = sim
+    probe_file(plugin, {"mode_altitude_arm": "no_change"})
+    aircraft(plugin, xp)
+    climbing_with_vs(xp)
+    plugin._capture_enabled = True
+    say(plugin, "vertical speed", "set_vertical_speed", {"vs": "800", "direction": "up"})
+    assert say(plugin, "cancel") == ["Cancelled"]
+    assert plugin._capture is None
+    assert events(plugin, "cancelled")[-1]["dropped"] == ["altitude capture"]
+
+
+def test_new_altitude_while_climbing_arms_capture(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "ARM_CAPTURE_DELAY_SEC", 0.0)
+    climbing_with_vs(xp)
+    xp.datarefs[AP + "altitude_mode"] = 4
+    xp.datarefs["sim/flightmodel/position/vh_ind_fpm"] = 900.0
+    assert say(plugin, "altitude", "set_autopilot_altitude", {"altitude": "7000"}) == [
+        "Altitude 7000 feet"
+    ]
+    plugin._flight_loop()
+    assert xp.commands_fired == ["sim/autopilot/altitude_arm"]

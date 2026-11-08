@@ -22,6 +22,7 @@ Pure Python (no XPPython3): the plugin reads the datarefs and passes them in.
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -87,6 +88,11 @@ DEFAULT_COMMANDS: Mapping[str, str | None] = MappingProxyType(
         "autothrottle_off": "sim/autopilot/autothrottle_off",
         "autothrottle_toggle": "sim/autopilot/autothrottle_toggle",
         "baro_std": "sim/instruments/barometer_std",
+        # One step of the altimeter knob, for aircraft whose own logic owns
+        # the setting (the 737 put written values back; its scripts handle
+        # these commands).
+        "baro_up": "sim/instruments/barometer_up",
+        "baro_down": "sim/instruments/barometer_down",
         # Opening an engine's fuel during a turbine start. None: write the
         # sim's fuel lever (mixture ratio) instead of pressing a command.
         "fuel_on_1": None,
@@ -132,11 +138,31 @@ OVERRIDES: tuple[Override, ...] = (
                 "heading_select": "laminar/A333/autopilot/heading_knob_pull",
                 "altitude_select": "laminar/A333/autopilot/altitude_knob_pull",
                 "vertical_select": "laminar/A333/autopilot/vertical_knob_pull",
+                # Managed modes: heading knob push engages GPS steering (NAV),
+                # altitude knob push the FMS's vertical mode (sim/autopilot/FMS).
+                "mode_gpss": "laminar/A333/autopilot/heading_knob_push",
+                "mode_vnav": "laminar/A333/autopilot/altitude_knob_push",
             }
         ),
-        source="Laminar A330-300 xlua A333.autopilot: create_command(...), X-Plane 12.4.3",
-        # CONF 1, 2, 3, FULL (4 detents); "full" is its own word.
-        settings=MappingProxyType({"flap_labels": ("1", "2", "3")}),
+        source="Laminar A330-300 xlua A333.autopilot: create_command(...) and its "
+        "*_CMDhandler functions, X-Plane 12.4.3",
+        settings=MappingProxyType(
+            {
+                # CONF 1, 2, 3, FULL (4 detents); "full" is its own word.
+                "flap_labels": ("1", "2", "3"),
+                # Managed vertical is FMS VNAV (fms_vnav), not the sim's
+                # geometric-descent vnav_status.
+                "status_datarefs": MappingProxyType(
+                    {"mode_vnav": "sim/cockpit2/autopilot/fms_vnav"}
+                ),
+                # A/THR flips autothrottle_enabled between -1 (off) and 0
+                # (armed); armed counts as on. While both thrust levers are at
+                # FLX/MCT or TOGA its script holds it at armed every frame.
+                "athr_on_from": 0,
+                "athr_hint": "A/THR stays armed while the thrust levers are at FLX, MCT "
+                "or TOGA. Move them to CL",
+            }
+        ),
     ),
     Override(
         name="b738_condition_levers",
@@ -217,6 +243,11 @@ class AircraftInfo:
     vno_kt: float | None = None
     vne_kt: float | None = None
     mmo: float | None = None
+    # Whether the aircraft's own files (.acf, cockpit objects, scripts) use an
+    # autothrottle at all; None until scanned. X-Plane's generic autothrottle
+    # runs on any aircraft (the Baron and King Air probes said "works"), so
+    # this, not the probe, says whether the aircraft has one.
+    autothrottle_shown: bool | None = None
 
     @property
     def engine_kind(self) -> str:
@@ -270,6 +301,8 @@ class Profile:
     # step -> "works" | "no_change" | "missing", from the probe (layer 4)
     probed: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
     settings: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+    # Roles whose command is the aircraft's own (from an override).
+    overridden: frozenset[str] = frozenset()
 
     def flap_notch(self, label: int) -> int | None:
         """The handle notch for a spoken flap setting ("flaps fifteen"), or None
@@ -303,11 +336,22 @@ class Profile:
         return self.commands.get(role)
 
     def supports(self, role: str) -> bool | None:
-        """True / False when measured, None when nobody has probed it."""
+        """True / False when measured, None when nobody has probed it.
+
+        A "no change" on the aircraft's *own* control (an override) is not a
+        refusal: the control exists and did nothing in that moment. The 737's
+        LNAV/VNAV buttons need a flight plan, and the A330's A/THR held while
+        the levers were at FLX. Those are tried and verified (None)."""
         verdict = self.probed.get(role)
         if verdict is None:
             return None if self.command(role) else False
+        if verdict == "no_change" and role in self.overridden:
+            return None
         return verdict == "works"
+
+    def status_dataref(self, role: str, default: str) -> str:
+        """Where this aircraft reports a mode's state (A330 VNAV: fms_vnav)."""
+        return (self.settings.get("status_datarefs") or {}).get(role, default)
 
     def summary(self) -> dict[str, Any]:
         """For the ``aircraft`` telemetry event."""
@@ -346,18 +390,61 @@ def resolve(
     commands: dict[str, str | None] = dict(DEFAULT_COMMANDS)
     settings: dict[str, Any] = {}
     applied = []
+    overridden: set[str] = set()
     for override in OVERRIDES:
         if all(has_command(name) for name in override.requires):
             commands.update(override.commands)
             settings.update(override.settings)
             applied.append(override.name)
+            overridden |= {role for role, name in override.commands.items() if name}
     return Profile(
         info=info,
         commands=MappingProxyType(commands),
         overrides=tuple(applied),
         probed=MappingProxyType(dict(probed or {})),
         settings=MappingProxyType(settings),
+        overridden=frozenset(overridden),
     )
+
+
+# What an aircraft's files say when it has an autothrottle: its panel, 3D
+# cockpit or scripts use the sim's autothrottle datarefs or commands.
+AUTOTHROTTLE_NEEDLE = b"autothrottle"
+_SCAN_SUFFIXES = (".acf", ".lua", ".obj")
+_SCAN_MAX_BYTES = 600_000_000
+
+
+def files_mention(acf_path: str, needle: bytes = AUTOTHROTTLE_NEEDLE) -> bool | None:
+    """Whether the aircraft's .acf, scripts or objects mention ``needle``
+    (case-insensitive). The .acf first, then scripts, then objects, stopping
+    at the first hit; liveries are skipped. None when the folder can't be
+    read or the scan would be too large to be sure.
+
+    Checked on X-Plane 12.4.3: the 737 (in its .acf), A330 (.acf) and MD-82
+    (cockpit objects, scripts) mention it; the Baron, King Air C90B, C172,
+    SR22 and Citation X mention it nowhere."""
+    folder = os.path.dirname(acf_path)
+    if not acf_path or not os.path.isdir(folder):
+        return None
+    files: list[str] = []
+    for root, dirs, names in os.walk(folder):
+        dirs[:] = [d for d in dirs if d.lower() != "liveries"]
+        files += [os.path.join(root, n) for n in names if n.lower().endswith(_SCAN_SUFFIXES)]
+    order = {".acf": 0, ".lua": 1, ".obj": 2}
+    files.sort(key=lambda f: order[os.path.splitext(f)[1].lower()])
+    needle = needle.lower()
+    total = 0
+    try:
+        for f in files:
+            total += os.path.getsize(f)
+            if total > _SCAN_MAX_BYTES:
+                return None
+            with open(f, "rb") as fh:
+                if needle in fh.read().lower():
+                    return True
+    except OSError:
+        return None
+    return False
 
 
 def override_names() -> tuple[str, ...]:
