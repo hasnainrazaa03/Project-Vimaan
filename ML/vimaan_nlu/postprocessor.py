@@ -105,6 +105,9 @@ def _build_matchers(synonyms: dict[str, tuple[str, ...]]) -> list[tuple[re.Patte
         verbs.extend((v, canon) for v in syns)
         verbs.extend((v, canon) for v in _GENERIC_STATE.get(canon, ()))
     verbs.sort(key=lambda c: len(c[0]), reverse=True)
+    # Values longest first too: "nav" matches inside "v nav" (v18 tagged
+    # "v nav" correctly and this turned it into "nav").
+    literals.sort(key=lambda c: len(c[0]), reverse=True)
     matchers: list[tuple[re.Pattern[str], str]] = []
     for verb, canon in verbs:
         stem = verb[:-1] if verb.endswith("e") else verb  # drop trailing e for -ing forms

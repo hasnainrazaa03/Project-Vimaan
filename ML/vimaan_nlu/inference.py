@@ -23,19 +23,22 @@ def reconstruct_slot_value(tokens):
         return ""
 
     reconstructed = ""
+    previous = ""
 
     for i, token in enumerate(tokens):
         clean_token = token.replace("##", "")
 
-        if clean_token == ".":
+        # A decimal point joins the tokens on both sides: "0", ".", "78" is
+        # 0.78. Joining only the left side gave "0. 78", which failed every
+        # Mach number and altimeter setting in inches (COM frequencies were
+        # rebuilt from the text by the postprocessor, which hid it).
+        if clean_token == "." or token.startswith("##") or previous == ".":
             reconstructed += clean_token
-        elif token.startswith("##"):
-            reconstructed += clean_token
+        elif i == 0:
+            reconstructed = clean_token
         else:
-            if i == 0:
-                reconstructed = clean_token
-            else:
-                reconstructed += " " + clean_token
+            reconstructed += " " + clean_token
+        previous = clean_token
 
     return reconstructed.strip()
 

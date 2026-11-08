@@ -42,9 +42,12 @@ class TestReconstructSlotValue:
     def test_decimal_token_attaches_without_space(self):
         from vimaan_nlu.inference import reconstruct_slot_value
 
-        out = reconstruct_slot_value(["121", ".", "9"])
-        # "." is special-cased to attach directly.
-        assert "121.9" in out or out == "121. 9"
+        # A decimal point joins both sides ("0. 78" failed every Mach number
+        # and altimeter setting in inches in v18's first gate).
+        assert reconstruct_slot_value(["121", ".", "9"]) == "121.9"
+        assert reconstruct_slot_value(["0", ".", "78"]) == "0.78"
+        assert reconstruct_slot_value(["28", ".", "42"]) == "28.42"
+        assert reconstruct_slot_value(["one", "two"]) == "one two"
 
 
 @pytest.mark.requires_torch
