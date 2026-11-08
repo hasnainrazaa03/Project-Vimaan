@@ -238,3 +238,156 @@ def test_bare_number_reason_shown():
         {"kind": "command_done", "cmd": "c1", "outcome": "rejected"},
     )
     assert s.lines()[-1].text == "Say it with the word heading  (not one of the two values offered)"
+
+
+# ---------------------------------------------------------------------------
+# The aircraft probe's own view
+# ---------------------------------------------------------------------------
+def start_probe(s, steps=15):
+    s.on_event(
+        {
+            "kind": "probe_start",
+            "where": "air",
+            "steps": steps,
+            "name": "BE58",
+            "next": "heading mode",
+        }
+    )
+
+
+def test_probe_view_shows_progress_and_whats_next():
+    s = OverlayState(Clock())
+    start_probe(s)
+    title, ready = s.lines()
+    assert (title.badge, title.text, title.detail, title.progress) == (
+        "PROBE",
+        "BE58  air probe",
+        "0 / 15",
+        0.0,
+    )
+    assert (ready.badge, ready.text) == ("NEXT", "heading mode  (press the probe key)")
+    s.on_event({"kind": "probe_act", "label": "heading mode", "index": 0, "total": 15})
+    ln = s.lines()[1]
+    assert (ln.badge, ln.text, ln.tone) == ("TESTING", "heading mode", "live")
+    s.on_event(
+        {
+            "kind": "probe_step",
+            "label": "heading mode",
+            "verdict": "works",
+            "index": 0,
+            "next": "nav mode",
+        }
+    )
+    title, result, nxt = s.lines()
+    assert title.detail == "1 / 15" and title.progress == pytest.approx(1 / 15)
+    assert (result.badge, result.text, result.tone) == ("WORKS", "heading mode", "ok")
+    assert nxt.text == "nav mode  (press the probe key)"
+
+
+def test_probe_results_never_mix_with_the_last_command():
+    # In flight the probe's announcements replaced the last command's reply
+    # line, under its HEARD / MEANT lines.
+    s = OverlayState(Clock())
+    command(s)  # "heading one eighty" ... DONE
+    start_probe(s)
+    s.on_event(
+        {"kind": "speak", "cmd": None, "text": "Probe ready. 15 air steps.", "origin": "probe"}
+    )
+    lines = s.lines()
+    assert [ln.badge for ln in lines] == ["PROBE", "NEXT"]
+    assert all("heading one eighty" not in ln.text for ln in lines)
+    assert s.reply == "Heading one eight zero"  # the command's own record is untouched
+
+
+def test_a_voice_command_takes_over_then_hands_back_to_the_probe():
+    clock = Clock()
+    s = OverlayState(clock)
+    start_probe(s)
+    command(s, text="autopilot on")
+    assert s.lines()[0].badge == "HEARD"
+    clock.now += HOLD_SEC + 0.1
+    assert s.visible and s.lines()[0].badge == "PROBE"
+
+
+def test_probe_view_stays_up_between_presses():
+    clock = Clock()
+    s = OverlayState(clock)
+    start_probe(s)
+    clock.now += 600  # the pilot takes their time between steps
+    assert s.visible
+
+
+def test_finished_probe_shows_a_summary_then_hides():
+    clock = Clock()
+    s = OverlayState(clock)
+    start_probe(s, steps=2)
+    for i, verdict in enumerate(("works", "no_change")):
+        s.on_event({"kind": "probe_step", "label": f"step {i}", "verdict": verdict, "index": i})
+    s.on_event({"kind": "probe_end", "reason": "complete", "message": "Probe complete."})
+    ln = s.lines()[-1]
+    assert (ln.badge, ln.text, ln.tone) == ("DONE", "Results saved. 1 work, 1 no change.", "ok")
+    clock.now += 13
+    assert not s.visible
+
+
+def test_stopped_probe_is_red():
+    s = OverlayState(Clock())
+    start_probe(s)
+    s.on_event(
+        {
+            "kind": "probe_end",
+            "reason": "restore_failed",
+            "message": "Probe stopped. Heading mode did not restore. Check the autopilot.",
+        }
+    )
+    ln = s.lines()[-1]
+    assert (ln.badge, ln.tone) == ("STOPPED", "error")
+    assert ln.text == "Probe stopped. Heading mode did not restore. Check the autopilot."
+
+
+def test_a_resumed_probe_starts_part_way():
+    s = OverlayState(Clock())
+    s.on_event(
+        {
+            "kind": "probe_start",
+            "where": "air",
+            "steps": 15,
+            "start": 9,
+            "name": "B738",
+            "next": "V NAV",
+        }
+    )
+    lines = s.lines()
+    assert lines[0].detail == "9 / 15" and lines[-1].text.startswith("V NAV")
+
+
+def test_probe_wait_and_note_lines():
+    s = OverlayState(Clock())
+    start_probe(s)
+    s.on_event(
+        {"kind": "probe_blocked", "label": "heading mode", "message": "Turn the autopilot on first"}
+    )
+    assert [(ln.badge, ln.text) for ln in s.lines()[1:]] == [
+        ("WAIT", "Turn the autopilot on first"),
+        ("NEXT", "heading mode  (press the probe key)"),
+    ]
+    s.on_event({"kind": "probe_act", "label": "altitude dial", "index": 14, "total": 15})
+    s.on_event(
+        {
+            "kind": "probe_step",
+            "label": "altitude dial",
+            "index": 14,
+            "verdict": "works",
+            "next": None,
+            "note": "altitude arm stayed on, which is harmless",
+        }
+    )
+    assert [ln.badge for ln in s.lines()] == ["PROBE", "WORKS", "NOTE"]
+    assert s.lines()[2].text == "Altitude arm stayed on, which is harmless"
+
+
+def test_probe_summary_counts_every_saved_run():
+    s = OverlayState(Clock())
+    start_probe(s)
+    s.on_event({"kind": "probe_end", "reason": "complete", "counts": {"works": 12, "no_change": 3}})
+    assert s.lines()[-1].text == "Results saved. 12 work, 3 no change."

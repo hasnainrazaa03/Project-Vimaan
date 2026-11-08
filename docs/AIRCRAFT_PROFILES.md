@@ -62,6 +62,21 @@ aircraft folders. `scripts/check_xplane_refs.py` re-checks every name.
 - The fuel cutoff is the condition levers (`laminar/B738/engines/condition_lever_{1,2}_{idle,cutoff}`). Override `b738_condition_levers` covers a turbine start.
 - The start switches are `laminar/B738/knob/starter{1,2}_{up,dn}`. Not used yet; the generic starter is tried first and logged.
 
+- **Probed 2026-11-07**, all 18 steps (sessions `vimaan_20261107_211836` and `_224940`):
+  - **Works:** HDG, VOR/LOC, APP, back course, ALT HOLD, ALT ARM, V/S, LVL CHG, autothrottle, knots/Mach, the speed, V/S and altitude dials, and the flap handle.
+  - **No change:** LNAV and VNAV (`lnav_press`, `vnav_press`). Both need an FMC flight plan to engage; whether one was loaded isn't logged.
+  - **Altimeter writes don't hold:** its scripts own the baro, so Part B's altimeter command must use the 737's EFIS controls. STD was inconclusive: the altimeter was already 29.92.
+  - **Side effects the probe now handles:** LVL CHG turns the autothrottle on, and the probe turns it back off. Moving the altitude dial arms altitude capture and leaves it armed; the probe notes that and carries on.
+  - Engaged with no modes (roll and pitch hold), ALT HOLD couldn't be put back: there's no button for pitch hold. The probe now asks for HDG and ALT first.
+- **Its MCP buttons** (`laminar/B738/autopilot/cmd_a_press`, `hdg_sel_press`, `vorloc_press`, `app_press`, `alt_hld_press`, `vs_press`, `lvl_chg_press`, `lnav_press`, `vnav_press`) call the same sim commands, and also update the 737's own `CMD_status` / `AP_status`, which drive its CMD light and annunciators.
+  - With the generic engage, its `cmd_a_status` read off while the servos flew.
+  - Override `b738_mcp` makes "autopilot on" and the probe's mode steps use those buttons.
+- **In the first flight the autopilot disconnected ten times**, each time 1–50 s after engaging, with no modes selected (roll and pitch hold), and with the flight director left on. That's how X-Plane's airliner autopilot disconnects on control-column input.
+  - Neither Vimaan nor the 737's scripts switched it off.
+  - X-Plane's log showed two Xbox controllers registered as joysticks, unconfigured, with every null zone at 0%. A thumbstick at rest is never exactly centred.
+  - The Baron's simpler autopilot stayed engaged through its whole probe.
+  - In the second flight, with the 737's own CMD A, it never disconnected.
+
 **Airbus A330-300** (`A333`, jet ×2, flap detents 4)
 - The scripts wrap `servos_toggle`/`servos2_toggle`, `altitude_hold`, `NAV`, `approach`, `knots_mach_toggle`, `barometer_std` and the up/down dials.
 - In flight, `servos_on` and `servos2_on` were ignored. The fix: press the toggle once the state has been read, on every aircraft.
@@ -69,9 +84,22 @@ aircraft folders. `scripts/check_xplane_refs.py` re-checks every name.
 - A/THR: `laminar/A333/autopilot/a_thr_toggle`. Override `airbus_fcu` covers both.
 - The ENG MODE selector is `laminar/A333/switch/eng_mode_{left,right}`. In flight, a restart cranked 20 s with the fuel lever at cutoff; the turbine start now opens it at 20% N2.
 
-**Not yet checked, for the generalization test:** King Air C90B (`BE9L`,
-turboprop) and Citation X (`C750`, jet). Neither has an override, so they
-exercise layers 1, 2, 4 and 5 only.
+- **Probed 2026-11-07**, all 18 steps (session `vimaan_20261107_231419`):
+  - **Works:** HDG, NAV, APP, back course, ALT HOLD, ALT ARM, V/S, LVL CHG, knots/Mach, the speed, V/S and altitude dials, STD, the altimeter setting, and the flap handle.
+  - **No change:** GPS steering and VNAV. Managed lateral and vertical guidance come from the FMS.
+  - **No change: A/THR.** `a_thr_toggle` flips `autothrottle_enabled` between -1 (hard off) and 0 (armed). But `A333_autothrust()` holds it at 0 every frame while both engines' `ENGN_fadec_pow_req` is 2 or more (thrust levers at FLX/MCT or TOGA). Re-test it with the levers in CL.
+  - The first air run started in TRK (lateral mode 18) and TO/GA (vertical mode 10). No button puts either back, and the probe warned about it.
+  - **The autopilot disconnected about nine times.** Vimaan pressed nothing at five of those moments, and no A330 script turns the servos off, so these were X-Plane's own disconnects on control input. Two controllers, the USB Xbox controller and a "Virtual" Xbox 360 one, were both mapped to pitch, roll and yaw, with null zones at 0%.
+  - A pause left APP armed, and the next step (back course) couldn't restore. A pause now puts the pressed control back first.
+
+**Beechcraft King Air C90B** (`BE9L`, turboprop ×2, flap detents 2, Rockwell/Collins FCS-65, no overrides)
+- **Probed 2026-11-07**, all 18 steps in one run with no disconnect (session `vimaan_20261107_232456`). It exercised layers 1, 2, 4 and 5 only.
+  - **Works:** HDG, NAV, APP, back course, GPS steering, ALT HOLD, ALT ARM, V/S, LVL CHG (the FCS-65's IAS mode), the three dials, the altimeter setting, and the flap handle.
+  - **No change:** VNAV.
+  - **"Works", but it's X-Plane, not the aircraft:** the autothrottle and knots/Mach. X-Plane's own autothrottle runs on any aircraft. The C90B has none in its cockpit: its `.acf` references no autothrottle dataref, while the 737's and the A330's do. Whether Vimaan should allow "autothrottle on" here is an open Part B decision.
+  - STD was inconclusive: the altimeter was already at 29.92.
+
+**Not yet checked:** the Citation X (`C750`, jet, no override).
 
 ## Engine start by type
 
@@ -99,22 +127,43 @@ overridden: they are impossible, not risky.
 
 ## Running the probe
 
-Bind two keys in X-Plane (Settings → Keyboard, search "Vimaan"):
-**Vimaan: probe this aircraft (one step per press)** and **Vimaan: stop the
-probe**. The probe is never started by voice, because it moves the
-autopilot.
+Bind keys in X-Plane (Settings → Keyboard, search "Vimaan"). The probe is
+never started by voice, because it moves the autopilot.
+
+| Key | Does |
+| --- | --- |
+| **Vimaan: probe this aircraft (one step per press)** | starts a run, then runs one step per press |
+| **Vimaan: stop the probe (press twice to start over)** | stops after the current step; pressed again with no probe running, it forgets where the run stopped |
+| **Vimaan: probe, skip to the next step** | moves on without running the step (optional) |
+| **Vimaan: probe, go back one step** | moves back, for example to retry one step (optional) |
+
+Skip and back wrap around the ends, so any single step can be reached
+without running the ones in between.
+
+**Joysticks and gamepads:** give every axis a null zone, so a stick at rest
+doesn't count as pilot input (X-Plane: Settings → Joystick → select the device
+→ Calibrate, then raise "Null zone"; 10–15% for a gamepad thumbstick). With a
+0% null zone an airliner autopilot disconnects within seconds.
 
 **On the ground** (3 steps: altimeter STD, altimeter setting, flap handle):
-1. Parked, parking brake set, engines in any state.
+1. Parked, parking brake set, engines in any state. Set the altimeter away from 29.92 first, or STD shows nothing.
 2. Press the probe key once. Vimaan says "Probe ready. 3 ground steps…".
 3. Press once per step. Each takes about 4 s and is put back afterwards.
 
 **In the air** (15 steps: 10 autopilot modes, autothrottle, knots/Mach, speed / V/S / altitude dials):
-1. Above 1,500 ft AGL, in smooth air, with the autopilot on in **HDG and ALT hold**.
+1. Above 1,500 ft AGL, in smooth air, with the autopilot on in **HDG and ALT hold**. Without them a step may not be able to put the mode back (there's no button for roll or pitch hold), so the probe says so once. Select them, or press again to run anyway.
 2. Press once, then once per step. Each step presses one control for 2 s and puts it back. Expect brief mode changes, for example a few seconds in pitch mode.
-3. If a step can't put things back, the probe stops and says "Check the autopilot". Fly normally and look at the mode lights.
-4. You can stop at any time with the stop key. What was measured is saved.
+3. Putting things back is tried in two rounds: first the mode that was on before, then an altitude arm or autothrottle the step changed. Altitude capture left armed on its own is harmless, and the probe carries on with a note.
+4. If the autopilot disconnects during a step, the probe puts back the control it pressed, then pauses there ("The autopilot disconnected during …"). Re-engage it with HDG and ALT, then press again to retry that step. Nothing is recorded for the interrupted try.
+5. If a step still can't put things back, the probe stops and says what didn't ("After level change, the autothrottle did not go back. Check the autopilot."). Fly normally and look at the mode lights.
 
-Results are saved to `~/Vimaan_Logs/aircraft/<folder>__<file>.json`, with
-the ground and air runs merged. They are used from the next aircraft load.
-Delete the file to forget a probe.
+**Nothing is lost when a run stops.** Each step is saved the moment it's
+measured, along with where the run has got to. The next press of the probe key
+carries on from there ("Probe ready. Continuing at V NAV, step 10 of 15"), even
+after X-Plane restarts. A finished run starts from the first step next time.
+To start over early, press stop twice.
+
+Results are saved to `~/Vimaan_Logs/aircraft/<folder>__<file>.json`, with the
+ground and air runs merged. A later "inconclusive" never replaces a definite
+result. They are used from the next aircraft load. Delete the file to forget a
+probe.

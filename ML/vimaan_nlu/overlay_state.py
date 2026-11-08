@@ -22,6 +22,7 @@ from typing import Any
 from vimaan_nlu.commands import SLOT_DISPLAY, command
 
 HOLD_SEC = 6.0  # how long the result stays up after a command finishes
+PROBE_HOLD_SEC = 12.0  # how long a finished probe's summary stays up
 MODES = ("auto", "pinned", "off")  # auto: shows on activity, then fades
 
 # Tones are mapped to colours by the renderer.
@@ -58,6 +59,16 @@ class Line:
     text: str
     tone: str  # live | text | muted | accent | ok | warn | error
     detail: str = ""  # right-aligned meta (backend, timings)
+    progress: float | None = None  # 0..1: a thin bar under the text (probe)
+
+
+# The aircraft probe's result for a step -> (badge, tone).
+PROBE_BADGE: dict[str, tuple[str, str]] = {
+    "works": ("WORKS", "ok"),
+    "no_change": ("NO CHANGE", "warn"),
+    "missing": ("MISSING", "muted"),
+    "inconclusive": ("UNCLEAR", "muted"),
+}
 
 
 def describe_intent(intent: str) -> str:
@@ -82,6 +93,9 @@ class OverlayState:
         self._reset(None)
         self.phase = "idle"  # idle | listening | processing | done | notice
         self.done_at: float | None = None
+        # The aircraft probe has its own view, fed by its own events, so its
+        # results never mix with the last voice command's lines.
+        self.probe: dict[str, Any] | None = None
 
     def _reset(self, cmd: str | None) -> None:
         self.cmd = cmd
@@ -108,6 +122,11 @@ class OverlayState:
     def on_event(self, ev: dict[str, Any]) -> None:
         kind = ev.get("kind")
         cmd = ev.get("cmd")
+        if str(kind).startswith("probe_"):
+            self._on_probe(ev)
+            return
+        if kind == "speak" and ev.get("origin") == "probe":
+            return  # the probe view shows it; it isn't a reply to a command
         if kind == "ptt_press":
             self._reset(cmd)
             self.phase = "listening"
@@ -161,6 +180,123 @@ class OverlayState:
             self.verified = bool(ev.get("ok")) and self.verified is not False
             self.done_at = self.clock()
 
+    def _on_probe(self, ev: dict[str, Any]) -> None:
+        kind, p = ev.get("kind"), self.probe
+        if kind == "probe_start":
+            self.probe = {
+                "name": ev.get("name") or "",
+                "where": ev.get("where") or "",
+                "total": int(ev.get("steps") or 0),
+                "done": int(ev.get("start") or 0),  # a resumed run starts part way
+                "step": None,
+                "status": "ready",
+                "next": ev.get("next"),
+                "counts": {},
+                "message": None,
+                "note": None,
+                "ended_at": None,
+            }
+        elif p is None:
+            return
+        elif kind == "probe_act":
+            p.update(step=ev.get("label"), status="testing", note=None, message=None)
+        elif kind == "probe_step":
+            verdict = ev.get("verdict") or ""
+            p["counts"][verdict] = p["counts"].get(verdict, 0) + 1
+            p.update(
+                step=ev.get("label"),
+                status=verdict,
+                done=int(ev.get("index", p["done"])) + 1,
+                next=ev.get("next"),
+                note=ev.get("note"),
+            )
+        elif kind == "probe_paused":
+            p.update(step=ev.get("label"), status="paused", next=ev.get("label"))
+        elif kind == "probe_blocked":
+            p.update(status="blocked", message=ev.get("message"), next=ev.get("label"))
+        elif kind == "probe_move":
+            p.update(
+                status="ready",
+                step=None,
+                note=None,
+                done=int(ev.get("index") or 0),
+                next=ev.get("label"),
+            )
+        elif kind == "probe_end":
+            ok = ev.get("reason") == "complete"
+            p.update(status="complete" if ok else "stopped", message=ev.get("message"))
+            if ev.get("counts"):
+                p["counts"] = dict(ev["counts"])  # every saved run, not just this one
+            p["ended_at"] = self.clock()
+        # Probe news replaces a finished command on screen (not one in progress).
+        if self.phase in ("done", "notice"):
+            self.phase = "idle"
+
+    def _probe_showing(self) -> bool:
+        p = self.probe
+        if p is None:
+            return False
+        return p["ended_at"] is None or self.clock() - p["ended_at"] < PROBE_HOLD_SEC
+
+    def _command_showing(self) -> bool:
+        if self.phase in ("listening", "processing"):
+            return True
+        return (
+            self.phase in ("done", "notice")
+            and self.done_at is not None
+            and self.clock() - self.done_at < HOLD_SEC
+        )
+
+    def _probe_lines(self) -> list[Line]:
+        p = self.probe
+        assert p is not None
+        total, done = p["total"], p["done"]
+        title = "  ".join(x for x in (p["name"], f"{p['where']} probe") if x)
+        out = [
+            Line(
+                "PROBE",
+                title,
+                "accent",
+                f"{done} / {total}" if total else "",
+                progress=done / total if total else None,
+            )
+        ]
+        status, step = p["status"], p["step"]
+        if status == "complete":
+            counts = p["counts"]
+            summary = ", ".join(
+                f"{counts[k]} {label}"
+                for k, label in (
+                    ("works", "work"),
+                    ("no_change", "no change"),
+                    ("missing", "missing"),
+                    ("inconclusive", "unclear"),
+                )
+                if counts.get(k)
+            )
+            out.append(Line("DONE", f"Results saved. {summary}.", "ok"))
+            return out
+        if status == "stopped":
+            out.append(Line("STOPPED", p["message"] or "Probe stopped", "error"))
+            return out
+        if status == "testing":
+            out.append(Line("TESTING", step or "", "live"))
+        elif status == "paused":
+            out.append(Line("PAUSED", f"Autopilot disconnected during {step}", "warn"))
+            out.append(Line("NEXT", "Re-engage the autopilot, then press the probe key", "muted"))
+            return out
+        elif status == "blocked":
+            out.append(Line("WAIT", p["message"] or "", "warn"))
+        elif status in PROBE_BADGE:
+            badge, tone = PROBE_BADGE[status]
+            out.append(Line(badge, step or "", tone))
+            if p["note"]:
+                out.append(Line("NOTE", p["note"][:1].upper() + p["note"][1:], "muted"))
+        if p["next"]:
+            hint = "press the probe key" if status != "testing" else "after this step"
+            out.append(Line("NEXT", f"{p['next']}  ({hint})", "muted"))
+        return out
+
     def notice(self, text: str) -> None:
         """Show a one-line message (e.g. "Overlay pinned")."""
         if self.phase in ("listening", "processing"):
@@ -183,13 +319,13 @@ class OverlayState:
             return False
         if self.mode == "pinned":
             return True
-        if self.phase in ("listening", "processing"):
-            return True
-        if self.phase in ("done", "notice") and self.done_at is not None:
-            return self.clock() - self.done_at < HOLD_SEC
-        return False
+        return self._command_showing() or self._probe_showing()
 
     def lines(self) -> list[Line]:
+        # A voice command (live, or just finished) takes the screen; the probe
+        # view comes back when it's done.
+        if not self._command_showing() and self._probe_showing():
+            return self._probe_lines()
         if self.phase == "idle":
             return [Line("VIMAAN", "Hold the push-to-talk key and speak", "muted")]
         if self.phase == "notice":

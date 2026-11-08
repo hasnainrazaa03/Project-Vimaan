@@ -17,6 +17,7 @@ from __future__ import annotations
 import importlib
 import math
 import time
+from collections.abc import Callable
 from typing import Any
 
 from vimaan_nlu.overlay_state import Line, OverlayState
@@ -30,7 +31,38 @@ IMGUI_FONT_SCALE = 1.45
 WIDEST_BADGE = "NO RESPONSE"  # every pill is this wide, so text columns line up
 PILL_ROUNDING = 5.0
 LINE_GAP = 8  # px between rows
+WRAP_GAP = 2  # px between the wrapped lines of one row
 STRIPE_WIDTH = 4  # outcome-coloured stripe down the left edge
+RIGHT_PAD = 16  # px kept clear at the right edge
+PROGRESS_HEIGHT = 5  # px, the probe's progress bar
+PAD_Y = 12  # ImGui window padding, top and bottom
+MAX_HEIGHT = 600  # the panel grows to fit wrapped text, up to this
+
+
+def wrap_text(text: str, width: float, measure: Callable[[str], float]) -> list[str]:
+    """Greedy word wrap to ``width`` as ``measure`` (px) sees it. A single word
+    wider than the line is split by characters, so nothing is ever cut off."""
+    out: list[str] = []
+    current = ""
+    for word in text.strip().split(" "):  # inner double spaces kept: they separate fields
+        candidate = f"{current} {word}" if current else word
+        if measure(candidate) <= width:
+            current = candidate
+            continue
+        if current:
+            out.append(current)
+            current = ""
+        while measure(word) > width and len(word) > 1:
+            cut = len(word) - 1
+            while cut > 1 and measure(word[:cut]) > width:
+                cut -= 1
+            out.append(word[:cut])
+            word = word[cut:]
+        current = word
+    if current or not out:
+        out.append(current)
+    return out
+
 
 TONES: dict[str, tuple[float, float, float]] = {
     "live": (1.00, 0.36, 0.33),  # recording red
@@ -72,6 +104,8 @@ class Overlay:
         self._shown = False
         self.draw_ms_max = 0.0
         self.draw_errors = 0
+        self._wanted_height: int | None = None  # measured by the last draw
+        self._resize_errors = 0
 
     # ------------------------------------------------------------------
     def start(self) -> str:
@@ -103,7 +137,7 @@ class Overlay:
         xp = self.xp
         xp.setWindowTitle(self.window_id, "Vimaan")
         xp.setWindowPositioningMode(self.window_id, xp.WindowPositionFree, -1)
-        xp.setWindowResizingLimits(self.window_id, 380, 70, 1600, 260)
+        xp.setWindowResizingLimits(self.window_id, 380, 70, 1600, MAX_HEIGHT)
         return self.backend
 
     def _initial_geometry(self) -> tuple[int, int, int, int]:
@@ -150,6 +184,29 @@ class Overlay:
         if want != self._shown:
             self.xp.setWindowIsVisible(self.window_id, 1 if want else 0)
             self._shown = want
+        if want:
+            self._fit_height()
+
+    def _fit_height(self) -> None:
+        """Grow (or shrink back) to the height the last frame needed, keeping
+        the bottom edge where it is: the panel sits at the bottom of the
+        screen. Left alone when popped out to its own OS window."""
+        wanted = self._wanted_height
+        if wanted is None:
+            return
+        xp = self.xp
+        try:
+            popped = getattr(xp, "windowIsPoppedOut", None)
+            if popped is not None and popped(self.window_id):
+                return
+            left, top, right, bottom = xp.getWindowGeometry(self.window_id)
+            height = max(HEIGHT, min(MAX_HEIGHT, wanted))
+            if abs((top - bottom) - height) > 2:
+                xp.setWindowGeometry(self.window_id, left, bottom + height, right, bottom)
+        except Exception as exc:
+            self._resize_errors += 1
+            if self._resize_errors <= 3:
+                self.log(f"overlay: resize failed ({type(exc).__name__}: {exc})")
 
     def stop(self) -> None:
         try:
@@ -179,7 +236,8 @@ class Overlay:
 
     def _imgui_lines(self, lines: list[Line]) -> None:
         """Rows of [pill badge] text .......... detail, with a stripe down the
-        left edge in the colour of the latest row (the outcome so far)."""
+        left edge in the colour of the latest row (the outcome so far). Long
+        text wraps under itself; the probe's title row has a progress bar."""
         imgui = self._imgui
         draw = imgui.get_window_draw_list()
         rgba = imgui.get_color_u32_rgba
@@ -196,6 +254,12 @@ class Overlay:
         line_h = imgui.get_text_line_height()
         pill_w = imgui.calc_text_size(WIDEST_BADGE).x + 20
         muted = rgba(*TONES["muted"], 1.0)
+
+        def measure(text: str) -> float:
+            return float(imgui.calc_text_size(text).x)
+
+        start_y = imgui.get_cursor_screen_pos()[1]
+        bottom = start_y
         for line in lines:
             x, y = imgui.get_cursor_screen_pos()
             r, g, b = TONES[line.tone]
@@ -211,12 +275,30 @@ class Overlay:
                     )
                     badge_x += 7
                 draw.add_text(badge_x, y, rgba(r, g, b, 1.0), line.badge)
-            imgui.set_cursor_screen_pos((x + pill_w + 14, y))
-            imgui.text_colored(line.text, *text_colour(line.tone), 1.0)
+            text_x = x + pill_w + 14
+            detail_w = measure(line.detail) + 18 if line.detail else 0.0
+            avail = max(80.0, win_x + win_w - RIGHT_PAD - detail_w - text_x)
+            parts = wrap_text(line.text, avail, measure)
+            for i, part in enumerate(parts):
+                imgui.set_cursor_screen_pos((text_x, y + i * (line_h + WRAP_GAP)))
+                imgui.text_colored(part, *text_colour(line.tone), 1.0)
             if line.detail:
-                detail_w = imgui.calc_text_size(line.detail).x
-                draw.add_text(win_x + win_w - detail_w - 16, y, muted, line.detail)
-            imgui.set_cursor_screen_pos((x, y + line_h + LINE_GAP))
+                draw.add_text(
+                    win_x + win_w - measure(line.detail) - RIGHT_PAD, y, muted, line.detail
+                )
+            bottom = y + len(parts) * line_h + (len(parts) - 1) * WRAP_GAP
+            if line.progress is not None:
+                bar_y, bar_end = bottom + 5, win_x + win_w - RIGHT_PAD
+                track = rgba(*TONES["muted"], 0.22)
+                draw.add_rect_filled(text_x, bar_y, bar_end, bar_y + PROGRESS_HEIGHT, track, 2.5)
+                fill = text_x + (bar_end - text_x) * min(1.0, max(0.0, line.progress))
+                if fill > text_x:
+                    draw.add_rect_filled(
+                        text_x, bar_y, fill, bar_y + PROGRESS_HEIGHT, rgba(r, g, b, 0.95), 2.5
+                    )
+                bottom = bar_y + PROGRESS_HEIGHT
+            imgui.set_cursor_screen_pos((x, bottom + LINE_GAP))
+        self._wanted_height = int(math.ceil(bottom - start_y + 2 * PAD_Y + 2))
 
     def _draw_native(self, window_id: Any, refcon: Any) -> None:
         self._timed(lambda lines: self._native_lines(window_id, lines))
@@ -229,15 +311,26 @@ class Overlay:
         left, top, right, bottom = geom
         xp.drawTranslucentDarkBox(left, top, right, bottom)
         font = xp.Font_Proportional
+
+        def measure(text: str) -> float:
+            return float(xp.measureString(font, text))
+
         y = top - LINE_HEIGHT
         for line in lines:
             colour = list(TONES[line.tone])
             if line.badge:
                 xp.drawString(colour, left + 12, y, line.badge, None, font)
-            xp.drawString(
-                list(text_colour(line.tone)), left + BADGE_COLUMN, y, line.text, None, font
-            )
+            detail_w = measure(line.detail) + 18 if line.detail else 0.0
+            avail = max(80.0, right - 12 - detail_w - (left + BADGE_COLUMN))
+            first_y = y
+            for part in wrap_text(line.text, avail, measure):
+                xp.drawString(
+                    list(text_colour(line.tone)), left + BADGE_COLUMN, y, part, None, font
+                )
+                y -= LINE_HEIGHT
             if line.detail:
-                w = int(xp.measureString(font, line.detail))
-                xp.drawString(list(TONES["muted"]), right - 12 - w, y, line.detail, None, font)
-            y -= LINE_HEIGHT
+                w = int(measure(line.detail))
+                xp.drawString(
+                    list(TONES["muted"]), right - 12 - w, first_y, line.detail, None, font
+                )
+        self._wanted_height = int(top - y - LINE_HEIGHT + 2 * PAD_Y)

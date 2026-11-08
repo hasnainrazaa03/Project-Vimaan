@@ -1495,7 +1495,8 @@ def test_probe_stops_when_it_cannot_restore(probing):
     press_probe(plugin, xp)
     press_probe(plugin, xp)
     assert settle(plugin, xp, loops=4) == [
-        "Probe stopped. Heading mode did not restore. Check the autopilot."
+        "Probe stopped. After heading mode, the lateral mode did not go back. "
+        "Check the autopilot. The probe key continues with nav mode."
     ]
     assert plugin._probe is None
     step = [e for e in events(plugin, "probe_step") if e["role"] == "mode_heading"][-1]
@@ -1518,7 +1519,9 @@ def test_probe_stop_saves_what_was_measured(probing):
     press_probe(plugin, xp)
     settle(plugin, xp)
     plugin._on_probe_stop_cmd(None, xp.CommandBegin, None)
-    assert xp.spoken[-1] == "Probe stopped. Results saved."
+    assert (
+        xp.spoken[-1] == "Probe stopped. Results saved. The probe key continues with approach mode."
+    )
     assert plugin.profile.supports("mode_nav") is False
 
 
@@ -1563,3 +1566,310 @@ def test_std_toggle_is_pressed_again_when_restoring(probing):
     assert settle(plugin, xp)[0] == "Altimeter standard: works. Next, altimeter setting."
     assert xp.commands_fired.count("sim/instruments/barometer_std") == 2
     assert remembered == {} and xp.datarefs[BARO] == pytest.approx(30.12)
+
+
+def test_overlay_shows_the_probe_not_the_last_command(probing):
+    # In flight: probe results appeared under the last command's HEARD/MEANT.
+    _, plugin, xp = probing
+    airborne(xp)
+    xp.effects["sim/autopilot/heading"] = toggle_heading
+    say(plugin, "autopilot on", "toggle_autopilot", {"state": "on"})
+    press_probe(plugin, xp)
+    press_probe(plugin, xp)
+    settle(plugin, xp)
+    lines = plugin.overlay_state.lines()
+    assert [ln.badge for ln in lines] == ["PROBE", "WORKS", "NEXT"]
+    assert lines[1].text == "heading mode" and lines[2].text.startswith("nav mode")
+    assert lines[0].text == "Beechcraft Baron 58  air probe" and lines[0].detail == "1 / 15"
+    probe_speech = [e for e in events(plugin, "speak") if e.get("origin") == "probe"]
+    assert probe_speech and all("autopilot" not in e["text"].lower() for e in probe_speech)
+
+
+# ---------------------------------------------------------------------------
+# 737 MCP buttons, and the autopilot dropping out during a probe
+# ---------------------------------------------------------------------------
+B738_MCP = (
+    "laminar/B738/autopilot/cmd_a_press",
+    "laminar/B738/autopilot/cmd_b_press",
+    "laminar/B738/autopilot/hdg_sel_press",
+    "laminar/B738/autopilot/vorloc_press",
+    "laminar/B738/autopilot/app_press",
+    "laminar/B738/autopilot/alt_hld_press",
+    "laminar/B738/autopilot/vs_press",
+    "laminar/B738/autopilot/lvl_chg_press",
+    "laminar/B738/autopilot/vnav_press",
+    "laminar/B738/autopilot/lnav_press",
+)
+
+
+def test_737_autopilot_on_presses_cmd_a(sim):
+    _, plugin, xp = sim
+    profile = load_aircraft(plugin, xp, 7, commands=B738_MCP)
+    assert "b738_mcp" in profile.overrides
+    say(plugin, "autopilot on", "toggle_autopilot", {"state": "on"})
+    assert xp.commands_fired == ["laminar/B738/autopilot/cmd_a_press"]
+    say(plugin, "autopilot two on", "toggle_autopilot", {"state": "on", "instance": "2"})
+    assert xp.commands_fired[-1] == "laminar/B738/autopilot/cmd_b_press"
+
+
+def test_737_autopilot_off_still_uses_the_checked_toggle(sim):
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 7, commands=B738_MCP)
+    xp.datarefs["sim/cockpit2/autopilot/servos_on"] = 1
+    say(plugin, "autopilot off", "toggle_autopilot", {"state": "off"})
+    assert xp.commands_fired == ["sim/autopilot/servos_toggle"]
+
+
+def test_737_probe_presses_its_own_mcp_buttons(probing):
+    _, plugin, xp = probing
+    load_aircraft(plugin, xp, 7, commands=B738_MCP)
+    airborne(xp)
+    xp.effects["laminar/B738/autopilot/hdg_sel_press"] = toggle_heading
+    press_probe(plugin, xp)
+    press_probe(plugin, xp)
+    assert settle(plugin, xp) == ["Heading mode: works. Next, nav mode."]
+    assert xp.commands_fired == ["laminar/B738/autopilot/hdg_sel_press"] * 2
+
+
+def test_autopilot_dropping_out_pauses_the_probe_for_a_retry(probing):
+    _, plugin, xp = probing
+    airborne(xp)
+
+    def heading_and_drop(x):  # the 737 in flight: the servos drop out
+        toggle_heading(x)
+        x.datarefs[AP + "servos_on"] = 0
+
+    xp.effects["sim/autopilot/heading"] = heading_and_drop
+    press_probe(plugin, xp)
+    press_probe(plugin, xp)
+    assert settle(plugin, xp) == [
+        "The autopilot disconnected during heading mode. Re-engage it, then press the probe key to retry."
+    ]
+    assert plugin._probe is not None and plugin._probe["index"] == 0  # same step next
+    assert "mode_heading" not in plugin._probe["results"]
+    # Heading was pressed off before the drop; it's pressed again so the
+    # retry starts where the run was.
+    assert xp.commands_fired == ["sim/autopilot/heading"] * 2
+    assert xp.datarefs[AP + "heading_mode"] == 1
+    assert [ln.badge for ln in plugin.overlay_state.lines()] == ["PROBE", "PAUSED", "NEXT"]
+    # The pilot re-engages; this time the aircraft keeps it.
+    xp.datarefs[AP + "servos_on"] = 1
+    xp.datarefs[AP + "heading_mode"], xp.datarefs[AP + "heading_status"] = 1, 2
+    xp.effects["sim/autopilot/heading"] = toggle_heading
+    press_probe(plugin, xp)
+    assert settle(plugin, xp) == ["Heading mode: works. Next, nav mode."]
+
+
+# ---------------------------------------------------------------------------
+# Saving every step, carrying on after a stop, and moving between steps
+# ---------------------------------------------------------------------------
+BARON_FILE = "Beechcraft_Baron_58__Baron_58.json"
+
+
+def saved(plugin):
+    return json.loads((plugin.tel.log_dir / "aircraft" / BARON_FILE).read_text())
+
+
+def press_stop(plugin, xp):
+    before = len(xp.spoken)
+    plugin._on_probe_stop_cmd(None, xp.CommandBegin, None)
+    return xp.spoken[before:]
+
+
+def press_move(plugin, xp, delta):
+    before = len(xp.spoken)
+    handler = plugin._on_probe_skip_cmd if delta > 0 else plugin._on_probe_back_cmd
+    handler(None, xp.CommandBegin, None)
+    return xp.spoken[before:]
+
+
+def test_each_step_is_saved_as_soon_as_it_is_measured(probing):
+    _, plugin, xp = probing
+    airborne(xp)
+    xp.effects["sim/autopilot/heading"] = toggle_heading
+    press_probe(plugin, xp)
+    press_probe(plugin, xp)
+    settle(plugin, xp)
+    assert plugin._probe is not None  # still running, and already on disk
+    record = saved(plugin)
+    assert record["steps"] == {"mode_heading": "works"}
+    assert record["resume"] == {"air": "mode_nav"} and record["end"] == "in_progress"
+
+
+def test_a_stopped_run_carries_on_where_it_stopped(probing):
+    # In flight the 737's run stopped at ALT HOLD, then LVL CHG, and each new
+    # run started again from heading mode.
+    _, plugin, xp = probing
+    airborne(xp)
+    xp.effects["sim/autopilot/heading"] = lambda x: x.datarefs.__setitem__(AP + "heading_mode", 0)
+    press_probe(plugin, xp)
+    press_probe(plugin, xp)
+    settle(plugin, xp, loops=4)  # heading didn't restore: stopped
+    assert plugin._probe is None and saved(plugin)["resume"] == {"air": "mode_nav"}
+    xp.datarefs[AP + "heading_mode"] = 1  # the pilot puts heading back
+    assert press_probe(plugin, xp) == [
+        "Probe ready. Continuing at nav mode, step 2 of 15. Press again to run it."
+    ]
+    assert plugin._probe["index"] == 1
+    assert plugin.overlay_state.lines()[0].detail == "1 / 15"
+
+
+def test_a_complete_run_clears_the_place(probing):
+    _, plugin, xp = probing
+    xp.datarefs["sim/flightmodel/controls/parkbrake"] = 1.0
+    for _ in range(4):
+        press_probe(plugin, xp)
+        settle(plugin, xp)
+    assert xp.spoken[-1] == "Probe complete. Results saved."
+    assert saved(plugin)["resume"] == {}
+    assert press_probe(plugin, xp)[0].startswith("Probe ready. 3 ground steps.")
+
+
+def test_stop_twice_starts_over(probing):
+    _, plugin, xp = probing
+    airborne(xp)
+    xp.effects["sim/autopilot/heading"] = toggle_heading
+    press_probe(plugin, xp)
+    press_probe(plugin, xp)
+    settle(plugin, xp)
+    assert press_stop(plugin, xp) == [
+        "Probe stopped. Results saved. The probe key continues with nav mode."
+    ]
+    assert press_stop(plugin, xp) == ["Probe reset. The next run starts from the first step."]
+    assert saved(plugin)["resume"] == {}
+    assert saved(plugin)["steps"] == {"mode_heading": "works"}  # results are kept
+    assert press_probe(plugin, xp)[0].startswith("Probe ready. 15 air steps.")
+    assert press_stop(plugin, xp)[0].startswith("Probe stopped.")
+    assert press_stop(plugin, xp) == ["Probe reset. The next run starts from the first step."]
+    assert press_stop(plugin, xp) == ["No probe running"]
+
+
+def test_stopping_mid_step_finishes_the_step_first(probing):
+    _, plugin, xp = probing
+    airborne(xp)
+    xp.effects["sim/autopilot/heading"] = toggle_heading
+    press_probe(plugin, xp)
+    press_probe(plugin, xp)  # heading pressed, not yet put back
+    assert press_stop(plugin, xp) == ["Stopping after this step"]
+    assert settle(plugin, xp) == [
+        "Heading mode: works.",
+        "Probe stopped. Results saved. The probe key continues with nav mode.",
+    ]
+    assert xp.datarefs[AP + "heading_mode"] == 1  # put back before stopping
+
+
+def test_skip_and_back_reach_one_step_without_running_the_rest(probing):
+    _, plugin, xp = probing
+    airborne(xp)
+    assert press_move(plugin, xp, 1) == ["Press the probe key first"]
+    press_probe(plugin, xp)
+    assert press_move(plugin, xp, 1) == ["Skipped to nav mode, step 2 of 15."]
+    assert press_move(plugin, xp, -1) == ["Back to heading mode, step 1 of 15."]
+    assert press_move(plugin, xp, -1) == ["Back to altitude dial, step 15 of 15."]  # wraps
+    assert xp.commands_fired == []
+    lines = plugin.overlay_state.lines()
+    assert lines[0].detail == "14 / 15" and lines[-1].text.startswith("altitude dial")
+
+
+def test_a_run_with_no_modes_on_asks_once_then_runs_anyway(probing):
+    # The 737 engaged with neither heading nor altitude hold on: nothing to
+    # press to put the pitch mode back, and ALT HOLD didn't restore.
+    _, plugin, xp = probing
+    airborne(xp)
+    xp.datarefs[AP + "heading_mode"], xp.datarefs[AP + "altitude_mode"] = 0, 3
+    press_probe(plugin, xp)
+    assert press_probe(plugin, xp) == [
+        "Heading and altitude hold are not both on, so this step may not restore. "
+        "Select them, or press again to run it anyway."
+    ]
+    assert xp.commands_fired == []
+    assert [ln.badge for ln in plugin.overlay_state.lines()] == ["PROBE", "WAIT", "NEXT"]
+    press_probe(plugin, xp)
+    assert xp.commands_fired == ["sim/autopilot/heading"]
+
+
+def test_altitude_arm_left_on_is_harmless_and_the_probe_carries_on(probing):
+    # The 737: moving the altitude dial armed altitude capture, and putting
+    # the dial back left it armed. That stopped the probe on its last step.
+    _, plugin, xp = probing
+    airborne(xp)
+
+    def heading_and_arm(x):
+        toggle_heading(x)
+        x.datarefs[AP + "altitude_hold_armed"] = 1  # sticks
+
+    xp.effects["sim/autopilot/heading"] = heading_and_arm
+    press_probe(plugin, xp)
+    press_probe(plugin, xp)
+    assert settle(plugin, xp, loops=5) == [
+        "Heading mode: works. Altitude arm stayed on, which is harmless. Next, nav mode."
+    ]
+    assert xp.commands_fired[-1] == "sim/autopilot/altitude_arm"  # tried to disarm first
+    step = events(plugin, "probe_step")[-1]
+    assert step["restored"] is False and step["note"].startswith("altitude arm")
+    assert [ln.badge for ln in plugin.overlay_state.lines()] == ["PROBE", "WORKS", "NOTE", "NEXT"]
+
+
+def test_autothrottle_a_mode_turned_on_is_turned_back_off(probing):
+    # The 737: LVL CHG engaged the autothrottle, and pressing LVL CHG again
+    # left it on.
+    _, plugin, xp = probing
+    airborne(xp)
+
+    def level_change(x):
+        if x.datarefs[AP + "altitude_mode"] == 5:
+            x.datarefs[AP + "altitude_mode"] = 6
+        else:
+            x.datarefs[AP + "altitude_mode"] = 5
+            x.datarefs[AP + "autothrottle_enabled"] = 1
+
+    def autothrottle_toggle(x):
+        x.datarefs[AP + "autothrottle_enabled"] = 1 - x.datarefs[AP + "autothrottle_enabled"]
+
+    xp.effects["sim/autopilot/level_change"] = level_change
+    xp.effects["sim/autopilot/autothrottle_toggle"] = autothrottle_toggle
+    press_probe(plugin, xp)
+    go_to(plugin, "mode_level_change")
+    press_probe(plugin, xp)
+    assert settle(plugin, xp, loops=5) == ["Level change: works. Next, V NAV."]
+    assert xp.commands_fired == [
+        "sim/autopilot/level_change",
+        "sim/autopilot/level_change",
+        "sim/autopilot/autothrottle_toggle",
+    ]
+    assert xp.datarefs[AP + "autothrottle_enabled"] == 0
+
+
+def test_a_pause_puts_back_what_the_step_pressed(probing):
+    # The A330: APP was pressed, the autopilot dropped, and APP stayed armed
+    # into the next steps, so back course couldn't restore.
+    _, plugin, xp = probing
+    airborne(xp)
+    drops = [True]
+
+    def approach(x):
+        on = x.datarefs[AP + "approach_status"] == 1
+        x.datarefs[AP + "approach_status"] = x.datarefs[AP + "nav_status"] = 0 if on else 1
+        if drops and drops.pop():
+            x.datarefs[AP + "servos_on"] = 0
+
+    xp.effects["sim/autopilot/approach"] = approach
+    press_probe(plugin, xp)
+    go_to(plugin, "mode_approach")
+    press_probe(plugin, xp)
+    assert settle(plugin, xp)[0].startswith("The autopilot disconnected during approach mode.")
+    assert xp.datarefs[AP + "approach_status"] == 0 and xp.datarefs[AP + "nav_status"] == 0
+    xp.datarefs[AP + "servos_on"] = 1
+    press_probe(plugin, xp)
+    assert settle(plugin, xp) == ["Approach mode: works. Next, back course."]
+
+
+def test_a_pause_that_changed_nothing_presses_nothing_more(probing):
+    _, plugin, xp = probing
+    airborne(xp)
+    xp.effects["sim/autopilot/NAV"] = lambda x: x.datarefs.__setitem__(AP + "servos_on", 0)
+    press_probe(plugin, xp)
+    go_to(plugin, "mode_nav")
+    press_probe(plugin, xp)
+    assert settle(plugin, xp)[0].startswith("The autopilot disconnected during nav mode.")
+    assert xp.commands_fired == ["sim/autopilot/NAV"]

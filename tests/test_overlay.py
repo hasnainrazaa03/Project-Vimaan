@@ -161,3 +161,92 @@ def test_imgui_backend():
     assert kinds == ["rect", "rect", "circle"]  # outcome stripe, badge pill, record dot
     overlay.stop()
     assert created["deleted"]
+
+
+# ---------------------------------------------------------------------------
+# Wrapping long text, and growing the panel to fit
+# ---------------------------------------------------------------------------
+from vimaan_nlu.overlay import MAX_HEIGHT, wrap_text  # noqa: E402
+
+PX = 8.0  # the fake font: 8 px per character
+
+
+def measure(text):
+    return PX * len(text)
+
+
+def test_wrap_breaks_between_words_and_never_loses_text():
+    text = "Probe stopped. Heading mode did not restore. Check the autopilot."
+    parts = wrap_text(text, 20 * PX, measure)
+    assert all(measure(p) <= 20 * PX for p in parts)
+    assert " ".join(parts) == text
+    assert wrap_text("short", 100, measure) == ["short"]
+    assert wrap_text("", 100, measure) == [""]
+
+
+def test_a_word_wider_than_the_line_is_split_not_cut():
+    parts = wrap_text("x" * 25, 10 * PX, measure)
+    assert parts == ["x" * 10, "x" * 10, "x" * 5]
+
+
+def test_long_line_wraps_and_the_panel_grows_upward():
+    xp = make_xp()
+    state = OverlayState(mode="pinned")
+    overlay = Overlay(xp, state, prefer_imgui=False)
+    overlay.start()
+    overlay.update()
+    (wid,) = xp.windows
+    left, _, right, bottom = xp.windows[wid]["geom"]
+    long = "I heard " + "a very long transcript that goes on " * 6
+    state.notice(long)
+    drawn = xp.draw_windows()
+    parts = [d for d in drawn if d != "VIMAAN"]
+    assert len(parts) > 1 and " ".join(parts) == long.strip()
+    overlay.update()  # applies the measured height
+    new_left, new_top, new_right, new_bottom = xp.windows[wid]["geom"]
+    assert (new_left, new_right, new_bottom) == (left, right, bottom)  # anchored bottom-left
+    assert HEIGHT < new_top - new_bottom <= MAX_HEIGHT
+
+
+def test_short_content_keeps_the_normal_height():
+    xp = make_xp()
+    state = OverlayState(mode="pinned")
+    overlay = Overlay(xp, state, prefer_imgui=False)
+    overlay.start()
+    overlay.update()
+    xp.draw_windows()
+    overlay.update()
+    (wid,) = xp.windows
+    left, top, right, bottom = xp.windows[wid]["geom"]
+    assert top - bottom == HEIGHT
+
+
+def test_imgui_wraps_and_draws_the_probe_progress_bar():
+    xp = make_xp()
+    imgui = FakeImgui()
+
+    class Window:
+        def __init__(self, **kw):
+            self.kw = kw
+            self.imgui_context = object()
+            self.windowID = xp.createWindowEx(
+                kw["left"], kw["top"], kw["right"], kw["bottom"], 0, None
+            )
+
+        def delete(self):
+            pass
+
+    state = OverlayState(mode="pinned")
+    overlay = Overlay(xp, state, imgui_modules=(types.SimpleNamespace(Window=Window), imgui))
+    overlay.start()
+    state.on_event({"kind": "probe_start", "where": "air", "steps": 4, "name": "BE58", "next": "x"})
+    state.on_event({"kind": "probe_step", "label": "heading mode", "verdict": "works", "index": 0})
+    overlay.window.kw["draw"](overlay.window_id, None)
+    rects = [s for s in imgui.draw_list.shapes if s[0] == "rect"]
+    assert len(rects) >= 5  # stripe, pills, progress track and fill
+    imgui.texts.clear()
+    state.on_event({"kind": "probe_end", "reason": "stopped", "message": "word " * 60})
+    overlay.window.kw["draw"](overlay.window_id, None)
+    wrapped = [t for t in imgui.texts if t.startswith("word")]
+    assert len(wrapped) > 1
+    assert overlay._wanted_height > HEIGHT
