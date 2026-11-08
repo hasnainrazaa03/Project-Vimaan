@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from . import evals, run_metrics
 from .paths import (
     ensure_dirs,
     list_datasets,
@@ -189,6 +193,96 @@ def api_train_metrics() -> dict[str, Any]:
     val intent-accuracy + slot-F1), streamed by the trainer to
     ML/training_runs/<version>/metrics.jsonl."""
     return latest_run_metrics()
+
+
+# ---- training runs: live and past -----------------------------------------
+
+STREAM_POLL_SEC = 0.5  # how often the stream checks the metrics file
+STREAM_SUMMARY_SEC = 5.0  # a status refresh even with no new lines
+STREAM_PING_SEC = 15.0
+
+
+@app.get("/api/runs")
+def api_runs() -> dict[str, Any]:
+    """Every training run (dashboard or terminal), newest version first."""
+    return {"runs": run_metrics.list_runs()}
+
+
+@app.get("/api/runs/{name}")
+def api_run(name: str, points: int = 1500) -> dict[str, Any]:
+    snap = run_metrics.snapshot(name, max_points=max(50, min(points, 5000)))
+    if snap is None:
+        raise HTTPException(status_code=404, detail=f"no run named {name!r}")
+    return snap
+
+
+def _sse(event: str, data: Any) -> str:
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+@app.get("/api/runs/{name}/stream")
+async def api_run_stream(name: str, request: Request, follow: bool = True) -> StreamingResponse:
+    """Server-sent events: a ``snapshot`` first, then ``records`` with each
+    batch of new lines (and the updated summary), ``summary`` every few
+    seconds so a stall shows up, and a fresh ``snapshot`` if the run is
+    restarted. ``follow=false`` sends what there is and ends (for tests)."""
+    first = run_metrics.snapshot(name)
+    if first is None:
+        raise HTTPException(status_code=404, detail=f"no run named {name!r}")
+
+    async def events() -> AsyncIterator[str]:
+        snap = first
+        offset = snap["summary"]["offset"]
+        yield _sse("snapshot", snap)
+        last_summary = last_ping = time.monotonic()
+        while follow:
+            if await request.is_disconnected():
+                return
+            await asyncio.sleep(STREAM_POLL_SEC)
+            got = run_metrics.tail(name, offset)
+            if got is None:
+                return  # the run was deleted
+            records, new_offset = got
+            now = time.monotonic()
+            if new_offset < 0:
+                snap = run_metrics.snapshot(name)
+                if snap is None:
+                    return
+                offset = snap["summary"]["offset"]
+                yield _sse("snapshot", snap)
+            elif records:
+                offset = new_offset
+                yield _sse("records", {"records": records, "summary": run_metrics.summarize(name)})
+                last_summary = last_ping = now
+            elif now - last_summary >= STREAM_SUMMARY_SEC:
+                yield _sse("summary", run_metrics.summarize(name))
+                last_summary = last_ping = now
+            elif now - last_ping >= STREAM_PING_SEC:
+                yield ": ping\n\n"
+                last_ping = now
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ---- evaluations -----------------------------------------------------------
+
+
+@app.get("/api/evals")
+def api_evals() -> dict[str, Any]:
+    """Every model version's gate, parity and training summary."""
+    return {"versions": evals.list_evals()}
+
+
+@app.get("/api/evals/{version}")
+def api_eval(version: str) -> dict[str, Any]:
+    detail = evals.eval_detail(version)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"no model {version!r}")
+    return detail
 
 
 # ---- static (mount last so /api/* wins) ------------------------------------

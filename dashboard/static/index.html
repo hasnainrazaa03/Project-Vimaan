@@ -9,9 +9,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%88%EF%B8%8F%3C/text%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="/static/style.css?v=3" />
+  <link rel="stylesheet" href="/static/style.css?v=6" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
-  <script src="/static/app.js?v=3" defer></script>
+  <script src="/static/app.js?v=5" defer></script>
+  <script src="/static/live.js?v=3" defer></script>
+  <script src="/static/evals.js?v=2" defer></script>
 </head>
 <body>
   <!-- animated aurora backdrop -->
@@ -34,6 +36,7 @@
     <nav class="tabs" role="tablist">
       <button class="tab is-active" data-tab="inference" role="tab">Inference</button>
       <button class="tab" data-tab="training" role="tab">Training</button>
+      <button class="tab" data-tab="evals" role="tab">Evals</button>
     </nav>
 
     <div class="top-actions">
@@ -118,10 +121,99 @@
 
     <!-- ============================= TRAINING ============================= -->
     <div class="panel" id="panel-training" role="tabpanel">
+      <!-- live run header -->
+      <section class="card glass live-card">
+        <header class="card-head live-head">
+          <div class="live-title">
+            <h2>Training run</h2>
+            <span class="live-chip" id="live-chip" data-status="none"><span class="dot"></span><span class="label">no run</span></span>
+            <span class="live-phase" id="live-phase"></span>
+          </div>
+          <div class="head-actions wrap-actions">
+            <label class="mini">Run <select id="run-select"></select></label>
+            <label class="mini">Compare with <select id="baseline-select"></select></label>
+            <label class="mini check"><input type="checkbox" id="log-scale" checked /> Log scale</label>
+          </div>
+        </header>
+        <div class="run-progress" id="run-progress">
+          <div class="rp-row">
+            <span class="rp-label">All epochs</span>
+            <div class="progress"><div class="progress-bar" id="rp-total"></div></div>
+            <span class="rp-val" id="rp-total-text">—</span>
+          </div>
+          <div class="rp-row">
+            <span class="rp-label" id="rp-epoch-label">This epoch</span>
+            <div class="progress"><div class="progress-bar alt" id="rp-epoch"></div></div>
+            <span class="rp-val" id="rp-epoch-text">—</span>
+          </div>
+        </div>
+        <div class="kpis" id="kpis"></div>
+        <p class="live-note" id="live-note"></p>
+      </section>
+
+      <div class="cols">
+        <section class="card glass">
+          <header class="card-head">
+            <h2>Training loss</h2>
+            <span class="badge ghost" id="step-badge">per step, smoothed</span>
+          </header>
+          <div class="chart-box"><canvas id="step-chart"></canvas></div>
+        </section>
+        <section class="card glass">
+          <header class="card-head">
+            <h2>Loss per epoch</h2>
+            <span class="badge ghost" id="epoch-badge">—</span>
+          </header>
+          <div class="chart-box"><canvas id="epoch-chart"></canvas></div>
+        </section>
+      </div>
+
+      <div class="cols">
+        <section class="card glass">
+          <header class="card-head">
+            <h2>Validation accuracy</h2>
+            <span class="badge ghost" id="val-badge">—</span>
+          </header>
+          <div class="chart-box"><canvas id="val-chart"></canvas></div>
+        </section>
+        <section class="card glass">
+          <header class="card-head">
+            <h2>Gradient norm</h2>
+            <span class="badge ghost" id="grad-badge">sampled every 25 steps</span>
+          </header>
+          <div class="chart-box"><canvas id="grad-chart"></canvas></div>
+        </section>
+      </div>
+
+      <div class="cols">
+        <section class="card glass">
+          <header class="card-head">
+            <h2>Intent accuracy by intent</h2>
+            <span class="badge ghost" id="intent-badge">latest epoch</span>
+          </header>
+          <div class="bar-list" id="intent-bars"><p class="muted">Logged once per epoch by runs from this version of the trainer.</p></div>
+        </section>
+        <section class="card glass">
+          <header class="card-head">
+            <h2>Slot F1 by slot</h2>
+            <span class="badge ghost" id="slot-badge">latest epoch</span>
+          </header>
+          <div class="bar-list" id="slot-bars"><p class="muted">Logged once per epoch by runs from this version of the trainer.</p></div>
+        </section>
+      </div>
+
+      <section class="card glass">
+        <header class="card-head">
+          <h2>Epochs</h2>
+          <span class="badge ghost" id="epochs-badge">—</span>
+        </header>
+        <div class="table-wrap"><table class="data-table" id="epoch-table"></table></div>
+      </section>
+
       <div class="cols">
         <!-- config -->
         <section class="card glass">
-          <header class="card-head"><h2>Configure training</h2></header>
+          <header class="card-head"><h2>Start a run from here</h2></header>
 
           <div class="field">
             <label for="dataset-select">Dataset</label>
@@ -143,28 +235,21 @@
             <label>Epochs<input id="hp-epochs" type="number" min="1" max="100" value="10" /></label>
             <label>Learning rate<input id="hp-lr" type="number" step="0.00001" value="0.00005" /></label>
             <label>Batch size<input id="hp-bs" type="number" min="1" max="512" value="16" /></label>
-            <label>Max length<input id="hp-ml" type="number" min="8" max="512" value="64" /></label>
-            <label>Patience<input id="hp-pat" type="number" min="0" max="20" value="2" /></label>
+            <label>Max length<input id="hp-ml" type="number" min="8" max="512" value="40" /></label>
+            <label>Patience<input id="hp-pat" type="number" min="0" max="20" value="4" /></label>
           </div>
 
           <div class="train-controls">
             <button class="btn primary grow" id="train-start">Start training</button>
             <button class="btn danger" id="train-stop" disabled>Stop</button>
           </div>
-
-          <div class="progress-wrap" id="progress-wrap" hidden>
-            <div class="progress"><div class="progress-bar" id="progress-bar"></div></div>
-            <div class="progress-meta">
-              <span id="progress-text">epoch 0</span>
-              <span id="elapsed">0:00</span>
-            </div>
-          </div>
+          <p class="subtle">Runs started in a terminal show up above too: everything is read from the run's metrics file.</p>
         </section>
 
         <!-- run overview -->
         <section class="card glass">
           <header class="card-head">
-            <h2>Run overview</h2>
+            <h2>Run data</h2>
             <span class="badge ghost" id="run-badge">no run yet</span>
           </header>
           <div class="splitbar" id="split-bar" hidden></div>
@@ -172,24 +257,6 @@
           <div class="run-stats" id="run-stats"></div>
           <div class="section-label" id="intent-dist-label" hidden>Intent distribution (train split)</div>
           <div class="intent-bars" id="run-intents"></div>
-        </section>
-      </div>
-
-      <!-- live charts -->
-      <div class="cols">
-        <section class="card glass">
-          <header class="card-head">
-            <h2>Loss</h2>
-            <span class="badge ghost" id="train-summary">no data yet</span>
-          </header>
-          <canvas id="loss-chart" height="160"></canvas>
-        </section>
-        <section class="card glass">
-          <header class="card-head">
-            <h2>Validation metrics</h2>
-            <span class="badge ghost" id="valmet-badge">—</span>
-          </header>
-          <canvas id="val-chart" height="160"></canvas>
         </section>
       </div>
 
@@ -204,6 +271,56 @@
         </header>
         <pre id="train-log" class="log"></pre>
       </section>
+    </div>
+
+    <!-- ============================= EVALS ============================= -->
+    <div class="panel" id="panel-evals" role="tabpanel">
+      <section class="card glass">
+        <header class="card-head">
+          <h2>Gate results by model version</h2>
+          <div class="head-actions">
+            <span class="badge ghost" id="evals-badge">—</span>
+            <button class="icon-btn" id="refresh-evals" title="Reload">↻</button>
+          </div>
+        </header>
+        <div class="chart-box tall"><canvas id="trend-chart"></canvas></div>
+        <p class="live-note">Each version is scored on its own held-out phrasings, and the gate's other sets grew over time (older gates had no old-data section and fewer real-voice recordings). Compare a version with the baseline in its own gate, in the table and below. Click a row or a point for detail.</p>
+        <div class="table-wrap"><table class="data-table clickable" id="evals-table"></table></div>
+      </section>
+
+      <div class="cols">
+        <section class="card glass">
+          <header class="card-head">
+            <h2>Gates</h2>
+            <span class="badge ghost" id="gate-badge">—</span>
+          </header>
+          <div id="gate-list" class="gate-list"><p class="muted">Pick a version above.</p></div>
+        </section>
+        <section class="card glass">
+          <header class="card-head">
+            <h2>New phrasings by intent</h2>
+            <span class="badge ghost" id="pi-badge">—</span>
+          </header>
+          <div class="bar-list" id="eval-intents"></div>
+        </section>
+      </div>
+
+      <div class="cols">
+        <section class="card glass">
+          <header class="card-head">
+            <h2>Real voice by flight</h2>
+            <span class="badge ghost" id="voice-badge">—</span>
+          </header>
+          <div class="table-wrap"><table class="data-table" id="voice-table"></table></div>
+        </section>
+        <section class="card glass">
+          <header class="card-head">
+            <h2>Where it differs from the baseline</h2>
+            <span class="badge ghost" id="diff-badge">—</span>
+          </header>
+          <div id="eval-diffs" class="diff-list"></div>
+        </section>
+      </div>
     </div>
   </main>
 

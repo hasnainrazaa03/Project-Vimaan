@@ -14,7 +14,7 @@ const EXAMPLES = [
 const els = {
   // nav / chrome
   tabs: document.querySelectorAll(".tab"),
-  panels: { inference: $("panel-inference"), training: $("panel-training") },
+  panels: { inference: $("panel-inference"), training: $("panel-training"), evals: $("panel-evals") },
   themeToggle: $("theme-toggle"),
   connState: $("conn-state"),
 
@@ -52,30 +52,12 @@ const els = {
   trainSummary: $("train-summary"),
   trainPid: $("train-pid"),
   copyLog: $("copy-log"),
-  chartCanvas: $("loss-chart"),
-  valCanvas: $("val-chart"),
-  runBadge: $("run-badge"),
-  splitBar: $("split-bar"),
-  splitLegend: $("split-legend"),
-  runStats: $("run-stats"),
-  intentDistLabel: $("intent-dist-label"),
-  runIntents: $("run-intents"),
-  valmetBadge: $("valmet-badge"),
-  progressWrap: $("progress-wrap"),
-  progressBar: $("progress-bar"),
-  progressText: $("progress-text"),
-  elapsed: $("elapsed"),
 
   toasts: $("toasts"),
 };
 
-let chart = null;
-let valChart = null;
-let lastMetrics = null;
 let pollTimer = null;
 let modelCache = [];
-let trainStartedAt = null;
-let elapsedTimer = null;
 let lastResult = null;
 
 // ------- helpers ------------------------------------------------------------
@@ -88,26 +70,6 @@ function fmtBytes(n) {
 
 function fmtInt(n) {
   return typeof n === "number" ? n.toLocaleString() : n;
-}
-
-function quantile(arr, q) {
-  if (!arr.length) return 0;
-  const a = arr.slice().sort((x, y) => x - y);
-  const i = (a.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i);
-  return a[lo] + (a[hi] - a[lo]) * (i - lo);
-}
-
-// theme-aware chart ink
-function ink() {
-  const cs = getComputedStyle(document.documentElement);
-  return {
-    grid: "rgba(148,163,184,.12)",
-    tick: cs.getPropertyValue("--fg-dim").trim() || "#93a1bd",
-    accent: cs.getPropertyValue("--accent").trim() || "#38bdf8",
-    accent2: cs.getPropertyValue("--accent-2").trim() || "#818cf8",
-    ok: cs.getPropertyValue("--ok").trim() || "#34d399",
-    warn: cs.getPropertyValue("--warn").trim() || "#fbbf24",
-  };
 }
 
 async function jget(url) {
@@ -144,20 +106,23 @@ function toast(msg, kind = "info") {
 function setTab(name) {
   els.tabs.forEach((t) => t.classList.toggle("is-active", t.dataset.tab === name));
   Object.entries(els.panels).forEach(([k, p]) => p.classList.toggle("is-active", k === name));
+  try { localStorage.setItem("vimaan-tab", name); } catch { /* storage blocked */ }
+  document.dispatchEvent(new CustomEvent("vimaan:tab", { detail: name }));
 }
 
 function initTheme() {
-  const saved = localStorage.getItem("vimaan-theme") || "dark";
+  let saved = new URLSearchParams(location.search).get("theme");
+  if (saved !== "light" && saved !== "dark") {
+    try { saved = localStorage.getItem("vimaan-theme") || "dark"; } catch { saved = "dark"; }
+  }
   document.documentElement.dataset.theme = saved;
 }
 function toggleTheme() {
   const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = next;
-  localStorage.setItem("vimaan-theme", next);
-  // rebuild charts so their axis/legend ink picks up the new theme
-  if (chart) { chart.destroy(); chart = null; }
-  if (valChart) { valChart.destroy(); valChart = null; }
-  if (lastMetrics) renderMetrics(lastMetrics);
+  try { localStorage.setItem("vimaan-theme", next); } catch { /* storage blocked */ }
+  // charts rebuild with the new theme's ink (live.js, evals.js)
+  document.dispatchEvent(new CustomEvent("vimaan:theme", { detail: next }));
 }
 
 // ------- model + dataset catalogues -----------------------------------------
@@ -386,198 +351,33 @@ function wireDropzone() {
 
 // ------- training -----------------------------------------------------------
 
-// Loss: per-step train loss (dense) + per-epoch train/val markers, adaptive Y.
-function ensureChart() {
-  if (chart) return chart;
-  const k = ink();
-  chart = new Chart(els.chartCanvas, {
-    type: "line",
-    data: {
-      datasets: [
-        { label: "train (step)", data: [], parsing: false, borderColor: k.accent, borderWidth: 1.3, pointRadius: 0, tension: .2 },
-        { label: "train (epoch)", data: [], parsing: false, borderColor: k.accent2, borderWidth: 2, pointRadius: 3, showLine: true, tension: .2 },
-        { label: "val (epoch)", data: [], parsing: false, borderColor: k.warn, borderWidth: 2, pointRadius: 3, showLine: true, tension: .2 },
-      ],
-    },
-    options: {
-      responsive: true, animation: false, interaction: { mode: "nearest", intersect: false },
-      plugins: { legend: { labels: { color: k.tick, usePointStyle: true, boxWidth: 8 } } },
-      scales: {
-        x: { type: "linear", title: { display: true, text: "step", color: k.tick }, ticks: { color: k.tick, maxTicksLimit: 6, callback: (v) => Number(v).toLocaleString() }, grid: { color: k.grid } },
-        y: { min: 0, title: { display: true, text: "loss", color: k.tick }, ticks: { color: k.tick }, grid: { color: k.grid } },
-      },
-    },
-  });
-  return chart;
-}
-
-// Validation: per-epoch intent accuracy + slot F1, Y zoomed to the data.
-function ensureValChart() {
-  if (valChart) return valChart;
-  const k = ink();
-  valChart = new Chart(els.valCanvas, {
-    type: "line",
-    data: {
-      datasets: [
-        { label: "intent accuracy", data: [], parsing: false, borderColor: k.accent, borderWidth: 2, pointRadius: 3, tension: .2 },
-        { label: "slot F1 (macro)", data: [], parsing: false, borderColor: k.ok, borderWidth: 2, pointRadius: 3, tension: .2 },
-      ],
-    },
-    options: {
-      responsive: true, animation: false, interaction: { mode: "nearest", intersect: false },
-      plugins: {
-        legend: { labels: { color: k.tick, usePointStyle: true, boxWidth: 8 } },
-        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${(c.parsed.y * 100).toFixed(2)}%` } },
-      },
-      scales: {
-        x: { type: "linear", title: { display: true, text: "epoch", color: k.tick }, ticks: { color: k.tick, stepSize: 1, precision: 0 }, grid: { color: k.grid } },
-        y: { ticks: { color: k.tick, callback: (v) => (v * 100).toFixed(0) + "%" }, grid: { color: k.grid } },
-      },
-    },
-  });
-  return valChart;
-}
-
-const SPLIT_COLORS = ["#38bdf8", "#818cf8", "#c084fc"];
-
-function renderMetrics(m) {
-  lastMetrics = m;
-  if (!m || m.waiting || !m.meta) {
-    els.runBadge.textContent = "no run yet";
-    return;
-  }
-  const meta = m.meta, steps = m.steps || [], epochs = m.epochs || [], done = m.done;
-  const lastStep = steps.length ? steps[steps.length - 1] : null;
-  const lastEp = epochs.length ? epochs[epochs.length - 1] : null;
-  const best = epochs.reduce((a, e) => Math.min(a, e.val_loss), Infinity);
-
-  els.runBadge.textContent = `${m.run} · ${done ? "done" : meta.device}`;
-
-  // dataset split
-  const sp = meta.split, tot = sp.train + sp.val + sp.test;
-  els.splitBar.hidden = false;
-  const segs = [["train", sp.train], ["val", sp.val], ["test", sp.test]];
-  els.splitBar.innerHTML = segs.map((s, i) => {
-    const pct = 100 * s[1] / tot;
-    return `<div style="width:${pct}%;background:${SPLIT_COLORS[i]}">${pct > 8 ? Math.round(pct) + "%" : ""}</div>`;
-  }).join("");
-  els.splitLegend.innerHTML = segs.map((s, i) =>
-    `<span><span style="color:${SPLIT_COLORS[i]}">■</span> ${s[0]} <b>${s[1].toLocaleString()}</b></span>`).join("");
-
-  // run stats
-  const rows = [
-    ["device", meta.device],
-    ["epoch", `${lastEp ? lastEp.epoch : 0} / ${meta.epochs}`],
-    ["step", (lastStep ? lastStep.step : 0).toLocaleString()],
-    ["best val", isFinite(best) ? best.toFixed(4) : "—"],
-    ["intent acc", lastEp ? (lastEp.val_intent_acc * 100).toFixed(2) + "%" : "—"],
-    ["slot F1", lastEp ? lastEp.val_slot_f1.toFixed(3) : "—"],
-  ];
-  els.runStats.innerHTML = rows.map(([k, v]) => `<div class="rs"><small>${k}</small><b>${v}</b></div>`).join("");
-
-  // intent distribution
-  const dist = Object.entries(meta.intent_dist || {}).slice(0, 10);
-  els.intentDistLabel.hidden = !dist.length;
-  const mx = dist.length ? dist[0][1] : 1;
-  els.runIntents.innerHTML = dist.map(([k, v]) => `
-    <div class="ib-row">
-      <span class="ib-name" title="${k}">${k}</span>
-      <span class="ib-track"><span class="ib-fill" style="width:${(v / mx * 100).toFixed(1)}%"></span></span>
-      <span class="ib-val">${v.toLocaleString()}</span>
-    </div>`).join("");
-
-  // loss chart
-  const spe = meta.steps_per_epoch || 1;
-  const c = ensureChart();
-  c.data.datasets[0].data = steps.map((s) => ({ x: s.step, y: s.loss }));
-  c.data.datasets[1].data = epochs.map((e) => ({ x: e.epoch * spe, y: e.train_loss }));
-  c.data.datasets[2].data = epochs.map((e) => ({ x: e.epoch * spe, y: e.val_loss }));
-  const ys = c.data.datasets.flatMap((d) => d.data.map((p) => p.y)).filter((v) => isFinite(v));
-  c.options.scales.y.suggestedMax = ys.length ? quantile(ys, 0.97) * 1.25 : undefined;
-  c.update("none");
-
-  // validation-metrics chart, Y zoomed to data
-  const vc = ensureValChart();
-  vc.data.datasets[0].data = epochs.map((e) => ({ x: e.epoch, y: e.val_intent_acc }));
-  vc.data.datasets[1].data = epochs.map((e) => ({ x: e.epoch, y: e.val_slot_f1 }));
-  const vy = epochs.flatMap((e) => [e.val_intent_acc, e.val_slot_f1]).filter((v) => isFinite(v));
-  if (vy.length) {
-    const lo = Math.min(...vy), hi = Math.max(...vy), pad = Math.max((hi - lo) * 0.6, 0.02);
-    vc.options.scales.y.min = Math.max(0, lo - pad);
-    vc.options.scales.y.max = Math.min(1, hi + pad);
-  }
-  vc.update("none");
-
-  // badges
-  els.trainSummary.textContent = lastEp
-    ? `epoch ${lastEp.epoch} · train ${lastEp.train_loss.toFixed(4)} · val ${lastEp.val_loss.toFixed(4)}`
-    : "no data yet";
-  els.valmetBadge.textContent = lastEp
-    ? `acc ${(lastEp.val_intent_acc * 100).toFixed(1)}% · F1 ${lastEp.val_slot_f1.toFixed(3)}`
-    : "—";
-}
-
-function fmtElapsed(ms) {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  return `${m}:${String(s % 60).padStart(2, "0")}`;
-}
-
-function startElapsed() {
-  stopElapsed();
-  trainStartedAt = trainStartedAt || Date.now();
-  elapsedTimer = setInterval(() => {
-    els.elapsed.textContent = fmtElapsed(Date.now() - trainStartedAt);
-  }, 1000);
-}
-function stopElapsed() { if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; } }
+// The dashboard's own job (one started from the form). Runs started in a
+// terminal are watched by live.js through the metrics stream.
+let managerStatus = "idle";
 
 function applyState(s) {
-  // status pill
-  els.trainStatusPill.dataset.status = s.status;
-  els.trainStatusPill.querySelector(".label").textContent = s.status;
+  managerStatus = s.status;
   els.trainPid.textContent = s.pid ? `pid ${s.pid}` : "";
   els.trainStop.disabled = s.status !== "running";
   els.trainStart.disabled = s.status === "running";
-
-  // log
-  els.trainLog.textContent = (s.log_tail || []).join("\n");
-  els.trainLog.scrollTop = els.trainLog.scrollHeight;
-
-  // progress (charts + summary come from renderMetrics via the live stream)
-  const last = s.metrics[s.metrics.length - 1];
-  const totalEpochs = +els.hp.epochs.value || 10;
-  if (s.status === "running") {
-    els.progressWrap.hidden = false;
-    const done = last ? last.epoch : 0;
-    const pct = Math.min(100, (done / totalEpochs) * 100);
-    els.progressBar.style.width = `${pct}%`;
-    els.progressText.textContent = `epoch ${done} / ${totalEpochs}`;
-    startElapsed();
-  } else {
-    stopElapsed();
-    if (s.status === "finished") { els.progressBar.style.width = "100%"; els.progressText.textContent = "complete"; }
-    else if (s.status === "failed") { els.progressText.textContent = "failed"; }
+  if (s.status === "running" || (s.log_tail || []).length) {
+    window.vimaanLive?.setManagerLog(s.log_tail || []);
   }
 }
 
 async function pollStatus() {
   try {
-    const [s, m] = await Promise.all([
-      jget("/api/train/status"),
-      jget("/api/train/metrics").catch(() => ({ waiting: true })),
-    ]);
+    const prev = managerStatus;
+    const s = await jget("/api/train/status");
     setConn(true);
-    const prev = els.trainStatusPill.dataset.status;
     applyState(s);
-    renderMetrics(m);
     if (s.status === "running") {
       pollTimer = setTimeout(pollStatus, 1500);
     } else {
       pollTimer = null;
-      if (prev === "running" && s.status === "finished") { toast("Training finished — new checkpoint saved", "ok"); }
-      if (prev === "running" && s.status === "failed") { toast("Training failed — check the log", "err"); }
-      if (prev === "running") { trainStartedAt = null; await refreshModels(); }
+      if (prev === "running" && s.status === "finished") { toast("Training finished. New checkpoint saved.", "ok"); }
+      if (prev === "running" && s.status === "failed") { toast("Training failed. Check the log.", "err"); }
+      if (prev === "running") { await refreshModels(); }
     }
   } catch {
     setConn(false);
@@ -597,13 +397,12 @@ async function onTrainStart() {
   };
   if (!body.dataset) { toast("Pick a dataset first", "warn"); return; }
   try {
-    trainStartedAt = Date.now();
     const s = await jpost("/api/train/start", body);
     toast("Training started", "ok");
     applyState(s);
+    window.vimaanLive?.followLatest();
     if (!pollTimer) pollStatus();
   } catch (e) {
-    trainStartedAt = null;
     toast(`Could not start: ${e.message}`, "err");
   }
 }
@@ -643,6 +442,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     try { await navigator.clipboard.writeText(els.trainLog.textContent || ""); toast("Log copied", "ok"); }
     catch { toast("Copy failed", "err"); }
   });
+
+  // ?tab=training links straight to a tab; otherwise the last one used.
+  let tab = new URLSearchParams(location.search).get("tab");
+  if (!tab) {
+    try { tab = localStorage.getItem("vimaan-tab") || "inference"; } catch { tab = "inference"; }
+  }
+  if (els.panels[tab]) setTab(tab);
 
   await Promise.all([refreshModels(), refreshDatasets()]);
   pollStatus();
