@@ -46,11 +46,56 @@ GOLD = [
     ("altitude two thousand", "set_autopilot_altitude", {"altitude": "2000"}),
     ("gear up", "toggle_landing_gear", {"state": "up"}),
     ("tune com two to one two one decimal five", "set_com_frequency", {"com_port": "2"}),
+    # E1: the port named after the frequency (v17 left it untagged; in flight
+    # COM 1 was tuned).
+    (
+        "frequency one three three decimal one on com two",
+        "set_com_frequency",
+        {"com_port": "2", "frequency": "133.1"},
+    ),
+    # Tier 1 (v18): the Part C flight checklist's phrases. Kept in GOLD_TIER1.
 ]
+
+GOLD_TIER1 = [
+    ("speed one six zero", "set_autopilot_speed", {"speed": "160"}),
+    ("mach point seven eight", "set_autopilot_speed", {"mach": "0.78"}),
+    (
+        "descend at one thousand five hundred feet per minute",
+        "set_vertical_speed",
+        {"vs": "1500", "direction": "down"},
+    ),
+    (
+        "climb at eight hundred feet per minute",
+        "set_vertical_speed",
+        {"vs": "800", "direction": "up"},
+    ),
+    ("heading mode", "set_autopilot_mode", {"mode": "heading"}),
+    ("approach mode", "set_autopilot_mode", {"mode": "approach"}),
+    ("level change", "set_autopilot_mode", {"mode": "level change"}),
+    ("altitude hold mode", "set_autopilot_mode", {"mode": "altitude hold"}),
+    ("engage v nav", "set_autopilot_mode", {"mode": "v nav"}),
+    ("auto throttle on", "toggle_autothrottle", {"state": "on"}),
+    ("auto throttle off", "toggle_autothrottle", {"state": "off"}),
+    ("altimeter two niner niner two", "set_altimeter", {"pressure": "2992"}),
+    ("q n h one zero one three", "set_altimeter", {"pressure": "1013"}),
+    ("altimeter standard", "set_altimeter", {"setting": "standard"}),
+    ("flaps fifteen", "set_flaps", {"flap_setting": "15"}),
+    ("flaps full", "set_flaps", {"position": "full"}),
+]
+GOLD = GOLD + GOLD_TIER1
 
 # Bare numbers and fragments must never be acted on (scripts/model_gate.py
 # checks these through the plugin's decision rules).
-MUST_NOT_ACT = ["eighty", "seventy", "forty five", "eighty two on", "two forty", "on", "down"]
+MUST_NOT_ACT = [
+    "eighty",
+    "seventy",
+    "forty five",
+    "eighty two on",
+    "two forty",
+    "on",
+    "down",
+    "point seven eight",
+]
 
 
 @pytest.fixture(scope="session")
@@ -70,6 +115,10 @@ def gold_model():
 @pytest.mark.parametrize("text,intent,slots", GOLD, ids=[c[0] for c in GOLD])
 def test_gold_intent_and_slots(gold_model, text, intent, slots):
     from vimaan_nlu import predict
+
+    tier1_model = "set_autopilot_speed" in gold_model.intent_map_rev.values()
+    if (text, intent, slots) in GOLD_TIER1 and not tier1_model:
+        pytest.skip("the installed model predates Tier 1")  # the gate still requires these
 
     r = predict(
         text,
