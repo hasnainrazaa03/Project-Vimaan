@@ -64,3 +64,21 @@ class Enum:
         if s in self.values:
             return s, True, "valid"
         return None, False, f"not one of {self.values}"
+
+
+@dataclass(frozen=True)
+class AnyOf:
+    """Valid when any of ``options`` accepts the value: an altimeter setting is
+    29.92 inHg said with a decimal, 2992 said as four digits, or 1013 hPa."""
+
+    options: tuple[Range | Enum, ...]
+
+    def contains(self, value: Any) -> bool:
+        return any(o.contains(value) for o in self.options)
+
+    def validate(self, value: Any) -> tuple[str | None, bool, str]:
+        for option in self.options:
+            coerced, ok, reason = option.validate(value)
+            if ok:
+                return coerced, True, reason
+        return None, False, "not a valid value"

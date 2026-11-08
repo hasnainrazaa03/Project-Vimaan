@@ -26,9 +26,15 @@ TARGET_SLOTS = {
     "set_autopilot_heading": "degrees",
     "set_autopilot_altitude": "altitude",
     "set_flight_level": "flight_level",
+    # Tier 1: "speed to eighty" (280?), "vertical speed to eight hundred"
+    # (2,800?), "flaps to five" (25?).
+    "set_autopilot_speed": "speed",
+    "set_vertical_speed": "vs",
+    "set_flaps": "flap_setting",
 }
-# Said as three digits ("two seven zero"), the "two" is taken as a digit.
-THREE_DIGIT_SLOTS = {"degrees", "flight_level"}
+# Said as three digits ("two seven zero", "speed two one zero"), the "two" is
+# taken as a digit.
+THREE_DIGIT_SLOTS = {"degrees", "flight_level", "speed"}
 
 _NUMBER_WORDS = set(_UNIT_WORDS) | set(_TEEN_WORDS) | set(_TENS_WORDS) | _MAGNITUDE_WORDS
 

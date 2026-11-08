@@ -122,6 +122,19 @@ def render_number(kind: str, rng: random.Random) -> str:
         return rng.choice(spoken.frequency(_frequency(rng)))
     if kind == "port":
         return rng.choice(("one", "two"))
+    # Tier 1
+    if kind == "speed":
+        return rng.choice(spoken.speed(rng.randrange(60, 401, 5)))
+    if kind == "mach":
+        return rng.choice(spoken.mach(f"0.{rng.randrange(40, 96):02d}"))
+    if kind == "vs":
+        return rng.choice(spoken.vertical_speed(rng.randrange(100, 6001, 100)))
+    if kind == "pressure":
+        if rng.random() < 0.6:  # inHg (the Americas) or hPa (most of the world)
+            return rng.choice(spoken.pressure(f"{rng.randrange(2800, 3151) / 100:.2f}"))
+        return rng.choice(spoken.pressure(str(rng.randrange(940, 1061))))
+    if kind == "flaps":
+        return rng.choice(spoken.flaps(rng.choice((1, 2, 3, 5, 10, 15, 20, 25, 30, 40))))
     raise ValueError(kind)
 
 

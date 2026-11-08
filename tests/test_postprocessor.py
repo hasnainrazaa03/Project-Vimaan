@@ -280,3 +280,13 @@ class TestPortFromText:
 def test_port_after_the_frequency(text, port):
     slots = port_from_text({"frequency": "133.1"}, text, "set_com_frequency")
     assert slots.get("com_port") == port
+
+
+def test_a_longer_choice_value_wins_over_one_inside_it():
+    # "nav" is inside "v nav" and "l nav": v18 tagged "v nav" correctly and
+    # the canonicalizer turned it into "nav".
+    from vimaan_nlu.postprocessor import canonicalize_choices
+
+    for value in ("v nav", "l nav", "nav"):
+        out = canonicalize_choices({"mode": value}, f"engage {value}", "set_autopilot_mode")
+        assert out["mode"] == value

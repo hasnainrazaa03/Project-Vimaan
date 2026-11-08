@@ -126,3 +126,57 @@ def instance(n: str) -> list[str]:
         "2": ["two", "number two", "right", "second"],
         "both": ["both"],
     }[n]
+
+
+# ---------------------------------------------------------------------------
+# Tier 1
+# ---------------------------------------------------------------------------
+def speed(kt: int) -> list[str]:
+    """180 -> "one eight zero", "one eighty", "one hundred eighty";
+    85 -> "eighty five", "eight five"."""
+    v = str(kt)
+    if kt < 100:
+        return list(dict.fromkeys([two_digit(kt), digits(v)]))
+    out = [digits(v)]
+    if (g := pilot_group(v)) is not None:
+        out.append(g)
+    out.append(cardinal(kt))
+    return list(dict.fromkeys(out))
+
+
+def mach(value: str) -> list[str]:
+    """ "0.78" -> "point seven eight", "decimal seven eight";
+    "0.80" -> also "point eight"."""
+    frac = value.split(".")[1]
+    out = [f"point {digits(frac)}", f"decimal {digits(frac)}"]
+    if frac.endswith("0"):
+        out.append(f"point {digits(frac.rstrip('0'))}")
+    return list(dict.fromkeys(out))
+
+
+def vertical_speed(fpm: int) -> list[str]:
+    """1500 -> "one thousand five hundred", "fifteen hundred"; 800 -> "eight hundred"."""
+    out = [cardinal(fpm)]
+    if 1000 < fpm < 10000 and fpm % 1000:
+        out.append(f"{two_digit(fpm // 100)} hundred")
+    return list(dict.fromkeys(out))
+
+
+def pressure(value: str) -> list[str]:
+    """Altimeter settings as said. inHg "29.92" -> "two niner niner two",
+    "two nine nine two", "twenty nine ninety two", "two nine point nine two";
+    hPa "1013" -> "one zero one three"."""
+    if "." in value:
+        whole, frac = value.split(".")
+        four = whole + frac
+        out = [digits(four, niner=True), digits(four)]
+        if int(frac) >= 10:
+            out.append(f"{two_digit(int(whole))} {two_digit(int(frac))}")
+        out.append(f"{digits(whole)} point {digits(frac)}")
+        return list(dict.fromkeys(out))
+    return list(dict.fromkeys([digits(value), digits(value, niner=True)]))
+
+
+def flaps(setting: int) -> list[str]:
+    """Flap handle labels are said as numbers: "fifteen", "one", "twenty five"."""
+    return [two_digit(setting)]

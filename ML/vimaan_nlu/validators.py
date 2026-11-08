@@ -19,7 +19,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from vimaan_nlu import commands as _commands
-from vimaan_nlu.slot_types import Enum, Range
+from vimaan_nlu.slot_types import AnyOf, Enum, Range
 
 __all__ = [
     "COMMAND_WORDS",
@@ -36,10 +36,10 @@ __all__ = [
 
 # Slot constraints and command words live in the command table; this module
 # keeps the validation API the postprocessor, plugin and dashboard use.
-SLOT_VALIDATORS: Mapping[str, Range | Enum] = _commands.SLOT_VALIDATORS
+SLOT_VALIDATORS: Mapping[str, Range | Enum | AnyOf] = _commands.SLOT_VALIDATORS
 
 
-def slot_validator(name: str) -> Range | Enum | None:
+def slot_validator(name: str) -> Range | Enum | AnyOf | None:
     """Return the validator for ``name``, or ``None`` if the slot is unconstrained."""
     return SLOT_VALIDATORS.get(name)
 
@@ -70,12 +70,15 @@ def in_range(name: str, value: Any) -> bool:
 # classified confidently and executed: "seventy" -> flight level 70,
 # "city eight on" -> flight director on. A pilot always names the thing.
 COMMAND_WORDS: dict[str, frozenset[str]] = _commands.command_words()
-# Actionable intents whose required slot is a choice (up/down, on/off): their
-# handlers ask "Gear up or down?" when it's missing.
+# Actionable intents with a choice (up/down, on/off, a mode) and no required
+# number: their handlers ask ("Gear up or down?", "Which mode?") when it's
+# missing, so a bare name can be sent to them.
 CHOICE_INTENTS: frozenset[str] = frozenset(
     c.intent
     for c in _commands.COMMANDS
-    if c.actionable and any(c.slots[n].kind == "choice" for n in c.required if n in c.slots)
+    if c.actionable
+    and any(slot.kind == "choice" for slot in c.slots.values())
+    and all(c.slots[n].kind == "choice" for n in c.required if n in c.slots)
 )
 
 
@@ -108,9 +111,7 @@ def bare_command(text: str) -> str | None:
     words = set(text.lower().split())
     if not words or words <= _BARE_EXTRA:
         return None
-    found = [
-        intent
-        for intent, names in COMMAND_WORDS.items()
-        if intent in CHOICE_INTENTS and words <= names | _BARE_EXTRA
-    ]
-    return found[0] if len(found) == 1 else None
+    # Exactly one command may own the words: "heading" names the heading
+    # value and the heading mode, so it is not a bare name.
+    found = [i for i, names in COMMAND_WORDS.items() if words <= names | _BARE_EXTRA]
+    return found[0] if len(found) == 1 and found[0] in CHOICE_INTENTS else None

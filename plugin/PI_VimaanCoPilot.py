@@ -41,6 +41,7 @@ _IMPORT_T0 = time.perf_counter()
 import logging  # noqa: E402
 import os  # noqa: E402
 import sys  # noqa: E402
+import threading  # noqa: E402
 from typing import Any  # noqa: E402
 
 from XPPython3 import xp  # noqa: E402
@@ -63,7 +64,7 @@ if _ML_PATH not in sys.path:
 # Only light, stdlib-backed modules load into X-Plane; the heavy ones live in
 # the worker process.
 from vimaan_nlu import probe  # noqa: E402
-from vimaan_nlu.aircraft import AircraftInfo, resolve  # noqa: E402
+from vimaan_nlu.aircraft import AircraftInfo, files_mention, resolve  # noqa: E402
 from vimaan_nlu.ambiguity import TARGET_SLOTS, bare_number, chosen, two_or_to  # noqa: E402
 from vimaan_nlu.commands import (  # noqa: E402
     BY_INTENT,
@@ -117,6 +118,9 @@ COMMAND_NOUN = {
     "set_autopilot_altitude": "altitude",
     "set_autopilot_heading": "heading",
     "set_flight_level": "flight level",
+    "set_autopilot_speed": "speed",
+    "set_vertical_speed": "vertical speed",
+    "set_flaps": "flaps",
 }
 # Delay before reading back a dataref a command or write should have changed.
 VERIFY_DELAY_SEC = 1.0
@@ -194,6 +198,50 @@ DREF_COM_KHZ: dict[str, str] = dict(BY_INTENT["set_com_frequency"].params["datar
 DREF_GEAR_HANDLE = "sim/cockpit2/controls/gear_handle_down"
 DREF_GEAR_RETRACTABLE = "sim/aircraft/gear/acf_gear_retract"
 DREF_FLAP_HANDLE = "sim/cockpit2/controls/flap_handle_request_ratio"
+# Tier 1 targets.
+DREF_SPEED_DIAL = "sim/cockpit2/autopilot/airspeed_dial_kts_mach"
+DREF_SPEED_IS_MACH = "sim/cockpit2/autopilot/airspeed_is_mach"
+DREF_VVI_DIAL = "sim/cockpit2/autopilot/vvi_dial_fpm"
+DREF_VVI_STATUS = "sim/cockpit2/autopilot/vvi_status"
+DREF_ALTITUDE_ACTUAL = "sim/cockpit2/gauges/indicators/altitude_ft_pilot"
+DREF_AUTOTHROTTLE = "sim/cockpit2/autopilot/autothrottle_enabled"
+DREF_BARO = (
+    "sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot",
+    "sim/cockpit2/gauges/actuators/barometer_setting_in_hg_copilot",
+)
+HPA_TO_INHG = 0.0295300
+DREF_ALT_ARMED = "sim/cockpit2/autopilot/altitude_hold_armed"
+DREF_SERVOS_ON = "sim/cockpit2/autopilot/servos_on"
+DREF_VERTICAL_MODE = "sim/cockpit2/autopilot/altitude_mode"
+DREF_ALT_HOLD_STATUS = "sim/cockpit2/autopilot/altitude_hold_status"
+VERTICAL_MOVING_MODES = (4, 5)  # V/S, level change: modes that climb or descend
+# Arming altitude capture waits for the climb/descent mode to settle: the 737
+# arms it by itself when V/S engages, and the generic arm command toggles.
+ARM_CAPTURE_DELAY_SEC = 1.2
+# Vimaan's own capture (option b): press altitude hold this far ahead of the
+# target, scaled to the climb rate, never closer than the minimum.
+CAPTURE_LEAD_SEC = 6.0
+CAPTURE_MIN_BAND_FT = 60.0
+CAPTURE_MAX_SEC = 20 * 60
+# Altimeter by knob steps (aircraft that put written values back).
+BARO_TOLERANCE_INHG = 0.005
+BARO_STEP_MAX_PRESSES = 400
+BARO_STEP_MAX_SEC = 30.0
+# Autopilot mode -> (profile role, status dataref; 0 off, 1 armed, 2 active).
+AUTOPILOT_MODES = {
+    "heading": ("mode_heading", "sim/cockpit2/autopilot/heading_status"),
+    "nav": ("mode_nav", "sim/cockpit2/autopilot/nav_status"),
+    "approach": ("mode_approach", "sim/cockpit2/autopilot/approach_status"),
+    "back course": ("mode_back_course", "sim/cockpit2/autopilot/backcourse_status"),
+    "altitude hold": ("mode_altitude_hold", "sim/cockpit2/autopilot/altitude_hold_status"),
+    "vertical speed": ("mode_vertical_speed", "sim/cockpit2/autopilot/vvi_status"),
+    "level change": ("mode_level_change", "sim/cockpit2/autopilot/speed_status"),
+    "v nav": ("mode_vnav", "sim/cockpit2/autopilot/vnav_status"),
+    # LNAV on X-Plane's generic autopilot is GPS steering (to verify per aircraft).
+    "l nav": ("mode_gpss", "sim/cockpit2/autopilot/gpss_status"),
+}
+MODE_SPOKEN = {"nav": "Nav", "v nav": "V NAV", "l nav": "L NAV"}
+FMS_MODES = ("v nav", "l nav")
 # cockpit2/controls/parking_brake_ratio is deprecated in 12.4 (X-Plane logs
 # "has been replaced" on every read); this is its replacement.
 DREF_PARKING_BRAKE = "sim/flightmodel/controls/parkbrake"
@@ -315,6 +363,15 @@ class PythonInterface:
         self._question: dict[str, Any] | None = None  # the open "to or two?" question
         self._held: dict[str, Any] | None = None  # the command a safety rule is holding
         self._probe: dict[str, Any] | None = None  # a running aircraft probe
+        self._deferred: list[dict[str, Any]] = []  # main-thread actions due later
+        self._baro_step: dict[str, Any] | None = None  # altimeter set by knob steps
+        self._capture: dict[str, Any] | None = None  # Vimaan's own altitude capture
+        # Option (b): Vimaan captures altitude where the aircraft can't. Off
+        # unless VIMAAN_CAPTURE=1, or switched on with its key.
+        self._capture_enabled = os.environ.get("VIMAAN_CAPTURE") == "1"
+        # Whether the loaded aircraft's own files use an autothrottle:
+        # (acf path, True/False/None), scanned off the main thread.
+        self._athr_scan: tuple[str, bool | None] | None = None
 
         # Safety interlocks (Phase 6B): risky commands must be repeated to confirm.
         self._confirm_gate = ConfirmationGate(window_sec=self.CONFIRM_WINDOW_SEC)
@@ -446,6 +503,11 @@ class PythonInterface:
         )
         self._register_command(
             "vimaan/probe_back", "Vimaan: probe, go back one step", self._on_probe_back_cmd
+        )
+        self._register_command(
+            "vimaan/toggle_capture",
+            "Vimaan: altitude capture by Vimaan on/off (aircraft that can't capture)",
+            self._on_capture_cmd,
         )
         self._start_overlay()
 
@@ -609,6 +671,9 @@ class PythonInterface:
             ):
                 self._end_command("timeout")
             self._service_cranks()
+            self._service_deferred()
+            self._service_baro_step()
+            self._service_capture()
             self._service_verifications()
             self._service_follow_ups()
             self._service_probe()
@@ -625,8 +690,8 @@ class PythonInterface:
             if self.overlay is None
             else round(self.overlay.draw_ms_max, 3),
         )
-        if self._active is not None or self._self_test_pending:
-            return -1.0  # every frame while a reply is due: act on it immediately
+        if self._active is not None or self._self_test_pending or self._baro_step is not None:
+            return -1.0  # every frame while a reply is due or a knob is stepping
         return QUEUE_POLL_INTERVAL_SEC
 
     def _on_worker_message(self, msg):
@@ -753,8 +818,14 @@ class PythonInterface:
 
             # A command's name alone ("landing gear"): ask which way rather
             # than stay silent. The handler asks when the choice is missing.
+            # Only when the model found no command: a confident reading wins
+            # ("heading" is also a word for the autopilot-mode command).
             bare = bare_command(normalized)
-            if bare is not None and intent_pred != bare:
+            found_none = (
+                intent_pred in self.NON_ACTIONABLE_INTENTS
+                or result["confidence"] < self.CONFIDENCE_FLOOR
+            )
+            if bare is not None and bare != intent_pred and found_none:
                 self.tel.event("bare_command", cmd=cmd, intent=bare, predicted=intent_pred)
                 outcome = self._dispatch(cmd, bare, {})
                 return
@@ -793,6 +864,8 @@ class PythonInterface:
                 return
             # "to" and "two" sound the same, so don't guess between two targets.
             either = two_or_to(intent_pred, text)
+            if either and self._implausible_reading(intent_pred, either[1]):
+                either = None  # "speed two eighty" on a jet: 80 kt is below its stall speed
             if either:
                 outcome = "ambiguous"
                 self._ask(cmd, intent_pred, *either)
@@ -895,6 +968,9 @@ class PythonInterface:
         dropped = []
         if held is not None:
             dropped.append(held["intent"])
+        if self._capture is not None:
+            dropped.append("altitude capture")
+            self._end_capture(False, "cancelled", speak=False)
         if self._question is not None and time.perf_counter() < self._question["expires"]:
             dropped.append(self._question["intent"])
         self._confirm_gate.clear()
@@ -1069,11 +1145,15 @@ class PythonInterface:
 
     @staticmethod
     def _which_value(intent, as_two, as_to):
-        if intent == "set_autopilot_altitude":
-            return f"Altitude {as_to} or {as_two} feet? Say it again without the word to."
-        name = "Heading" if intent == "set_autopilot_heading" else "Flight level"
-        a, b = (spell_digits(f"{int(v):03d}") for v in (as_to, as_two))
-        return f"{name} {a} or {b}? Say all three digits."
+        if intent in ("set_autopilot_heading", "set_flight_level"):
+            name = "Heading" if intent == "set_autopilot_heading" else "Flight level"
+            a, b = (spell_digits(f"{int(v):03d}") for v in (as_to, as_two))
+            return f"{name} {a} or {b}? Say all three digits."
+        unit = {"set_autopilot_altitude": " feet", "set_vertical_speed": " feet per minute"}
+        name = COMMAND_NOUN[intent].capitalize()
+        return (
+            f"{name} {as_to} or {as_two}{unit.get(intent, '')}? Say it again without the word to."
+        )
 
     def _write(self, name, value, is_float=True):
         """Write a dataref and read it straight back. Returns True on success.
@@ -1127,7 +1207,7 @@ class PythonInterface:
         self.tel.event("sim_command", cmd=self._current_cmd, command=command_path, ok=True)
         return True
 
-    def _hold_check(self, label, name, value, is_float=True, modulo=None):
+    def _hold_check(self, label, name, value, is_float=True, modulo=None, tolerance=0.5):
         """Did a written value stay? The read-back in ``_write`` is in the same
         frame, so it can't tell if the sim or aircraft replaced it. Also records
         the aircraft now and shortly after, to compare target with response."""
@@ -1137,7 +1217,7 @@ class PythonInterface:
             actual = read(name)
             return actual % modulo if actual is not None and modulo else actual
 
-        self._expect(label, current, value % modulo if modulo else value, tolerance=0.5)
+        self._expect(label, current, value % modulo if modulo else value, tolerance=tolerance)
         now = time.perf_counter()
         for after in FOLLOW_UP_SEC:
             self._follow_ups.append(
@@ -1254,6 +1334,26 @@ class PythonInterface:
         info = self._aircraft_info(icao, acf_path)
         self.profile = resolve(info, self._has_command, self._probe_results(info.key))
         self.tel.event("aircraft", **self.profile.summary())
+        self._capture = None
+        self._baro_step = None
+        self._athr_scan = (acf_path, None)
+        threading.Thread(
+            target=self._scan_aircraft_files, args=(acf_path,), daemon=True, name="vimaan-acf-scan"
+        ).start()
+
+    def _scan_aircraft_files(self, acf_path):
+        """Background thread: file reads only, no X-Plane calls."""
+        try:
+            shown = files_mention(acf_path)
+        except Exception:  # never let a scan take the plugin down
+            shown = None
+        if self._athr_scan and self._athr_scan[0] == acf_path:
+            self._athr_scan = (acf_path, shown)
+            self.tel.event("aircraft_files", acf=acf_path, autothrottle_shown=shown)
+
+    def _autothrottle_shown(self):
+        scan = self._athr_scan
+        return scan[1] if scan and scan[0] == self.profile.info.acf_path else None
 
     def _aircraft_name(self):
         """Short name for the overlay: the description if it's short, else ICAO."""
@@ -1663,9 +1763,10 @@ class PythonInterface:
         self.profile = resolve(self.profile.info, self._has_command, probe.load_results(path))
         self._say(spoken, origin="probe")
 
-    def _expect(self, label, read, expected, delay=None, tolerance=None):
+    def _expect(self, label, read, expected, delay=None, tolerance=None, fail=None):
         """After a command, check the sim actually changed; say so if it didn't
-        (in-sim the A330 ignored "autopilot on" while Vimaan had said "on")."""
+        (in-sim the A330 ignored "autopilot on" while Vimaan had said "on").
+        ``fail``: what to say instead of "<label> did not respond"."""
         self._verifications.append(
             {
                 "cmd": self._current_cmd,
@@ -1673,6 +1774,7 @@ class PythonInterface:
                 "read": read,
                 "expected": expected,
                 "tolerance": tolerance,
+                "fail": fail,
                 "due": time.perf_counter() + (VERIFY_DELAY_SEC if delay is None else delay),
             }
         )
@@ -1697,7 +1799,7 @@ class PythonInterface:
                 ok=ok,
             )
             if not ok:
-                self._say(f"{v['label'].replace('_', ' ')} did not respond")
+                self._say(v.get("fail") or f"{v['label'].replace('_', ' ')} did not respond")
 
     def _not_applicable(self, intent, slots=None):
         """Why this aircraft can't perform ``intent``, or None if it can."""
@@ -1726,6 +1828,7 @@ class PythonInterface:
             ias_kt=ias,
             on_ground=None if on_ground_i is None else bool(on_ground_i),
             vs_fpm=self._read_float(DREF_VERTICAL_SPEED_FPM),
+            vfe_kt=self.profile.info.vfe_kt or None,
         )
 
     # ------------------------------------------------------------------
@@ -1771,7 +1874,17 @@ class PythonInterface:
             self._say("Cannot set altitude")
             return "failed"
         self._hold_check("Altitude", DREF_ALTITUDE, v)
-        self._say(f"Altitude {int(v)} feet")
+        extra = ""
+        if self._capture is not None:
+            self._end_capture(False, "new target", speak=False)
+        if (
+            self._read_int(DREF_SERVOS_ON) == 1
+            and self._read_int(DREF_VERTICAL_MODE) in VERTICAL_MOVING_MODES
+        ):
+            vs = self._read_float(DREF_VERTICAL_SPEED_FPM)
+            if vs is not None and abs(vs) >= 100:
+                extra = self._plan_capture(vs).replace(f", to {int(v)}", "")
+        self._say(f"Altitude {int(v)} feet{extra}")
         return "executed"
 
     def _set_flight_level(self, slots, intent):
@@ -1796,6 +1909,415 @@ class PythonInterface:
         self._hold_check("Flight level", DREF_ALTITUDE, float(value) * 100)
         self._say(f"Flight level {spell_digits(f'{int(float(value)):03d}')}")
         return "executed"
+
+    # ------------------------------------------------------------------
+    # Tier 1: speed, vertical speed, modes, autothrottle, altimeter
+    # ------------------------------------------------------------------
+    def _implausible_reading(self, intent, as_to):
+        """A "to" reading this aircraft can't fly, so there's nothing to ask."""
+        vso = self.profile.info.vso_kt
+        if intent != "set_autopilot_speed" or vso is None or vso <= 0:
+            return False
+        return float(as_to) < vso
+
+    def _set_autopilot_speed(self, slots, intent):
+        info = self.profile.info
+        if slots.get("mach"):
+            value, ok, _ = validate_slot("mach", slots["mach"])
+            want_mach = 1
+            if ok and info.mmo and float(value) > info.mmo:
+                self._say(f"Mach {value} is above this aircraft's limit")
+                return "rejected"
+        elif slots.get("speed"):
+            value, ok, _ = validate_slot("speed", slots["speed"])
+            want_mach = 0
+            if ok and info.vso_kt and float(value) < info.vso_kt:
+                self._say(f"Speed {int(float(value))} is below this aircraft's stall speed")
+                return "rejected"
+            if ok and info.vne_kt and float(value) > info.vne_kt:
+                self._say(f"Speed {int(float(value))} is above this aircraft's never exceed speed")
+                return "rejected"
+        else:
+            self._say("Speed value missing")
+            return "rejected"
+        if not ok:
+            self.tel.event("slot_rejected", logging.WARNING, slot="speed", value=slots)
+            self._say("Speed out of range")
+            return "rejected"
+        target = float(value)
+        is_mach = self._read_int(DREF_SPEED_IS_MACH)
+        if is_mach is not None and is_mach != want_mach:
+            toggle = self.profile.command("knots_mach_toggle")
+            if not (toggle and self._fire_command(toggle)):
+                self._say("Cannot switch between knots and Mach")
+                return "failed"
+        if not self._write(DREF_SPEED_DIAL, target):
+            self._say("Cannot set speed")
+            return "failed"
+        select = self.profile.command("speed_select")
+        if select:
+            self._fire_command(select)  # Airbus: pull for a selected speed
+        self._hold_check("Speed", DREF_SPEED_DIAL, target, tolerance=0.005 if want_mach else 0.5)
+        if want_mach:
+            spoken = f"Mach point {spell_digits(f'{target:.2f}'.split('.')[1])}"
+        else:
+            spoken = f"Speed {spell_digits(str(int(target)))}"
+        self._say(spoken)
+        return "executed"
+
+    def _set_vertical_speed(self, slots, intent):
+        value, ok, _ = validate_slot("vs", slots.get("vs"))
+        if not ok:
+            self._say("Vertical speed out of range")
+            return "rejected"
+        direction = slots.get("direction")
+        if direction not in ("up", "down"):
+            # Unsaid: towards the selected altitude, when that is clear.
+            target_alt = self._read_float(DREF_ALTITUDE)
+            actual = self._read_float(DREF_ALTITUDE_ACTUAL)
+            if target_alt is None or actual is None or abs(target_alt - actual) < 100:
+                self._say("Climb or descend?")
+                return "rejected"
+            direction = "up" if target_alt > actual else "down"
+        if self.profile.supports("mode_vertical_speed") is False:
+            self._say("This aircraft has no vertical speed mode")
+            return "rejected"
+        fpm = float(value) if direction == "up" else -float(value)
+        # Engage first: the generic V/S command captures the *current* rate,
+        # so the dial is written after it.
+        if self._read_int(DREF_VVI_STATUS) != 2:
+            mode = self.profile.command("mode_vertical_speed")
+            if not (mode and self._fire_command(mode)):
+                self._say("Cannot engage vertical speed")
+                return "failed"
+            self._expect("Vertical speed mode", lambda: self._read_int(DREF_VVI_STATUS), 2)
+        if not self._write(DREF_VVI_DIAL, fpm):
+            self._say("Cannot set vertical speed")
+            return "failed"
+        select = self.profile.command("vertical_select")
+        if select:
+            self._fire_command(select)
+        self._hold_check("Vertical speed", DREF_VVI_DIAL, fpm, tolerance=50.0)
+        verb = "Climb" if fpm > 0 else "Descend"
+        self._say(f"{verb} {int(abs(fpm))} feet per minute{self._plan_capture(fpm)}")
+        return "executed"
+
+    # ------------------------------------------------------------------
+    # Altitude capture (Tier 1, B6)
+    # ------------------------------------------------------------------
+    def _plan_capture(self, fpm):
+        """After a climb or descent starts: level off at the selected altitude.
+        Returns what to add to the read-back.
+
+        1. The aircraft's own capture (altitude arm), unless the probe said it
+           does nothing. Armed after a short delay: the 737 arms it by itself
+           when V/S engages, and the generic arm command is a toggle.
+        2. Else Vimaan's own capture, if switched on (option b).
+        3. Else say how to level off (option a)."""
+        target = self._read_float(DREF_ALTITUDE)
+        actual = self._read_float(DREF_ALTITUDE_ACTUAL)
+        if target is None or actual is None or (target - actual) * fpm <= 0:
+            return ""  # the selected altitude isn't ahead: nothing to capture
+        if abs(target - actual) < 100:
+            return ""
+        arm = self.profile.command("mode_altitude_arm")
+        if (
+            self.profile.supports("mode_altitude_arm") is not False
+            and arm
+            and self._has_command(arm)
+        ):
+            self._later(ARM_CAPTURE_DELAY_SEC, self._arm_capture)
+            return f", to {int(target)}"
+        if self._capture_enabled:
+            self._start_capture(target, fpm)
+            return f". Leveling off at {int(target)}"
+        return f". This aircraft can't capture altitude. Say altitude hold at {int(target)}"
+
+    def _arm_capture(self):
+        if self._read_int(DREF_ALT_ARMED) == 1:
+            return  # armed by the aircraft (737) or already
+        if self._read_int(DREF_VERTICAL_MODE) not in VERTICAL_MOVING_MODES:
+            return  # the pilot changed mode in the meantime
+        arm = self.profile.command("mode_altitude_arm")
+        if arm and self._fire_command(arm):
+            self._expect(
+                "Altitude capture",
+                lambda: self._read_int(DREF_ALT_ARMED),
+                1,
+                fail="Altitude capture did not arm. Say altitude hold at the target.",
+            )
+
+    def _start_capture(self, target, fpm):
+        self._capture = {
+            "cmd": self._current_cmd,
+            "target": target,
+            "up": fpm > 0,
+            "mode": self._read_int(DREF_VERTICAL_MODE),
+            "deadline": time.perf_counter() + CAPTURE_MAX_SEC,
+        }
+        self.tel.event("capture_start", cmd=self._current_cmd, target=target, fpm=fpm)
+
+    def _service_capture(self):
+        c = self._capture
+        if c is None:
+            return
+        alt = self._read_float(DREF_ALTITUDE_ACTUAL)
+        vs = self._read_float(DREF_VERTICAL_SPEED_FPM)
+        dial = self._read_float(DREF_ALTITUDE)
+        why = None
+        if self._read_int(DREF_SERVOS_ON) != 1:
+            why = "autopilot off"
+        elif dial is None or abs(dial - c["target"]) > 50:
+            why = "target moved"
+        elif self._read_int(DREF_VERTICAL_MODE) != c["mode"]:
+            why = "mode changed"
+        elif time.perf_counter() > c["deadline"]:
+            why = "timed out"
+        if why:
+            return self._end_capture(False, why)
+        if alt is None or vs is None:
+            return
+        remaining = (c["target"] - alt) if c["up"] else (alt - c["target"])
+        band = max(CAPTURE_MIN_BAND_FT, abs(vs) * CAPTURE_LEAD_SEC / 60.0)
+        if remaining <= band:
+            hold = self.profile.command("mode_altitude_hold")
+            if hold and self._fire_command(hold):
+                self._expect("Altitude hold", lambda: self._read_int(DREF_ALT_HOLD_STATUS), 2)
+            self._end_capture(True, "captured", alt)
+
+    def _end_capture(self, ok, why, alt=None, speak=True):
+        c, self._capture = self._capture, None
+        if c is None:
+            return
+        self.tel.event(
+            "capture_end",
+            logging.INFO if ok else logging.WARNING,
+            cmd=c["cmd"],
+            ok=ok,
+            why=why,
+            target=c["target"],
+            altitude=None if alt is None else round(alt),
+        )
+        if speak:
+            self._say(
+                f"Altitude hold, {int(c['target'])}" if ok else f"Altitude capture cancelled, {why}"
+            )
+
+    def _on_capture_cmd(self, cmd_ref, phase, refcon):
+        if phase == xp.CommandBegin:
+            self._capture_enabled = not self._capture_enabled
+            if not self._capture_enabled and self._capture is not None:
+                self._end_capture(False, "switched off", speak=False)
+            self.tel.event("capture_setting", enabled=self._capture_enabled)
+            self._say(f"Vimaan altitude capture {'on' if self._capture_enabled else 'off'}")
+        return 1
+
+    def _later(self, delay, action):
+        self._deferred.append(
+            {"due": time.perf_counter() + delay, "action": action, "cmd": self._current_cmd}
+        )
+
+    def _service_deferred(self):
+        now = time.perf_counter()
+        due = [d for d in self._deferred if d["due"] <= now]
+        if not due:
+            return
+        self._deferred = [d for d in self._deferred if d["due"] > now]
+        for d in due:
+            previous, self._current_cmd = self._current_cmd, d["cmd"]
+            try:
+                d["action"]()
+            except Exception as exc:
+                self.tel.error("deferred_error", exc, cmd=d["cmd"])
+            finally:
+                self._current_cmd = previous
+
+    def _set_autopilot_mode(self, slots, intent):
+        mode = slots.get("mode")
+        if mode not in AUTOPILOT_MODES:
+            self._say("Which mode?")
+            return "rejected"
+        state = slots.get("state") or "on"
+        role, status_dref = AUTOPILOT_MODES[mode]
+        status_dref = self.profile.status_dataref(role, status_dref)
+        name = MODE_SPOKEN.get(mode, mode.capitalize())
+        command = self.profile.command(role)
+        if not command or not self._has_command(command) or self.profile.supports(role) is False:
+            self._say(f"{name} mode is not available on this aircraft")
+            return "rejected"
+        status = self._read_int(status_dref)
+        if status is None and state == "off":
+            self._say(f"Cannot read {name} mode state")  # a blind press could turn it on
+            return "failed"
+        if status is not None and (status >= 1) == (state == "on"):
+            self._say(f"{name} already {state}")
+            return "no_op"
+        if not self._fire_command(command):
+            self._say(f"Cannot select {name}")
+            return "failed"
+        want_on = state == "on"
+        # The FMS modes engage only with a flight plan: the 737's LNAV and
+        # VNAV buttons did nothing in the probe without one.
+        fms = mode in FMS_MODES and (
+            role in self.profile.overridden or self.profile.info.autopilot_type == 1
+        )
+        self._expect(
+            f"{name} mode",
+            lambda: None if (r := self._read_int(status_dref)) is None else r >= 1,
+            want_on,
+            fail=f"{name} did not engage. It needs a flight plan in the F M C."
+            if fms and want_on
+            else None,
+        )
+        self._say(f"{name} {'on' if want_on else 'off'}")
+        return "executed"
+
+    def _toggle_autothrottle(self, slots, intent):
+        state = slots.get("state")
+        if state not in ("on", "off"):
+            self._say("Autothrottle on or off?")
+            return "rejected"
+        own = "autothrottle_toggle" in self.profile.overridden
+        # X-Plane's own autothrottle runs on any aircraft (the Baron and King
+        # Air probes said "works"); only an aircraft whose files use one has it.
+        if not own and (
+            self._autothrottle_shown() is False
+            or self.profile.supports("autothrottle_toggle") is False
+        ):
+            self._say("This aircraft has no autothrottle")
+            return "rejected"
+        # autothrottle_enabled: -1 off, 0 armed, 1-3 holding. The A330's A/THR
+        # is on when armed; elsewhere on means holding a speed.
+        on_from = self.profile.settings.get("athr_on_from", 1)
+        hint = self.profile.settings.get("athr_hint")
+        raw = self._read_int(DREF_AUTOTHROTTLE)
+        current = None if raw is None else raw >= on_from
+        want_on = state == "on"
+        if current is not None and current == want_on:
+            self._say(f"Autothrottle already {state}")
+            return "no_op"
+        command = self.profile.command("autothrottle_on" if want_on else "autothrottle_off")
+        if not (command and self._has_command(command)):
+            if current is None:
+                self._say("Cannot read autothrottle state")
+                return "failed"
+            command = self.profile.command("autothrottle_toggle")
+        if not (command and self._fire_command(command)):
+            self._say("No autothrottle on this aircraft")
+            return "rejected"
+        self._expect(
+            "Autothrottle",
+            lambda: None if (r := self._read_int(DREF_AUTOTHROTTLE)) is None else r >= on_from,
+            want_on,
+            fail=f"Autothrottle did not respond. {hint}." if hint else None,
+        )
+        self._say(f"Autothrottle {state}")
+        return "executed"
+
+    def _set_altimeter(self, slots, intent):
+        if not slots.get("setting") and not slots.get("pressure"):
+            self._say("Altimeter setting?")
+            return "rejected"
+        if slots.get("setting") == "standard":
+            command = self.profile.command("baro_std")
+            if not (command and self._fire_command(command)):
+                self._say("Cannot set standard")
+                return "failed"
+            self._say("Altimeter standard")
+            return "executed"
+        value, ok, _ = validate_slot("pressure", slots.get("pressure"))
+        if not ok:
+            self._say("Altimeter setting out of range")
+            return "rejected"
+        number = float(value)
+        if 940 <= number <= 1060:
+            inhg, spoken = number * HPA_TO_INHG, f"Q N H {spell_digits(str(int(number)))}"
+        else:
+            inhg = number / 100 if number >= 2800 else number
+            spoken = f"Altimeter {spell_digits(f'{inhg:.2f}')}"
+        spoken = spoken.replace(" decimal ", " ")
+        if self.profile.probed.get("dial_baro") == "no_change":
+            # The probe measured that this aircraft puts a written setting
+            # back (the 737's scripts own it): turn its knob instead.
+            return self._start_baro_steps(inhg, spoken)
+        if not all(self._write(name, inhg) for name in DREF_BARO):
+            self._say("Cannot set altimeter")
+            return "failed"
+        self._hold_check("Altimeter", DREF_BARO[0], inhg, tolerance=0.005)
+        self._say(spoken)
+        return "executed"
+
+    def _start_baro_steps(self, inhg, spoken):
+        up, down = self.profile.command("baro_up"), self.profile.command("baro_down")
+        if not (up and down and self._has_command(up) and self._has_command(down)):
+            self._say("Cannot set the altimeter on this aircraft")
+            return "rejected"
+        self._baro_step = {
+            "cmd": self._current_cmd,
+            "target": inhg,
+            "spoken": spoken,
+            "up": up,
+            "down": down,
+            "presses": 0,
+            "last": None,  # reading before the last press
+            "last_dir": 0,
+            "stuck": 0,
+            "finishing": False,
+            "deadline": time.perf_counter() + BARO_STEP_MAX_SEC,
+        }
+        self.tel.event("baro_step_start", cmd=self._current_cmd, target=round(inhg, 4))
+        return "pending"
+
+    def _service_baro_step(self):
+        """One knob press per frame toward the target, reading back between
+        presses. A step can be bigger than the tolerance (an altimeter in
+        hPa moves 0.03 inHg a click): on crossing the target, keep whichever
+        side is closer."""
+        j = self._baro_step
+        if j is None:
+            return
+        now = self._read_float(DREF_BARO[0])
+        if now is None:
+            return self._end_baro_steps(False, None, "cannot read the altimeter")
+        err = j["target"] - now
+        if abs(err) <= BARO_TOLERANCE_INHG or j["finishing"]:
+            return self._end_baro_steps(True, now)
+        direction = 1 if err > 0 else -1
+        if j["last"] is not None:
+            j["stuck"] = j["stuck"] + 1 if abs(now - j["last"]) < 1e-6 else 0
+            if j["stuck"] >= 6:
+                return self._end_baro_steps(False, now, "the knob did not move it")
+            if j["last_dir"] and direction != j["last_dir"]:
+                if abs(j["target"] - j["last"]) < abs(err):
+                    # The previous click was closer: go back one.
+                    self._fire_command(j["up"] if direction > 0 else j["down"])
+                    j["finishing"] = True
+                    return
+                return self._end_baro_steps(True, now)
+        if j["presses"] >= BARO_STEP_MAX_PRESSES or time.perf_counter() > j["deadline"]:
+            return self._end_baro_steps(False, now, "it took too many steps")
+        self._fire_command(j["up"] if direction > 0 else j["down"])
+        j.update(presses=j["presses"] + 1, last=now, last_dir=direction)
+
+    def _end_baro_steps(self, ok, reading, why=None):
+        j, self._baro_step = self._baro_step, None
+        assert j is not None  # only called while stepping
+        self.tel.event(
+            "baro_step_end",
+            logging.INFO if ok else logging.WARNING,
+            cmd=j["cmd"],
+            ok=ok,
+            target=round(j["target"], 4),
+            reading=None if reading is None else round(reading, 4),
+            presses=j["presses"],
+            why=why,
+        )
+        if ok:
+            self._write(DREF_BARO[1], reading)  # copilot side, where the aircraft keeps it
+            self._say(j["spoken"])
+        else:
+            shown = "" if reading is None else f" It reads {spell_digits(f'{reading:.2f}')}."
+            self._say(f"Altimeter not set: {why}.{shown}".replace(" decimal ", " "))
 
     def _set_com_frequency(self, slots, intent):
         frequency = slots.get("frequency")
@@ -1840,6 +2362,8 @@ class PythonInterface:
     def _set_flaps(self, slots, intent):
         state = slots.get("position")
         before = self._read_float(DREF_FLAP_HANDLE)
+        if state == "full" or (slots.get("flap_setting") and state not in ("up", "down")):
+            return self._set_flap_notch(slots, before)
         if state == "up":
             # "Flaps up" in a cockpit means fully retracted, not one notch.
             if before is not None and before <= 0.01:
@@ -1858,6 +2382,36 @@ class PythonInterface:
             self._say("Flaps command unavailable")
             return "failed"
         self.tel.event("flaps", cmd=self._current_cmd, handle_before=before)
+        self._say(spoken)
+        return "executed"
+
+    def _set_flap_notch(self, slots, before):
+        """ "Flaps full" or "flaps fifteen": a handle position by its label."""
+        detents = self.profile.info.flap_detents
+        if not detents:
+            self._say("Cannot read this aircraft's flap settings")
+            return "failed"
+        notch: int | None
+        if slots.get("position") == "full":
+            notch, spoken = detents, "Flaps full"
+        else:
+            value, ok, _ = validate_slot("flap_setting", slots.get("flap_setting"))
+            notch = self.profile.flap_notch(int(float(value))) if ok else None
+            if notch is None:
+                self._say(f"Flaps {slots.get('flap_setting')} is not a setting on this aircraft")
+                return "rejected"
+            spoken = f"Flaps {int(float(value))}"
+        ratio = notch / detents
+        if before is not None and abs(before - ratio) < 0.01:
+            self._say(f"{spoken} already set")
+            return "no_op"
+        if not self._write(DREF_FLAP_HANDLE, ratio):
+            self._say("Flaps command unavailable")
+            return "failed"
+        self._hold_check("Flaps", DREF_FLAP_HANDLE, ratio, tolerance=0.01)
+        self.tel.event(
+            "flaps", cmd=self._current_cmd, handle_before=before, notch=notch, of=detents
+        )
         self._say(spoken)
         return "executed"
 

@@ -120,3 +120,33 @@ def test_not_a_bare_number(heard):
 )
 def test_chosen_only_names_an_offered_value(offered, heard, pick):
     assert chosen(offered, heard) == pick
+
+
+SPEED, VS, FLAPS = "set_autopilot_speed", "set_vertical_speed", "set_flaps"
+
+
+@pytest.mark.parametrize(
+    ("heard", "intent", "as_two", "as_to"),
+    [
+        ("speed two eighty", SPEED, "280", "80"),  # the plugin drops 80 below Vso
+        ("vertical speed two eight hundred feet per minute", VS, "2800", "800"),
+        ("flaps two five", FLAPS, "25", "5"),
+    ],
+)
+def test_tier1_two_readings(heard, intent, as_two, as_to):
+    assert two_or_to(intent, heard) == (as_two, as_to)
+
+
+@pytest.mark.parametrize(
+    ("heard", "intent"),
+    [
+        ("speed two one zero", SPEED),  # three digits: the two is a digit
+        ("set mach point seven eight", SPEED),
+        ("vertical speed two thousand", VS),
+        ("flaps two", FLAPS),
+        ("flaps twenty five", FLAPS),
+        ("flaps two fifteen", FLAPS),  # 215 is no flap setting
+    ],
+)
+def test_tier1_clear_values(heard, intent):
+    assert two_or_to(intent, heard) is None

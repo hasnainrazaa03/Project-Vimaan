@@ -127,6 +127,36 @@ class TestConfirmationGate:
         assert command_token("set_flaps", {"position": "up"}) == "set_flaps::up"
 
 
+# ---------------------------------------------------------------------------
+# Tier 1: flaps above the flap speed
+# ---------------------------------------------------------------------------
+from vimaan_nlu.safety import SafetyContext as _Ctx  # noqa: E402
+from vimaan_nlu.safety import command_token as _token  # noqa: E402
+from vimaan_nlu.safety import evaluate_safety as _evaluate  # noqa: E402
+
+
+def test_flap_setting_above_vfe_needs_confirmation():
+    fast = _Ctx(ias_kt=150.0, vfe_kt=122.0)
+    slow = _Ctx(ias_kt=100.0, vfe_kt=122.0)
+    assert _evaluate("set_flaps", {"flap_setting": "30"}, fast).rule == "flaps_above_vfe"
+    assert _evaluate("set_flaps", {"position": "full"}, fast).requires_confirmation
+    assert not _evaluate("set_flaps", {"flap_setting": "30"}, slow).requires_confirmation
+    # Up, and one notch down, are as before.
+    assert not _evaluate("set_flaps", {"position": "up"}, fast).requires_confirmation
+    assert not _evaluate("set_flaps", {"position": "down"}, fast).requires_confirmation
+
+
+def test_unknown_flap_speed_fails_safe():
+    verdict = _evaluate("set_flaps", {"flap_setting": "15"}, _Ctx(ias_kt=90.0, vfe_kt=None))
+    assert verdict.requires_confirmation and verdict.fail_safe
+
+
+def test_a_different_flap_setting_does_not_confirm_a_held_one():
+    assert _token("set_flaps", {"flap_setting": "15"}) != _token(
+        "set_flaps", {"flap_setting": "30"}
+    )
+
+
 @pytest.mark.parametrize(
     ("ctx", "held"),
     [

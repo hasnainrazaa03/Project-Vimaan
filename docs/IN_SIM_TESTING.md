@@ -142,7 +142,9 @@ worst draw time per frame.
 
 **Baron autopilot:** HDG follows the heading bug, so a voice heading turns the aircraft once HDG is on. ALT holds the altitude you are at, and pressing it replaces the selected altitude with the current one. A voice altitude is only a number on the display until there is a mode that climbs or descends to it.
 
-**Target vs aircraft:** commands set targets and don't engage autopilot modes. `aircraft_state` events record modes, actual heading and altitude, and COM values when a target or radio is set and 10 s and 30 s later; `autopilot_state_change` records changes Vimaan didn't make. The log report shows both.
+**Climbs and descents (Tier 1):** "descend at one thousand five hundred" engages V/S, sets the rate, and has the autopilot level off at the selected altitude ("Descend 1500 feet per minute, to 3000"). Where the aircraft can arm altitude capture, Vimaan arms it (if the aircraft hasn't already). Where it can't, Vimaan can level off for you: bind **Vimaan: altitude capture by Vimaan on/off** (`vimaan/toggle_capture`), or set `VIMAAN_CAPTURE=1` before launch. It presses altitude hold just before the target and stands down if you change mode, move the target, or say "cancel". Otherwise the read-back says to say "altitude hold" at the target.
+
+**Target vs aircraft:** commands other than modes and climbs set targets and don't engage autopilot modes. `aircraft_state` events record modes, actual heading and altitude, and COM values when a target or radio is set and 10 s and 30 s later; `autopilot_state_change` records changes Vimaan didn't make. The log report shows both.
 
 **Push-to-talk on a yoke button:** Settings → Joystick → search `vimaan` →
 bind **Vimaan: push to talk** (and optionally **Vimaan: run self test**).
