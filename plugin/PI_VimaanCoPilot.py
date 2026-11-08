@@ -62,6 +62,8 @@ if _ML_PATH not in sys.path:
 
 # Only light, stdlib-backed modules load into X-Plane; the heavy ones live in
 # the worker process.
+from vimaan_nlu import probe  # noqa: E402
+from vimaan_nlu.aircraft import AircraftInfo, resolve  # noqa: E402
 from vimaan_nlu.ambiguity import TARGET_SLOTS, bare_number, chosen, two_or_to  # noqa: E402
 from vimaan_nlu.commands import (  # noqa: E402
     BY_INTENT,
@@ -71,6 +73,7 @@ from vimaan_nlu.commands import (  # noqa: E402
 )
 from vimaan_nlu.overlay import Overlay  # noqa: E402
 from vimaan_nlu.overlay_state import OverlayState  # noqa: E402
+from vimaan_nlu.pilot_replies import pilot_reply  # noqa: E402
 from vimaan_nlu.readback import spell_digits  # noqa: E402
 from vimaan_nlu.safety import (  # noqa: E402
     ConfirmationGate,
@@ -96,6 +99,18 @@ WORKER_MAX_RESTARTS = 3
 
 # Engine start: hold the starter until the engine reports running, up to this.
 STARTER_MAX_CRANK_SEC = 20.0
+# Turbine starts (jet, turboprop) spool for longer, and fuel goes in only once
+# the starter has the core turning: N2 (jet) / N1, the gas generator
+# (turboprop), in percent. The starter is held until the engine runs and the
+# core is past the cutout.
+TURBINE_MAX_CRANK_SEC = 60.0
+FUEL_ON_AT_PCT = {"jet": 20.0, "turboprop": 13.0}
+STARTER_CUTOUT_PCT = 50.0
+CORE_SPEED = {
+    "jet": "sim/cockpit2/engine/indicators/N2_percent",
+    "turboprop": "sim/cockpit2/engine/indicators/N1_percent",
+}
+DREF_FUEL_LEVER = "sim/cockpit2/engine/actuators/mixture_ratio"  # 0 cutoff, 1 open
 # What the pilot must say with a number to make it a command, per "to or two?" target.
 COMMAND_NOUN = {
     "set_autopilot_altitude": "altitude",
@@ -140,6 +155,23 @@ AUTOPILOT_STATE = {
     "speed_status": "sim/cockpit2/autopilot/speed_status",
 }
 DREF_AIRCRAFT_ICAO = "sim/aircraft/view/acf_ICAO"
+# What X-Plane reports about the loaded aircraft (vimaan_nlu.aircraft, layer 2).
+AIRCRAFT_STRINGS = {
+    "author": "sim/aircraft/view/acf_author",
+    "description": "sim/aircraft/view/acf_descrip",
+}
+DREF_ENGINE_TYPE = "sim/aircraft/prop/acf_en_type"
+DREF_FLAP_DETENTS = "sim/aircraft/controls/acf_flap_detents"
+DREF_FLAP_DEGREES = "sim/aircraft/controls/acf_flap_dn"
+DREF_AUTOPILOT_TYPE = "sim/aircraft/autopilot/preconfigured_ap_type"
+DREF_SINGLE_AXIS_AP = "sim/aircraft/autopilot/single_axis_autopilot"
+V_SPEEDS = {
+    "vso_kt": "sim/aircraft/view/acf_Vso",
+    "vfe_kt": "sim/aircraft/view/acf_Vfe",
+    "vno_kt": "sim/aircraft/view/acf_Vno",
+    "vne_kt": "sim/aircraft/view/acf_Vne",
+    "mmo": "sim/aircraft/view/acf_Mmo",
+}
 
 # Commands (phrasing, values, bindings, handler, safety, self-test) are
 # declared once in vimaan_nlu/commands.py; these are views of that table.
@@ -273,10 +305,14 @@ class PythonInterface:
         self._cranks: dict[str, dict[str, Any]] = {}
         self._follow_ups: list[dict[str, Any]] = []
         self._autopilot_state: dict[str, Any] | None = None
-        self._aircraft: str | None = None
+        self._aircraft: tuple[str, str] | None = None  # (ICAO, .acf path) last loaded
+        # How Vimaan drives the loaded aircraft; standard controls until one loads.
+        self.profile = resolve(AircraftInfo(), lambda _name: False)
         self._next_state_watch = 0.0
         self._last_action: dict[str, Any] | None = None
         self._question: dict[str, Any] | None = None  # the open "to or two?" question
+        self._held: dict[str, Any] | None = None  # the command a safety rule is holding
+        self._probe: dict[str, Any] | None = None  # a running aircraft probe
 
         # Safety interlocks (Phase 6B): risky commands must be repeated to confirm.
         self._confirm_gate = ConfirmationGate(window_sec=self.CONFIRM_WINDOW_SEC)
@@ -390,6 +426,16 @@ class PythonInterface:
         self._register_command("vimaan/self_test", "Vimaan: run self test", self._on_self_test_cmd)
         self._register_command(
             "vimaan/toggle_overlay", "Vimaan: overlay auto / pinned / off", self._on_overlay_cmd
+        )
+        # The aircraft probe actuates the autopilot, so it is a key the pilot
+        # binds and presses, one step per press; never a voice command.
+        self._register_command(
+            "vimaan/probe_aircraft",
+            "Vimaan: probe this aircraft (one step per press)",
+            self._on_probe_cmd,
+        )
+        self._register_command(
+            "vimaan/probe_stop", "Vimaan: stop the probe", self._on_probe_stop_cmd
         )
         self._start_overlay()
 
@@ -555,6 +601,7 @@ class PythonInterface:
             self._service_cranks()
             self._service_verifications()
             self._service_follow_ups()
+            self._service_probe()
             self._watch_state()
             if self.overlay is not None:
                 self.overlay.update()
@@ -672,6 +719,13 @@ class PythonInterface:
             )
             intent_pred, slots = result["intent"], result["slots"]
 
+            # "Override" / "cancel" answer Vimaan; they name no system, so
+            # they are matched on the words and never reach the model.
+            reply = pilot_reply(text)
+            if reply is not None:
+                outcome = self._pilot_reply(cmd, reply)
+                return
+
             # A number on its own ("one thousand") names no command: it can
             # only be the answer to an open "to or two?" question.
             if bare_number(text) is not None:
@@ -773,8 +827,46 @@ class PythonInterface:
         self.tel.event("answered", cmd=cmd, reply_to=q["cmd"], intent=q["intent"], slots=slots)
         return self._dispatch(cmd, q["intent"], slots)
 
-    def _dispatch(self, cmd, intent, slots):
-        """Aircraft check, safety interlock, then the handler. Returns the outcome."""
+    def _pilot_reply(self, cmd, reply):
+        """Override the held command, or cancel what is pending."""
+        held = self._held if self._confirm_gate.pending_token() else None
+        if reply == "override":
+            if held is None:
+                self.tel.event("override_ignored", cmd=cmd, reason="nothing_held")
+                self._say("Nothing to override")
+                return "rejected"
+            self._confirm_gate.clear()
+            self._held = None
+            self.tel.event(
+                "safety_override",
+                logging.WARNING,
+                cmd=cmd,
+                held_cmd=held["cmd"],
+                rule=held["rule"],
+                intent=held["intent"],
+                slots=held["slots"],
+            )
+            self._say("Override")
+            skip = (*held["skip"], held["rule"])
+            return self._dispatch(cmd, held["intent"], held["slots"], skip=skip)
+        dropped = []
+        if held is not None:
+            dropped.append(held["intent"])
+        if self._question is not None and time.perf_counter() < self._question["expires"]:
+            dropped.append(self._question["intent"])
+        self._confirm_gate.clear()
+        self._held = None
+        self._question = None
+        if not dropped:
+            self._say("Nothing to cancel")
+            return "no_op"
+        self.tel.event("cancelled", cmd=cmd, dropped=dropped)
+        self._say("Cancelled")
+        return "cancelled"
+
+    def _dispatch(self, cmd, intent, slots, skip=()):
+        """Aircraft check, safety interlock, then the handler. Returns the outcome.
+        ``skip``: safety rules the pilot overrode for this command."""
         # Commands this aircraft physically can't do are rejected before
         # the safety gate, which would otherwise ask the pilot to confirm
         # "gear up" on a fixed-gear Cessna.
@@ -788,10 +880,19 @@ class PythonInterface:
         # confirmation (repeat the command) when risky in the current flight
         # context. Fails safe if the relevant datarefs are unavailable.
         ctx = self._read_safety_context()
-        verdict = evaluate_safety(intent, slots, ctx)
+        verdict = evaluate_safety(intent, slots, ctx, skip=skip)
         token = command_token(intent, slots)
         if verdict.requires_confirmation and not self._confirm_gate.confirm(token):
             self._confirm_gate.arm(token)
+            # ``skip`` carries rules already overridden for this command, so a
+            # second rule's hold can't bring the first one back.
+            self._held = {
+                "cmd": cmd,
+                "intent": intent,
+                "slots": dict(slots),
+                "rule": verdict.rule,
+                "skip": tuple(skip),
+            }
             self.tel.event(
                 "safety_hold",
                 logging.WARNING,
@@ -800,7 +901,7 @@ class PythonInterface:
                 fail_safe=verdict.fail_safe,
                 context=ctx.__dict__,
             )
-            self._say(f"{verdict.message}. Repeat to confirm.")
+            self._say(f"{verdict.message}. Say override, or repeat to confirm.")
             return "safety_hold"
         handler = self.intent_to_command[intent]
         with self.tel.stage("dispatch", cmd=cmd, intent=intent) as res:
@@ -815,6 +916,7 @@ class PythonInterface:
         # incomplete one ("engine") must not.
         if outcome == "executed":
             self._confirm_gate.clear()
+            self._held = None
             self._question = None
         return outcome
 
@@ -1026,7 +1128,7 @@ class PythonInterface:
         if now < self._next_state_watch:
             return
         self._next_state_watch = now + STATE_WATCH_SEC
-        self._log_aircraft_type()
+        self._check_aircraft()
         state = {key: self._read_int(name) for key, name in AUTOPILOT_STATE.items()}
         previous, self._autopilot_state = self._autopilot_state, state
         if previous is None or previous == state:
@@ -1041,21 +1143,276 @@ class PythonInterface:
             **state,
         )
 
-    def _log_aircraft_type(self):
-        dref = self._find(DREF_AIRCRAFT_ICAO)
+    def _read_string(self, name):
+        dref = self._find(name)
         if not dref:
-            return
+            return ""
         try:
-            text = xp.getDatas(dref)  # type: ignore[attr-defined]
-            icao = (text or "").strip("\x00 ")
+            return (xp.getDatas(dref) or "").strip("\x00 ")
         except Exception as exc:
-            self.tel.event(
-                "dataref_read_error", logging.WARNING, dataref=DREF_AIRCRAFT_ICAO, error=repr(exc)
+            self.tel.event("dataref_read_error", logging.WARNING, dataref=name, error=repr(exc))
+            return ""
+
+    def _read_values(self, name, count, is_float=False):
+        """The first ``count`` elements of an array dataref ([] if unreadable)."""
+        dref = self._find(name)
+        if not dref or not count:
+            return []
+        values: list = []
+        try:
+            (xp.getDatavf if is_float else xp.getDatavi)(dref, values, 0, count)
+        except Exception as exc:
+            self.tel.event("dataref_read_error", logging.WARNING, dataref=name, error=repr(exc))
+            return []
+        return values[:count]
+
+    @staticmethod
+    def _acf_path():
+        try:
+            return xp.getNthAircraftModel(0)[1] or ""
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _has_command(name):
+        return bool(name) and bool(xp.findCommand(name))
+
+    def _check_aircraft(self):
+        """Rebuild the profile when a different aircraft is loaded."""
+        identity = (self._read_string(DREF_AIRCRAFT_ICAO), self._acf_path())
+        if identity[0] and identity != self._aircraft:
+            self._aircraft = identity
+            self._load_aircraft(*identity)
+
+    def _aircraft_info(self, icao, acf_path):
+        """Layer 2: what X-Plane reports about the loaded aircraft."""
+        num_engines = self._read_int(DREF_NUM_ENGINES)
+        detents = self._read_int(DREF_FLAP_DETENTS)
+        single_axis = self._read_int(DREF_SINGLE_AXIS_AP)
+        retractable = self._read_int(DREF_GEAR_RETRACTABLE)
+        return AircraftInfo(
+            icao=icao,
+            acf_path=acf_path,
+            **{key: self._read_string(name) for key, name in AIRCRAFT_STRINGS.items()},
+            num_engines=num_engines,
+            engine_types=tuple(self._read_values(DREF_ENGINE_TYPE, num_engines or 0)),
+            flap_detents=detents,
+            flap_degrees=tuple(self._read_values(DREF_FLAP_DEGREES, 10, is_float=True)),
+            gear_retractable=None if retractable is None else bool(retractable),
+            autopilot_type=self._read_int(DREF_AUTOPILOT_TYPE),
+            single_axis_autopilot=None if single_axis is None else bool(single_axis),
+            **{key: self._read_float(name) for key, name in V_SPEEDS.items()},
+        )
+
+    def _load_aircraft(self, icao, acf_path):
+        info = self._aircraft_info(icao, acf_path)
+        self.profile = resolve(info, self._has_command, self._probe_results(info.key))
+        self.tel.event("aircraft", **self.profile.summary())
+
+    def _probe_folder(self):
+        return str(self.tel.log_dir / "aircraft")
+
+    def _probe_results(self, key):
+        """Layer 4: what the probe measured on this aircraft, if anything."""
+        return probe.load_results(probe.results_path(self._probe_folder(), key))
+
+    # ------------------------------------------------------------------
+    # Aircraft probe (vimaan_nlu.probe): pilot-paced, one step per press
+    # ------------------------------------------------------------------
+    PROBE_SPOKEN = {
+        "works": "works",
+        "no_change": "no change",
+        "missing": "not on this aircraft",
+        "inconclusive": "inconclusive",
+    }
+
+    def _on_probe_cmd(self, cmd_ref, phase, refcon):
+        if phase == xp.CommandBegin:
+            try:
+                self._probe_press()
+            except Exception as exc:
+                self.tel.error("probe_error", exc)
+                self._probe_finish("error", "Probe stopped by an error. Check the autopilot.")
+        return 1
+
+    def _on_probe_stop_cmd(self, cmd_ref, phase, refcon):
+        if phase == xp.CommandBegin and self._probe is not None:
+            self._probe_finish("stopped", "Probe stopped. Results saved.")
+        return 1
+
+    def _probe_state(self):
+        state = {}
+        for key, (name, is_float) in probe.STATE.items():
+            value = (self._read_float if is_float else self._read_int)(name)
+            state[key] = round(value, 4) if is_float and value is not None else value
+        return state
+
+    def _probe_begin(self):
+        ctx = self._read_safety_context()
+        where = probe.situation(ctx.on_ground, ctx.agl_ft, ctx.ground_speed_kt)
+        if where is None:
+            self._say(
+                "The probe needs the aircraft stopped on the ground, "
+                "or airborne above fifteen hundred feet"
             )
             return
-        if icao and icao != self._aircraft:
-            self._aircraft = icao
-            self.tel.event("aircraft", icao=icao, num_engines=self._read_int(DREF_NUM_ENGINES))
+        steps = probe.steps_for(where)
+        found = {
+            role: bool(name) and self._has_command(name)
+            for role, name in self.profile.commands.items()
+        }
+        self._probe = {
+            "where": where,
+            "steps": steps,
+            "index": 0,
+            "phase": "ready",
+            "results": {},
+            "details": [],
+            "found": found,
+        }
+        self.tel.event(
+            "probe_start",
+            where=where,
+            steps=len(steps),
+            aircraft=self.profile.info.key,
+            found=found,
+        )
+        self._say(f"Probe ready. {len(steps)} {where} steps. Press again for {steps[0].label}.")
+
+    def _probe_press(self):
+        p = self._probe
+        if p is None:
+            self._probe_begin()
+            return
+        if p["phase"] != "ready":
+            self._say("Probe busy")
+            return
+        step = p["steps"][p["index"]]
+        before = self._probe_state()
+        brake = self._read_float(DREF_PARKING_BRAKE)
+        why = probe.ready_for(step, before, None if brake is None else brake > 0.5)
+        if why:
+            self._say(why)
+            return
+        written, name = None, None
+        if step.write is None:
+            name = self.profile.command(step.role)
+            if not (name and self._has_command(name)):
+                self._probe_done(step, "missing", before, before, True)
+                return
+            self._fire_command(name)
+        else:
+            written = probe.write_value(step, before, self.profile.info.flap_detents)
+            if written is None or not self._write(probe.STATE[step.write][0], written):
+                self._probe_done(step, "inconclusive", before, before, True)
+                return
+        p.update(
+            phase="acting",
+            step=step,
+            before=before,
+            written=written,
+            name=name,
+            fixed=False,
+            due=time.perf_counter() + probe.SETTLE_SEC,
+        )
+        self.tel.event("probe_act", role=step.role, command=name, written=written)
+
+    def _service_probe(self):
+        p = self._probe
+        if p is None or p["phase"] == "ready" or time.perf_counter() < p["due"]:
+            return
+        try:
+            self._advance_probe(p)
+        except Exception as exc:  # never leave a probe half-run
+            self.tel.error("probe_error", exc)
+            self._probe_finish("error", "Probe stopped by an error. Check the autopilot.")
+
+    def _advance_probe(self, p):
+        step, before = p["step"], p["before"]
+        now = self._probe_state()
+        if p["phase"] == "acting":
+            p["verdict"] = probe.classify(step, before, now, True, p["written"])
+            p["after"] = now
+            if step.write is not None:
+                self._write(probe.STATE[step.write][0], before[step.write])
+            elif step.role == "baro_std":
+                # STD is a toggle on some aircraft (737 EFIS) and a plain
+                # "set 29.92" on others: press it again, then put the old
+                # setting back, which covers both.
+                self._fire_command(p["name"])
+                if before.get("baro") is not None:
+                    self._write(probe.STATE["baro"][0], before["baro"])
+            elif probe.changes(before, now):
+                self._fire_command(p["name"])  # press it again
+            p.update(phase="restoring", due=time.perf_counter() + probe.SETTLE_SEC)
+            return
+        if probe.restored(step, before, now):
+            self._probe_done(step, p["verdict"], before, p["after"], True)
+            return
+        fixes = [] if p["fixed"] else probe.mode_fix(before, now)
+        if fixes:
+            for role in fixes:
+                self._fire_command(self.profile.command(role))
+            p.update(fixed=True, due=time.perf_counter() + probe.SETTLE_SEC)
+            return
+        self._probe_record(step, p["verdict"], before, p["after"], False, now)
+        label = step.label[:1].upper() + step.label[1:]
+        self._probe_finish(
+            "restore_failed", f"Probe stopped. {label} did not restore. Check the autopilot."
+        )
+
+    def _probe_record(self, step, verdict, before, after, ok, now=None):
+        p = self._probe
+        assert p is not None  # only called while a probe runs
+        p["results"][step.role] = verdict
+        detail = {
+            "role": step.role,
+            "verdict": verdict,
+            "changed": probe.changes(before, after),
+            "restored": ok,
+        }
+        if now is not None:
+            detail["left_changed"] = probe.changes(before, now)
+        p["details"].append(detail)
+        self.tel.event("probe_step", logging.INFO if ok else logging.WARNING, **detail)
+
+    def _probe_done(self, step, verdict, before, after, ok):
+        self._probe_record(step, verdict, before, after, ok)
+        p = self._probe
+        assert p is not None
+        p["index"] += 1
+        p["phase"] = "ready"
+        label = step.label[:1].upper() + step.label[1:]  # "V NAV" stays "V NAV"
+        spoken = f"{label}: {self.PROBE_SPOKEN[verdict]}."
+        if p["index"] >= len(p["steps"]):
+            self._say(spoken)
+            self._probe_finish("complete", "Probe complete. Results saved.")
+        else:
+            self._say(f"{spoken} Next, {p['steps'][p['index']].label}.")
+
+    def _probe_finish(self, reason, spoken):
+        p, self._probe = self._probe, None
+        if p is None:
+            return
+        info = self.profile.info
+        path = probe.results_path(self._probe_folder(), info.key)
+        record = {
+            "aircraft": self.profile.summary(),
+            "probed_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "session": self.tel.session_id,
+            "where": p["where"],
+            "end": reason,
+            "steps": p["results"],
+            "details": p["details"],
+            "commands_found": p["found"],
+        }
+        try:
+            probe.save_results(path, record)
+        except OSError as exc:
+            self.tel.error("probe_save_error", exc, path=path)
+        self.tel.event("probe_end", reason=reason, path=path, steps=p["results"])
+        self.profile = resolve(info, self._has_command, probe.load_results(path))
+        self._say(spoken)
 
     def _expect(self, label, read, expected, delay=None, tolerance=None):
         """After a command, check the sim actually changed; say so if it didn't
@@ -1304,6 +1661,10 @@ class PythonInterface:
                 return "executed"
 
         command = binding["on_cmd"] if target else binding["off_cmd"]
+        if binding.get("prefer_toggle") and current is not None:
+            # The state was just read and differs, so the toggle moves it the
+            # right way, on aircraft that ignore the dedicated command too.
+            command = binding["toggle"]
         if command is None:
             if current is None:
                 # Without the state, a toggle could turn it ON. Refuse.
@@ -1368,6 +1729,10 @@ class PythonInterface:
         if label in self._cranks:
             self._say(f"{label} already starting")
             return "no_op"
+        kind = self.profile.engine_start
+        if kind == "electric":
+            self._say(f"{label} is electric and has no starter")
+            return "rejected"
         cmd_ref = xp.findCommand(eng["starter"])
         if not cmd_ref:
             self.tel.event(
@@ -1381,31 +1746,111 @@ class PythonInterface:
             self._say(f"Cannot start {label}")
             return "failed"
         xp.commandBegin(cmd_ref)
+        turbine = kind in CORE_SPEED
         self._cranks[label] = {
             "cmd": self._current_cmd,
             "ref": cmd_ref,
             "started": time.perf_counter(),
+            "kind": kind,
+            "max_sec": TURBINE_MAX_CRANK_SEC if turbine else STARTER_MAX_CRANK_SEC,
+            "fuel_on": not turbine,  # pistons start with the mixture as set
+            "peak_pct": 0.0,
             **eng,
         }
         self.tel.event(
             "crank_begin",
             cmd=self._current_cmd,
             engine=label,
+            start_type=kind,
             mixture=self._read_array(DREF_ENGINE_MIXTURE, eng["index"], True),
+            fuel_lever=self._read_array(DREF_FUEL_LEVER, eng["index"], True),
+            core_pct=self._core_pct(self._cranks[label]),
             ignition_key=self._read_array(DREF_IGNITION_KEY, eng["index"]),
             battery=self._read_array(DREF_BATTERY, 0),
         )
         self._say(f"Starting {label.lower()}")
         return "pending"
 
+    def _core_pct(self, crank):
+        name = CORE_SPEED.get(crank["kind"])
+        return None if name is None else self._read_array(name, crank["index"], True)
+
     def _service_cranks(self):
-        for intent, crank in list(self._cranks.items()):
-            if self._read_array(DREF_ENGINE_RUNNING, crank["index"]) == 1:
-                self._end_crank(intent, "running")
+        for label, crank in list(self._cranks.items()):
+            core = self._core_pct(crank)
+            if core is not None:
+                crank["peak_pct"] = max(crank["peak_pct"], core)
+                if not crank["fuel_on"] and core >= FUEL_ON_AT_PCT[crank["kind"]]:
+                    self._fuel_on(crank, core)
+            running = self._read_array(DREF_ENGINE_RUNNING, crank["index"]) == 1
+            spooled = core is None or core >= STARTER_CUTOUT_PCT
+            if running and spooled:
+                self._end_crank(label, "running")
                 self._say(f"{crank['label']} running")
-            elif time.perf_counter() - crank["started"] > STARTER_MAX_CRANK_SEC:
-                self._end_crank(intent, "timeout")
-                self._say(f"{crank['label']} did not start. Check fuel, mixture and ignition.")
+            elif time.perf_counter() - crank["started"] > crank["max_sec"]:
+                self._end_crank(label, "timeout")
+                self._say(self._why_no_start(crank))
+
+    def _fuel_on(self, crank, core):
+        """Open the fuel once the core turns: the aircraft's own lever command
+        if it has one (layer 3), else the sim's fuel lever (mixture ratio)."""
+        crank["fuel_on"] = True
+        index = crank["index"]
+        before = self._read_array(DREF_FUEL_LEVER, index, True)
+        role_cmd = self.profile.command(f"fuel_on_{index + 1}")
+        if before is not None and before >= 0.5:
+            method = "already_open"
+        elif role_cmd and self._fire_command(role_cmd):
+            method = role_cmd
+        else:
+            method = "write" if self._write_array(DREF_FUEL_LEVER, index, 1.0) else "failed"
+        self.tel.event(
+            "fuel_on",
+            cmd=crank["cmd"],
+            engine=crank["label"],
+            core_pct=round(core, 1),
+            method=method,
+            lever_before=before,
+        )
+
+    @staticmethod
+    def _why_no_start(crank):
+        label = crank["label"]
+        if crank["kind"] not in CORE_SPEED:
+            return f"{label} did not start. Check fuel, mixture and ignition."
+        core = "N2" if crank["kind"] == "jet" else "N1"
+        if crank["peak_pct"] < FUEL_ON_AT_PCT[crank["kind"]]:
+            return (
+                f"{label} did not spool up. {core} reached {crank['peak_pct']:.0f} percent. "
+                "Check bleed air and the engine start switch."
+            )
+        return (
+            f"{label} did not light. {core} reached {crank['peak_pct']:.0f} percent. "
+            "Check fuel and ignition."
+        )
+
+    def _write_array(self, name, index, value):
+        """Write one element of a float[] dataref and read it back."""
+        dref = self._find(name)
+        if not dref:
+            return False
+        try:
+            xp.setDatavf(dref, [float(value)], index, 1)
+            readback = self._read_array(name, index, True)
+        except Exception as exc:
+            self.tel.event("dataref_write_error", logging.WARNING, dataref=name, error=repr(exc))
+            return False
+        ok = readback is not None and abs(readback - float(value)) < 0.01
+        self.tel.event(
+            "sim_write",
+            logging.INFO if ok else logging.WARNING,
+            cmd=self._current_cmd,
+            dataref=f"{name}[{index}]",
+            value=value,
+            readback=readback,
+            ok=ok,
+        )
+        return ok
 
     def _end_crank(self, intent, result):
         crank = self._cranks.pop(intent)
@@ -1417,6 +1862,9 @@ class PythonInterface:
             engine=crank["label"],
             result=result,
             crank_sec=round(time.perf_counter() - crank["started"], 1),
+            start_type=crank["kind"],
+            peak_core_pct=round(crank["peak_pct"], 1),
+            fuel_on=crank["fuel_on"],
             mixture=self._read_array(DREF_ENGINE_MIXTURE, crank["index"], True),
             ignition_key=self._read_array(DREF_IGNITION_KEY, crank["index"]),
         )

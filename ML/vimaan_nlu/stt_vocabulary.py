@@ -56,7 +56,9 @@ def build_vocabulary(schema: Mapping[str, Any], phrases: Iterable[str] = ()) -> 
     """Every word in the schema's templates, categorical slot values and
     synonyms, plus ``phrases`` (generator prefixes/suffixes), number words and
     connective words. Sorted, de-duplicated, lowercase."""
-    words: set[str] = set(NUMBER_WORDS) | set(EXTRA_WORDS)
+    from vimaan_nlu.pilot_replies import REPLY_WORDS
+
+    words: set[str] = set(NUMBER_WORDS) | set(EXTRA_WORDS) | REPLY_WORDS
     for intent in schema.values():
         for template in intent.get("templates", []):
             words.update(_words(template))

@@ -11,10 +11,10 @@ def family_of(intent: str) -> str:
     return legacy[0] if legacy else intent
 
 
-# Aviation commands are short (the longest in the training set is well under
-# 32 word-piece tokens). Padding/truncating to 32 instead of 64 roughly halves
-# the per-token compute on CPU with no change in output for real commands,
-# since no genuine tokens are ever truncated. Override per call if needed.
+# Aviation commands are short (the longest of the 15,305 texts the model gate
+# scores is 21 word-pieces). A model's own training length comes from its
+# manifest (ModelLoader sets tokenizer.model_max_length); this is the fallback
+# for a checkpoint without one.
 DEFAULT_MAX_LENGTH = 32
 
 
@@ -83,13 +83,25 @@ def predict(
     intent_map_rev,
     slot_map_rev,
     do_postprocess=True,
-    max_length=DEFAULT_MAX_LENGTH,
+    max_length=None,
+    pad_to_max_length=False,
 ):
+    """Intent, slots and confidence for one utterance.
+
+    The input is truncated at ``max_length`` (default: the length the model
+    was trained at, ``tokenizer.model_max_length`` as set by ModelLoader) and,
+    unless ``pad_to_max_length``, not padded: one utterance needs no padding,
+    and padding it to a fixed length only adds compute (and, for the int8
+    model, shifts the per-tensor quantization range).
+    """
     text_normalized = normalize_aviation_input(text)
+    if max_length is None:
+        limit = getattr(tokenizer, "model_max_length", None)
+        max_length = limit if isinstance(limit, int) and 0 < limit <= 512 else DEFAULT_MAX_LENGTH
 
     encoding = tokenizer(
         text_normalized,
-        padding="max_length",
+        padding="max_length" if pad_to_max_length else False,
         truncation=True,
         max_length=max_length,
         return_tensors="pt",

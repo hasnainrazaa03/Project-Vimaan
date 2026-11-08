@@ -95,7 +95,7 @@ gear, flaps, autopilot and flight director, so every command can be exercised.
 | 4 | "set altitude seven thousand five hundred" | "Altitude 7500 feet" | |
 | 5 | "tune com one to one one eight decimal seven five" | "COM 1 set to …"; COM1 shows 118.750 | |
 | 6 | "parking brake on" then "parking brake off" | each confirmed | |
-| 7 | "gear up" **on the ground** | "Confirm gear up, low altitude. Repeat to confirm." — do **not** repeat | `safety_hold` event |
+| 7 | "gear up" **on the ground** | "Confirm gear up, low altitude. Say override, or repeat to confirm." — do **not** repeat (then say "cancel") | `safety_hold` event |
 | 8 | Take off, climb above 1,000 ft AGL: "gear up" | "Gear up" | |
 | 9 | "flaps up" | "Flaps up" | |
 | 10 | "flight director on", "autopilot on" | each confirmed; AP engages | `verify` event with `ok: false` |
@@ -146,6 +146,15 @@ worst draw time per frame.
 
 **Push-to-talk on a yoke button:** Settings → Joystick → search `vimaan` →
 bind **Vimaan: push to talk** (and optionally **Vimaan: run self test**).
+
+## 4b. Probing a new aircraft
+
+To find out which controls an aircraft honours (Tier 1), run the probe once
+on the ground and once in the air. It is pilot-paced, one key press per step,
+and puts everything back after each step. Key bindings, steps and what to
+expect are in [AIRCRAFT_PROFILES.md](AIRCRAFT_PROFILES.md#running-the-probe).
+Results land in `~/Vimaan_Logs/aircraft/` and are used from the next load of
+that aircraft.
 
 ## 5. Reading what happened
 

@@ -113,12 +113,16 @@ _RULE_LIST: tuple[_Rule, ...] = (
 RULES: dict[str, _Rule] = {rule.name: rule for rule in _RULE_LIST}
 
 
-def evaluate_safety(intent: str, slots: dict, ctx: SafetyContext) -> SafetyVerdict:
-    """Return whether ``intent`` (with ``slots``) needs confirmation in ``ctx``."""
+def evaluate_safety(
+    intent: str, slots: dict, ctx: SafetyContext, skip: tuple[str, ...] = ()
+) -> SafetyVerdict:
+    """Return whether ``intent`` (with ``slots``) needs confirmation in ``ctx``.
+    ``skip``: rules the pilot has overridden for this one command; any other
+    rule that applies still holds it."""
     slots = slots or {}
     cmd = command(intent)
     for rule in (RULES[name] for name in (cmd.safety if cmd else ())):
-        if not rule.applies_to(slots):
+        if rule.name in skip or not rule.applies_to(slots):
             continue
         risky = rule.risky_when(ctx)
         if risky is None:

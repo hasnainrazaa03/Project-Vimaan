@@ -18,11 +18,14 @@ class TestInferenceMaxLength:
         assert DEFAULT_MAX_LENGTH == 32
 
     def test_predict_accepts_max_length_kwarg(self):
-        from vimaan_nlu.inference import DEFAULT_MAX_LENGTH, predict
+        from vimaan_nlu.inference import predict
 
         sig = inspect.signature(predict)
         assert "max_length" in sig.parameters
-        assert sig.parameters["max_length"].default == DEFAULT_MAX_LENGTH
+        # None = the model's trained length (tokenizer.model_max_length), with
+        # DEFAULT_MAX_LENGTH as the fallback: see tests/test_input_length.py.
+        assert sig.parameters["max_length"].default is None
+        assert sig.parameters["pad_to_max_length"].default is False
 
 
 @pytest.mark.requires_torch

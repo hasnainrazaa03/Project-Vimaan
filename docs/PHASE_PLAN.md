@@ -302,41 +302,108 @@ Used in every phase of every flight.
 | `set_altimeter` | `pressure` Number: 28.00–31.50 inHg **or** 940–1060 hPa (unit from the range); or `standard` | "altimeter two niner niner two", "q n h one zero one three", "set standard" | write `gauges/actuators/barometer_setting_in_hg_pilot` + `_copilot` (hPa × 0.02953); standard → `sim/instruments/barometer_2992` | ±0.01 inHg | — |
 | `set_flaps` (positions) | `position` Choice up/down(=one notch)/full, **or** `notch` Number 0–detents, **or** `degrees` matched to `aircraft/controls/acf_flap_dn` | "flaps fifteen", "flaps one", "flaps full", "flaps up" | write `controls/flap_handle_request_ratio` = notch / `acf_flap_detents` | `flap_handle_request_ratio` | beyond notch 1 above the flap speed → confirm (find the Vfe dataref in step 1) |
 
-Also in T1:
+### Decisions (owner, 2026-11-07)
 
-- **Carried from E0:** binding types (`WriteValue`, `CommandPair`,
-  `CheckedToggle`) and generic handlers, and read-back templates in the table
-  (E0.6); the existing custom handlers move onto them where they fit.
-- **Fix: autopilot engage on Airbus.** The A330 replaces
-  `sim/autopilot/servos_toggle` / `servos2_toggle` but not `servos_on`, which
-  it ignored in flight. Engage/disengage = `CheckedToggle(servos_toggle,
-  servos_on)` for every aircraft.
-- **Aircraft profiles** (`ML/vimaan_nlu/aircraft.py`): detect from
-  `sim/aircraft/view/acf_ICAO`, engine count, `acf_flap_detents`, and
-  whether the aircraft has autothrottle; pick a profile:
-  - `default`: everything above.
-  - `jet`: engine start = open the fuel lever
-    (`engine/actuators/mixture_ratio` → 1), engage starter, wait for
-    `engine/indicators/N2_percent` to stabilise, not "starter until running"
-    (the A330 restart cranked 20 s with mixture 0).
-  - `airbus` (Laminar A330 first): flap positions 1 / 2 / 3 / FULL;
-    selected vs managed = `laminar/A333/autopilot/{speed,heading,altitude,vertical}_knob_pull/push`
-    after writing a value; A/THR = `laminar/A333/autopilot/a_thr_toggle`
-    (state-checked); engine mode `laminar/A333/switch/eng_mode_left/right`.
-  - Unsupported command → "No autothrottle on this aircraft", never a
-    silent no-op.
-- **Vocabulary**: Vosk lacks *autothrottle, vnav, lnav, flch, qnh,
-  hectopascal(s), millibars, fpm, localizer, glideslope*. Use split forms
-  ("auto throttle", "v nav", "l nav", "level change", "q n h", "feet per
-  minute", "loc", "glide slope") and rejoin them in the normalizer. Letters
-  v, l, q, h, n, a exist.
+1. **Two PRs:** Part A (aircraft profiles and fixes, no retraining), then Part B (new commands, v18).
+2. **Probe and research flight before any training data.** It must generalize to *every* aircraft, not just the three test aircraft.
+3. **Altitude on aircraft that can't capture one:** (a) by default, set the target and say how to get there; (b) optionally, Vimaan captures it (it engages altitude hold at the target). Option (b) is off unless the pilot turns it on.
+4. **Safety rules for the new commands as proposed**, plus an **override** command.
 
-### Tier 1 flight checklist (Baron, 737, A330)
+### How it generalizes
 
-Speed 160 / mach .78 (jets) · V/S descend 1500 · heading mode, nav, approach,
-altitude hold, level change, VNAV (737) · autothrottle on/off (jets) ·
-altimeter 2992, QNH 1013, standard · flaps 1 / 15 / full / up · autopilot on
-and off on the A330 (the fix) · "both engines" start on the ground (jet).
+No behaviour is keyed to an aircraft's name. Every action resolves through five layers, from most general to most specific:
+
+1. **X-Plane's standard controls** (`sim/...`). Most default and add-on aircraft honour them.
+2. **Capabilities read when the aircraft loads**, from X-Plane's own datarefs:
+   - engine count and type per engine (`acf_en_type`: piston / turboprop / jet / electric);
+   - flap detents and angles;
+   - retractable gear;
+   - autopilot type (`preconfigured_ap_type`) and single-axis flag;
+   - V-speeds (`acf_Vso`, `acf_Vfe`, `acf_Vno`, `acf_Vne`).
+3. **Overrides that apply only when the loaded aircraft has the custom control.** The A330's `laminar/A333/autopilot/a_thr_toggle` is used only if that command exists. Matching on ICAO or author is unreliable: Laminar's 737 and A330 list individual authors, and add-ons reuse ICAO codes.
+4. **Probe results** saved per aircraft file (`~/Vimaan_Logs/aircraft/<aircraft>.json`). If the probe measured that a mode command does nothing on this aircraft, Vimaan says so instead of trying.
+5. **Verification after every action.** On an aircraft nobody has probed, a command the aircraft ignores is reported aloud, never assumed to have worked.
+
+An aircraft never seen before gets layers 1, 2 and 5 automatically, and layer 4 after one probe flight.
+
+### Part A — profiles and fixes (PR 1, no retraining)
+
+- [x] **A1 Research record** (`docs/AIRCRAFT_PROFILES.md`). Every Tier 1 control, with its source: X-Plane 12.4.3 `DataRefs.txt` / `Commands.txt`, the aircraft's xlua scripts, and the POH. *Verified 2026-11-07:*
+  - all Tier 1 names exist;
+  - the Baron autopilot has no VS mode, no altitude capture and no A/T;
+  - the 737 uses the standard autopilot commands;
+  - the A330 wraps servos, altitude hold, NAV, approach, knots/Mach and baro STD, and adds knob push/pull and A/THR commands.
+- [x] **A2 `vimaan_nlu/aircraft.py`** (pure Python, unit-tested):
+  - `AircraftInfo` (identity plus layer-2 capabilities);
+  - an override table (layer 3), each override declaring the command it requires;
+  - `resolve(info, available_commands, probe)` returns a `Profile`.
+  - The plugin logs the identity, the capabilities and the resolved profile on every aircraft load.
+- [x] **A3 Autopilot engage on every aircraft:** read `servos_on`; if it needs changing, press `servos_toggle` and verify. The A330 ignored `servos_on` in flight but wraps the toggle. Use the explicit `servos_on` command only when the state can't be read.
+- [x] **A4 Engine start by engine type:**
+  - Piston: hold the starter until the engine runs (as now).
+  - Jet: starter on, open the fuel (`mixture_ratio` → 1) once N2 passes 20%, hold until it runs, 60 s limit.
+  - Turboprop: the same, with N1 / Ng.
+  - Electric: no starter, so say so.
+  - N1/N2 is logged at every step, and a failure says which step stalled.
+- [x] **A5 Override and cancel** (matched on the transcript, never sent to the model):
+  - "override" / "confirm" / "affirmative" executes the command a safety rule is holding, and the pilot hears which rule was overridden.
+  - "cancel" / "negative" / "disregard" clears a held command or an open "to or two?" question.
+  - Validators and "not on this aircraft" refusals can't be overridden; they are impossible values, not risks.
+  - The words are added to the recognizer's grammar.
+- [x] **A6 Probe** (`vimaan/probe_aircraft`, bound to a key, never voice; `vimaan/probe_stop`).
+  - The first press records identity, capabilities and which candidate controls exist, with nothing actuated. Each later press runs **one** step.
+  - A step snapshots the autopilot, presses one control or writes one dial, reads back after 2 s, classifies it (works / no change / missing), and restores the previous state.
+  - Restoring means pressing the button for the previous mode (mode datarefs are read-only without an override) and writing old dial values back.
+  - If restoring fails, the probe stops and says so.
+  - Airborne steps need autopilot on and 1,500 ft AGL; ground steps (flaps) need the parking brake set.
+  - The results file is layer 4.
+- [x] **A7 Model input length from the model's manifest** (v17 trained at 40, runtime 32), with dynamic padding. Measure the gate before and after: decisions must not change. *Done:*
+  - On all 15,305 gate texts, int8 decisions change on 28, and all 28 keep their outcome: 27 rejected either way (for a different reason), 1 right either way.
+  - p50 8.7 → 4.4 ms.
+  - Gate re-run: every v17 number unchanged except p95, 9.7 → 5.9 ms.
+  - v11 as the fallback: unchanged on old data and real voice; on new phrasings, intent 91.64% → 91.56%.
+- [x] **A8 `check_xplane_refs.py`** also checks aircraft-specific names (`laminar/...`) against that aircraft's scripts. *Done:* 223/223 X-Plane names, 8/8 aircraft-specific controls.
+- [ ] **A9 Tests** (fake sim per profile), docs, PR. The owner merges. *Tests and docs done (1,124 tests); PR open.*
+
+**Research flight (after A):** run the probe on the Baron, 737 and A330, plus one aircraft with no override (King Air C90B, a turboprop, or Citation X, a jet). Also check engine start by type on the ground. The results set Part B's per-aircraft data.
+
+### Part B — new commands → v18 (PR 2)
+
+- [ ] **B1 Table entries** for the six commands above:
+  - templates, slots, bindings per layer;
+  - read-back templates and verification (E0.6);
+  - safety rules, command words, display names, self-test probes.
+- [ ] **B2 Normalizer:** "point seven eight", "two niner niner two" → 29.92, "one thousand five hundred" (rate), plus/minus, and rejoining "q n h", "v nav", "l nav", "auto throttle", "level change", "feet per minute". All with round-trip tests.
+- [ ] **B3 Vocabulary:** split forms for words Vosk lacks; `build_stt_vocabulary.py --check-vosk` passes.
+- [ ] **B4 "To or two?"** extended to speed and vertical speed.
+- [ ] **B5 Safety:**
+  - flaps beyond the first notch above that notch's speed limit → confirm;
+  - a speed target outside the aircraft's range (`acf_Vso`…`acf_Vne` / `acf_Mmo`) → refuse;
+  - mode changes → no confirmation;
+  - everything holdable can be overridden (A5).
+- [ ] **B6 Altitude without capture:**
+  - (a) default: set the target, then say "This aircraft can't capture altitude. Climb, and say altitude hold at the target."
+  - (b) optional `capture` setting (`VIMAAN_CAPTURE=1`): Vimaan watches the altitude and presses altitude hold within a band scaled to vertical speed. It cancels on "cancel", on any pilot mode change, or if the target moves.
+- [ ] **B7 Data:** regenerate everything, and train **v18** at the same length as A7.
+- [ ] **B8 Gate v18 vs v17**, same bars, plus Tier 1 gold commands.
+- [ ] **B9 Handlers** through the resolved profile; fake-sim tests per command and per profile.
+- [ ] **B10 PR.** The owner merges.
+
+### Part C — Tier 1 flight (Baron, 737, A330, plus one aircraft with no override)
+On each aircraft:
+- speed 160, and Mach .78 on jets;
+- V/S descend 1500;
+- heading mode, nav, approach, altitude hold, level change, and VNAV (737);
+- autothrottle on/off (jets);
+- altimeter 2992, QNH 1013, standard;
+- flaps 1 / 15 / full / up;
+- autopilot on and off;
+- "both engines" start on the ground (jets);
+- an override of one safety hold;
+- the capture option, once, on the Baron;
+- **from E1:** the five "frequency … on com two" phrases.
+
+Then logs, fixes, merge.
 
 ---
 
