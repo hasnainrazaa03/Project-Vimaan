@@ -263,6 +263,8 @@ def make_xp() -> types.ModuleType:
     xp.setWindowIsVisible = setWindowIsVisible
     xp.getWindowIsVisible = lambda wid: xp.windows[wid]["visible"]
     xp.getWindowGeometry = lambda wid: xp.windows[wid]["geom"]
+    xp.setWindowGeometry = lambda wid, *geom: xp.windows[wid].update(geom=tuple(geom))
+    xp.windowIsPoppedOut = lambda wid: 0
     xp.setWindowTitle = lambda wid, title: xp.windows[wid].update(title=title)
     xp.setWindowPositioningMode = lambda wid, mode, index=-1: None
     xp.setWindowResizingLimits = lambda wid, *a: None
