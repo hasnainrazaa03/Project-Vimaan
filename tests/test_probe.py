@@ -210,3 +210,26 @@ def test_caution_only_for_air_steps_without_selectable_modes():
     assert probe.caution(hdg, {**BASE, "lateral_mode": 0, "vertical_mode": 3})
     assert probe.caution(hdg, {**BASE, "lateral_mode": 2, "vertical_mode": 4}) is None  # NAV, V/S
     assert probe.caution(STEP["flap_handle"], {}) is None
+
+
+@pytest.mark.parametrize(
+    ("value", "active"), [(-1, False), (0, False), (1, True), (3, True), (None, False)]
+)
+def test_autothrottle_active_means_holding_something(value, active):
+    # -1 hard off and 0 armed are both "not flying the throttles".
+    assert probe.autothrottle_active({"autothrottle_enabled": value}) is active
+
+
+def test_hard_off_versus_armed_is_not_an_autothrottle_to_turn_off():
+    assert (
+        probe.restore_presses(
+            {**BASE, "autothrottle_enabled": -1}, {**BASE, "autothrottle_enabled": 0}, 1
+        )
+        == []
+    )
+
+
+def test_undo_needed_only_when_the_control_changed_what_it_controls():
+    app = STEP["mode_approach"]
+    assert probe.undo_needed(app, BASE, {**BASE, "approach_status": 1, "servos_on": 0})
+    assert not probe.undo_needed(app, BASE, {**BASE, "servos_on": 0})

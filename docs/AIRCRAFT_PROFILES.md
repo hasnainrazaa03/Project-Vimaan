@@ -84,9 +84,22 @@ aircraft folders. `scripts/check_xplane_refs.py` re-checks every name.
 - A/THR: `laminar/A333/autopilot/a_thr_toggle`. Override `airbus_fcu` covers both.
 - The ENG MODE selector is `laminar/A333/switch/eng_mode_{left,right}`. In flight, a restart cranked 20 s with the fuel lever at cutoff; the turbine start now opens it at 20% N2.
 
-**Not yet checked, for the generalization test:** King Air C90B (`BE9L`,
-turboprop) and Citation X (`C750`, jet). Neither has an override, so they
-exercise layers 1, 2, 4 and 5 only.
+- **Probed 2026-11-07**, all 18 steps (session `vimaan_20261107_231419`):
+  - **Works:** HDG, NAV, APP, back course, ALT HOLD, ALT ARM, V/S, LVL CHG, knots/Mach, the speed, V/S and altitude dials, STD, the altimeter setting, and the flap handle.
+  - **No change:** GPS steering and VNAV. Managed lateral and vertical guidance come from the FMS.
+  - **No change: A/THR.** `a_thr_toggle` flips `autothrottle_enabled` between -1 (hard off) and 0 (armed). But `A333_autothrust()` holds it at 0 every frame while both engines' `ENGN_fadec_pow_req` is 2 or more (thrust levers at FLX/MCT or TOGA). Re-test it with the levers in CL.
+  - The first air run started in TRK (lateral mode 18) and TO/GA (vertical mode 10). No button puts either back, and the probe warned about it.
+  - **The autopilot disconnected about nine times.** Vimaan pressed nothing at five of those moments, and no A330 script turns the servos off, so these were X-Plane's own disconnects on control input. Two controllers, the USB Xbox controller and a "Virtual" Xbox 360 one, were both mapped to pitch, roll and yaw, with null zones at 0%.
+  - A pause left APP armed, and the next step (back course) couldn't restore. A pause now puts the pressed control back first.
+
+**Beechcraft King Air C90B** (`BE9L`, turboprop ×2, flap detents 2, Rockwell/Collins FCS-65, no overrides)
+- **Probed 2026-11-07**, all 18 steps in one run with no disconnect (session `vimaan_20261107_232456`). It exercised layers 1, 2, 4 and 5 only.
+  - **Works:** HDG, NAV, APP, back course, GPS steering, ALT HOLD, ALT ARM, V/S, LVL CHG (the FCS-65's IAS mode), the three dials, the altimeter setting, and the flap handle.
+  - **No change:** VNAV.
+  - **"Works", but it's X-Plane, not the aircraft:** the autothrottle and knots/Mach. X-Plane's own autothrottle runs on any aircraft. The C90B has none in its cockpit: its `.acf` references no autothrottle dataref, while the 737's and the A330's do. Whether Vimaan should allow "autothrottle on" here is an open Part B decision.
+  - STD was inconclusive: the altimeter was already at 29.92.
+
+**Not yet checked:** the Citation X (`C750`, jet, no override).
 
 ## Engine start by type
 
@@ -141,7 +154,7 @@ doesn't count as pilot input (X-Plane: Settings → Joystick → select the devi
 1. Above 1,500 ft AGL, in smooth air, with the autopilot on in **HDG and ALT hold**. Without them a step may not be able to put the mode back (there's no button for roll or pitch hold), so the probe says so once. Select them, or press again to run anyway.
 2. Press once, then once per step. Each step presses one control for 2 s and puts it back. Expect brief mode changes, for example a few seconds in pitch mode.
 3. Putting things back is tried in two rounds: first the mode that was on before, then an altitude arm or autothrottle the step changed. Altitude capture left armed on its own is harmless, and the probe carries on with a note.
-4. If the autopilot disconnects during a step, the probe pauses there ("The autopilot disconnected during …"). Re-engage it with HDG and ALT, then press again to retry that step. Nothing is recorded for the interrupted try.
+4. If the autopilot disconnects during a step, the probe puts back the control it pressed, then pauses there ("The autopilot disconnected during …"). Re-engage it with HDG and ALT, then press again to retry that step. Nothing is recorded for the interrupted try.
 5. If a step still can't put things back, the probe stops and says what didn't ("After level change, the autothrottle did not go back. Check the autopilot."). Fly normally and look at the mode lights.
 
 **Nothing is lost when a run stops.** Each step is saved the moment it's

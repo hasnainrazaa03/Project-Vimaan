@@ -1647,6 +1647,10 @@ def test_autopilot_dropping_out_pauses_the_probe_for_a_retry(probing):
     ]
     assert plugin._probe is not None and plugin._probe["index"] == 0  # same step next
     assert "mode_heading" not in plugin._probe["results"]
+    # Heading was pressed off before the drop; it's pressed again so the
+    # retry starts where the run was.
+    assert xp.commands_fired == ["sim/autopilot/heading"] * 2
+    assert xp.datarefs[AP + "heading_mode"] == 1
     assert [ln.badge for ln in plugin.overlay_state.lines()] == ["PROBE", "PAUSED", "NEXT"]
     # The pilot re-engages; this time the aircraft keeps it.
     xp.datarefs[AP + "servos_on"] = 1
@@ -1834,3 +1838,38 @@ def test_autothrottle_a_mode_turned_on_is_turned_back_off(probing):
         "sim/autopilot/autothrottle_toggle",
     ]
     assert xp.datarefs[AP + "autothrottle_enabled"] == 0
+
+
+def test_a_pause_puts_back_what_the_step_pressed(probing):
+    # The A330: APP was pressed, the autopilot dropped, and APP stayed armed
+    # into the next steps, so back course couldn't restore.
+    _, plugin, xp = probing
+    airborne(xp)
+    drops = [True]
+
+    def approach(x):
+        on = x.datarefs[AP + "approach_status"] == 1
+        x.datarefs[AP + "approach_status"] = x.datarefs[AP + "nav_status"] = 0 if on else 1
+        if drops and drops.pop():
+            x.datarefs[AP + "servos_on"] = 0
+
+    xp.effects["sim/autopilot/approach"] = approach
+    press_probe(plugin, xp)
+    go_to(plugin, "mode_approach")
+    press_probe(plugin, xp)
+    assert settle(plugin, xp)[0].startswith("The autopilot disconnected during approach mode.")
+    assert xp.datarefs[AP + "approach_status"] == 0 and xp.datarefs[AP + "nav_status"] == 0
+    xp.datarefs[AP + "servos_on"] = 1
+    press_probe(plugin, xp)
+    assert settle(plugin, xp) == ["Approach mode: works. Next, back course."]
+
+
+def test_a_pause_that_changed_nothing_presses_nothing_more(probing):
+    _, plugin, xp = probing
+    airborne(xp)
+    xp.effects["sim/autopilot/NAV"] = lambda x: x.datarefs.__setitem__(AP + "servos_on", 0)
+    press_probe(plugin, xp)
+    go_to(plugin, "mode_nav")
+    press_probe(plugin, xp)
+    assert settle(plugin, xp)[0].startswith("The autopilot disconnected during nav mode.")
+    assert xp.commands_fired == ["sim/autopilot/NAV"]

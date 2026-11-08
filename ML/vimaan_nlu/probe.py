@@ -279,10 +279,25 @@ def restore_presses(
         roles = []
         if bool(now.get("altitude_armed")) != bool(before.get("altitude_armed")):
             roles.append("mode_altitude_arm")
-        if bool(now.get("autothrottle_enabled")) != bool(before.get("autothrottle_enabled")):
+        if autothrottle_active(now) != autothrottle_active(before):
             roles.append("autothrottle_toggle")
         return roles
     return None
+
+
+def autothrottle_active(state: Mapping[str, Any]) -> bool:
+    """X-Plane's autothrottle_enabled: -1 hard off, 0 armed, 1-3 holding
+    speed / N1 / retard. The A330's A/THR button flips -1 and 0."""
+    value = state.get("autothrottle_enabled")
+    return value is not None and value > 0
+
+
+def undo_needed(step: Step, before: Mapping[str, Any], now: Mapping[str, Any]) -> bool:
+    """After the autopilot dropped mid-step: did the pressed control change
+    what it controls? Then press it again before pausing, so the retry (and
+    the steps after it) start from where the run was. In flight the A330's
+    APP stayed armed after a pause, and the next step couldn't restore."""
+    return any(not _same(k, before.get(k), now.get(k)) for k in step.watch)
 
 
 def mode_fix(before: Mapping[str, Any], now: Mapping[str, Any]) -> list[str]:

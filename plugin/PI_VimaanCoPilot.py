@@ -1500,7 +1500,14 @@ class PythonInterface:
     def _probe_pause(self, p, step, before, now):
         """The autopilot dropped out mid-step: that's the aircraft (or the
         controls), not the control under test. Nothing is recorded; the same
-        step runs again on the next press, once the pilot has re-engaged."""
+        step runs again on the next press, once the pilot has re-engaged.
+        A control already pressed is put back first (a mode the flight
+        director still shows would otherwise carry into the next steps)."""
+        if p["phase"] == "acting":
+            if step.write is not None:
+                self._write(probe.STATE[step.write][0], before[step.write])
+            elif p["name"] and probe.undo_needed(step, before, now):
+                self._fire_command(p["name"])
         p["phase"] = "ready"
         self.tel.event(
             "probe_paused",
