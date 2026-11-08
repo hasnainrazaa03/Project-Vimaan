@@ -147,3 +147,66 @@ def test_autopilot_dropping_mid_step_is_detected():
     assert probe.autopilot_dropped(heading, BASE, {**BASE, "servos_on": 0})
     assert not probe.autopilot_dropped(heading, BASE, BASE)
     assert not probe.autopilot_dropped(STEP["flap_handle"], BASE, {**BASE, "servos_on": 0})
+
+
+def test_inconclusive_does_not_replace_a_definite_result(tmp_path):
+    path = str(tmp_path / "a.json")
+    probe.save_results(path, {"steps": {"baro_std": "works"}})
+    probe.save_results(path, {"steps": {"baro_std": "inconclusive", "dial_baro": "inconclusive"}})
+    steps = json.loads(open(path).read())["steps"]
+    assert steps == {"baro_std": "works", "dial_baro": "inconclusive"}
+    probe.save_results(path, {"steps": {"baro_std": "no_change"}})
+    assert probe.load_results(path)["baro_std"] == "no_change"  # a new definite one does
+
+
+def test_resume_point_is_kept_per_situation_and_cleared_by_none(tmp_path):
+    path = str(tmp_path / "a.json")
+    probe.save_results(path, {"resume": {"air": "mode_vnav"}})
+    probe.save_results(path, {"resume": {"ground": "flap_handle"}})
+    record = probe.load_record(path)
+    assert probe.resume_index(record, "air") == 9
+    assert probe.resume_index(record, "ground") == 2
+    probe.save_results(path, {"resume": {"air": None}})
+    record = probe.load_record(path)
+    assert probe.resume_index(record, "air") == 0 and record["resume"] == {"ground": "flap_handle"}
+    # A role that isn't a step (any more) starts from the beginning.
+    assert probe.resume_index({"resume": {"air": "gone"}}, "air") == 0
+
+
+def test_counts_cover_every_saved_run_for_one_situation():
+    record = {"steps": {"mode_heading": "works", "mode_vnav": "no_change", "flap_handle": "works"}}
+    assert probe.counts(record, "air") == {"works": 1, "no_change": 1}
+
+
+def test_restore_presses_modes_first_then_arm_and_autothrottle():
+    now = {**BASE, "vertical_mode": 5, "altitude_armed": 1, "autothrottle_enabled": 1}
+    assert probe.restore_presses(BASE, now, 0) == ["mode_altitude_hold"]
+    assert probe.restore_presses(BASE, now, 1) == ["mode_altitude_arm", "autothrottle_toggle"]
+    assert probe.restore_presses(BASE, now, 2) is None
+    # Both "on", in different sub-states: nothing to press.
+    assert (
+        probe.restore_presses(
+            {**BASE, "autothrottle_enabled": 1}, {**BASE, "autothrottle_enabled": 3}, 1
+        )
+        == []
+    )
+
+
+def test_leftovers_and_their_names():
+    dial = STEP["dial_altitude"]
+    before = {**BASE, "altitude_dial": 8680.0}
+    now = {**before, "altitude_armed": 1}
+    assert probe.leftovers(dial, before, now) == ["altitude_armed"]
+    assert set(probe.leftovers(dial, before, now)) <= probe.HARMLESS_LEFTOVERS
+    worse = {**now, "lateral_mode": 0, "nav_status": 1}
+    assert probe.describe(probe.leftovers(dial, before, worse)) == (
+        "the lateral mode, nav and altitude arm"
+    )
+
+
+def test_caution_only_for_air_steps_without_selectable_modes():
+    hdg = STEP["mode_heading"]
+    assert probe.caution(hdg, BASE) is None
+    assert probe.caution(hdg, {**BASE, "lateral_mode": 0, "vertical_mode": 3})
+    assert probe.caution(hdg, {**BASE, "lateral_mode": 2, "vertical_mode": 4}) is None  # NAV, V/S
+    assert probe.caution(STEP["flap_handle"], {}) is None

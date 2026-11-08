@@ -15,6 +15,10 @@ the mode that was on before. Mode datarefs can't be written without an
 autopilot override, so restoring is done with buttons. If restoring fails,
 the probe stops and says so.
 
+Every measured step is saved at once, with the place the run has reached, so
+a stopped run (or X-Plane quitting) loses nothing and the next press carries on
+from there.
+
 Pure Python: the plugin does the reading, pressing and timing.
 """
 
@@ -135,6 +139,21 @@ def ready_for(step: Step, state: Mapping[str, Any], parking_brake: bool | None) 
     return None
 
 
+def caution(step: Step, state: Mapping[str, Any]) -> str | None:
+    """A reason the step may not put things back, which the pilot can choose
+    to ignore (one more press). Restoring presses the mode that was on before;
+    roll and pitch hold have no button, so with them on nothing can be pressed.
+    In flight, the 737 engaged with no modes and its ALT HOLD step failed."""
+    if step.where != "air":
+        return None
+    if (
+        state.get("lateral_mode") not in LATERAL_ROLES
+        or state.get("vertical_mode") not in VERTICAL_ROLES
+    ):
+        return "Heading and altitude hold are not both on, so this step may not restore"
+    return None
+
+
 def write_value(step: Step, state: Mapping[str, Any], flap_detents: int | None) -> float | None:
     if step.write is None:
         return None
@@ -200,13 +219,70 @@ def classify(
     return "works" if changed else "no_change"
 
 
-def restored(step: Step, before: Mapping[str, Any], now: Mapping[str, Any]) -> bool:
-    keys = (
+def _restore_keys(step: Step) -> tuple[str, ...]:
+    return (
         RESTORE_KEYS
         + ((step.write,) if step.write else ())
         + (("baro",) if step.role == "baro_std" else ())
     )
-    return all(_same(k, before.get(k), now.get(k)) for k in keys)
+
+
+def leftovers(step: Step, before: Mapping[str, Any], now: Mapping[str, Any]) -> list[str]:
+    """What hasn't gone back to how it was (STATE keys)."""
+    return [k for k in _restore_keys(step) if not _same(k, before.get(k), now.get(k))]
+
+
+def restored(step: Step, before: Mapping[str, Any], now: Mapping[str, Any]) -> bool:
+    return not leftovers(step, before, now)
+
+
+# Left over on its own, this doesn't stop the probe. On the 737, moving the
+# altitude dial arms altitude capture, and it stays armed after the dial goes
+# back: armed for the altitude the aircraft is already at, it changes nothing.
+HARMLESS_LEFTOVERS = frozenset({"altitude_armed"})
+
+LEFTOVER_NAMES: Mapping[str, str] = {
+    "servos_on": "the autopilot",
+    "lateral_mode": "the lateral mode",
+    "vertical_mode": "the vertical mode",
+    "nav_status": "nav",
+    "approach_status": "approach",
+    "backcourse_status": "back course",
+    "altitude_armed": "altitude arm",
+    "autothrottle_enabled": "the autothrottle",
+    "airspeed_is_mach": "knots or Mach",
+    "speed_dial": "the speed dial",
+    "vs_dial": "the vertical speed dial",
+    "altitude_dial": "the altitude dial",
+    "baro": "the altimeter",
+    "flap_handle": "the flap handle",
+}
+
+
+def describe(keys: list[str]) -> str:
+    """A spoken list of STATE keys: "nav and approach"."""
+    names = [LEFTOVER_NAMES.get(k, k) for k in keys]
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def restore_presses(
+    before: Mapping[str, Any], now: Mapping[str, Any], attempt: int
+) -> list[str] | None:
+    """Roles to press on restore attempt ``attempt``, or None when there are no
+    more attempts. First the previous modes; then, once the modes have
+    settled, an altitude arm or autothrottle the step left changed (the 737's
+    LVL CHG turned the autothrottle on). Arm and A/T wait for the modes
+    because pressing a mode can clear an arm by itself."""
+    if attempt == 0:
+        return mode_fix(before, now)
+    if attempt == 1:
+        roles = []
+        if bool(now.get("altitude_armed")) != bool(before.get("altitude_armed")):
+            roles.append("mode_altitude_arm")
+        if bool(now.get("autothrottle_enabled")) != bool(before.get("autothrottle_enabled")):
+            roles.append("autothrottle_toggle")
+        return roles
+    return None
 
 
 def mode_fix(before: Mapping[str, Any], now: Mapping[str, Any]) -> list[str]:
@@ -239,30 +315,61 @@ def results_path(folder: str, key: str) -> str:
     return os.path.join(folder, f"{key}.json")
 
 
-def load_results(path: str) -> dict[str, str]:
-    """role -> verdict, from a saved probe (empty when there is none). Only
-    definite verdicts count; "inconclusive" and skipped steps are left out."""
+def load_record(path: str) -> dict[str, Any]:
+    """The saved probe file, or {} when there is none (or it is broken)."""
     try:
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, ValueError):
         return {}
-    steps = data.get("steps", {}) if isinstance(data, dict) else {}
+    return data if isinstance(data, dict) else {}
+
+
+def load_results(path: str) -> dict[str, str]:
+    """role -> verdict, from a saved probe (empty when there is none). Only
+    definite verdicts count; "inconclusive" and skipped steps are left out."""
+    steps = load_record(path).get("steps", {})
     return {k: v for k, v in steps.items() if v in VERDICTS}
 
 
+def resume_index(record: Mapping[str, Any], where: str) -> int:
+    """Where an unfinished run of ``where`` steps stopped: the index of the
+    step to run next, 0 for a fresh start. Saved as a role, so a change to the
+    step list can't point it at the wrong step."""
+    role = (record.get("resume") or {}).get(where)
+    roles = [s.role for s in steps_for(where)]
+    return roles.index(role) if role in roles else 0
+
+
+def counts(record: Mapping[str, Any], where: str) -> dict[str, int]:
+    """Verdict -> how many ``where`` steps have it, over every saved run."""
+    steps = record.get("steps", {})
+    out: dict[str, int] = {}
+    for s in steps_for(where):
+        verdict = steps.get(s.role)
+        if verdict:
+            out[verdict] = out.get(verdict, 0) + 1
+    return out
+
+
 def save_results(path: str, record: Mapping[str, Any]) -> None:
-    """Merge with an earlier probe of the same aircraft (a ground run and an
-    air run each fill in their own steps), then write atomically."""
-    previous: dict[str, Any] = {}
-    try:
-        with open(path, encoding="utf-8") as fh:
-            previous = json.load(fh)
-    except (OSError, ValueError):
-        pass
-    merged = dict(record)
-    merged["steps"] = {**previous.get("steps", {}), **record.get("steps", {})}
+    """Merge with what is saved for the aircraft, then write atomically.
+
+    Called after every step and again when a run ends. Steps and the resume
+    point merge per key (a ground run and an air run each fill in their own);
+    details append. A new "inconclusive" doesn't replace a definite verdict
+    from an earlier run: the 737's STD step is inconclusive whenever the
+    altimeter is already at 29.92. A resume point of None clears it."""
+    previous = load_record(path)
+    merged = {**previous, **record}
+    steps = dict(previous.get("steps", {}))
+    for role, verdict in record.get("steps", {}).items():
+        if verdict in VERDICTS or steps.get(role) not in VERDICTS:
+            steps[role] = verdict
+    merged["steps"] = steps
     merged["details"] = [*previous.get("details", []), *record.get("details", [])][-200:]
+    resume = {**previous.get("resume", {}), **record.get("resume", {})}
+    merged["resume"] = {k: v for k, v in resume.items() if v}
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:

@@ -224,20 +224,42 @@ def report(path: Path) -> str:
                     f"{e.get('peak_core_pct')}%, fuel on {e.get('fuel_on')}"
                 )
             w(f"  t={e.get('t')}s {e.get('engine')} {detail}")
-    probe_steps = [e for e in events if e["kind"] in ("probe_start", "probe_step", "probe_end")]
+    probe_kinds = (
+        "probe_start",
+        "probe_step",
+        "probe_end",
+        "probe_paused",
+        "probe_blocked",
+        "probe_move",
+        "probe_reset",
+    )
+    probe_steps = [e for e in events if e["kind"] in probe_kinds]
     if probe_steps:
         w("")
         w("Aircraft probe:")
         for e in probe_steps:
-            if e["kind"] == "probe_start":
+            kind = e["kind"]
+            if kind == "probe_start":
+                at = f", from step {e['start'] + 1}" if e.get("start") else ""
                 w(
-                    f"  t={e.get('t')}s start ({e.get('where')}, {e.get('steps')} steps) {e.get('aircraft')}"
+                    f"  t={e.get('t')}s start ({e.get('where')}, {e.get('steps')} steps{at}) "
+                    f"{e.get('aircraft')}"
                 )
-            elif e["kind"] == "probe_step":
-                flag = "" if e.get("restored") else "  NOT RESTORED"
-                w(f"  {e.get('role'):<22} {e.get('verdict'):<12} {e.get('changed')}{flag}")
+            elif kind == "probe_step":
+                flag = "" if e.get("restored") else f"  NOT RESTORED {e.get('left_changed')}"
+                note = f"  note: {e['note']}" if e.get("note") else ""
+                w(f"  {e.get('role'):<22} {e.get('verdict'):<12} {e.get('changed')}{flag}{note}")
+            elif kind == "probe_paused":
+                w(f"  t={e.get('t')}s paused at {e.get('label')}: autopilot dropped")
+            elif kind == "probe_blocked":
+                w(f"  t={e.get('t')}s waiting at {e.get('label')}: {e.get('message')}")
+            elif kind == "probe_move":
+                w(f"  t={e.get('t')}s {e.get('direction')} to {e.get('label')}")
+            elif kind == "probe_reset":
+                w(f"  t={e.get('t')}s reset: next run starts from the first step")
             else:
-                w(f"  t={e.get('t')}s end: {e.get('reason')} -> {e.get('path')}")
+                then = f", resumes at {e['resume']}" if e.get("resume") else ""
+                w(f"  t={e.get('t')}s end: {e.get('reason')}{then} -> {e.get('path')}")
     overrides = [e for e in events if e["kind"] in ("safety_override", "cancelled")]
     for e in overrides:
         w(

@@ -343,3 +343,51 @@ def test_stopped_probe_is_red():
     ln = s.lines()[-1]
     assert (ln.badge, ln.tone) == ("STOPPED", "error")
     assert ln.text == "Probe stopped. Heading mode did not restore. Check the autopilot."
+
+
+def test_a_resumed_probe_starts_part_way():
+    s = OverlayState(Clock())
+    s.on_event(
+        {
+            "kind": "probe_start",
+            "where": "air",
+            "steps": 15,
+            "start": 9,
+            "name": "B738",
+            "next": "V NAV",
+        }
+    )
+    lines = s.lines()
+    assert lines[0].detail == "9 / 15" and lines[-1].text.startswith("V NAV")
+
+
+def test_probe_wait_and_note_lines():
+    s = OverlayState(Clock())
+    start_probe(s)
+    s.on_event(
+        {"kind": "probe_blocked", "label": "heading mode", "message": "Turn the autopilot on first"}
+    )
+    assert [(ln.badge, ln.text) for ln in s.lines()[1:]] == [
+        ("WAIT", "Turn the autopilot on first"),
+        ("NEXT", "heading mode  (press the probe key)"),
+    ]
+    s.on_event({"kind": "probe_act", "label": "altitude dial", "index": 14, "total": 15})
+    s.on_event(
+        {
+            "kind": "probe_step",
+            "label": "altitude dial",
+            "index": 14,
+            "verdict": "works",
+            "next": None,
+            "note": "altitude arm stayed on, which is harmless",
+        }
+    )
+    assert [ln.badge for ln in s.lines()] == ["PROBE", "WORKS", "NOTE"]
+    assert s.lines()[2].text == "Altitude arm stayed on, which is harmless"
+
+
+def test_probe_summary_counts_every_saved_run():
+    s = OverlayState(Clock())
+    start_probe(s)
+    s.on_event({"kind": "probe_end", "reason": "complete", "counts": {"works": 12, "no_change": 3}})
+    assert s.lines()[-1].text == "Results saved. 12 work, 3 no change."
