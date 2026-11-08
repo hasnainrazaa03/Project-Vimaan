@@ -385,8 +385,18 @@ An aircraft never seen before gets layers 1, 2 and 5 automatically, and layer 4 
   - after V/S engages (or a new altitude is set while climbing or descending), altitude arm is pressed 1.2 s later, only if not armed already: the 737 arms it by itself, and the arm command is a toggle;
   - (b) where the probe says arm does nothing: Vimaan's own capture, if switched on (`VIMAAN_CAPTURE=1`, or the **Vimaan: altitude capture by Vimaan on/off** key). It presses altitude hold within a band scaled to vertical speed (6 s ahead, at least 60 ft), and stands down on "cancel", a pilot mode change, a moved target or the autopilot off;
   - (a) otherwise the read-back says "This aircraft can't capture altitude. Say altitude hold at <target>."
-- [ ] **B7 Data:** regenerate everything, and train **v18** at the same length as A7. *Regenerated on the merged code: identical to v7 (67,320 rows), so v18 trains on v7.*
-- [ ] **B8 Gate v18 vs v17**, same bars, plus Tier 1 gold commands. *Gold: 17 Tier 1 phrases plus the E1 COM 2 phrase (tests/test_gold_nlu.py).*
+- [x] **B7 Data and training.** *v18 (data v7, 67,320 rows) failed the gate; **v19** (data v8) passes. Both trained at length 40, 10 epochs, patience 4, batch 16, lr 5e-5, watched live on the dashboard.*
+  - v18's first gate: new phrasings (Mach and altimeter-inch slots F1 0.49 / 0.80; COM intent 0.95), old data (96.68% vs 97.21%), gold 39/41.
+  - Two decoding bugs, fixed in code: `reconstruct_slot_value` turned "0", ".", "78" into "0. 78" (since v1; COM frequencies were repaired from the text, which hid it), and the choice canonicalizer matched "nav" inside "v nav". Re-gated, v18 still failed on COM.
+  - The data cause: COM's only portless training rows were "tune ..." ("frequency {f}" is a held-out template), so "frequency one eighteen point four" was read as the new speed intent, whose Mach values also have decimals. Data v8 adds "new frequency", "change frequency to" and "go to frequency" (all outside the held-out set, which stays the same): 843 portless training rows instead of 248.
+- [x] **B8 Gate v19 vs v17**, same bars, plus Tier 1 gold commands. **All six pass:**
+  - new phrasings (11,376): intent 1.0000, slot F1 1.0000 (v17 0.6891 / 0.6667, which lacks the new commands);
+  - old data (7,170): 97.25% right, 0 wrong (v17 97.21%, 0 wrong);
+  - gold: 41/41 (17 Tier 1 phrases plus the E1 COM 2 phrase), 8/8 fragments not acted on;
+  - real voice (118): 91 / 26 / 1, same as v17 (the one wrong is the same recording);
+  - negatives: 873/873 rejected;
+  - latency p95 6.2 ms.
+  - Backend parity: fp32 = ONNX on all 8,874 texts; int8 differs on 2, right either way. ONNX p95 3.2 ms.
 - [x] **B9 Handlers** through the resolved profile; fake-sim tests per command and per profile.
 - [ ] **B10 PR.** The owner merges.
 
@@ -403,7 +413,7 @@ An aircraft never seen before gets layers 1, 2 and 5 automatically, and layer 4 
   - FMS modes on airliners explain a failure ("needs a flight plan in the F M C"); A330 managed modes push the FCU knobs;
   - autothrottle is refused where the aircraft's own files never use one (X-Plane's generic A/T "worked" on the Baron and King Air); the A330's armed A/THR counts as on;
   - the 737's altimeter is turned with its knob, since it puts written values back.
-- **Still to do:** B7 training, B8 gate, B10 PR.
+- **Still to do:** B10 PR; install v19 (owner's approval); Part C flight.
 
 ### Part C — Tier 1 flight (Baron, 737, A330, plus one aircraft with no override)
 On each aircraft:
