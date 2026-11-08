@@ -144,12 +144,33 @@ def write_value(step: Step, state: Mapping[str, Any], flap_detents: int | None) 
     return None if current is None else float(current) + step.delta
 
 
+# How close a float must come back to count as restored: an aircraft's own
+# logic rounds (the 737 put the altimeter back at 29.92 for 29.9212).
+TOLERANCE: Mapping[str, float] = {
+    "baro": 0.006,  # inHg
+    "flap_handle": 0.01,
+    "speed_dial": 0.5,  # knots; Mach is checked at 0.005 below
+    "vs_dial": 10.0,
+    "altitude_dial": 5.0,
+}
+
+
 def _same(key: str, a: Any, b: Any) -> bool:
     if a is None or b is None:
         return a == b
     if STATE[key][1]:
-        return abs(float(a) - float(b)) < 1e-3
+        tolerance = TOLERANCE.get(key, 1e-3)
+        if key == "speed_dial" and max(abs(float(a)), abs(float(b))) < 2:
+            tolerance = 0.005  # the dial holds a Mach number
+        return abs(float(a) - float(b)) <= tolerance
     return a == b
+
+
+def autopilot_dropped(step: Step, before: Mapping[str, Any], now: Mapping[str, Any]) -> bool:
+    """The autopilot was on for an air step and isn't now: the aircraft (or
+    the pilot's controls) disconnected it, which says nothing about the
+    control being tested."""
+    return step.where == "air" and before.get("servos_on") == 1 and now.get("servos_on") == 0
 
 
 def classify(

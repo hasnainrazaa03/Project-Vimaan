@@ -125,3 +125,25 @@ def test_missing_or_broken_results_file_means_no_results(tmp_path):
     bad = tmp_path / "bad.json"
     bad.write_text("{not json")
     assert probe.load_results(str(bad)) == {}
+
+
+def test_aircraft_rounding_still_counts_as_restored():
+    # The 737 put the altimeter back at 29.92 for 29.9212: the probe stopped.
+    std = STEP["baro_std"]
+    assert probe.restored(std, {**BASE, "baro": 29.9212}, {**BASE, "baro": 29.92})
+    assert not probe.restored(std, {**BASE, "baro": 29.92}, {**BASE, "baro": 30.12})
+    flaps = STEP["flap_handle"]
+    assert probe.restored(flaps, {**BASE, "flap_handle": 0.5}, {**BASE, "flap_handle": 0.505})
+
+
+def test_mach_dial_tolerance_is_tighter():
+    dial = STEP["dial_speed"]
+    assert probe.restored(dial, {**BASE, "speed_dial": 250.0}, {**BASE, "speed_dial": 250.3})
+    assert not probe.restored(dial, {**BASE, "speed_dial": 0.78}, {**BASE, "speed_dial": 0.80})
+
+
+def test_autopilot_dropping_mid_step_is_detected():
+    heading = STEP["mode_heading"]
+    assert probe.autopilot_dropped(heading, BASE, {**BASE, "servos_on": 0})
+    assert not probe.autopilot_dropped(heading, BASE, BASE)
+    assert not probe.autopilot_dropped(STEP["flap_handle"], BASE, {**BASE, "servos_on": 0})

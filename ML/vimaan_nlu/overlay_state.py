@@ -208,6 +208,8 @@ class OverlayState:
                 done=int(ev.get("index", p["done"])) + 1,
                 next=ev.get("next"),
             )
+        elif kind == "probe_paused":
+            p.update(step=ev.get("label"), status="paused", next=ev.get("label"))
         elif kind == "probe_end":
             ok = ev.get("reason") == "complete"
             p.update(status="complete" if ok else "stopped", message=ev.get("message"))
@@ -265,6 +267,10 @@ class OverlayState:
             return out
         if status == "testing":
             out.append(Line("TESTING", step or "", "live"))
+        elif status == "paused":
+            out.append(Line("PAUSED", f"Autopilot disconnected during {step}", "warn"))
+            out.append(Line("NEXT", "Re-engage the autopilot, then press the probe key", "muted"))
+            return out
         elif status in PROBE_BADGE:
             badge, tone = PROBE_BADGE[status]
             out.append(Line(badge, step or "", tone))

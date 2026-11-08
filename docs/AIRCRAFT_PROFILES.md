@@ -62,6 +62,19 @@ aircraft folders. `scripts/check_xplane_refs.py` re-checks every name.
 - The fuel cutoff is the condition levers (`laminar/B738/engines/condition_lever_{1,2}_{idle,cutoff}`). Override `b738_condition_levers` covers a turbine start.
 - The start switches are `laminar/B738/knob/starter{1,2}_{up,dn}`. Not used yet; the generic starter is tried first and logged.
 
+- **Probed 2026-11-07** (session `vimaan_20261107_211836`):
+  - HDG, VOR/LOC, APP and back course work through the generic commands.
+  - GPS steering: no change (the 737's LNAV is its own `lnav_press`).
+  - ALT HOLD works, but pressing it again left ALT armed, so the restore failed.
+  - **Altimeter writes don't hold:** its scripts own the baro, so Part B's altimeter command must use the 737's EFIS controls.
+- **Its MCP buttons** (`laminar/B738/autopilot/cmd_a_press`, `hdg_sel_press`, `vorloc_press`, `app_press`, `alt_hld_press`, `vs_press`, `lvl_chg_press`, `lnav_press`, `vnav_press`) call the same sim commands, and also update the 737's own `CMD_status` / `AP_status`, which drive its CMD light and annunciators.
+  - With the generic engage, its `cmd_a_status` read off while the servos flew.
+  - Override `b738_mcp` makes "autopilot on" and the probe's mode steps use those buttons.
+- **The autopilot disconnected ten times in that flight**, each time 1–50 s after engaging, with no modes selected (roll and pitch hold), and with the flight director left on. That's how X-Plane's airliner autopilot disconnects on control-column input.
+  - Neither Vimaan nor the 737's scripts switched it off.
+  - X-Plane's log showed two Xbox controllers registered as joysticks, unconfigured, with every null zone at 0%. A thumbstick at rest is never exactly centred.
+  - The Baron's simpler autopilot stayed engaged through its whole probe.
+
 **Airbus A330-300** (`A333`, jet ×2, flap detents 4)
 - The scripts wrap `servos_toggle`/`servos2_toggle`, `altitude_hold`, `NAV`, `approach`, `knots_mach_toggle`, `barometer_std` and the up/down dials.
 - In flight, `servos_on` and `servos2_on` were ignored. The fix: press the toggle once the state has been read, on every aircraft.
@@ -109,11 +122,17 @@ autopilot.
 2. Press the probe key once. Vimaan says "Probe ready. 3 ground steps…".
 3. Press once per step. Each takes about 4 s and is put back afterwards.
 
+**Joysticks and gamepads:** give every axis a null zone, so a stick at rest
+doesn't count as pilot input (X-Plane: Settings → Joystick → select the device
+→ Calibrate, then raise "Null zone"; 10–15% for a gamepad thumbstick). With a
+0% null zone an airliner autopilot disconnects within seconds.
+
 **In the air** (15 steps: 10 autopilot modes, autothrottle, knots/Mach, speed / V/S / altitude dials):
 1. Above 1,500 ft AGL, in smooth air, with the autopilot on in **HDG and ALT hold**.
 2. Press once, then once per step. Each step presses one control for 2 s and puts it back. Expect brief mode changes, for example a few seconds in pitch mode.
-3. If a step can't put things back, the probe stops and says "Check the autopilot". Fly normally and look at the mode lights.
-4. You can stop at any time with the stop key. What was measured is saved.
+3. If the autopilot disconnects during a step, the probe pauses there ("The autopilot disconnected during …"). Re-engage it with HDG and ALT, then press again to retry that step. Nothing is recorded for the interrupted try.
+4. If a step can't put things back, the probe stops and says "Check the autopilot". Fly normally and look at the mode lights.
+5. You can stop at any time with the stop key. What was measured is saved.
 
 Results are saved to `~/Vimaan_Logs/aircraft/<folder>__<file>.json`, with
 the ground and air runs merged. They are used from the next aircraft load.

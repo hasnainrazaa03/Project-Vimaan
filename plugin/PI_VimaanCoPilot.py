@@ -1351,6 +1351,9 @@ class PythonInterface:
     def _advance_probe(self, p):
         step, before = p["step"], p["before"]
         now = self._probe_state()
+        if probe.autopilot_dropped(step, before, now):
+            self._probe_pause(p, step, before, now)
+            return
         if p["phase"] == "acting":
             p["verdict"] = probe.classify(step, before, now, True, p["written"])
             p["after"] = now
@@ -1380,6 +1383,26 @@ class PythonInterface:
         label = step.label[:1].upper() + step.label[1:]
         self._probe_finish(
             "restore_failed", f"Probe stopped. {label} did not restore. Check the autopilot."
+        )
+
+    def _probe_pause(self, p, step, before, now):
+        """The autopilot dropped out mid-step: that's the aircraft (or the
+        controls), not the control under test. Nothing is recorded; the same
+        step runs again on the next press, once the pilot has re-engaged."""
+        p["phase"] = "ready"
+        self.tel.event(
+            "probe_paused",
+            logging.WARNING,
+            role=step.role,
+            label=step.label,
+            index=p["index"],
+            total=len(p["steps"]),
+            changed=probe.changes(before, now),
+        )
+        self._say(
+            f"The autopilot disconnected during {step.label}. "
+            "Re-engage it, then press the probe key to retry.",
+            origin="probe",
         )
 
     def _probe_record(self, step, verdict, before, after, ok, now=None):
@@ -1691,7 +1714,11 @@ class PythonInterface:
                 return "executed"
 
         command = binding["on_cmd"] if target else binding["off_cmd"]
-        if binding.get("prefer_toggle") and current is not None:
+        engage = self.profile.command(binding.get("engage_role") or "")
+        if target and engage and self._has_command(engage):
+            # The aircraft's own engage button keeps its logic in step.
+            command = engage
+        elif binding.get("prefer_toggle") and current is not None:
             # The state was just read and differs, so the toggle moves it the
             # right way, on aircraft that ignore the dedicated command too.
             command = binding["toggle"]

@@ -1580,3 +1580,74 @@ def test_overlay_shows_the_probe_not_the_last_command(probing):
     assert lines[0].text == "Beechcraft Baron 58  air probe" and lines[0].detail == "1 / 15"
     probe_speech = [e for e in events(plugin, "speak") if e.get("origin") == "probe"]
     assert probe_speech and all("autopilot" not in e["text"].lower() for e in probe_speech)
+
+
+# ---------------------------------------------------------------------------
+# 737 MCP buttons, and the autopilot dropping out during a probe
+# ---------------------------------------------------------------------------
+B738_MCP = (
+    "laminar/B738/autopilot/cmd_a_press",
+    "laminar/B738/autopilot/cmd_b_press",
+    "laminar/B738/autopilot/hdg_sel_press",
+    "laminar/B738/autopilot/vorloc_press",
+    "laminar/B738/autopilot/app_press",
+    "laminar/B738/autopilot/alt_hld_press",
+    "laminar/B738/autopilot/vs_press",
+    "laminar/B738/autopilot/lvl_chg_press",
+    "laminar/B738/autopilot/vnav_press",
+    "laminar/B738/autopilot/lnav_press",
+)
+
+
+def test_737_autopilot_on_presses_cmd_a(sim):
+    _, plugin, xp = sim
+    profile = load_aircraft(plugin, xp, 7, commands=B738_MCP)
+    assert "b738_mcp" in profile.overrides
+    say(plugin, "autopilot on", "toggle_autopilot", {"state": "on"})
+    assert xp.commands_fired == ["laminar/B738/autopilot/cmd_a_press"]
+    say(plugin, "autopilot two on", "toggle_autopilot", {"state": "on", "instance": "2"})
+    assert xp.commands_fired[-1] == "laminar/B738/autopilot/cmd_b_press"
+
+
+def test_737_autopilot_off_still_uses_the_checked_toggle(sim):
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 7, commands=B738_MCP)
+    xp.datarefs["sim/cockpit2/autopilot/servos_on"] = 1
+    say(plugin, "autopilot off", "toggle_autopilot", {"state": "off"})
+    assert xp.commands_fired == ["sim/autopilot/servos_toggle"]
+
+
+def test_737_probe_presses_its_own_mcp_buttons(probing):
+    _, plugin, xp = probing
+    load_aircraft(plugin, xp, 7, commands=B738_MCP)
+    airborne(xp)
+    xp.effects["laminar/B738/autopilot/hdg_sel_press"] = toggle_heading
+    press_probe(plugin, xp)
+    press_probe(plugin, xp)
+    assert settle(plugin, xp) == ["Heading mode: works. Next, nav mode."]
+    assert xp.commands_fired == ["laminar/B738/autopilot/hdg_sel_press"] * 2
+
+
+def test_autopilot_dropping_out_pauses_the_probe_for_a_retry(probing):
+    _, plugin, xp = probing
+    airborne(xp)
+
+    def heading_and_drop(x):  # the 737 in flight: the servos drop out
+        toggle_heading(x)
+        x.datarefs[AP + "servos_on"] = 0
+
+    xp.effects["sim/autopilot/heading"] = heading_and_drop
+    press_probe(plugin, xp)
+    press_probe(plugin, xp)
+    assert settle(plugin, xp) == [
+        "The autopilot disconnected during heading mode. Re-engage it, then press the probe key to retry."
+    ]
+    assert plugin._probe is not None and plugin._probe["index"] == 0  # same step next
+    assert "mode_heading" not in plugin._probe["results"]
+    assert [ln.badge for ln in plugin.overlay_state.lines()] == ["PROBE", "PAUSED", "NEXT"]
+    # The pilot re-engages; this time the aircraft keeps it.
+    xp.datarefs[AP + "servos_on"] = 1
+    xp.datarefs[AP + "heading_mode"], xp.datarefs[AP + "heading_status"] = 1, 2
+    xp.effects["sim/autopilot/heading"] = toggle_heading
+    press_probe(plugin, xp)
+    assert settle(plugin, xp) == ["Heading mode: works. Next, nav mode."]
