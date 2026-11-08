@@ -1010,8 +1010,11 @@ class PythonInterface:
     # ------------------------------------------------------------------
     # Sim I/O helpers (every read/write/command is logged with the command id)
     # ------------------------------------------------------------------
-    def _say(self, text):
-        self.tel.event("speak", logging.DEBUG, cmd=self._current_cmd, text=text)
+    def _say(self, text, origin=None):
+        """Speak, and log it. ``origin="probe"`` keeps a probe announcement out
+        of the overlay's view of the last voice command."""
+        extra = {"origin": origin} if origin else {}
+        self.tel.event("speak", logging.DEBUG, cmd=self._current_cmd, text=text, **extra)
         xp.speakString(text)
 
     @staticmethod
@@ -1244,6 +1247,11 @@ class PythonInterface:
         self.profile = resolve(info, self._has_command, self._probe_results(info.key))
         self.tel.event("aircraft", **self.profile.summary())
 
+    def _aircraft_name(self):
+        """Short name for the overlay: the description if it's short, else ICAO."""
+        info = self.profile.info
+        return info.description if 0 < len(info.description) <= 28 else info.icao
+
     def _probe_folder(self):
         return str(self.tel.log_dir / "aircraft")
 
@@ -1310,9 +1318,14 @@ class PythonInterface:
             where=where,
             steps=len(steps),
             aircraft=self.profile.info.key,
+            name=self._aircraft_name(),
+            next=steps[0].label,
             found=found,
         )
-        self._say(f"Probe ready. {len(steps)} {where} steps. Press again for {steps[0].label}.")
+        self._say(
+            f"Probe ready. {len(steps)} {where} steps. Press again for {steps[0].label}.",
+            origin="probe",
+        )
 
     def _probe_press(self):
         p = self._probe
@@ -1320,14 +1333,14 @@ class PythonInterface:
             self._probe_begin()
             return
         if p["phase"] != "ready":
-            self._say("Probe busy")
+            self._say("Probe busy", origin="probe")
             return
         step = p["steps"][p["index"]]
         before = self._probe_state()
         brake = self._read_float(DREF_PARKING_BRAKE)
         why = probe.ready_for(step, before, None if brake is None else brake > 0.5)
         if why:
-            self._say(why)
+            self._say(why, origin="probe")
             return
         written, name = None, None
         if step.write is None:
@@ -1350,7 +1363,15 @@ class PythonInterface:
             fixed=False,
             due=time.perf_counter() + probe.SETTLE_SEC,
         )
-        self.tel.event("probe_act", role=step.role, command=name, written=written)
+        self.tel.event(
+            "probe_act",
+            role=step.role,
+            label=step.label,
+            index=p["index"],
+            total=len(p["steps"]),
+            command=name,
+            written=written,
+        )
 
     def _service_probe(self):
         p = self._probe
@@ -1409,7 +1430,16 @@ class PythonInterface:
         if now is not None:
             detail["left_changed"] = probe.changes(before, now)
         p["details"].append(detail)
-        self.tel.event("probe_step", logging.INFO if ok else logging.WARNING, **detail)
+        following = p["steps"][p["index"] + 1] if p["index"] + 1 < len(p["steps"]) else None
+        self.tel.event(
+            "probe_step",
+            logging.INFO if ok else logging.WARNING,
+            label=step.label,
+            index=p["index"],
+            total=len(p["steps"]),
+            next=following.label if following and ok else None,
+            **detail,
+        )
 
     def _probe_done(self, step, verdict, before, after, ok):
         self._probe_record(step, verdict, before, after, ok)
@@ -1420,10 +1450,10 @@ class PythonInterface:
         label = step.label[:1].upper() + step.label[1:]  # "V NAV" stays "V NAV"
         spoken = f"{label}: {self.PROBE_SPOKEN[verdict]}."
         if p["index"] >= len(p["steps"]):
-            self._say(spoken)
+            self._say(spoken, origin="probe")
             self._probe_finish("complete", "Probe complete. Results saved.")
         else:
-            self._say(f"{spoken} Next, {p['steps'][p['index']].label}.")
+            self._say(f"{spoken} Next, {p['steps'][p['index']].label}.", origin="probe")
 
     def _probe_finish(self, reason, spoken):
         p, self._probe = self._probe, None
@@ -1445,9 +1475,9 @@ class PythonInterface:
             probe.save_results(path, record)
         except OSError as exc:
             self.tel.error("probe_save_error", exc, path=path)
-        self.tel.event("probe_end", reason=reason, path=path, steps=p["results"])
+        self.tel.event("probe_end", reason=reason, path=path, steps=p["results"], message=spoken)
         self.profile = resolve(info, self._has_command, probe.load_results(path))
-        self._say(spoken)
+        self._say(spoken, origin="probe")
 
     def _expect(self, label, read, expected, delay=None, tolerance=None):
         """After a command, check the sim actually changed; say so if it didn't

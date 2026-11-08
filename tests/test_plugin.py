@@ -1833,3 +1833,20 @@ def test_flaps_up_and_down_unchanged(sim):
     xp.datarefs["sim/cockpit2/gauges/indicators/airspeed_kts_pilot"] = 150.0
     say(plugin, "flaps", "set_flaps", {"position": "down"})  # one notch: no new rule
     assert xp.commands_fired == ["sim/flight_controls/flaps_down"]
+
+
+def test_overlay_shows_the_probe_not_the_last_command(probing):
+    # In flight: probe results appeared under the last command's HEARD/MEANT.
+    _, plugin, xp = probing
+    airborne(xp)
+    xp.effects["sim/autopilot/heading"] = toggle_heading
+    say(plugin, "autopilot on", "toggle_autopilot", {"state": "on"})
+    press_probe(plugin, xp)
+    press_probe(plugin, xp)
+    settle(plugin, xp)
+    lines = plugin.overlay_state.lines()
+    assert [ln.badge for ln in lines] == ["PROBE", "WORKS", "NEXT"]
+    assert lines[1].text == "heading mode" and lines[2].text.startswith("nav mode")
+    assert lines[0].text == "Beechcraft Baron 58  air probe" and lines[0].detail == "1 / 15"
+    probe_speech = [e for e in events(plugin, "speak") if e.get("origin") == "probe"]
+    assert probe_speech and all("autopilot" not in e["text"].lower() for e in probe_speech)
