@@ -1119,7 +1119,8 @@ def test_self_test_checks_intent_and_slots(sim):
     NLU[text] = (intent, {}, 0.99)  # e.g. the COM probe losing its frequency
     plugin._run_self_test()
     plugin._flight_loop()  # worker reply
-    assert xp.spoken[-1] == "Self test complete. 9 of 10 passed."
+    total = len(module.PythonInterface.SELF_TEST_PROBES)
+    assert xp.spoken[-1] == f"Self test complete. {total - 1} of {total} passed."
     failed = [e for e in events(plugin, "self_test_probe") if not e["ok"]]
     assert failed[0]["missing_slots"] == ["frequency"]
     assert xp.writes == [] and xp.commands_fired == []  # self-test never actuates
@@ -1563,3 +1564,272 @@ def test_std_toggle_is_pressed_again_when_restoring(probing):
     assert settle(plugin, xp)[0] == "Altimeter standard: works. Next, altimeter setting."
     assert xp.commands_fired.count("sim/instruments/barometer_std") == 2
     assert remembered == {} and xp.datarefs[BARO] == pytest.approx(30.12)
+
+
+# ---------------------------------------------------------------------------
+# Tier 1 commands: speed, vertical speed, modes, autothrottle, altimeter, flaps
+# ---------------------------------------------------------------------------
+SPEED_DIAL = AP + "airspeed_dial_kts_mach"
+VVI_DIAL = AP + "vvi_dial_fpm"
+FLAP_HANDLE = "sim/cockpit2/controls/flap_handle_request_ratio"
+A333 = ("laminar/A333/autopilot/speed_knob_pull", "laminar/A333/autopilot/a_thr_toggle")
+B738 = (
+    "laminar/B738/engines/condition_lever_1_idle",
+    "laminar/B738/engines/condition_lever_2_idle",
+    "laminar/B738/EFIS_control/capt/push_button/std_press",
+)
+
+
+def aircraft(plugin, xp, engine_type=7, commands=(), **datarefs):
+    for name, value in datarefs.items():
+        xp.datarefs[name] = value
+    return load_aircraft(plugin, xp, engine_type, commands=commands)
+
+
+def test_speed_in_knots(sim):
+    _, plugin, xp = sim
+    assert say(plugin, "speed", "set_autopilot_speed", {"speed": "160"}) == ["Speed one six zero"]
+    assert xp.datarefs[SPEED_DIAL] == 160.0 and xp.commands_fired == []
+
+
+def test_mach_switches_the_dial_to_mach_first(sim):
+    _, plugin, xp = sim
+
+    def to_mach(x):
+        x.datarefs[AP + "airspeed_is_mach"] = 1 - x.datarefs[AP + "airspeed_is_mach"]
+
+    xp.effects["sim/autopilot/knots_mach_toggle"] = to_mach
+    assert say(plugin, "mach", "set_autopilot_speed", {"mach": "0.78"}) == [
+        "Mach point seven eight"
+    ]
+    assert xp.commands_fired == ["sim/autopilot/knots_mach_toggle"]
+    assert xp.datarefs[SPEED_DIAL] == pytest.approx(0.78)
+
+
+@pytest.mark.parametrize(
+    ("value", "spoken"),
+    [
+        ("70", "Speed 70 is below this aircraft's stall speed"),  # Baron Vso 74
+        ("240", "Speed 240 is above this aircraft's never exceed speed"),  # Vne 223
+    ],
+)
+def test_speed_outside_the_aircraft_envelope_is_refused(sim, value, spoken):
+    _, plugin, xp = sim
+    assert say(plugin, "speed", "set_autopilot_speed", {"speed": value}) == [spoken]
+    assert xp.writes == []
+
+
+def test_airbus_pulls_the_speed_knob_for_a_selected_speed(sim):
+    _, plugin, xp = sim
+    aircraft(plugin, xp, commands=A333)
+    say(plugin, "speed", "set_autopilot_speed", {"speed": "160"})
+    assert xp.commands_fired == ["laminar/A333/autopilot/speed_knob_pull"]
+
+
+def test_speed_two_eighty_on_a_jet_is_not_asked(sim):
+    _, plugin, xp = sim  # 80 kt is below a 737's stall speed: only 280 makes sense
+    aircraft(plugin, xp, **{"sim/aircraft/view/acf_Vso": 110.0, "sim/aircraft/view/acf_Vne": 340.0})
+    NLU["speed two eighty"] = ("set_autopilot_speed", {"speed": "280"}, 0.99)
+    assert say(plugin, "speed two eighty") == ["Speed two eight zero"]
+
+
+def test_speed_two_eighty_on_the_baron_asks(sim):
+    _, plugin, xp = sim  # Vso 74: "to eighty" is flyable, so both readings stand
+    NLU["speed two eighty"] = ("set_autopilot_speed", {"speed": "280"}, 0.99)
+    assert say(plugin, "speed two eighty") == ["Speed 80 or 280? Say it again without the word to."]
+
+
+def test_vertical_speed_engages_the_mode_then_sets_the_rate(sim):
+    _, plugin, xp = sim
+    spoken = say(
+        plugin, "vertical speed", "set_vertical_speed", {"vs": "1500", "direction": "down"}
+    )
+    assert spoken == ["Descend 1500 feet per minute"]
+    assert xp.commands_fired == ["sim/autopilot/vertical_speed"]
+    assert xp.datarefs[VVI_DIAL] == -1500.0
+
+
+def test_vertical_speed_direction_from_the_selected_altitude(sim):
+    _, plugin, xp = sim
+    xp.datarefs["sim/cockpit2/autopilot/altitude_dial_ft"] = 9000.0
+    xp.datarefs["sim/cockpit2/gauges/indicators/altitude_ft_pilot"] = 5000.0
+    assert say(plugin, "vertical speed", "set_vertical_speed", {"vs": "800"}) == [
+        "Climb 800 feet per minute"
+    ]
+
+
+def test_vertical_speed_without_a_direction_asks(sim):
+    _, plugin, xp = sim
+    assert say(plugin, "vertical speed", "set_vertical_speed", {"vs": "800"}) == [
+        "Climb or descend?"
+    ]
+    assert xp.writes == []
+
+
+def test_vertical_speed_on_an_aircraft_probed_without_it(sim):
+    _, plugin, xp = sim
+    folder = plugin.tel.log_dir / "aircraft"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "Other_7__other.json").write_text(
+        json.dumps({"steps": {"mode_vertical_speed": "no_change"}})
+    )
+    aircraft(plugin, xp)
+    assert say(
+        plugin, "vertical speed", "set_vertical_speed", {"vs": "800", "direction": "up"}
+    ) == ["This aircraft has no vertical speed mode"]
+    assert xp.commands_fired == []
+
+
+@pytest.mark.parametrize(
+    ("mode", "command", "spoken"),
+    [
+        ("heading", "sim/autopilot/heading", "Heading on"),
+        ("approach", "sim/autopilot/approach", "Approach on"),
+        ("altitude hold", "sim/autopilot/altitude_hold", "Altitude hold on"),
+        ("level change", "sim/autopilot/level_change", "Level change on"),
+        ("v nav", "sim/autopilot/vnav", "V NAV on"),
+        ("l nav", "sim/autopilot/gpss", "L NAV on"),
+    ],
+)
+def test_mode_on(sim, mode, command, spoken):
+    _, plugin, xp = sim
+    assert say(plugin, "mode", "set_autopilot_mode", {"mode": mode}) == [spoken]
+    assert xp.commands_fired == [command]
+
+
+def test_mode_already_on_is_not_pressed_again(sim):
+    _, plugin, xp = sim  # pressing would toggle it off
+    xp.datarefs[AP + "heading_status"] = 2
+    assert say(plugin, "mode", "set_autopilot_mode", {"mode": "heading", "state": "on"}) == [
+        "Heading already on"
+    ]
+    assert xp.commands_fired == []
+
+
+def test_mode_off_with_unreadable_state_is_refused(sim):
+    _, plugin, xp = sim
+    del xp.datarefs[AP + "nav_status"]
+    assert say(plugin, "mode", "set_autopilot_mode", {"mode": "nav", "state": "off"}) == [
+        "Cannot read Nav mode state"
+    ]
+    assert xp.commands_fired == []
+
+
+def test_mode_the_aircraft_lacks(sim):
+    _, plugin, xp = sim
+    xp.missing_commands.add("sim/autopilot/vnav")
+    aircraft(plugin, xp)
+    assert say(plugin, "mode", "set_autopilot_mode", {"mode": "v nav"}) == [
+        "V NAV mode is not available on this aircraft"
+    ]
+
+
+def test_autothrottle_on(sim):
+    _, plugin, xp = sim
+    assert say(plugin, "auto throttle", "toggle_autothrottle", {"state": "on"}) == [
+        "Autothrottle on"
+    ]
+    assert xp.commands_fired == ["sim/autopilot/autothrottle_on"]
+
+
+def test_airbus_athr_uses_its_own_button(sim):
+    _, plugin, xp = sim
+    aircraft(plugin, xp, commands=A333)
+    say(plugin, "auto throttle", "toggle_autothrottle", {"state": "on"})
+    assert xp.commands_fired == ["laminar/A333/autopilot/a_thr_toggle"]
+
+
+def test_autothrottle_probed_absent(sim):
+    _, plugin, xp = sim
+    folder = plugin.tel.log_dir / "aircraft"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "Other_1__other.json").write_text(
+        json.dumps({"steps": {"autothrottle_toggle": "no_change"}})
+    )
+    aircraft(plugin, xp, engine_type=1)
+    assert say(plugin, "auto throttle", "toggle_autothrottle", {"state": "on"}) == [
+        "No autothrottle on this aircraft"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("pressure", "inhg", "spoken"),
+    [
+        ("2992", 29.92, "Altimeter two niner niner two"),
+        ("29.92", 29.92, "Altimeter two niner niner two"),
+        ("1013", 1013 * 0.02953, "Q N H one zero one three"),
+    ],
+)
+def test_altimeter_sets_both_sides(sim, pressure, inhg, spoken):
+    _, plugin, xp = sim
+    assert say(plugin, "altimeter", "set_altimeter", {"pressure": pressure}) == [spoken]
+    assert xp.datarefs[BARO] == pytest.approx(inhg)
+    assert xp.datarefs[
+        "sim/cockpit2/gauges/actuators/barometer_setting_in_hg_copilot"
+    ] == pytest.approx(inhg)
+
+
+def test_altimeter_standard(sim):
+    _, plugin, xp = sim
+    assert say(plugin, "set standard", "set_altimeter", {"setting": "standard"}) == [
+        "Altimeter standard"
+    ]
+    assert xp.commands_fired == ["sim/instruments/barometer_std"]
+
+
+def test_737_standard_presses_its_efis_button(sim):
+    _, plugin, xp = sim
+    aircraft(plugin, xp, commands=B738)
+    say(plugin, "set standard", "set_altimeter", {"setting": "standard"})
+    assert xp.commands_fired == ["laminar/B738/EFIS_control/capt/push_button/std_press"]
+
+
+def test_flaps_by_degrees_on_the_baron(sim):
+    _, plugin, xp = sim  # Baron notches are 13 and 30 degrees
+    assert say(plugin, "flaps", "set_flaps", {"flap_setting": "15"}) == ["Flaps 15"]
+    assert xp.datarefs[FLAP_HANDLE] == 0.5
+    assert say(plugin, "flaps", "set_flaps", {"flap_setting": "25"}) == [
+        "Flaps 25 is not a setting on this aircraft"
+    ]
+
+
+def test_flaps_by_label_on_the_737(sim):
+    _, plugin, xp = sim
+    aircraft(
+        plugin,
+        xp,
+        commands=B738,
+        **{
+            "sim/aircraft/controls/acf_flap_detents": 8,
+            "sim/aircraft/controls/acf_flap_dn": [0.0, 3, 5, 8, 10, 12, 14, 18, 40, 0],
+            "sim/aircraft/view/acf_Vfe": 162.0,
+        },
+    )
+    say(plugin, "flaps", "set_flaps", {"flap_setting": "15"})
+    assert xp.datarefs[FLAP_HANDLE] == pytest.approx(
+        5 / 8
+    )  # notch 5, though modelled at 12 degrees
+
+
+def test_flaps_full(sim):
+    _, plugin, xp = sim
+    assert say(plugin, "flaps", "set_flaps", {"position": "full"}) == ["Flaps full"]
+    assert xp.datarefs[FLAP_HANDLE] == 1.0
+
+
+def test_flaps_above_flap_speed_need_confirmation_and_can_be_overridden(sim):
+    _, plugin, xp = sim
+    xp.datarefs["sim/cockpit2/gauges/indicators/airspeed_kts_pilot"] = 150.0  # Baron Vfe 122
+    assert say(plugin, "flaps", "set_flaps", {"flap_setting": "30"}) == [
+        "Confirm flaps, above flap speed. Say override, or repeat to confirm."
+    ]
+    assert xp.datarefs[FLAP_HANDLE] == 0.0
+    assert say(plugin, "override") == ["Override", "Flaps 30"]
+    assert xp.datarefs[FLAP_HANDLE] == 1.0
+
+
+def test_flaps_up_and_down_unchanged(sim):
+    _, plugin, xp = sim
+    xp.datarefs["sim/cockpit2/gauges/indicators/airspeed_kts_pilot"] = 150.0
+    say(plugin, "flaps", "set_flaps", {"position": "down"})  # one notch: no new rule
+    assert xp.commands_fired == ["sim/flight_controls/flaps_down"]

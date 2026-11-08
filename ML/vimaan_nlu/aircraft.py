@@ -105,6 +105,8 @@ class Override:
     requires: tuple[str, ...]
     commands: Mapping[str, str | None]
     source: str  # where the finding comes from
+    # Non-command facts, e.g. flap handle labels.
+    settings: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
 
 OVERRIDES: tuple[Override, ...] = (
@@ -129,6 +131,8 @@ OVERRIDES: tuple[Override, ...] = (
             }
         ),
         source="Laminar A330-300 xlua A333.autopilot: create_command(...), X-Plane 12.4.3",
+        # CONF 1, 2, 3, FULL (4 detents); "full" is its own word.
+        settings=MappingProxyType({"flap_labels": ("1", "2", "3")}),
     ),
     Override(
         name="b738_condition_levers",
@@ -145,6 +149,10 @@ OVERRIDES: tuple[Override, ...] = (
             }
         ),
         source="Laminar 737-800 xlua B738 scripts: create_command(...), X-Plane 12.4.3",
+        # Handle labels, notch 1..8 (POH); X-Plane's modelled angles differ
+        # (notch 5 is 12 degrees), so they can't be derived. Used only when
+        # the aircraft reports 8 detents.
+        settings=MappingProxyType({"flap_labels": ("1", "2", "5", "10", "15", "25", "30", "40")}),
     ),
     Override(
         name="b738_efis_baro",
@@ -230,6 +238,30 @@ class Profile:
     overrides: tuple[str, ...] = ()
     # step -> "works" | "no_change" | "missing", from the probe (layer 4)
     probed: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
+    settings: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+
+    def flap_notch(self, label: int) -> int | None:
+        """The handle notch for a spoken flap setting ("flaps fifteen"), or None
+        when this aircraft has no such setting.
+
+        1. Labels from an override (737: 1 2 5 10 15 25 30 40), used only when
+           their count matches the aircraft's detents.
+        2. Else a notch whose modelled angle is within 3 degrees (Baron 13 and
+           30: "flaps fifteen" -> notch 1).
+        3. Else the notch number itself, if there is one ("flaps one", "flaps two").
+        """
+        detents = self.info.flap_detents
+        if not detents:
+            return None
+        labels = self.settings.get("flap_labels") or ()
+        full_word = 1 if len(labels) == detents - 1 else 0  # A330: 1 2 3 + "full"
+        if labels and len(labels) + full_word == detents:
+            return labels.index(str(label)) + 1 if str(label) in labels else None
+        angles = self.info.flap_notch_degrees()
+        near = [i for i, a in enumerate(angles) if i and abs(a - label) <= 3.0]
+        if near:
+            return min(near, key=lambda i: abs(angles[i] - label))
+        return label if 1 <= label <= detents else None
 
     @property
     def engine_start(self) -> str:
@@ -281,16 +313,19 @@ def resolve(
 ) -> Profile:
     """Layers 1-4 -> the profile the plugin uses for this aircraft."""
     commands: dict[str, str | None] = dict(DEFAULT_COMMANDS)
+    settings: dict[str, Any] = {}
     applied = []
     for override in OVERRIDES:
         if all(has_command(name) for name in override.requires):
             commands.update(override.commands)
+            settings.update(override.settings)
             applied.append(override.name)
     return Profile(
         info=info,
         commands=MappingProxyType(commands),
         overrides=tuple(applied),
         probed=MappingProxyType(dict(probed or {})),
+        settings=MappingProxyType(settings),
     )
 
 

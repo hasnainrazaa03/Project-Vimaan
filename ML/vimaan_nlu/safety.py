@@ -41,6 +41,7 @@ class SafetyContext:
     ground_speed_kt: float | None = None
     ias_kt: float | None = None
     on_ground: bool | None = None
+    vfe_kt: float | None = None  # the aircraft's full-flap limit (acf_Vfe)
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,12 @@ def _gear_up_low(ctx: SafetyContext) -> bool | None:
     return ctx.agl_ft < GEAR_UP_MIN_AGL_FT
 
 
+def _flaps_fast(ctx: SafetyContext) -> bool | None:
+    if ctx.ias_kt is None or not ctx.vfe_kt:
+        return None
+    return ctx.ias_kt > ctx.vfe_kt
+
+
 def _parking_brake_fast(ctx: SafetyContext) -> bool | None:
     if ctx.ground_speed_kt is None:
         return None
@@ -100,6 +107,14 @@ _RULE_LIST: tuple[_Rule, ...] = (
         applies_to=lambda s: s.get("state") == "off",
         risky_when=_airborne,
         message="Confirm engine shutdown in flight",
+    ),
+    _Rule(
+        # Conservative: X-Plane exposes only the full-flap limit, so a first
+        # notch inside its own (higher) limit may still ask. Override is there.
+        name="flaps_above_vfe",
+        applies_to=lambda s: s.get("position") == "full" or bool(s.get("flap_setting")),
+        risky_when=_flaps_fast,
+        message="Confirm flaps, above flap speed",
     ),
     _Rule(
         name="parking_brake_at_speed",
@@ -137,7 +152,7 @@ def command_token(intent: str, slots: dict) -> str:
     it. Keyed on intent + which unit + the action (robust to minor STT
     variation): "engine two off" must not confirm a pending "engine one off"."""
     slots = slots or {}
-    action = slots.get("state") or slots.get("position", "")
+    action = slots.get("state") or slots.get("position") or slots.get("flap_setting", "")
     return f"{intent}:{slots.get('instance', '')}:{action}"
 
 

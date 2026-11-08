@@ -341,6 +341,8 @@ def normalize_aviation_input(text: str) -> str:
     text_lower = _join_spaced_digits(text_lower)
     #    ...and numerals around a spoken decimal: "121 decimal 5" -> "121.5".
     text_lower = re.sub(r"\b(\d+) (?:point|decimal) (\d+)\b", r"\1.\2", text_lower)
+    #    A decimal with no whole part is a fraction: "mach point 78" -> "mach 0.78".
+    text_lower = re.sub(r"(?<!\d)(?<!\d )\b(?:point|decimal) (\d+)\b", r"0.\1", text_lower)
     # 7. Port digit absorbed into a frequency: "com 1118.75" -> "com 1 118.75".
     text_lower = _ABSORBED_PORT_RE.sub(_split_absorbed_com_port, text_lower)
     return text_lower

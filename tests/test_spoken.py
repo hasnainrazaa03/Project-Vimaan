@@ -65,3 +65,77 @@ def test_frequencies():
         mhz = mhz + "0" if mhz.endswith(".") else mhz
         bad += [t for t in spoken.frequency(mhz) if not reads_as(t, "tune com one to {}", mhz)]
     assert bad == []
+
+
+# ---------------------------------------------------------------------------
+# Tier 1 values
+# ---------------------------------------------------------------------------
+def same_number(norm: str, context: str, expected: float) -> bool:
+    """The slot's number in the normalized text equals ``expected``."""
+    found = re.findall(r"(?<![\d.])\d+(?:\.\d+)?(?![\d.])", norm)
+    return any(abs(float(n) - expected) < 1e-9 for n in found)
+
+
+def test_tier1_renderers():
+    assert spoken.speed(180) == ["one eight zero", "one eighty", "one hundred eighty"]
+    assert spoken.speed(85) == ["eighty five", "eight five"]
+    assert spoken.mach("0.78") == ["point seven eight", "decimal seven eight"]
+    assert "point eight" in spoken.mach("0.80")
+    assert spoken.vertical_speed(1500) == ["one thousand five hundred", "fifteen hundred"]
+    assert spoken.pressure("29.92") == [
+        "two niner niner two",
+        "two nine nine two",
+        "twenty nine ninety two",
+        "two nine point nine two",
+    ]
+    assert spoken.pressure("1013") == ["one zero one three"]
+    assert spoken.flaps(15) == ["fifteen"]
+
+
+@pytest.mark.parametrize("kt", range(60, 401, 5))
+def test_every_speed(kt):
+    for text in spoken.speed(kt):
+        assert reads_as(text, "set speed {} knots", str(kt)), text
+
+
+@pytest.mark.parametrize("hundredths", range(40, 96))
+def test_every_mach(hundredths):
+    value = f"0.{hundredths:02d}"
+    for text in spoken.mach(value):
+        norm = normalize_aviation_input(f"set mach {text}")
+        assert same_number(norm, text, float(value)), (text, norm)
+
+
+@pytest.mark.parametrize("fpm", range(100, 6001, 100))
+def test_every_vertical_speed(fpm):
+    for text in spoken.vertical_speed(fpm):
+        assert reads_as(text, "descend at {} feet per minute", str(fpm)), text
+
+
+@pytest.mark.parametrize("hundredths", range(2800, 3151))
+def test_every_inch_setting(hundredths):
+    value = f"{hundredths / 100:.2f}"
+    for text in spoken.pressure(value):
+        norm = normalize_aviation_input(f"altimeter {text}")
+        # Four digits ("2992") or with the decimal ("29.92"): both mean 29.92.
+        assert same_number(norm, text, float(value)) or same_number(norm, text, hundredths), (
+            text,
+            norm,
+        )
+
+
+@pytest.mark.parametrize("hpa", range(940, 1061))
+def test_every_hectopascal_setting(hpa):
+    for text in spoken.pressure(str(hpa)):
+        assert reads_as(text, "q n h {}", str(hpa)), text
+
+
+@pytest.mark.parametrize("setting", (1, 2, 3, 5, 10, 15, 20, 25, 30, 40))
+def test_every_flap_setting(setting):
+    for text in spoken.flaps(setting):
+        assert reads_as(text, "flaps {}", str(setting)), text
+
+
+def test_fraction_rule_leaves_frequencies_alone():
+    assert normalize_aviation_input("tune one two one point five") == "tune 121.5"
+    assert normalize_aviation_input("set mach point seven eight") == "set mach 0.78"

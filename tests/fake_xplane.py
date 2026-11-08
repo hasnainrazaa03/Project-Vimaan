@@ -78,6 +78,7 @@ DEFAULT_DATAREFS: dict[str, Any] = {
     "sim/cockpit2/autopilot/airspeed_dial_kts_mach": 150.0,
     "sim/cockpit2/autopilot/vvi_dial_fpm": 0.0,
     "sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot": 30.12,
+    "sim/cockpit2/gauges/actuators/barometer_setting_in_hg_copilot": 30.12,
 }
 
 # xp.getNthAircraftModel(0): (file name, full path).

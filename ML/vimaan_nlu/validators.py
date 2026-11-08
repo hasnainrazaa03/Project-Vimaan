@@ -19,7 +19,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from vimaan_nlu import commands as _commands
-from vimaan_nlu.slot_types import Enum, Range
+from vimaan_nlu.slot_types import AnyOf, Enum, Range
 
 __all__ = [
     "COMMAND_WORDS",
@@ -36,10 +36,10 @@ __all__ = [
 
 # Slot constraints and command words live in the command table; this module
 # keeps the validation API the postprocessor, plugin and dashboard use.
-SLOT_VALIDATORS: Mapping[str, Range | Enum] = _commands.SLOT_VALIDATORS
+SLOT_VALIDATORS: Mapping[str, Range | Enum | AnyOf] = _commands.SLOT_VALIDATORS
 
 
-def slot_validator(name: str) -> Range | Enum | None:
+def slot_validator(name: str) -> Range | Enum | AnyOf | None:
     """Return the validator for ``name``, or ``None`` if the slot is unconstrained."""
     return SLOT_VALIDATORS.get(name)
 

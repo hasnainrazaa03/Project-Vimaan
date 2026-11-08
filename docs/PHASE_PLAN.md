@@ -369,14 +369,14 @@ An aircraft never seen before gets layers 1, 2 and 5 automatically, and layer 4 
 
 ### Part B — new commands → v18 (PR 2)
 
-- [ ] **B1 Table entries** for the six commands above:
+- [x] **B1 Table entries** for the six commands above:
   - templates, slots, bindings per layer;
   - read-back templates and verification (E0.6);
   - safety rules, command words, display names, self-test probes.
-- [ ] **B2 Normalizer:** "point seven eight", "two niner niner two" → 29.92, "one thousand five hundred" (rate), plus/minus, and rejoining "q n h", "v nav", "l nav", "auto throttle", "level change", "feet per minute". All with round-trip tests.
-- [ ] **B3 Vocabulary:** split forms for words Vosk lacks; `build_stt_vocabulary.py --check-vosk` passes.
-- [ ] **B4 "To or two?"** extended to speed and vertical speed.
-- [ ] **B5 Safety:**
+- [x] **B2 Normalizer:** "point seven eight", "two niner niner two" → 29.92, "one thousand five hundred" (rate), plus/minus, and rejoining "q n h", "v nav", "l nav", "auto throttle", "level change", "feet per minute". All with round-trip tests.
+- [x] **B3 Vocabulary:** split forms for words Vosk lacks; `build_stt_vocabulary.py --check-vosk` passes.
+- [x] **B4 "To or two?"** extended to speed and vertical speed.
+- [x] **B5 Safety:**
   - flaps beyond the first notch above that notch's speed limit → confirm;
   - a speed target outside the aircraft's range (`acf_Vso`…`acf_Vne` / `acf_Mmo`) → refuse;
   - mode changes → no confirmation;
@@ -386,8 +386,18 @@ An aircraft never seen before gets layers 1, 2 and 5 automatically, and layer 4 
   - (b) optional `capture` setting (`VIMAAN_CAPTURE=1`): Vimaan watches the altitude and presses altitude hold within a band scaled to vertical speed. It cancels on "cancel", on any pilot mode change, or if the target moves.
 - [ ] **B7 Data:** regenerate everything, and train **v18** at the same length as A7.
 - [ ] **B8 Gate v18 vs v17**, same bars, plus Tier 1 gold commands.
-- [ ] **B9 Handlers** through the resolved profile; fake-sim tests per command and per profile.
+- [x] **B9 Handlers** through the resolved profile; fake-sim tests per command and per profile.
 - [ ] **B10 PR.** The owner merges.
+
+*Part B status (2026-11-07):*
+- **B1:** 5 new commands plus flap settings. 19 intents, 15 actionable. Read-backs are in the handlers.
+- **B2:** most forms already parsed. Mach needed one rule ("mach point 78" → 0.78). Split forms ("auto throttle", "v nav", "q n h") go to the model as Vosk says them, so nothing is rejoined.
+- **B3:** 41 grammar words added; a test checks every grammar word against the Vosk model.
+- **B4:** the "to or two?" check covers speed, V/S and flap settings. A speed reading below the aircraft's Vso isn't asked ("speed two eighty" on a jet).
+- **B5:** flap setting or full above `acf_Vfe` → confirm; speed below Vso, or above Vne / Mmo → refuse.
+- **B7:** dataset `aviation_v2_v7` generated: 67,320 rows, 11,485 held out, 12 dropped by the round-trip check. Training waits for the research flight.
+- **B9:** handlers go through the profile: knots/Mach toggle, A330 knob pull, V/S engaged before the rate is written, mode state checked, A/T via the aircraft's own control, flap labels.
+- **Still to do:** B6 capture, B7 training, B8 gold commands and gate.
 
 ### Part C — Tier 1 flight (Baron, 737, A330, plus one aircraft with no override)
 On each aircraft:

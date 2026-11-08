@@ -27,11 +27,17 @@ EXAMPLES = {
     "flight_level": "three five zero",
     "frequency": "one two one decimal five",
     "com_port": "one",
+    "speed": "one eight zero",
+    "mach": "point seven eight",
+    "vs": "one thousand five hundred",
+    "pressure": "two niner niner two",
+    "flap_setting": "fifteen",
 }
 SAFETY_TEXT = {
     "gear_up_low_altitude": "gear up below 1,000 ft AGL",
     "engine_shutdown_in_flight": "shutdown while airborne",
     "parking_brake_at_speed": "set above 5 kt ground speed",
+    "flaps_above_vfe": "a flap setting or full above the aircraft's Vfe",
 }
 
 
@@ -40,7 +46,7 @@ def example(c: Command, template: str) -> str:
     for name, slot in c.slots.items():
         value = EXAMPLES.get(name)
         if value is None:
-            value = next(iter(slot.values))
+            value = str(next(iter(slot.values)))
         text = text.replace("{" + name + "}", value)
     return text
 
@@ -54,6 +60,10 @@ def values(c: Command) -> str:
         elif isinstance(v, Range):
             fmt = (lambda x: str(int(x))) if v.integer else str
             parts.append(f"{SLOT_DISPLAY.get(name, name)} {fmt(v.lo)}–{fmt(v.hi)}")
+        elif name == "pressure":
+            parts.append("altimeter 28.00–31.50 inHg (or 2992) / 940–1060 hPa")
+        elif slot.kind == "choice" and name != "position":
+            parts.append(f"{name}: " + " / ".join(dict.fromkeys(str(x) for x in slot.values)))
         else:
             parts.append(name)
     return "; ".join(parts) or "—"
