@@ -277,3 +277,30 @@ class TestGoogleMishearings:
 
     def test_ordinary_words_untouched(self):
         assert normalize_aviation_input("come here") == "come here"
+
+
+# ---------------------------------------------------------------------------
+# From the flights of 2026-11-07
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # "one" lost: "altitude (one) thousand five hundred" set 1,000 ft.
+        ("altitude bug thousand five hundred feet", "altitude bug 1500 feet"),
+        ("altitude thousand five hundred", "altitude 1500"),
+        ("thousand feet", "1000 feet"),
+        ("hundred", "100"),
+        # Unchanged.
+        ("climb to one thousand five hundred", "climb to 1500"),
+        ("set altitude seven thousand five hundred", "set altitude 7500"),
+    ],
+)
+def test_a_number_that_starts_with_its_magnitude(text, expected):
+    assert normalize_aviation_input(text) == expected
+
+
+@pytest.mark.parametrize(
+    "heard", ["landing get up", "landing it up", "override landing get up", "landing get down"]
+)
+def test_landing_get_is_landing_gear(heard):
+    assert "landing gear" in normalize_aviation_input(heard)

@@ -29,7 +29,7 @@ EXAMPLES = {
     "com_port": "one",
 }
 SAFETY_TEXT = {
-    "gear_up_low_altitude": "gear up below 1,000 ft AGL",
+    "gear_up_low_altitude": "gear up on the ground, below 50 ft, or below 1,000 ft AGL without a positive rate of climb",
     "engine_shutdown_in_flight": "shutdown while airborne",
     "parking_brake_at_speed": "set above 5 kt ground speed",
 }

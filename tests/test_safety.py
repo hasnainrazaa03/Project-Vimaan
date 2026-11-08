@@ -1,3 +1,5 @@
+import pytest
+
 """Tests for vimaan_nlu.safety (Phase 6B) — interlocks + confirmation gate.
 
 Pure-Python; no simulator. Sim state is supplied via synthetic SafetyContext.
@@ -123,3 +125,23 @@ class TestConfirmationGate:
         # "engine two off" must not confirm a pending "engine one off"
         assert off_1 != command_token("toggle_engine", {"state": "off", "instance": "2"})
         assert command_token("set_flaps", {"position": "up"}) == "set_flaps::up"
+
+
+@pytest.mark.parametrize(
+    ("ctx", "held"),
+    [
+        (SafetyContext(on_ground=True, agl_ft=3.0), True),
+        (SafetyContext(on_ground=False, agl_ft=30.0, vs_fpm=900.0), True),  # just off
+        # Climbing out: the flights held gear up at 447-779 ft, five times.
+        (SafetyContext(on_ground=False, agl_ft=447.0, vs_fpm=1200.0), False),
+        (SafetyContext(on_ground=False, agl_ft=779.0, vs_fpm=350.0), False),
+        (SafetyContext(on_ground=False, agl_ft=600.0, vs_fpm=0.0), True),  # level, low
+        (SafetyContext(on_ground=False, agl_ft=600.0, vs_fpm=-700.0), True),  # descending
+        (SafetyContext(on_ground=False, agl_ft=600.0), True),  # climb rate unknown
+        (SafetyContext(on_ground=False, agl_ft=1500.0, vs_fpm=-500.0), False),
+        (SafetyContext(), True),  # nothing known: fail safe
+    ],
+)
+def test_gear_up_holds_low_unless_climbing(ctx, held):
+    verdict = evaluate_safety("toggle_landing_gear", {"state": "up"}, ctx)
+    assert verdict.requires_confirmation is held

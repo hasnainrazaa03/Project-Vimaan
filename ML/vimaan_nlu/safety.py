@@ -27,6 +27,9 @@ from vimaan_nlu.commands import command
 
 # Thresholds (documented + tested). Tune in one place.
 GEAR_UP_MIN_AGL_FT = 1000.0
+# Climbing at least this fast counts as a positive rate: gear up after takeoff
+# is normal then (in flight it was held five times, at 447-779 ft, climbing).
+POSITIVE_RATE_FPM = 300.0
 AIRBORNE_AGL_FT = 50.0
 AIRBORNE_IAS_KT = 40.0
 PARKING_BRAKE_MAX_GROUND_SPEED_KT = 5.0
@@ -41,6 +44,7 @@ class SafetyContext:
     ground_speed_kt: float | None = None
     ias_kt: float | None = None
     on_ground: bool | None = None
+    vs_fpm: float | None = None  # vertical speed, + is up
 
 
 @dataclass(frozen=True)
@@ -77,9 +81,20 @@ class _Rule:
 
 
 def _gear_up_low(ctx: SafetyContext) -> bool | None:
+    """Risky on the ground, below 50 ft, or below 1,000 ft without a positive
+    rate of climb. Unknown height, or unknown climb rate below 1,000 ft, is
+    treated as risky (fail safe)."""
+    if ctx.on_ground:
+        return True
     if ctx.agl_ft is None:
         return None
-    return ctx.agl_ft < GEAR_UP_MIN_AGL_FT
+    if ctx.agl_ft < AIRBORNE_AGL_FT:
+        return True
+    if ctx.agl_ft >= GEAR_UP_MIN_AGL_FT:
+        return False
+    if ctx.vs_fpm is None:
+        return None
+    return ctx.vs_fpm < POSITIVE_RATE_FPM
 
 
 def _parking_brake_fast(ctx: SafetyContext) -> bool | None:

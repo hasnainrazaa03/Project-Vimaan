@@ -96,7 +96,7 @@ gear, flaps, autopilot and flight director, so every command can be exercised.
 | 5 | "tune com one to one one eight decimal seven five" | "COM 1 set to …"; COM1 shows 118.750 | |
 | 6 | "parking brake on" then "parking brake off" | each confirmed | |
 | 7 | "gear up" **on the ground** | "Confirm gear up, low altitude. Say override, or repeat to confirm." — do **not** repeat (then say "cancel") | `safety_hold` event |
-| 8 | Take off, climb above 1,000 ft AGL: "gear up" | "Gear up" | |
+| 8 | Take off and, once climbing, "gear up" | "Gear up" (no confirmation while climbing at 300 fpm or more) | |
 | 9 | "flaps up" | "Flaps up" | |
 | 10 | "flight director on", "autopilot on" | each confirmed; AP engages | `verify` event with `ok: false` |
 | 11 | "climb to flight level one two zero" | "Flight level one two zero" | |
