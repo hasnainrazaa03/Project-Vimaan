@@ -232,8 +232,13 @@ def _convert_cardinals(text: str) -> str:
                 run = run[:-1]
                 j -= 1
             if any(w in _MAGNITUDE_WORDS for w in run):
+                # A run that starts with its magnitude lost its first word:
+                # "altitude (one) thousand five hundred" was heard as "bug
+                # thousand five hundred", and word2number can't parse a leading
+                # "thousand", so the halves became "1000 500" (1,000 ft set).
+                spoken = ["one", *run] if run[0] in _MAGNITUDE_WORDS else run
                 try:
-                    out.append(str(w2n.word_to_num(" ".join(run))))
+                    out.append(str(w2n.word_to_num(" ".join(spoken))))
                     i = j
                     continue
                 except (ValueError, IndexError):
@@ -270,6 +275,9 @@ def _clean_asr_formatting(text: str) -> str:
     # "set com" run together; "flaps" heard as "slaps".
     text = re.sub(r"\bsecom\b", "set com", text)
     text = re.sub(r"\bslaps\b", "flaps", text)
+    # Vosk heard "landing gear" as "landing get" / "landing it" three times in
+    # flight; "landing" is only ever said before "gear".
+    text = re.sub(r"\blanding (?:get|it)\b", "landing gear", text)
     # Aviation abbreviations ASR emits for words the model was trained on.
     text = re.sub(r"\bfl(?=\s|\d|$)", "flight level ", text)
     text = re.sub(r"(?<=\d)ft\b|\bft\b", " feet", text)

@@ -200,7 +200,7 @@ to confirm before they execute:
 
 | Command | Gated when | Spoken warning |
 | --- | --- | --- |
-| Gear up | below 1,000 ft AGL | "Confirm gear up, low altitude" |
+| Gear up | on the ground, below 50 ft AGL, or below 1,000 ft AGL when not climbing at 300 fpm or more | "Confirm gear up, low altitude" |
 | Engine shutdown | airborne | "Confirm engine shutdown in flight" |
 | Parking brake on | ground speed above 5 kt | "Confirm parking brake at speed" |
 

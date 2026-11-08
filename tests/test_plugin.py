@@ -1873,3 +1873,84 @@ def test_a_pause_that_changed_nothing_presses_nothing_more(probing):
     press_probe(plugin, xp)
     assert settle(plugin, xp)[0].startswith("The autopilot disconnected during nav mode.")
     assert xp.commands_fired == ["sim/autopilot/NAV"]
+
+
+# ---------------------------------------------------------------------------
+# From the flights of 2026-11-07: override said with the command, a bare
+# "landing gear", gear up while climbing out
+# ---------------------------------------------------------------------------
+def climbing_out(xp, agl_ft=600.0, vs_fpm=1200.0):
+    xp.datarefs["sim/flightmodel/failures/onground_any"] = 0
+    xp.datarefs["sim/flightmodel/position/y_agl"] = agl_ft / 3.28084
+    xp.datarefs["sim/flightmodel/position/groundspeed"] = 70.0
+    xp.datarefs["sim/flightmodel/position/vh_ind_fpm"] = vs_fpm
+
+
+def test_gear_up_climbing_out_is_not_held(sim):
+    _, plugin, xp = sim
+    climbing_out(xp)
+    assert say(plugin, "landing gear up", "toggle_landing_gear", {"state": "up"}) == ["Gear up"]
+    assert xp.commands_fired == [GEAR_UP]
+
+
+def test_gear_up_low_and_level_is_still_held(sim):
+    _, plugin, xp = sim
+    climbing_out(xp, vs_fpm=0.0)
+    spoken = say(plugin, "landing gear up", "toggle_landing_gear", {"state": "up"})
+    assert spoken[0].startswith("Confirm gear up, low altitude")
+    assert xp.commands_fired == []
+
+
+def test_override_said_with_the_held_command(sim):
+    _, plugin, xp = sim
+    say(plugin, "gear", "toggle_landing_gear", {"state": "up"})  # held: on the ground
+    # In flight: heard as "override landing get up", conf 0.89, no "gear".
+    spoken = say(plugin, "override landing get up", "toggle_landing_gear", {"state": "up"}, 0.89)
+    assert spoken == ["Override", "Gear up"]
+    assert xp.commands_fired == [GEAR_UP]
+    assert events(plugin, "override_with_command")[-1]["intent"] == "toggle_landing_gear"
+
+
+def test_override_with_a_garbled_rest_still_overrides(sim):
+    _, plugin, xp = sim
+    say(plugin, "gear", "toggle_landing_gear", {"state": "up"})
+    assert say(plugin, "override landing get how") == ["Override", "Gear up"]
+
+
+def test_override_naming_another_command_is_that_command(sim):
+    _, plugin, xp = sim
+    say(plugin, "gear", "toggle_landing_gear", {"state": "up"})
+    say(plugin, "override flaps up", "set_flaps", {"position": "up"})
+    assert GEAR_UP not in xp.commands_fired
+    assert events(plugin, "safety_override") == []
+
+
+def test_override_contradicting_the_held_command_does_not_confirm_it(sim):
+    _, plugin, xp = sim
+    say(plugin, "gear", "toggle_landing_gear", {"state": "up"})
+    say(plugin, "override gear down", "toggle_landing_gear", {"state": "down"})
+    assert GEAR_UP not in xp.commands_fired
+    assert events(plugin, "safety_override") == []
+
+
+def test_override_with_a_command_and_nothing_held_is_just_the_command(sim):
+    _, plugin, xp = sim
+    spoken = say(plugin, "override landing gear up", "toggle_landing_gear", {"state": "up"})
+    assert spoken[0].startswith("Confirm gear up")  # still held on the ground
+    assert xp.commands_fired == []
+
+
+@pytest.mark.parametrize(
+    ("text", "question"),
+    [
+        ("landing gear", "Gear up or down?"),
+        ("flaps", "Flaps up or down?"),
+        ("parking brake", "Parking brake on or off?"),
+    ],
+)
+def test_a_bare_command_name_asks_which_way(sim, text, question):
+    # v17 classed "landing gear" as no command and stayed silent, twice.
+    _, plugin, xp = sim
+    assert say(plugin, text, "None", {}, 0.999) == [question]
+    assert xp.commands_fired == []
+    assert events(plugin, "bare_command")[-1]["predicted"] == "None"
