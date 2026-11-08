@@ -16,7 +16,7 @@ and layer 4 after one probe.
 | 1. Standard controls | X-Plane's `sim/...` commands and datarefs | `sim/autopilot/heading` for heading mode |
 | 2. What X-Plane reports | datarefs read when the aircraft loads | `acf_en_type` = 7 (jet) gives a turbine start |
 | 3. Overrides | used only if the aircraft *has* the custom control | `laminar/A333/autopilot/a_thr_toggle` exists, so A/THR presses it |
-| 4. Probe results | measured on this aircraft, saved per aircraft file | V/S mode "no change" means "not on this aircraft" |
+| 4. Probe results | measured on this aircraft, saved per aircraft file | V/S mode "no change" means "not on this aircraft", for X-Plane's generic commands. The aircraft's own control (an override) measured as "no change" is still tried and verified: it exists, and did nothing in that moment |
 | 5. Verification | read-back after every action | "Autopilot 1 did not respond" |
 
 **Why overrides aren't matched on ICAO or author.** Laminar's 737 lists
@@ -34,6 +34,15 @@ control's existence is what decides, because that is what the action needs.
 | Autopilot type | `sim/aircraft/autopilot/preconfigured_ap_type`, `single_axis_autopilot` | logged; probe context |
 | V-speeds | `sim/aircraft/view/acf_Vso`, `acf_Vfe`, `acf_Vno`, `acf_Vne`, `acf_Mmo` | speed and flap safety rules (Part B) |
 | Identity | `acf_ICAO`, `acf_author`, `acf_descrip`, `xp.getNthAircraftModel(0)` | logs; the probe file's name |
+| Autothrottle in the cockpit | the aircraft's own files: `.acf`, then scripts, then objects (not liveries), searched for "autothrottle", in a background thread at load | refusing "autothrottle on" where the aircraft has none |
+
+**Why the files, for autothrottle:** X-Plane's generic autothrottle runs on any
+aircraft, so the probe said "works" on the Baron and King Air, which have none.
+An aircraft that has one uses the sim's autothrottle datarefs or commands
+somewhere in its panel, 3D cockpit or scripts. Checked on 12.4.3: the 737 and
+A330 (in the .acf) and MD-82 (cockpit objects and scripts) do; the Baron, King
+Air C90B, C172, SR22 and Citation X don't. An aircraft's own A/T control (an
+override) always counts.
 
 Each load is logged as an `aircraft` event with the full profile.
 
@@ -65,7 +74,7 @@ aircraft folders. `scripts/check_xplane_refs.py` re-checks every name.
 - **Probed 2026-11-07**, all 18 steps (sessions `vimaan_20261107_211836` and `_224940`):
   - **Works:** HDG, VOR/LOC, APP, back course, ALT HOLD, ALT ARM, V/S, LVL CHG, autothrottle, knots/Mach, the speed, V/S and altitude dials, and the flap handle.
   - **No change:** LNAV and VNAV (`lnav_press`, `vnav_press`). Both need an FMC flight plan to engage; whether one was loaded isn't logged.
-  - **Altimeter writes don't hold:** its scripts own the baro, so Part B's altimeter command must use the 737's EFIS controls. STD was inconclusive: the altimeter was already 29.92.
+  - **Altimeter writes don't hold:** its scripts own the baro. Vimaan turns the knob instead (`sim/instruments/barometer_up/down`, which the 737's scripts handle): one click per frame, reading back between clicks. STD was inconclusive: the altimeter was already 29.92.
   - **Side effects the probe now handles:** LVL CHG turns the autothrottle on, and the probe turns it back off. Moving the altitude dial arms altitude capture and leaves it armed; the probe notes that and carries on.
   - Engaged with no modes (roll and pitch hold), ALT HOLD couldn't be put back: there's no button for pitch hold. The probe now asks for HDG and ALT first.
 - **Its MCP buttons** (`laminar/B738/autopilot/cmd_a_press`, `hdg_sel_press`, `vorloc_press`, `app_press`, `alt_hld_press`, `vs_press`, `lvl_chg_press`, `lnav_press`, `vnav_press`) call the same sim commands, and also update the 737's own `CMD_status` / `AP_status`, which drive its CMD light and annunciators.
@@ -80,14 +89,14 @@ aircraft folders. `scripts/check_xplane_refs.py` re-checks every name.
 **Airbus A330-300** (`A333`, jet ×2, flap detents 4)
 - The scripts wrap `servos_toggle`/`servos2_toggle`, `altitude_hold`, `NAV`, `approach`, `knots_mach_toggle`, `barometer_std` and the up/down dials.
 - In flight, `servos_on` and `servos2_on` were ignored. The fix: press the toggle once the state has been read, on every aircraft.
-- The FCU knobs: `laminar/A333/autopilot/{speed,heading,altitude,vertical}_knob_{pull,push}`. Pull = selected, push = managed.
+- The FCU knobs: `laminar/A333/autopilot/{speed,heading,altitude,vertical}_knob_{pull,push}`. Pull = selected, push = managed. Heading push engages GPS steering (managed NAV); altitude push engages `sim/autopilot/FMS` (managed vertical), read from `fms_vnav`. Override `airbus_fcu` maps LNAV and VNAV to them.
 - A/THR: `laminar/A333/autopilot/a_thr_toggle`. Override `airbus_fcu` covers both.
 - The ENG MODE selector is `laminar/A333/switch/eng_mode_{left,right}`. In flight, a restart cranked 20 s with the fuel lever at cutoff; the turbine start now opens it at 20% N2.
 
 - **Probed 2026-11-07**, all 18 steps (session `vimaan_20261107_231419`):
   - **Works:** HDG, NAV, APP, back course, ALT HOLD, ALT ARM, V/S, LVL CHG, knots/Mach, the speed, V/S and altitude dials, STD, the altimeter setting, and the flap handle.
   - **No change:** GPS steering and VNAV. Managed lateral and vertical guidance come from the FMS.
-  - **No change: A/THR.** `a_thr_toggle` flips `autothrottle_enabled` between -1 (hard off) and 0 (armed). But `A333_autothrust()` holds it at 0 every frame while both engines' `ENGN_fadec_pow_req` is 2 or more (thrust levers at FLX/MCT or TOGA). Re-test it with the levers in CL.
+  - **No change: A/THR.** `a_thr_toggle` flips `autothrottle_enabled` between -1 (hard off) and 0 (armed). But `A333_autothrust()` holds it at 0 every frame while both engines' `ENGN_fadec_pow_req` is 2 or more (thrust levers at FLX/MCT or TOGA). Re-test it with the levers in CL. Vimaan counts armed as on, and an "autothrottle off" that doesn't take says to move the levers to CL.
   - The first air run started in TRK (lateral mode 18) and TO/GA (vertical mode 10). No button puts either back, and the probe warned about it.
   - **The autopilot disconnected about nine times.** Vimaan pressed nothing at five of those moments, and no A330 script turns the servos off, so these were X-Plane's own disconnects on control input. Two controllers, the USB Xbox controller and a "Virtual" Xbox 360 one, were both mapped to pitch, roll and yaw, with null zones at 0%.
   - A pause left APP armed, and the next step (back course) couldn't restore. A pause now puts the pressed control back first.

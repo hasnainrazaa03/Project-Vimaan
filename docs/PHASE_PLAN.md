@@ -381,11 +381,12 @@ An aircraft never seen before gets layers 1, 2 and 5 automatically, and layer 4 
   - a speed target outside the aircraft's range (`acf_Vso`…`acf_Vne` / `acf_Mmo`) → refuse;
   - mode changes → no confirmation;
   - everything holdable can be overridden (A5).
-- [ ] **B6 Altitude without capture:**
-  - (a) default: set the target, then say "This aircraft can't capture altitude. Climb, and say altitude hold at the target."
-  - (b) optional `capture` setting (`VIMAAN_CAPTURE=1`): Vimaan watches the altitude and presses altitude hold within a band scaled to vertical speed. It cancels on "cancel", on any pilot mode change, or if the target moves.
-- [ ] **B7 Data:** regenerate everything, and train **v18** at the same length as A7.
-- [ ] **B8 Gate v18 vs v17**, same bars, plus Tier 1 gold commands.
+- [x] **B6 Altitude capture.** The probe showed altitude arm working on all four probed aircraft, so the aircraft's own capture comes first:
+  - after V/S engages (or a new altitude is set while climbing or descending), altitude arm is pressed 1.2 s later, only if not armed already: the 737 arms it by itself, and the arm command is a toggle;
+  - (b) where the probe says arm does nothing: Vimaan's own capture, if switched on (`VIMAAN_CAPTURE=1`, or the **Vimaan: altitude capture by Vimaan on/off** key). It presses altitude hold within a band scaled to vertical speed (6 s ahead, at least 60 ft), and stands down on "cancel", a pilot mode change, a moved target or the autopilot off;
+  - (a) otherwise the read-back says "This aircraft can't capture altitude. Say altitude hold at <target>."
+- [ ] **B7 Data:** regenerate everything, and train **v18** at the same length as A7. *Regenerated on the merged code: identical to v7 (67,320 rows), so v18 trains on v7.*
+- [ ] **B8 Gate v18 vs v17**, same bars, plus Tier 1 gold commands. *Gold: 17 Tier 1 phrases plus the E1 COM 2 phrase (tests/test_gold_nlu.py).*
 - [x] **B9 Handlers** through the resolved profile; fake-sim tests per command and per profile.
 - [ ] **B10 PR.** The owner merges.
 
@@ -397,7 +398,12 @@ An aircraft never seen before gets layers 1, 2 and 5 automatically, and layer 4 
 - **B5:** flap setting or full above `acf_Vfe` → confirm; speed below Vso, or above Vne / Mmo → refuse.
 - **B7:** dataset `aviation_v2_v7` generated: 67,320 rows, 11,485 held out, 12 dropped by the round-trip check. Training waits for the research flight.
 - **B9:** handlers go through the profile: knots/Mach toggle, A330 knob pull, V/S engaged before the rate is written, mode state checked, A/T via the aircraft's own control, flap labels.
-- **Still to do:** B6 capture, B7 training, B8 gold commands and gate.
+- **From the probes (2026-11-07/08):**
+  - an aircraft's own control measured as "no change" is tried and verified, not refused (737 LNAV/VNAV need a flight plan; A330 A/THR held at FLX);
+  - FMS modes on airliners explain a failure ("needs a flight plan in the F M C"); A330 managed modes push the FCU knobs;
+  - autothrottle is refused where the aircraft's own files never use one (X-Plane's generic A/T "worked" on the Baron and King Air); the A330's armed A/THR counts as on;
+  - the 737's altimeter is turned with its knob, since it puts written values back.
+- **Still to do:** B7 training, B8 gate, B10 PR.
 
 ### Part C — Tier 1 flight (Baron, 737, A330, plus one aircraft with no override)
 On each aircraft:
