@@ -68,6 +68,10 @@ DEFAULT_COMMANDS: Mapping[str, str | None] = MappingProxyType(
         "autopilot_on": "sim/autopilot/servos_on",
         "autopilot2_toggle": "sim/autopilot/servos2_toggle",
         "autopilot2_on": "sim/autopilot/servos2_on",
+        # Press-to-engage buttons on aircraft that track the autopilot in
+        # their own logic (737 CMD A / B). None: use the checked toggle.
+        "autopilot_engage": None,
+        "autopilot2_engage": None,
         "mode_heading": "sim/autopilot/heading",
         "mode_nav": "sim/autopilot/NAV",
         "mode_approach": "sim/autopilot/approach",
@@ -153,6 +157,33 @@ OVERRIDES: tuple[Override, ...] = (
         # (notch 5 is 12 degrees), so they can't be derived. Used only when
         # the aircraft reports 8 detents.
         settings=MappingProxyType({"flap_labels": ("1", "2", "5", "10", "15", "25", "30", "40")}),
+    ),
+    Override(
+        name="b738_mcp",
+        requires=(
+            "laminar/B738/autopilot/cmd_a_press",
+            "laminar/B738/autopilot/hdg_sel_press",
+        ),
+        commands=MappingProxyType(
+            {
+                # The 737's MCP buttons call the same sim commands but also
+                # update its own state (CMD_status / AP_status), which drives
+                # its CMD light and annunciators; the generic commands skip
+                # that, so its CMD A status read off while the servos flew.
+                "autopilot_engage": "laminar/B738/autopilot/cmd_a_press",
+                "autopilot2_engage": "laminar/B738/autopilot/cmd_b_press",
+                "mode_heading": "laminar/B738/autopilot/hdg_sel_press",
+                "mode_nav": "laminar/B738/autopilot/vorloc_press",
+                "mode_approach": "laminar/B738/autopilot/app_press",
+                "mode_altitude_hold": "laminar/B738/autopilot/alt_hld_press",
+                "mode_vertical_speed": "laminar/B738/autopilot/vs_press",
+                "mode_level_change": "laminar/B738/autopilot/lvl_chg_press",
+                "mode_vnav": "laminar/B738/autopilot/vnav_press",
+                "mode_gpss": "laminar/B738/autopilot/lnav_press",
+            }
+        ),
+        source="Laminar 737-800 xlua B738.glareshield: create_command(...) and its "
+        "*_CMDhandler functions, X-Plane 12.4.3",
     ),
     Override(
         name="b738_efis_baro",

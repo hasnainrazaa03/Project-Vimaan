@@ -20,6 +20,8 @@ _GENERIC_STATE: dict[str, tuple[str, ...]] = {
 
 # "com 2", "comm 2", "radio 2" in normalized text.
 _PORT_IN_TEXT = re.compile(r"\b(?:com|comm|radio)\s+([1-4])\b")
+# "133.1 on 2": "com" lost after "on" (Vosk heard "on com two" as "on on two").
+_PORT_AFTER_FREQUENCY = re.compile(r"\b\d{3}\.\d+\s+(?:on\s+)+([1-4])\b")
 
 
 def port_from_text(slots: dict[str, Any], text: str, intent: str | None) -> dict[str, Any]:
@@ -27,13 +29,16 @@ def port_from_text(slots: dict[str, Any], text: str, intent: str | None) -> dict
 
     The model can miss the port in a phrasing it never trained on: v17 left
     it untagged in "frequency 133.1 on com 2" (a held-out template), so the
-    plugin's COM 1 default tuned the wrong radio, in flight. A tagged port is
-    never overridden, and two different ports named leave it to the default.
+    plugin's COM 1 default tuned the wrong radio, in flight. "133.1 on 2"
+    counts too: in flight Vosk heard "on com two" as "on on two" and COM 1
+    was tuned. A tagged port is never overridden, and two different ports
+    named leave it to the default.
     """
     cmd = command(intent or "")
     if cmd is None or "com_port" not in cmd.slots or slots.get("com_port"):
         return slots
-    ports = set(_PORT_IN_TEXT.findall(text.lower()))
+    lowered = text.lower()
+    ports = set(_PORT_IN_TEXT.findall(lowered)) | set(_PORT_AFTER_FREQUENCY.findall(lowered))
     if len(ports) == 1:
         slots["com_port"] = ports.pop()
     return slots

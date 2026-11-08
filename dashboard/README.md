@@ -22,29 +22,76 @@ python3 -m dashboard --host 0.0.0.0 --port 9000
 
 ## What it does
 
-| Panel | What it shows | Backed by |
-| --- | --- | --- |
-| Inference | Model selector + live prediction (intent, confidence, slots) | `dashboard.predictor.predict` ← `vimaan_nlu.predict` |
-| Train a model | Dataset selector + upload (.jsonl) + hyperparameters + start/stop | spawns `ML/train_nlu_model.py` with the chosen flags |
-| Loss curve | Per-epoch train/val loss, updated live during training | parses `Epoch N - Average ... Loss:` lines from stdout |
-| Training log | Last 200 stdout/stderr lines | `dashboard.training.TrainingManager` |
-| Status pill | `idle` / `running` / `finished` / `failed` | `/api/train/status` |
+Three tabs. `?tab=training` (or `inference`, `evals`) links straight to one;
+`?run=v18&compare=v17` pins a run and the run to compare it with;
+`?theme=light` picks the theme.
 
-The dashboard polls `/api/train/status` every 1.5s while training is
-running and stops polling once the job finishes (no extra battery drain
-when idle).
+### Training: a run, live
+
+Every run is read from its metrics stream,
+`ML/training_runs/<version>/metrics.jsonl`, so a run started in a terminal
+shows up exactly like one started from the form. The page follows the newest
+run by default and switches when a new one starts.
+
+| Panel | Shows |
+| --- | --- |
+| Run header | status (live / finished / failed / stopped / interrupted), phase (training, validating, saving), progress through all epochs and the current one |
+| Tiles | epoch, elapsed, time left (if every epoch runs), speed in steps/s and examples/s, best validation loss and its epoch, epochs since the best (against patience), latest intent accuracy and slot F1 |
+| Training loss | every step (faint), smoothed (EMA over ~100 steps), and the comparison run's smoothed curve, on a shared epoch axis |
+| Loss per epoch | train and validation loss, with the best epoch marked, plus the comparison run's validation loss |
+| Validation accuracy | intent accuracy and slot F1 per epoch, against the comparison run |
+| Gradient norm | sampled every 25 steps |
+| By intent / by slot | the latest epoch's accuracy per intent and F1 per slot. The bar is the error rate (worst first), with the change since the previous epoch |
+| Epochs | every epoch as a table: losses, scores, time, validation time |
+| Run data | split, hyperparameters, intent distribution |
+| Training log | the dashboard job's output, or the run's `train.log` |
+
+"Interrupted" means no new line for 3 minutes and no end record: the process
+was killed or the machine slept. A crash is recorded as "failed" with its
+message, and Ctrl-C as "stopped".
+
+### Evals: every model version's record
+
+| Panel | Shows | From |
+| --- | --- | --- |
+| Gate results by version | intent accuracy and slot F1 on new phrasings across versions, and a table with all six gates per version | `<version>/gate.json` (`scripts/model_gate.py`) |
+| Gates | each gate's pass or fail and its numbers, plus backend parity | `gate.json`, `onnx/parity.json` |
+| New phrasings by intent | the version's accuracy per intent, with the baseline as a tick | `gate.json` |
+| Real voice by flight | right / rejected / wrong per recorded flight, against the baseline | `gate.json` |
+| Where it differs | the examples the gate lists: baseline right but candidate wrong or rejected, gold failures, negatives acted on | `gate.json` |
+
+### Inference
+
+Model selector, live prediction (intent, confidence, slots), and the model's provenance.
+
+## What the trainer records
+
+`ML/train_nlu_model.py` streams one JSON object per line:
+
+| Record | When | Fields |
+| --- | --- | --- |
+| `meta` | start | version, device, dataset, split, hyperparameters, steps per epoch, intent distribution |
+| `step` | every step | step, epoch, loss, learning rate, elapsed; `grad_norm` every 25th step |
+| `phase` | validation / saving starts | phase, epoch |
+| `epoch` | every epoch | train and validation loss, intent accuracy, slot F1, `per_intent` {acc, n}, `per_slot` {f1, n}, validation seconds, epochs without improvement, patience |
+| `done` / `error` / `stopped` | the end | best validation loss and epoch, whether it stopped early; or the error |
 
 ## Endpoints
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| GET | `/api/runs` | every run with its summary (status, progress, speed, ETA, best epoch) |
+| GET | `/api/runs/{name}` | one run: summary, downsampled steps, gradient norms, epochs, log tail |
+| GET | `/api/runs/{name}/stream` | server-sent events: `snapshot`, then `records` as lines arrive, `summary` every 5 s |
+| GET | `/api/evals` | every model version's gate summary, parity and run summary |
+| GET | `/api/evals/{version}` | one version's full `gate.json`, parity and manifest |
 | GET | `/api/models` | list checkpoints + parsed manifests |
 | GET | `/api/datasets` | list `.jsonl` datasets (final + uploads) |
 | POST | `/api/datasets/upload` | upload a `.jsonl` (validated row-by-row) |
 | POST | `/api/predict` | `{model_path, text}` → `{intent, confidence, slots}` |
 | POST | `/api/train/start` | start a training run (409 if one is in flight) |
 | POST | `/api/train/stop` | terminate the running job |
-| GET | `/api/train/status` | full state snapshot (logs, metrics, checkpoints) |
+| GET | `/api/train/status` | the dashboard job's state and log |
 
 ## Security note
 
@@ -56,5 +103,5 @@ internet without adding auth + a reverse proxy.
 ## Tests
 
 ```bash
-python3 -m pytest tests/test_dashboard.py
+python3 -m pytest tests/test_dashboard.py tests/test_run_metrics.py tests/test_eval_metrics.py
 ```

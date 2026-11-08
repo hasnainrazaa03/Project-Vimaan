@@ -4,8 +4,9 @@
 altitude"); "cancel" drops a held command or an open "to or two?" question.
 They are matched on the whole transcript, never sent to the model: a reply
 names no system, so a classifier has nothing to go on, and a fixed list
-can't drift with retraining. A longer utterance ("confirm gear up") is not a
-reply and goes to the model as a command.
+can't drift with retraining. A longer utterance ("confirm gear up") goes to
+the model as a command; while a command is held, the plugin also accepts it
+as the override when it names that command (see ``override_prefix``).
 
 What can't be overridden: validator limits (a heading of 400) and commands
 the aircraft can't perform are impossible, not risky, so there is nothing to
@@ -43,4 +44,17 @@ def pilot_reply(text: str) -> str | None:
         return "override"
     if phrase in CANCEL:
         return "cancel"
+    return None
+
+
+def override_prefix(text: str) -> str | None:
+    """The words after a leading override phrase ("override landing gear up"
+    -> "landing gear up"), or None when ``text`` doesn't start with one or is
+    nothing but the reply. In flight the pilot answered a hold with "override
+    landing gear up", which Vosk heard as "override landing get up" and was
+    rejected; whether the rest names the held command is the plugin's call."""
+    words = [w for w in text.lower().split() if w not in _FILLER]
+    for size in (2, 1):
+        if len(words) > size and " ".join(words[:size]) in OVERRIDE:
+            return " ".join(words[size:])
     return None

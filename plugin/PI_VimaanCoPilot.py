@@ -73,7 +73,7 @@ from vimaan_nlu.commands import (  # noqa: E402
 )
 from vimaan_nlu.overlay import Overlay  # noqa: E402
 from vimaan_nlu.overlay_state import OverlayState  # noqa: E402
-from vimaan_nlu.pilot_replies import pilot_reply  # noqa: E402
+from vimaan_nlu.pilot_replies import override_prefix, pilot_reply  # noqa: E402
 from vimaan_nlu.readback import spell_digits  # noqa: E402
 from vimaan_nlu.safety import (  # noqa: E402
     ConfirmationGate,
@@ -83,6 +83,7 @@ from vimaan_nlu.safety import (  # noqa: E402
 )
 from vimaan_nlu.telemetry import Telemetry  # noqa: E402
 from vimaan_nlu.validators import (  # noqa: E402
+    bare_command,
     has_command_word,
     heading_too_short,
     validate_slot,
@@ -225,6 +226,7 @@ MODE_SPOKEN = {"nav": "Nav", "v nav": "V NAV", "l nav": "L NAV"}
 # cockpit2/controls/parking_brake_ratio is deprecated in 12.4 (X-Plane logs
 # "has been replaced" on every read); this is its replacement.
 DREF_PARKING_BRAKE = "sim/flightmodel/controls/parkbrake"
+DREF_VERTICAL_SPEED_FPM = "sim/flightmodel/position/vh_ind_fpm"
 DREF_ENGINE_RUNNING = "sim/flightmodel/engine/ENGN_running"
 DREF_ENGINE_MIXTURE = "sim/flightmodel/engine/ENGN_mixt"
 DREF_IGNITION_KEY = "sim/cockpit2/engine/actuators/ignition_key"
@@ -464,7 +466,15 @@ class PythonInterface:
             self._on_probe_cmd,
         )
         self._register_command(
-            "vimaan/probe_stop", "Vimaan: stop the probe", self._on_probe_stop_cmd
+            "vimaan/probe_stop",
+            "Vimaan: stop the probe (press twice to start over)",
+            self._on_probe_stop_cmd,
+        )
+        self._register_command(
+            "vimaan/probe_skip", "Vimaan: probe, skip to the next step", self._on_probe_skip_cmd
+        )
+        self._register_command(
+            "vimaan/probe_back", "Vimaan: probe, go back one step", self._on_probe_back_cmd
         )
         self._start_overlay()
 
@@ -754,11 +764,34 @@ class PythonInterface:
             if reply is not None:
                 outcome = self._pilot_reply(cmd, reply)
                 return
+            # "Override landing gear up" while gear up is held: the override,
+            # said with the command. Not when it names a different command.
+            normalized = result.get("normalized") or text
+            if override_prefix(text) is not None and self._names_held(
+                intent_pred, slots, result["confidence"], normalized
+            ):
+                self.tel.event("override_with_command", cmd=cmd, intent=intent_pred, text=text)
+                outcome = self._pilot_reply(cmd, "override")
+                return
 
             # A number on its own ("one thousand") names no command: it can
             # only be the answer to an open "to or two?" question.
             if bare_number(text) is not None:
                 outcome = self._answer_question(cmd, text)
+                return
+
+            # A command's name alone ("landing gear"): ask which way rather
+            # than stay silent. The handler asks when the choice is missing.
+            # Only when the model found no command: a confident reading wins
+            # ("heading" is also a word for the autopilot-mode command).
+            bare = bare_command(normalized)
+            found_none = (
+                intent_pred in self.NON_ACTIONABLE_INTENTS
+                or result["confidence"] < self.CONFIDENCE_FLOOR
+            )
+            if bare is not None and bare != intent_pred and found_none:
+                self.tel.event("bare_command", cmd=cmd, intent=bare, predicted=intent_pred)
+                outcome = self._dispatch(cmd, bare, {})
                 return
 
             if result["confidence"] < self.CONFIDENCE_FLOOR:
@@ -781,7 +814,6 @@ class PythonInterface:
 
             # A fragment ("seventy", "city eight on") can be classified
             # confidently; only act when the pilot named the thing.
-            normalized = result.get("normalized") or text
             if not has_command_word(intent_pred, normalized):
                 outcome = "rejected"
                 self.tel.event("implausible", cmd=cmd, reason="no_command_word", intent=intent_pred)
@@ -857,6 +889,23 @@ class PythonInterface:
         slots = {TARGET_SLOTS[q["intent"]]: choice}
         self.tel.event("answered", cmd=cmd, reply_to=q["cmd"], intent=q["intent"], slots=slots)
         return self._dispatch(cmd, q["intent"], slots)
+
+    def _names_held(self, intent, slots, confidence, normalized):
+        """Whether an utterance that starts with "override" is about the held
+        command: the same command (no slot contradicting it, so "override
+        gear down" doesn't confirm a held gear up), or no other command at
+        all (a garbled rest, as "override landing get up" was in flight)."""
+        held = self._held if self._confirm_gate.pending_token() else None
+        if held is None:
+            return False
+        if intent == held["intent"]:
+            return all(held["slots"].get(k) in (None, v) for k, v in (slots or {}).items())
+        names_other = (
+            intent in self.intent_to_command
+            and confidence >= self.CONFIDENCE_FLOOR
+            and has_command_word(intent, normalized)
+        )
+        return not names_other
 
     def _pilot_reply(self, cmd, reply):
         """Override the held command, or cancel what is pending."""
@@ -1271,17 +1320,33 @@ class PythonInterface:
 
     def _on_probe_cmd(self, cmd_ref, phase, refcon):
         if phase == xp.CommandBegin:
-            try:
-                self._probe_press()
-            except Exception as exc:
-                self.tel.error("probe_error", exc)
-                self._probe_finish("error", "Probe stopped by an error. Check the autopilot.")
+            self._probe_guarded(self._probe_press)
         return 1
 
     def _on_probe_stop_cmd(self, cmd_ref, phase, refcon):
-        if phase == xp.CommandBegin and self._probe is not None:
-            self._probe_finish("stopped", "Probe stopped. Results saved.")
+        if phase == xp.CommandBegin:
+            self._probe_guarded(self._probe_stop)
         return 1
+
+    def _on_probe_skip_cmd(self, cmd_ref, phase, refcon):
+        if phase == xp.CommandBegin:
+            self._probe_guarded(lambda: self._probe_move(1))
+        return 1
+
+    def _on_probe_back_cmd(self, cmd_ref, phase, refcon):
+        if phase == xp.CommandBegin:
+            self._probe_guarded(lambda: self._probe_move(-1))
+        return 1
+
+    def _probe_guarded(self, action):
+        try:
+            action()
+        except Exception as exc:  # never leave a probe half-run
+            self.tel.error("probe_error", exc)
+            self._probe_finish("error", "Probe stopped by an error. Check the autopilot.")
+
+    def _probe_path(self):
+        return probe.results_path(self._probe_folder(), self.profile.info.key)
 
     def _probe_state(self):
         state = {}
@@ -1304,28 +1369,40 @@ class PythonInterface:
             role: bool(name) and self._has_command(name)
             for role, name in self.profile.commands.items()
         }
+        # An unfinished run carries on where it stopped, even after a restart.
+        start = probe.resume_index(probe.load_record(self._probe_path()), where)
         self._probe = {
             "where": where,
             "steps": steps,
-            "index": 0,
+            "index": start,
             "phase": "ready",
             "results": {},
             "details": [],
             "found": found,
+            "cautioned": False,
+            "stopping": False,
         }
         self.tel.event(
             "probe_start",
             where=where,
             steps=len(steps),
+            start=start,
             aircraft=self.profile.info.key,
             name=self._aircraft_name(),
-            next=steps[0].label,
+            next=steps[start].label,
             found=found,
         )
-        self._say(
-            f"Probe ready. {len(steps)} {where} steps. Press again for {steps[0].label}.",
-            origin="probe",
-        )
+        if start:
+            self._say(
+                f"Probe ready. Continuing at {steps[start].label}, step {start + 1} of "
+                f"{len(steps)}. Press again to run it.",
+                origin="probe",
+            )
+        else:
+            self._say(
+                f"Probe ready. {len(steps)} {where} steps. Press again for {steps[0].label}.",
+                origin="probe",
+            )
 
     def _probe_press(self):
         p = self._probe
@@ -1340,19 +1417,24 @@ class PythonInterface:
         brake = self._read_float(DREF_PARKING_BRAKE)
         why = probe.ready_for(step, before, None if brake is None else brake > 0.5)
         if why:
-            self._say(why, origin="probe")
+            self._probe_blocked(step, why)
+            return
+        warning = probe.caution(step, before)
+        if warning and not p["cautioned"]:
+            p["cautioned"] = True  # once per run: the next press runs it anyway
+            self._probe_blocked(step, f"{warning}. Select them, or press again to run it anyway.")
             return
         written, name = None, None
         if step.write is None:
             name = self.profile.command(step.role)
             if not (name and self._has_command(name)):
-                self._probe_done(step, "missing", before, before, True)
+                self._probe_done(step, "missing", before, before)
                 return
             self._fire_command(name)
         else:
             written = probe.write_value(step, before, self.profile.info.flap_detents)
             if written is None or not self._write(probe.STATE[step.write][0], written):
-                self._probe_done(step, "inconclusive", before, before, True)
+                self._probe_done(step, "inconclusive", before, before)
                 return
         p.update(
             phase="acting",
@@ -1360,7 +1442,7 @@ class PythonInterface:
             before=before,
             written=written,
             name=name,
-            fixed=False,
+            attempt=0,
             due=time.perf_counter() + probe.SETTLE_SEC,
         )
         self.tel.event(
@@ -1373,19 +1455,83 @@ class PythonInterface:
             written=written,
         )
 
+    def _probe_blocked(self, step, message):
+        """A press that didn't run its step, and why (shown on the overlay)."""
+        p = self._probe
+        assert p is not None
+        self.tel.event(
+            "probe_blocked",
+            label=step.label,
+            index=p["index"],
+            total=len(p["steps"]),
+            message=message,
+        )
+        self._say(message, origin="probe")
+
+    def _probe_move(self, delta):
+        """Skip ahead or go back one step without running anything, to reach
+        a single step. Wraps around, so every step can be reached."""
+        p = self._probe
+        if p is None:
+            self._say("Press the probe key first", origin="probe")
+            return
+        if p["phase"] != "ready":
+            self._say("Probe busy", origin="probe")
+            return
+        total = len(p["steps"])
+        p["index"] = (p["index"] + delta) % total
+        step = p["steps"][p["index"]]
+        self.tel.event(
+            "probe_move",
+            label=step.label,
+            index=p["index"],
+            total=total,
+            direction="skip" if delta > 0 else "back",
+        )
+        verb = "Skipped to" if delta > 0 else "Back to"
+        self._say(f"{verb} {step.label}, step {p['index'] + 1} of {total}.", origin="probe")
+
+    def _probe_stop(self):
+        p = self._probe
+        if p is None:
+            self._probe_reset()
+        elif p["phase"] != "ready":
+            # Mid-step the control is pressed and not yet put back: finish it.
+            p["stopping"] = True
+            self._say("Stopping after this step", origin="probe")
+        else:
+            self._probe_finish("stopped", "Probe stopped. Results saved." + self._probe_hint(p))
+
+    def _probe_reset(self):
+        """The stop key with no probe running: forget where an unfinished run
+        stopped, so the next one starts from the first step."""
+        path = self._probe_path()
+        if not probe.load_record(path).get("resume"):
+            self._say("No probe running", origin="probe")
+            return
+        probe.save_results(path, {"resume": {"air": None, "ground": None}})
+        self.tel.event("probe_reset", path=path)
+        self._say("Probe reset. The next run starts from the first step.", origin="probe")
+
+    @staticmethod
+    def _probe_hint(p):
+        """Where the next press of the probe key carries on, if anywhere."""
+        if p["index"] >= len(p["steps"]):
+            return " Every step is measured."
+        return f" The probe key continues with {p['steps'][p['index']].label}."
+
     def _service_probe(self):
         p = self._probe
         if p is None or p["phase"] == "ready" or time.perf_counter() < p["due"]:
             return
-        try:
-            self._advance_probe(p)
-        except Exception as exc:  # never leave a probe half-run
-            self.tel.error("probe_error", exc)
-            self._probe_finish("error", "Probe stopped by an error. Check the autopilot.")
+        self._probe_guarded(lambda: self._advance_probe(p))
 
     def _advance_probe(self, p):
         step, before = p["step"], p["before"]
         now = self._probe_state()
+        if probe.autopilot_dropped(step, before, now):
+            self._probe_pause(p, step, before, now)
+            return
         if p["phase"] == "acting":
             p["verdict"] = probe.classify(step, before, now, True, p["written"])
             p["after"] = now
@@ -1403,21 +1549,67 @@ class PythonInterface:
             p.update(phase="restoring", due=time.perf_counter() + probe.SETTLE_SEC)
             return
         if probe.restored(step, before, now):
-            self._probe_done(step, p["verdict"], before, p["after"], True)
+            self._probe_done(step, p["verdict"], before, p["after"])
             return
-        fixes = [] if p["fixed"] else probe.mode_fix(before, now)
-        if fixes:
-            for role in fixes:
-                self._fire_command(self.profile.command(role))
-            p.update(fixed=True, due=time.perf_counter() + probe.SETTLE_SEC)
+        while (roles := probe.restore_presses(before, now, p["attempt"])) is not None:
+            p["attempt"] += 1
+            names = [self.profile.command(role) for role in roles]
+            names = [n for n in names if n and self._has_command(n)]
+            if names:
+                for name in names:
+                    self._fire_command(name)
+                p["due"] = time.perf_counter() + probe.SETTLE_SEC
+                return
+        left = probe.leftovers(step, before, now)
+        if set(left) <= probe.HARMLESS_LEFTOVERS:
+            note = f"{probe.describe(left)} stayed on, which is harmless"
+            self._probe_done(step, p["verdict"], before, p["after"], now=now, note=note)
             return
-        self._probe_record(step, p["verdict"], before, p["after"], False, now)
-        label = step.label[:1].upper() + step.label[1:]
+        self._probe_record(step, p["verdict"], before, p["after"], now=now)
+        p["index"] += 1  # measured: carry on after it, not with it
         self._probe_finish(
-            "restore_failed", f"Probe stopped. {label} did not restore. Check the autopilot."
+            "restore_failed",
+            f"Probe stopped. After {step.label}, {probe.describe(left)} did not go back. "
+            f"Check the autopilot.{self._probe_hint(p)}",
         )
 
-    def _probe_record(self, step, verdict, before, after, ok, now=None):
+    def _probe_pause(self, p, step, before, now):
+        """The autopilot dropped out mid-step: that's the aircraft (or the
+        controls), not the control under test. Nothing is recorded; the same
+        step runs again on the next press, once the pilot has re-engaged.
+        A control already pressed is put back first (a mode the flight
+        director still shows would otherwise carry into the next steps)."""
+        if p["phase"] == "acting":
+            if step.write is not None:
+                self._write(probe.STATE[step.write][0], before[step.write])
+            elif p["name"] and probe.undo_needed(step, before, now):
+                self._fire_command(p["name"])
+        p["phase"] = "ready"
+        self.tel.event(
+            "probe_paused",
+            logging.WARNING,
+            role=step.role,
+            label=step.label,
+            index=p["index"],
+            total=len(p["steps"]),
+            changed=probe.changes(before, now),
+        )
+        if p["stopping"]:
+            self._probe_finish(
+                "stopped",
+                f"Probe stopped. The autopilot disconnected during {step.label}."
+                + self._probe_hint(p),
+            )
+            return
+        self._say(
+            f"The autopilot disconnected during {step.label}. "
+            "Re-engage it, then press the probe key to retry.",
+            origin="probe",
+        )
+
+    def _probe_record(self, step, verdict, before, after, now=None, note=None):
+        """Log a measured step and save it straight away, with the place the
+        run has reached, so a stop or a crash loses nothing."""
         p = self._probe
         assert p is not None  # only called while a probe runs
         p["results"][step.role] = verdict
@@ -1425,33 +1617,68 @@ class PythonInterface:
             "role": step.role,
             "verdict": verdict,
             "changed": probe.changes(before, after),
-            "restored": ok,
+            "restored": now is None,
         }
         if now is not None:
             detail["left_changed"] = probe.changes(before, now)
+        if note:
+            detail["note"] = note
         p["details"].append(detail)
-        following = p["steps"][p["index"] + 1] if p["index"] + 1 < len(p["steps"]) else None
+        steps, index = p["steps"], p["index"]
+        following = steps[index + 1] if index + 1 < len(steps) else None
+        going_on = now is None or note is not None
         self.tel.event(
             "probe_step",
-            logging.INFO if ok else logging.WARNING,
+            logging.INFO if going_on else logging.WARNING,
             label=step.label,
-            index=p["index"],
-            total=len(p["steps"]),
-            next=following.label if following and ok else None,
+            index=index,
+            total=len(steps),
+            next=following.label if following and going_on else None,
             **detail,
         )
+        self._probe_save(
+            p,
+            steps={step.role: verdict},
+            details=[detail],
+            resume=following.role if following else None,
+            end="in_progress",
+        )
 
-    def _probe_done(self, step, verdict, before, after, ok):
-        self._probe_record(step, verdict, before, after, ok)
+    def _probe_save(self, p, *, resume, end, steps=None, details=None):
+        path = self._probe_path()
+        record = {
+            "aircraft": self.profile.summary(),
+            "probed_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "session": self.tel.session_id,
+            "where": p["where"],
+            "end": end,
+            "steps": steps or {},
+            "details": details or [],
+            "commands_found": p["found"],
+            "resume": {p["where"]: resume},
+        }
+        try:
+            probe.save_results(path, record)
+        except OSError as exc:
+            self.tel.error("probe_save_error", exc, path=path)
+        return path
+
+    def _probe_done(self, step, verdict, before, after, now=None, note=None):
+        self._probe_record(step, verdict, before, after, now=now, note=note)
         p = self._probe
         assert p is not None
         p["index"] += 1
         p["phase"] = "ready"
         label = step.label[:1].upper() + step.label[1:]  # "V NAV" stays "V NAV"
         spoken = f"{label}: {self.PROBE_SPOKEN[verdict]}."
+        if note:
+            spoken += f" {note[:1].upper()}{note[1:]}."
         if p["index"] >= len(p["steps"]):
             self._say(spoken, origin="probe")
             self._probe_finish("complete", "Probe complete. Results saved.")
+        elif p["stopping"]:
+            self._say(spoken, origin="probe")
+            self._probe_finish("stopped", "Probe stopped. Results saved." + self._probe_hint(p))
         else:
             self._say(f"{spoken} Next, {p['steps'][p['index']].label}.", origin="probe")
 
@@ -1459,24 +1686,22 @@ class PythonInterface:
         p, self._probe = self._probe, None
         if p is None:
             return
-        info = self.profile.info
-        path = probe.results_path(self._probe_folder(), info.key)
-        record = {
-            "aircraft": self.profile.summary(),
-            "probed_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-            "session": self.tel.session_id,
-            "where": p["where"],
-            "end": reason,
-            "steps": p["results"],
-            "details": p["details"],
-            "commands_found": p["found"],
-        }
-        try:
-            probe.save_results(path, record)
-        except OSError as exc:
-            self.tel.error("probe_save_error", exc, path=path)
-        self.tel.event("probe_end", reason=reason, path=path, steps=p["results"], message=spoken)
-        self.profile = resolve(info, self._has_command, probe.load_results(path))
+        steps = p["steps"]
+        resume = None
+        if reason != "complete" and p["index"] < len(steps):
+            resume = steps[p["index"]].role
+        path = self._probe_save(p, resume=resume, end=reason)
+        record = probe.load_record(path)
+        self.tel.event(
+            "probe_end",
+            reason=reason,
+            path=path,
+            steps=p["results"],
+            counts=probe.counts(record, p["where"]),
+            resume=resume,
+            message=spoken,
+        )
+        self.profile = resolve(self.profile.info, self._has_command, probe.load_results(path))
         self._say(spoken, origin="probe")
 
     def _expect(self, label, read, expected, delay=None, tolerance=None):
@@ -1541,6 +1766,7 @@ class PythonInterface:
             ground_speed_kt=None if gs_ms is None else gs_ms * 1.94384,
             ias_kt=ias,
             on_ground=None if on_ground_i is None else bool(on_ground_i),
+            vs_fpm=self._read_float(DREF_VERTICAL_SPEED_FPM),
             vfe_kt=self.profile.info.vfe_kt or None,
         )
 
@@ -1768,6 +1994,9 @@ class PythonInterface:
         return "executed"
 
     def _set_altimeter(self, slots, intent):
+        if not slots.get("setting") and not slots.get("pressure"):
+            self._say("Altimeter setting?")
+            return "rejected"
         if slots.get("setting") == "standard":
             command = self.profile.command("baro_std")
             if not (command and self._fire_command(command)):
@@ -1938,7 +2167,11 @@ class PythonInterface:
                 return "executed"
 
         command = binding["on_cmd"] if target else binding["off_cmd"]
-        if binding.get("prefer_toggle") and current is not None:
+        engage = self.profile.command(binding.get("engage_role") or "")
+        if target and engage and self._has_command(engage):
+            # The aircraft's own engage button keeps its logic in step.
+            command = engage
+        elif binding.get("prefer_toggle") and current is not None:
             # The state was just read and differs, so the toggle moves it the
             # right way, on aircraft that ignore the dedicated command too.
             command = binding["toggle"]

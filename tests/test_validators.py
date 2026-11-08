@@ -9,6 +9,7 @@ from vimaan_nlu.validators import (
     SLOT_VALIDATORS,
     Enum,
     Range,
+    bare_command,
     in_range,
     validate_slot,
 )
@@ -140,3 +141,23 @@ class TestPlausibility:
         from vimaan_nlu.validators import heading_too_short
 
         assert heading_too_short(value) is short
+
+
+@pytest.mark.parametrize(
+    ("text", "intent"),
+    [
+        ("landing gear", "toggle_landing_gear"),
+        ("the landing gear", "toggle_landing_gear"),
+        ("gear", "toggle_landing_gear"),
+        ("flaps", "set_flaps"),
+        ("parking brake", "toggle_parking_brake"),
+        ("autopilot", "toggle_autopilot"),
+        ("landing", None),
+        ("landing gear up", None),  # has its choice: an ordinary command
+        ("heading", None),  # needs a number, not a choice
+        ("gear flaps", None),  # two things
+        ("", None),
+    ],
+)
+def test_bare_command(text, intent):
+    assert bare_command(text) == intent

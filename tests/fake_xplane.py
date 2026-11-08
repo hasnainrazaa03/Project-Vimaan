@@ -35,6 +35,7 @@ DEFAULT_DATAREFS: dict[str, Any] = {
     "sim/flightmodel/position/y_agl": 0.0,
     "sim/flightmodel/position/groundspeed": 0.0,
     "sim/flightmodel/failures/onground_any": 1,
+    "sim/flightmodel/position/vh_ind_fpm": 0.0,
     "sim/cockpit2/gauges/indicators/airspeed_kts_pilot": 0.0,
     "sim/cockpit2/gauges/indicators/heading_AHARS_deg_mag_pilot": 0.0,
     "sim/cockpit2/gauges/indicators/altitude_ft_pilot": 0.0,

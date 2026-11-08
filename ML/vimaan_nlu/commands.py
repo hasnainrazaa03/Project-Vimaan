@@ -233,6 +233,8 @@ def _autopilot_unit(n: str) -> dict[str, Any]:
         # the A330 ignored servos_on in flight. With the state readable, the
         # toggle is pressed only when a change is needed.
         "prefer_toggle": True,
+        # An aircraft's own engage button, if its profile has one (737 CMD A/B).
+        "engage_role": "autopilot_engage" if n == "1" else "autopilot2_engage",
         "label": f"Autopilot {n}",
     }
 

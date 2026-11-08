@@ -268,6 +268,7 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setattr(dpaths, "MODELS_ROOT", tmp_path / "models")
     monkeypatch.setattr(dpaths, "DATASETS_FINAL", tmp_path / "datasets")
     monkeypatch.setattr(dpaths, "UPLOAD_DIR", tmp_path / "uploads")
+    monkeypatch.setattr(dpaths, "TRAINING_RUNS", tmp_path / "runs")
     (tmp_path / "uploads").mkdir(parents=True)
     (tmp_path / "models" / "v1").mkdir(parents=True)
     (tmp_path / "datasets").mkdir()
@@ -371,3 +372,80 @@ class TestAPI:
         r = client.get("/api/train/status")
         assert r.status_code == 200
         assert r.json()["status"] in ("idle", "finished", "failed")
+
+
+# ---- training runs and evals ------------------------------------------------
+
+
+def _run(tmp_path, name="v1", end=True):
+    d = tmp_path / "runs" / name
+    d.mkdir(parents=True)
+    recs = [
+        {
+            "type": "meta",
+            "version": name,
+            "epochs": 2,
+            "steps_per_epoch": 2,
+            "split": {"train": 1, "val": 1, "test": 1},
+        },
+        {"type": "step", "step": 1, "epoch": 1, "loss": 2.0, "elapsed": 0.1, "grad_norm": 3.0},
+        {"type": "step", "step": 2, "epoch": 1, "loss": 1.0, "elapsed": 0.2},
+        {
+            "type": "epoch",
+            "epoch": 1,
+            "train_loss": 1.5,
+            "val_loss": 1.2,
+            "val_intent_acc": 0.9,
+            "val_slot_f1": 0.8,
+            "elapsed": 0.5,
+            "per_intent": {"a": {"acc": 0.9, "n": 10}},
+        },
+    ]
+    if end:
+        recs.append({"type": "done", "best_val_loss": 1.2, "elapsed": 0.6})
+    (d / "metrics.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs))
+
+
+class TestRunsAndEvals:
+    def test_runs_list_and_snapshot(self, client, tmp_path):
+        _run(tmp_path)
+        runs = client.get("/api/runs").json()["runs"]
+        assert [(r["run"], r["status"]) for r in runs] == [("v1", "finished")]
+        snap = client.get("/api/runs/v1").json()
+        assert snap["summary"]["best_val_loss"] == 1.2
+        assert [s["step"] for s in snap["steps"]] == [1, 2]
+        assert snap["grad_norms"][0]["grad_norm"] == 3.0
+        assert snap["epochs"][0]["per_intent"]["a"]["acc"] == 0.9
+
+    def test_stream_starts_with_a_snapshot(self, client, tmp_path):
+        _run(tmp_path, end=False)
+        r = client.get("/api/runs/v1/stream?follow=false")
+        assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream")
+        first = r.text.split("\n\n")[0]
+        assert first.startswith("event: snapshot\ndata: ")
+        assert json.loads(first.split("data: ", 1)[1])["summary"]["status"] == "running"
+
+    @pytest.mark.parametrize(
+        "path", ["/api/runs/nope", "/api/runs/nope/stream", "/api/runs/..%2Fx", "/api/evals/v99"]
+    )
+    def test_unknown_runs_and_versions_are_404(self, client, path):
+        assert client.get(path).status_code == 404
+
+    def test_evals(self, client, tmp_path):
+        (tmp_path / "models" / "v1" / "gate.json").write_text(
+            json.dumps(
+                {
+                    "candidate": "v1",
+                    "baseline": "v0",
+                    "gates": {"1 new phrasings": {"pass": True, "detail": "ok"}},
+                }
+            )
+        )
+        rows = client.get("/api/evals").json()["versions"]
+        assert rows[0]["version"] == "v1" and rows[0]["gate"]["passed"] == 1
+        assert client.get("/api/evals/v1").json()["gate"]["baseline"] == "v0"
+
+    def test_page_has_the_live_and_evals_views(self, client):
+        html = client.get("/").text
+        for needle in ('id="step-chart"', 'id="kpis"', 'id="panel-evals"', "live.js", "evals.js"):
+            assert needle in html

@@ -187,18 +187,19 @@ class OverlayState:
                 "name": ev.get("name") or "",
                 "where": ev.get("where") or "",
                 "total": int(ev.get("steps") or 0),
-                "done": 0,
+                "done": int(ev.get("start") or 0),  # a resumed run starts part way
                 "step": None,
                 "status": "ready",
                 "next": ev.get("next"),
                 "counts": {},
                 "message": None,
+                "note": None,
                 "ended_at": None,
             }
         elif p is None:
             return
         elif kind == "probe_act":
-            p.update(step=ev.get("label"), status="testing")
+            p.update(step=ev.get("label"), status="testing", note=None, message=None)
         elif kind == "probe_step":
             verdict = ev.get("verdict") or ""
             p["counts"][verdict] = p["counts"].get(verdict, 0) + 1
@@ -207,10 +208,25 @@ class OverlayState:
                 status=verdict,
                 done=int(ev.get("index", p["done"])) + 1,
                 next=ev.get("next"),
+                note=ev.get("note"),
+            )
+        elif kind == "probe_paused":
+            p.update(step=ev.get("label"), status="paused", next=ev.get("label"))
+        elif kind == "probe_blocked":
+            p.update(status="blocked", message=ev.get("message"), next=ev.get("label"))
+        elif kind == "probe_move":
+            p.update(
+                status="ready",
+                step=None,
+                note=None,
+                done=int(ev.get("index") or 0),
+                next=ev.get("label"),
             )
         elif kind == "probe_end":
             ok = ev.get("reason") == "complete"
             p.update(status="complete" if ok else "stopped", message=ev.get("message"))
+            if ev.get("counts"):
+                p["counts"] = dict(ev["counts"])  # every saved run, not just this one
             p["ended_at"] = self.clock()
         # Probe news replaces a finished command on screen (not one in progress).
         if self.phase in ("done", "notice"):
@@ -265,9 +281,17 @@ class OverlayState:
             return out
         if status == "testing":
             out.append(Line("TESTING", step or "", "live"))
+        elif status == "paused":
+            out.append(Line("PAUSED", f"Autopilot disconnected during {step}", "warn"))
+            out.append(Line("NEXT", "Re-engage the autopilot, then press the probe key", "muted"))
+            return out
+        elif status == "blocked":
+            out.append(Line("WAIT", p["message"] or "", "warn"))
         elif status in PROBE_BADGE:
             badge, tone = PROBE_BADGE[status]
             out.append(Line(badge, step or "", tone))
+            if p["note"]:
+                out.append(Line("NOTE", p["note"][:1].upper() + p["note"][1:], "muted"))
         if p["next"]:
             hint = "press the probe key" if status != "testing" else "after this step"
             out.append(Line("NEXT", f"{p['next']}  ({hint})", "muted"))
