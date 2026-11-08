@@ -389,6 +389,14 @@ COMMANDS: tuple[Command, ...] = (
             "tune {frequency}",
             "tune the radio to {frequency}",
             "frequency {frequency}",
+            # Without a port, which defaults to COM 1. v18 confused "frequency
+            # 118.4" with the speed intent (Mach also has decimals): its only
+            # portless training rows were "tune ...", since "frequency {f}"
+            # is a held-out template. These rank outside the held-out set, so
+            # that set (and scores across versions) stays the same.
+            "new frequency {frequency}",
+            "change frequency to {frequency}",
+            "go to frequency {frequency}",
         ),
         slots=_frozen(
             {
