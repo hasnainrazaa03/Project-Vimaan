@@ -119,6 +119,12 @@ After a safety hold ("Confirm gear up, low altitude. Say override, or repeat
 to confirm."):
 - **override / confirm / affirmative** runs the held command. It skips only
   the rules overridden for it, so another rule that applies still holds it.
+- It can come with the command: "override landing gear up" overrides a held
+  gear up. A rest that names a different command ("override flaps up") or
+  contradicts the held one ("override gear down") is not an override. A
+  garbled rest still is, since the hold already said what's held. With
+  nothing held, "override gear up" is just "gear up", and it gets held as
+  usual. Vimaan always says what it's holding before it acts.
 - **cancel / negative / disregard / abort** drops it. It also drops an open
   "to or two?" question.
 

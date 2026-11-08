@@ -70,6 +70,13 @@ def in_range(name: str, value: Any) -> bool:
 # classified confidently and executed: "seventy" -> flight level 70,
 # "city eight on" -> flight director on. A pilot always names the thing.
 COMMAND_WORDS: dict[str, frozenset[str]] = _commands.command_words()
+# Actionable intents whose required slot is a choice (up/down, on/off): their
+# handlers ask "Gear up or down?" when it's missing.
+CHOICE_INTENTS: frozenset[str] = frozenset(
+    c.intent
+    for c in _commands.COMMANDS
+    if c.actionable and any(c.slots[n].kind == "choice" for n in c.required if n in c.slots)
+)
 
 
 def has_command_word(intent: str, text: str) -> bool:
@@ -87,3 +94,23 @@ def heading_too_short(value: Any) -> bool:
     digits ("zero zero five"). Ask again instead of turning to 001."""
     s = str(value).strip()
     return s.isdigit() and len(s) == 1
+
+
+# Words that can come with a bare command noun: "the landing gear".
+_BARE_EXTRA = frozenset({"the", "landing", "please", "uh", "um", "er"})
+
+
+def bare_command(text: str) -> str | None:
+    """The intent when ``text`` is nothing but its name ("landing gear",
+    "flaps", "parking brake") and the intent needs a choice (up/down,
+    on/off), so its handler asks which; None otherwise. v17 classed "landing
+    gear" as no command and stayed silent, twice in one flight."""
+    words = set(text.lower().split())
+    if not words or words <= _BARE_EXTRA:
+        return None
+    found = [
+        intent
+        for intent, names in COMMAND_WORDS.items()
+        if intent in CHOICE_INTENTS and words <= names | _BARE_EXTRA
+    ]
+    return found[0] if len(found) == 1 else None

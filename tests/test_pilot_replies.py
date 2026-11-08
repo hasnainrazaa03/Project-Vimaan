@@ -1,7 +1,7 @@
 """vimaan_nlu.pilot_replies: "override" and "cancel", matched on the words."""
 
 import pytest
-from vimaan_nlu.pilot_replies import REPLY_WORDS, pilot_reply
+from vimaan_nlu.pilot_replies import REPLY_WORDS, override_prefix, pilot_reply
 from vimaan_nlu.stt_vocabulary import load_vocabulary
 
 
@@ -41,3 +41,19 @@ def test_anything_longer_is_not_a_reply(heard):
 
 def test_reply_words_are_in_the_recogniser_grammar():
     assert REPLY_WORDS <= set(load_vocabulary())
+
+
+@pytest.mark.parametrize(
+    ("text", "rest"),
+    [
+        ("override landing gear up", "landing gear up"),
+        ("confirm gear up", "gear up"),
+        ("override confirm gear up", "gear up"),
+        ("please override landing get up", "landing get up"),
+        ("override", None),  # the reply itself
+        ("gear up", None),
+        ("gear up override", None),  # only at the start
+    ],
+)
+def test_override_prefix(text, rest):
+    assert override_prefix(text) == rest

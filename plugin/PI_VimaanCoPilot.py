@@ -73,7 +73,7 @@ from vimaan_nlu.commands import (  # noqa: E402
 )
 from vimaan_nlu.overlay import Overlay  # noqa: E402
 from vimaan_nlu.overlay_state import OverlayState  # noqa: E402
-from vimaan_nlu.pilot_replies import pilot_reply  # noqa: E402
+from vimaan_nlu.pilot_replies import override_prefix, pilot_reply  # noqa: E402
 from vimaan_nlu.readback import spell_digits  # noqa: E402
 from vimaan_nlu.safety import (  # noqa: E402
     ConfirmationGate,
@@ -83,6 +83,7 @@ from vimaan_nlu.safety import (  # noqa: E402
 )
 from vimaan_nlu.telemetry import Telemetry  # noqa: E402
 from vimaan_nlu.validators import (  # noqa: E402
+    bare_command,
     has_command_word,
     heading_too_short,
     validate_slot,
@@ -196,6 +197,7 @@ DREF_FLAP_HANDLE = "sim/cockpit2/controls/flap_handle_request_ratio"
 # cockpit2/controls/parking_brake_ratio is deprecated in 12.4 (X-Plane logs
 # "has been replaced" on every read); this is its replacement.
 DREF_PARKING_BRAKE = "sim/flightmodel/controls/parkbrake"
+DREF_VERTICAL_SPEED_FPM = "sim/flightmodel/position/vh_ind_fpm"
 DREF_ENGINE_RUNNING = "sim/flightmodel/engine/ENGN_running"
 DREF_ENGINE_MIXTURE = "sim/flightmodel/engine/ENGN_mixt"
 DREF_IGNITION_KEY = "sim/cockpit2/engine/actuators/ignition_key"
@@ -733,11 +735,28 @@ class PythonInterface:
             if reply is not None:
                 outcome = self._pilot_reply(cmd, reply)
                 return
+            # "Override landing gear up" while gear up is held: the override,
+            # said with the command. Not when it names a different command.
+            normalized = result.get("normalized") or text
+            if override_prefix(text) is not None and self._names_held(
+                intent_pred, slots, result["confidence"], normalized
+            ):
+                self.tel.event("override_with_command", cmd=cmd, intent=intent_pred, text=text)
+                outcome = self._pilot_reply(cmd, "override")
+                return
 
             # A number on its own ("one thousand") names no command: it can
             # only be the answer to an open "to or two?" question.
             if bare_number(text) is not None:
                 outcome = self._answer_question(cmd, text)
+                return
+
+            # A command's name alone ("landing gear"): ask which way rather
+            # than stay silent. The handler asks when the choice is missing.
+            bare = bare_command(normalized)
+            if bare is not None and intent_pred != bare:
+                self.tel.event("bare_command", cmd=cmd, intent=bare, predicted=intent_pred)
+                outcome = self._dispatch(cmd, bare, {})
                 return
 
             if result["confidence"] < self.CONFIDENCE_FLOOR:
@@ -760,7 +779,6 @@ class PythonInterface:
 
             # A fragment ("seventy", "city eight on") can be classified
             # confidently; only act when the pilot named the thing.
-            normalized = result.get("normalized") or text
             if not has_command_word(intent_pred, normalized):
                 outcome = "rejected"
                 self.tel.event("implausible", cmd=cmd, reason="no_command_word", intent=intent_pred)
@@ -834,6 +852,23 @@ class PythonInterface:
         slots = {TARGET_SLOTS[q["intent"]]: choice}
         self.tel.event("answered", cmd=cmd, reply_to=q["cmd"], intent=q["intent"], slots=slots)
         return self._dispatch(cmd, q["intent"], slots)
+
+    def _names_held(self, intent, slots, confidence, normalized):
+        """Whether an utterance that starts with "override" is about the held
+        command: the same command (no slot contradicting it, so "override
+        gear down" doesn't confirm a held gear up), or no other command at
+        all (a garbled rest, as "override landing get up" was in flight)."""
+        held = self._held if self._confirm_gate.pending_token() else None
+        if held is None:
+            return False
+        if intent == held["intent"]:
+            return all(held["slots"].get(k) in (None, v) for k, v in (slots or {}).items())
+        names_other = (
+            intent in self.intent_to_command
+            and confidence >= self.CONFIDENCE_FLOOR
+            and has_command_word(intent, normalized)
+        )
+        return not names_other
 
     def _pilot_reply(self, cmd, reply):
         """Override the held command, or cancel what is pending."""
@@ -1690,6 +1725,7 @@ class PythonInterface:
             ground_speed_kt=None if gs_ms is None else gs_ms * 1.94384,
             ias_kt=ias,
             on_ground=None if on_ground_i is None else bool(on_ground_i),
+            vs_fpm=self._read_float(DREF_VERTICAL_SPEED_FPM),
         )
 
     # ------------------------------------------------------------------

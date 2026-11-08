@@ -265,3 +265,18 @@ class TestPortFromText:
     def test_runs_in_postprocess_slots(self):
         slots = postprocess_slots({"frequency": "133.1"}, "frequency 133.1 on com 2", COM)
         assert slots == {"frequency": "133.1", "com_port": "2"}
+
+
+@pytest.mark.parametrize(
+    ("text", "port"),
+    [
+        ("frequency 133.1 on on 2", "2"),  # Vosk: "on com two" -> "on on two"
+        ("tune 121.5 on 2", "2"),
+        ("frequency 133.1 on com 2", "2"),
+        ("com 1 133.1 on 2", None),  # two ports named: leave it to the default
+        ("frequency 133.1", None),
+    ],
+)
+def test_port_after_the_frequency(text, port):
+    slots = port_from_text({"frequency": "133.1"}, text, "set_com_frequency")
+    assert slots.get("com_port") == port
