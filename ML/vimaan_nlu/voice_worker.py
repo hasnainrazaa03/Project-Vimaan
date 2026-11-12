@@ -57,6 +57,9 @@ RELEASE_TAIL_SEC = 0.3
 MAX_AUDIO_DIR_BYTES = 500 * 1024 * 1024
 # Live transcript for the overlay: at most this often, only when it changed.
 PARTIAL_INTERVAL_SEC = 0.1
+# A recording played from a file (the test bridge) when there's no microphone
+# to take the rate from: what every recogniser here wants.
+FILE_SAMPLE_RATE = 16_000
 
 
 class WavRecorder:
@@ -186,6 +189,8 @@ class VoiceWorker:
                     self._finish()
         elif op == "text":
             self._predict_and_reply(cmd, msg.get("text", ""), stt_ms=None, audio=None)
+        elif op == "wav":
+            self._play_file(cmd, msg.get("path") or "")
         elif op == "selftest":
             results = []
             for text, expected in msg.get("probes", []):
@@ -257,9 +262,51 @@ class VoiceWorker:
         rec, self.rec = self.rec, None
         if rec is None:
             return
-        cmd = rec["cmd"]
         raw = self.recorder.stop()
-        audio_sec = self.recorder.seconds(raw)
+        self._recognise(
+            rec["cmd"],
+            raw,
+            self.recorder.sample_rate,
+            live=True,
+            overflows=self.recorder.overflows,
+            truncated=self.recorder.truncated,
+            auto_stop=auto_stop,
+        )
+
+    def _play_file(self, cmd: Any, path: str) -> None:
+        """A recording from a file, recognised exactly like a push-to-talk one
+        (the automated-test bridge, Phase A). 16-bit mono PCM at the
+        recogniser's rate."""
+        if self.rec is not None:
+            self.send({"type": "error", "cmd": cmd, "outcome": "worker_error", "error": "busy"})
+            return
+        import wave
+
+        rate = int(getattr(self.recorder, "sample_rate", 0) or FILE_SAMPLE_RATE)
+        try:
+            with wave.open(path) as w:
+                if w.getsampwidth() != 2 or w.getnchannels() != 1:
+                    raise ValueError("need 16-bit mono PCM")
+                if w.getframerate() != rate:
+                    raise ValueError(f"sample rate {w.getframerate()}, need {rate}")
+                raw = w.readframes(w.getnframes())
+        except (OSError, EOFError, ValueError, wave.Error) as exc:
+            self.send(
+                {
+                    "type": "error",
+                    "cmd": cmd,
+                    "outcome": "worker_error",
+                    "stage": "capture",
+                    "error": f"{path}: {exc}",
+                }
+            )
+            return
+        self._recognise(cmd, raw, rate, live=False, source_file=path)
+
+    def _recognise(self, cmd: Any, raw: bytes, rate: int, *, live: bool, **captured: Any) -> None:
+        """Recognise one recording, then predict and reply. ``live``: it came
+        from the microphone, and a streaming recogniser has been fed already."""
+        audio_sec = len(raw) / (2 * rate)
         rms = rms_from_pcm16(raw)
         self.send(
             {
@@ -267,10 +314,8 @@ class VoiceWorker:
                 "cmd": cmd,
                 "audio_sec": round(audio_sec, 2),
                 "rms": round(rms, 1),
-                "overflows": self.recorder.overflows,
-                "truncated": self.recorder.truncated,
-                "auto_stop": auto_stop,
-                "audio_file": self._save_audio(cmd, raw),
+                **captured,
+                "audio_file": self._save_audio(cmd, raw, rate),
             }
         )
         if audio_sec < MIN_RECORD_SEC:
@@ -282,10 +327,14 @@ class VoiceWorker:
         t = self.clock()
         try:
             if self.stream_stt is not None:
-                self.stream_stt.feed(raw[self.stream_stt.fed_bytes :])  # the release tail
+                if live:
+                    self.stream_stt.feed(raw[self.stream_stt.fed_bytes :])  # the release tail
+                else:
+                    self.stream_stt.begin()
+                    self.stream_stt.feed(raw)
                 text = self.stream_stt.finish()
             else:
-                text = self.transcribe_audio(raw, self.recorder.sample_rate)
+                text = self.transcribe_audio(raw, rate)
         except Exception as exc:
             self.send(
                 {
@@ -312,7 +361,7 @@ class VoiceWorker:
             rec["partial"] = text
             self.send({"type": "partial", "cmd": rec["cmd"], "text": text})
 
-    def _save_audio(self, cmd: Any, raw: bytes) -> str | None:
+    def _save_audio(self, cmd: Any, raw: bytes, rate: int) -> str | None:
         if not self.audio_dir or not raw:
             return None
         if self._audio_dir_bytes + len(raw) > MAX_AUDIO_DIR_BYTES:
@@ -325,7 +374,7 @@ class VoiceWorker:
             with wave.open(path, "wb") as w:
                 w.setnchannels(1)
                 w.setsampwidth(2)
-                w.setframerate(self.recorder.sample_rate)
+                w.setframerate(rate)
                 w.writeframes(raw)
         except OSError as exc:
             self.send({"type": "log", "level": "warning", "msg": f"audio not saved: {exc}"})

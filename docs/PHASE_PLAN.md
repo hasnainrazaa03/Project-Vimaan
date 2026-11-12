@@ -19,8 +19,8 @@ Last updated 2026-11-11.
 | E0 | Command table: one source of truth (no behaviour change) | ✅ merged; smoke-flown on v11 | #28 |
 | E1 | Training data v2 + command families → **v17** | ✅ merged; flown twice | #29 |
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | 🟡 merged, all four aircraft probed, v19 passes every gate and is installed; Part C flight next | #30–#34 |
-| D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | 🟡 PR open; install with the next plugin update | #35 |
-| A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 next (owner approved 2026-11-11) | |
+| D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim (switch); stick pull still to check | #35 |
+| A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 done and flown (2026-11-12); A2 next | #36 |
 | T2 | Tier 2: radios & navigation → **v20** | ⬜ T2.0 groundwork (research, handlers, tests) after A2; training after T1 closes | |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v21** | ⬜ | |
 | T4 | Tier 4: questions (read-only) → **v22** | ⬜ | |
@@ -487,7 +487,7 @@ Rules: a run happens only when the owner starts or approves it, never while
 they fly. The bridge is off unless switched on, says so when it is, and
 gives the controls back at the end of a run.
 
-- [ ] **A1 Test bridge and recorded voice.**
+- [x] **A1 Test bridge and recorded voice.** *Done (#36), and run live 2026-11-12, session 005223, details below.*
   - Plugin bridge, off by default; on while `~/Vimaan_Logs/test/bridge.on`
     exists (announced). Requests are files in `test/inbox/`, results in
     `test/outbox/`: say (a WAV through the voice engine, or text through the
@@ -502,6 +502,31 @@ gives the controls back at the end of a run.
   - Done when: with X-Plane running and no one at the controls, "autopilot on"
     in a generated voice engages the autopilot and the result comes back to
     the terminal.
+  - **Live run (2026-11-12, session 005223), no one at the controls:**
+    - X-Plane was started through Steam. The flight was started through the
+      web API: the Baron in the air over Seattle, 6,000 ft, engines running.
+    - In the generated voice "Daniel", every command was heard exactly and
+      done, with its read-back checked: "autopilot on", "heading mode",
+      "altitude hold", "altitude five thousand", and "descend at one thousand
+      five hundred feet per minute" (read back "Descend 1500 feet per minute,
+      to 5000"). Speech to action 21–111 ms.
+    - The descent held about −1,450 ft/min with altitude capture armed,
+      switched to altitude hold at about 5,200 ft, and settled at 4,996 ft.
+    - A disconnect pressed through the bridge (`servos_fdir_off`) was
+      diagnosed as "switch or button", and Vimaan said so. D.3 still needs a
+      stick pull; no joystick was connected.
+    - Clean shutdown, no errors.
+  - **Learned about X-Plane, now in `simtest launch` / `fly` / `quit`:**
+    - The Steam edition starts only through Steam (`steam://run/2014780`),
+      and Steam asks for a launch option (X-Plane / Plane Maker / Airfoil
+      Maker) unless a default is set.
+    - The first start came up in Safe Mode (plugins off) for no clear
+      reason; the second was normal.
+    - `POST /api/v3/flight` starts the flight but leaves the Flight
+      Configuration screen open over it, paused; `toggle_flight_config`
+      closes it.
+    - `sim/operation/quit` asks to confirm unless "Don't ask again" was
+      ticked once.
 - [ ] **A2 In-air runner for Tier 1.** One scenario per aircraft (Baron, 737,
   A330, King Air): placed in the air, set up, then each checklist command is
   said and the sim is checked: targets, modes, the level-off at the selected

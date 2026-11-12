@@ -63,7 +63,7 @@ if _ML_PATH not in sys.path:
 
 # Only light, stdlib-backed modules load into X-Plane; the heavy ones live in
 # the worker process.
-from vimaan_nlu import probe  # noqa: E402
+from vimaan_nlu import probe, sim_bridge  # noqa: E402
 from vimaan_nlu.aircraft import AircraftInfo, files_mention, resolve  # noqa: E402
 from vimaan_nlu.ambiguity import TARGET_SLOTS, bare_number, chosen, two_or_to  # noqa: E402
 from vimaan_nlu.commands import (  # noqa: E402
@@ -136,6 +136,11 @@ VERIFY_DELAY_SEC = 1.0
 FOLLOW_UP_SEC = (0.0, 10.0, 30.0)
 # How often to look for autopilot changes nobody asked Vimaan for.
 STATE_WATCH_SEC = 1.0
+# The automated-test bridge (vimaan_nlu.sim_bridge): how often it looks for
+# its switch file and requests.
+BRIDGE_POLL_SEC = 0.25
+METRES_PER_FOOT = 0.3048
+MPS_PER_KNOT = 0.514444
 # Autopilot-off diagnostics (vimaan_nlu.disconnect). The pilot's stick input,
 # not the autopilot's: X-Plane keeps the servo output separately.
 STICK_INPUT = {
@@ -404,6 +409,10 @@ class PythonInterface:
         # Whether the loaded aircraft's own files use an autothrottle:
         # (acf path, True/False/None), scanned off the main thread.
         self._athr_scan: tuple[str, bool | None] | None = None
+        # The automated-test bridge (Phase A): off unless its switch file exists.
+        self._bridge_on = False
+        self._bridge_next = 0.0
+        self._say_results = sim_bridge.SayResults()
         # Autopilot-off diagnostics: stick history, autopilot-off commands
         # seen (whoever fired them), and the command Vimaan is firing now.
         self._stick = StickTrace()
@@ -420,6 +429,7 @@ class PythonInterface:
         # also in events.jsonl (except live partial transcripts).
         self.overlay_state = OverlayState(mode=self.OVERLAY_MODE)
         self.tel.subscribe(self.overlay_state.on_event)
+        self.tel.subscribe(self._say_results.on_event)
         self.overlay: Overlay | None = None
         self._start_worker()
 
@@ -810,6 +820,7 @@ class PythonInterface:
             self._service_verifications()
             self._service_follow_ups()
             self._service_probe()
+            self._service_bridge()
             self._sample_stick()
             self._watch_state()
             if self.overlay is not None:
@@ -1408,6 +1419,190 @@ class PythonInterface:
         )
         if dropped(previous, state):
             self._on_autopilot_drop(previous, state, now)
+
+    # ------------------------------------------------------------------
+    # Automated-test bridge (vimaan_nlu.sim_bridge, Phase A)
+    # ------------------------------------------------------------------
+    def _service_bridge(self):
+        """Switch on or off with the switch file, hand back finished results,
+        and take new requests. Off: one file check every quarter second."""
+        now = time.perf_counter()
+        if now < self._bridge_next:
+            return
+        self._bridge_next = now + BRIDGE_POLL_SEC
+        flag, inbox, outbox = sim_bridge.paths(self.tel.log_dir)
+        on = flag.exists()
+        if on != self._bridge_on:
+            self._bridge_on = on
+            self.tel.event("test_bridge", on=on, folder=str(flag.parent))
+            self._say("Test bridge on" if on else "Test bridge off")
+        if not on:
+            return
+        checking = {v["cmd"] for v in self._verifications}
+        for result in self._say_results.finished(now, checking):
+            sim_bridge.write_json(outbox / f"{result['id']}.json", result)
+        for req in sim_bridge.take_requests(inbox):
+            result = self._bridge_request(req)
+            if result is not None:  # a say answers when its command is done
+                sim_bridge.write_json(outbox / f"{req['id']}.json", {"id": req["id"], **result})
+
+    def _bridge_request(self, req):
+        why = sim_bridge.problem(req)
+        if why:
+            return {"ok": False, "error": why}
+        op = req["op"]
+        if op not in ("state", "read"):
+            fields = {k: v for k, v in req.items() if k not in ("id", "op")}
+            self.tel.event("test_request", request=req["id"], op=op, **fields)
+        try:
+            if op == "state":
+                return {"ok": True, **self._bridge_state()}
+            if op == "say":
+                error = self._bridge_say(req)
+                return None if error is None else {"ok": False, "error": error}
+            if op == "read":
+                return {"ok": True, "values": {n: self._read_any(n) for n in req["datarefs"]}}
+            if op == "write":
+                return self._write_any(req["dataref"], req["value"])
+            if op == "command":
+                return self._bridge_command(req["name"], req.get("phase", "once"))
+            if op == "place":
+                xp.placeUserAtLocation(
+                    float(req["latitude"]),
+                    float(req["longitude"]),
+                    float(req["elevation_ft"]) * METRES_PER_FOOT,
+                    float(req["heading_true"]),
+                    float(req["speed_kt"]) * MPS_PER_KNOT,
+                )
+            elif op == "airport":
+                xp.placeUserAtAirport(req["icao"])
+            elif op == "aircraft":
+                xp.setUsersAircraft(req["path"])
+            # A new position resets the autopilot: not a disconnect to call out.
+            self._autopilot_state = None
+            self._quiet_until = time.perf_counter() + RELOAD_QUIET_SEC
+            return {"ok": True}
+        except Exception as exc:
+            self.tel.error("test_request_failed", exc, request=req["id"], op=op)
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+    def _bridge_say(self, req):
+        """Start a command as if the pilot had pressed push-to-talk and said
+        it: a WAV goes through recognition, text to the model only."""
+        if not self.ready or self.worker is None:
+            return "Vimaan is not ready"
+        if self._active is not None or self._say_results.busy:
+            return "busy"
+        cmd = self.tel.new_command_id()
+        if req.get("wav"):
+            msg, said = {"op": "wav", "cmd": cmd, "path": req["wav"]}, {"wav": req["wav"]}
+        else:
+            msg, said = {"op": "text", "cmd": cmd, "text": req["text"]}, {"text": req["text"]}
+        now = time.perf_counter()
+        self._active = {"cmd": cmd, "t_press": now, "t_release": now, "source": "test"}
+        self._say_results.start(req["id"], cmd, now)
+        self.tel.event("ptt_press", cmd=cmd, source="test", request=req["id"], **said)
+        self.tel.event("ptt_release", cmd=cmd, source="test", held_ms=0.0)
+        if not self.worker.send(msg):
+            self._end_command("worker_error")
+            return None  # the result reports the error
+        if self._flight_loop_id:
+            xp.scheduleFlightLoop(self._flight_loop_id, -1.0, 1)
+        return None
+
+    def _bridge_command(self, name, phase):
+        """A command from the bridge counts as the pilot's, not Vimaan's."""
+        ref = xp.findCommand(name)
+        if not ref:
+            return {"ok": False, "error": f"no command {name}"}
+        {"once": xp.commandOnce, "begin": xp.commandBegin, "end": xp.commandEnd}[phase](ref)
+        self.tel.event("sim_command", cmd=None, command=name, ok=True, origin="test", phase=phase)
+        return {"ok": True}
+
+    def _bridge_state(self):
+        info = self.profile.info
+        agl_m = self._read_float("sim/flightmodel/position/y_agl")
+        return {
+            "session": self.tel.session_id,
+            "events": str(self.tel.events_path),
+            "ready": self.ready,
+            "busy": self._active is not None or self._say_results.busy,
+            "probe": self._probe is not None,
+            "aircraft": {
+                "icao": info.icao,
+                "key": info.key,
+                "acf": info.acf_path,
+                "description": info.description,
+            },
+            "paused": self._read_int(DREF_PAUSED),
+            "on_ground": self._read_int("sim/flightmodel/failures/onground_any"),
+            "agl_ft": None if agl_m is None else round(agl_m / METRES_PER_FOOT, 1),
+            "flying": {k: _round(self._read_float(n), 1) for k, n in STATE_FLOATS.items()},
+            "autopilot": {k: self._read_int(n) for k, n in AUTOPILOT_STATE.items()},
+        }
+
+    @staticmethod
+    def _dataref_kind(ref):
+        """'int', 'float', 'ints', 'floats', 'data' or None, from X-Plane's type bits."""
+        types = xp.getDataRefTypes(ref)
+        if types & 1 and not types & 6:
+            return "int"
+        if types & 6:
+            return "float"
+        if types & 16:
+            return "ints"
+        if types & 8:
+            return "floats"
+        return "data" if types & 32 else None
+
+    def _read_any(self, name):
+        """Any dataref by name, "name[i]" for one element of an array; a whole
+        array comes back as a list (first 64 values)."""
+        base, index = sim_bridge.parse_dataref(name)
+        ref = self._find(base)
+        if not ref:
+            return None
+        kind = self._dataref_kind(ref)
+        values: list = []
+        if kind in ("ints", "floats"):
+            get = xp.getDatavi if kind == "ints" else xp.getDatavf
+            if index is not None:
+                get(ref, values, index, 1)
+                return values[0] if values else None
+            get(ref, values, 0, min(64, get(ref, None, 0, -1)))
+            return values
+        if index is not None:
+            return None
+        if kind == "int":
+            return xp.getDatai(ref)
+        if kind == "float":
+            return xp.getDataf(ref)
+        return xp.getDatas(ref) if kind == "data" else None
+
+    def _write_any(self, name, value):
+        base, index = sim_bridge.parse_dataref(name)
+        ref = self._find(base)
+        if not ref:
+            return {"ok": False, "error": f"no dataref {base}"}
+        if not xp.canWriteDataRef(ref):
+            return {"ok": False, "error": f"{base} is read-only"}
+        kind = self._dataref_kind(ref)
+        if kind == "ints" and index is not None:
+            xp.setDatavi(ref, [int(value)], index, 1)
+        elif kind == "floats" and index is not None:
+            xp.setDatavf(ref, [float(value)], index, 1)
+        elif kind == "int" and index is None:
+            xp.setDatai(ref, int(value))
+        elif kind == "float" and index is None:
+            xp.setDataf(ref, float(value))
+        else:
+            return {"ok": False, "error": f"can't write {name} ({kind})"}
+        back = self._read_any(name)
+        ok = back is not None and abs(float(back) - float(value)) < 1e-3
+        self.tel.event(
+            "sim_write", cmd=None, dataref=name, value=value, readback=back, ok=ok, origin="test"
+        )
+        return {"ok": ok, "readback": back}
 
     def _read_string(self, name):
         dref = self._find(name)
