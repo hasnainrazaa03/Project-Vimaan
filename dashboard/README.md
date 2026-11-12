@@ -1,8 +1,8 @@
 # Vimaan Dashboard
 
 A lightweight web UI for monitoring training runs, picking a trained
-checkpoint, sending live predictions, uploading datasets, and kicking off
-new training jobs — all in one place.
+checkpoint, sending live predictions, uploading datasets, kicking off
+new training jobs, and reviewing flights flown with Vimaan — all in one place.
 
 ## Install
 
@@ -22,9 +22,9 @@ python3 -m dashboard --host 0.0.0.0 --port 9000
 
 ## What it does
 
-Three tabs. `?tab=training` (or `inference`, `evals`) links straight to one;
-`?run=v18&compare=v17` pins a run and the run to compare it with;
-`?theme=light` picks the theme.
+Four tabs. `?tab=training` (or `inference`, `evals`, `flights`) links straight
+to one; `?run=v18&compare=v17` pins a run and the run to compare it with;
+`?flight=20261107_203741` opens one flight; `?theme=light` picks the theme.
 
 ### Training: a run, live
 
@@ -60,6 +60,25 @@ message, and Ctrl-C as "stopped".
 | Real voice by flight | right / rejected / wrong per recorded flight, against the baseline | `gate.json` |
 | Where it differs | the examples the gate lists: baseline right but candidate wrong or rejected, gold failures, negatives acted on | `gate.json` |
 
+### Flights: what happened in the sim
+
+Every X-Plane session the plugin logged, from `~/Vimaan_Logs` (set
+`VIMAAN_LOG_DIR` to read another folder). The page follows the newest flight,
+and a flight in progress updates live (server-sent events, once a second
+while its log grows).
+
+| Panel | Shows | From |
+| --- | --- | --- |
+| Flights | date, length, aircraft, model, commands, done / not done / not understood, autopilot drops not made by Vimaan, problems, live or ended | `vimaan_<session>.events.jsonl` |
+| Tiles | the same for one flight, plus speech-to-action time (median, p95) | |
+| Timeline | each push-to-talk command: what was heard, the intent and values understood, Vimaan's reply, the result, speech-to-action time, and ▶ the recording. Click a row for what was sent to X-Plane, what was read back afterwards, and notes (safety holds, overrides, refused values, the aircraft 10 s and 30 s later) | the command's events, `audio/<session>_<cmd>.wav` |
+| | autopilot changes, marked Vimaan / not Vimaan / the probe, and disconnects with the plugin's diagnosis (cause, stick input, null zone, what the aircraft was doing) | `autopilot_state_change`, `autopilot_disconnect` |
+| | startup, model, aircraft, joystick null zone, self test, probe, freezes and errors | |
+
+Filters: everything, only what needs a look, only commands that worked, only
+the autopilot; a word search; probe steps and other details are hidden until
+asked for.
+
 ### Inference
 
 Model selector, live prediction (intent, confidence, slots), and the model's provenance.
@@ -85,6 +104,10 @@ Model selector, live prediction (intent, confidence, slots), and the model's pro
 | GET | `/api/runs/{name}/stream` | server-sent events: `snapshot`, then `records` as lines arrive, `summary` every 5 s |
 | GET | `/api/evals` | every model version's gate summary, parity and run summary |
 | GET | `/api/evals/{version}` | one version's full `gate.json`, parity and manifest |
+| GET | `/api/flights` | every logged session with its summary, newest first |
+| GET | `/api/flights/{session}` | one session: summary, timeline items, problems |
+| GET | `/api/flights/{session}/stream` | server-sent events: `flight` now and each time the log grows, until the session ends |
+| GET | `/api/flights/{session}/audio/{cmd}` | one command's recording (WAV) |
 | GET | `/api/models` | list checkpoints + parsed manifests |
 | GET | `/api/datasets` | list `.jsonl` datasets (final + uploads) |
 | POST | `/api/datasets/upload` | upload a `.jsonl` (validated row-by-row) |
@@ -103,5 +126,5 @@ internet without adding auth + a reverse proxy.
 ## Tests
 
 ```bash
-python3 -m pytest tests/test_dashboard.py tests/test_run_metrics.py tests/test_eval_metrics.py
+python3 -m pytest tests/test_dashboard.py tests/test_run_metrics.py tests/test_eval_metrics.py tests/test_flights.py
 ```

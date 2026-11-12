@@ -81,6 +81,19 @@ DEFAULT_DATAREFS: dict[str, Any] = {
     "sim/cockpit2/autopilot/vvi_dial_fpm": 0.0,
     "sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot": 30.12,
     "sim/cockpit2/gauges/actuators/barometer_setting_in_hg_copilot": 30.12,
+    # Autopilot-off diagnostics: pilot stick input, autopilot servo output,
+    # joystick setup, autopilot power and warnings.
+    "sim/joystick/yoke_pitch_ratio": 0.0,
+    "sim/joystick/yoke_roll_ratio": 0.0,
+    "sim/joystick/yoke_heading_ratio": 0.0,
+    "sim/joystick/servo_pitch_ratio": 0.0,
+    "sim/joystick/servo_roll_ratio": 0.0,
+    "sim/joystick/servo_heading_ratio": 0.0,
+    "sim/joystick/has_joystick": 1,
+    "sim/joystick/joystick_pitch_nullzone": 0.0,
+    "sim/cockpit2/autopilot/autopilot_has_power": 1,
+    "sim/cockpit2/autopilot/otto_fail_warn": 0,
+    "sim/cockpit2/autopilot/autopilot_disconnect": 0,
 }
 
 # xp.getNthAircraftModel(0): (file name, full path).
@@ -127,6 +140,21 @@ KNOWN_COMMANDS = {
     "sim/instruments/barometer_std",
     "sim/instruments/barometer_up",
     "sim/instruments/barometer_down",
+    # Autopilot off (vimaan_nlu.disconnect.WATCHED_COMMANDS, the sim/ ones).
+    "sim/autopilot/servos_fdir_off",
+    "sim/autopilot/servos_fdir2_off",
+    "sim/autopilot/servos_fdir_yawd_off",
+    "sim/autopilot/servos_fdir_yawd_trim_off",
+    "sim/autopilot/servos_off_any",
+    "sim/autopilot/servos_yawd_off_any",
+    "sim/autopilot/servos_yawd_trim_off_any",
+    "sim/autopilot/fdir_servos_down_one",
+    "sim/autopilot/fdir2_servos_down_one",
+    "sim/autopilot/electric_master_off",
+    "sim/autopilot/control_wheel_steer",
+    "sim/autopilot/CWSA",
+    "sim/autopilot/CWSB",
+    "sim/autopilot/take_off_go_around",
 }
 
 
@@ -138,6 +166,9 @@ def make_xp() -> types.ModuleType:
     xp.held = set()  # commands between commandBegin/commandEnd
     xp.spoken = []
     xp.custom_commands = {}  # name -> handler
+    # Handlers plugins put on X-Plane's own commands: name -> [(callback, refCon)].
+    xp.hooks = {}
+    xp.created = set()  # commands the plugin created (createCommand)
     xp.hotkeys = []
     xp.flight_loops = []
     # command name -> fn(xp): what the command does to the sim, for tests that
@@ -146,6 +177,7 @@ def make_xp() -> types.ModuleType:
 
     xp.VK_Z, xp.DownFlag, xp.UpFlag, xp.ControlFlag = 90, 1, 2, 4
     xp.CommandBegin, xp.CommandContinue, xp.CommandEnd = 0, 1, 2
+    xp.MSG_PLANE_LOADED, xp.MSG_AIRPORT_LOADED = 102, 103
 
     def findDataRef(name):
         return name if name in xp.datarefs else None
@@ -182,14 +214,21 @@ def make_xp() -> types.ModuleType:
         values.extend(chunk)
         return len(chunk)
 
+    def _run_hooks(ref, phase):
+        for callback, ref_con in list(xp.hooks.get(ref, ())):
+            callback(ref, phase, ref_con)
+
     def commandOnce(ref):
         xp.commands_fired.append(ref)
+        _run_hooks(ref, xp.CommandBegin)
         if ref in xp.effects:
             xp.effects[ref](xp)
+        _run_hooks(ref, xp.CommandEnd)
 
     def commandBegin(ref):
         xp.held.add(ref)
         xp.commands_fired.append(ref + ":begin")
+        _run_hooks(ref, xp.CommandBegin)
         if ref in xp.effects:
             xp.effects[ref](xp)
 
@@ -199,13 +238,20 @@ def make_xp() -> types.ModuleType:
 
     def createCommand(name, description):
         xp.custom_commands[name] = None
+        xp.created.add(name)
         return name
 
     def registerCommandHandler(ref, callback, before=1, refCon=None):
-        xp.custom_commands[ref] = callback
+        if ref in xp.created:  # one the plugin created
+            xp.custom_commands[ref] = callback
+        else:  # X-Plane's or an aircraft's: a watcher, the command still runs
+            xp.hooks.setdefault(ref, []).append((callback, refCon))
 
     def unregisterCommandHandler(ref, callback, before=1, refCon=None):
-        xp.custom_commands.pop(ref, None)
+        if ref in xp.created:
+            xp.custom_commands.pop(ref, None)
+        else:
+            xp.hooks[ref] = [h for h in xp.hooks.get(ref, []) if h != (callback, refCon)]
 
     def registerHotKey(key, flags, description, callback, refCon=None):
         xp.hotkeys.append((key, flags, description, callback))

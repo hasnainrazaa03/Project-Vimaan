@@ -72,6 +72,13 @@ from vimaan_nlu.commands import (  # noqa: E402
     required_slots,
     self_test_probes,
 )
+from vimaan_nlu.disconnect import (  # noqa: E402
+    WATCHED_COMMANDS,
+    CommandTrace,
+    StickTrace,
+    diagnose,
+    dropped,
+)
 from vimaan_nlu.overlay import Overlay  # noqa: E402
 from vimaan_nlu.overlay_state import OverlayState  # noqa: E402
 from vimaan_nlu.pilot_replies import override_prefix, pilot_reply  # noqa: E402
@@ -134,6 +141,27 @@ STATE_WATCH_SEC = 1.0
 BRIDGE_POLL_SEC = 0.25
 METRES_PER_FOOT = 0.3048
 MPS_PER_KNOT = 0.514444
+# Autopilot-off diagnostics (vimaan_nlu.disconnect). The pilot's stick input,
+# not the autopilot's: X-Plane keeps the servo output separately.
+STICK_INPUT = {
+    "pitch": "sim/joystick/yoke_pitch_ratio",
+    "roll": "sim/joystick/yoke_roll_ratio",
+    "yaw": "sim/joystick/yoke_heading_ratio",
+}
+SERVO_OUTPUT = {
+    "pitch": "sim/joystick/servo_pitch_ratio",
+    "roll": "sim/joystick/servo_roll_ratio",
+    "yaw": "sim/joystick/servo_heading_ratio",
+}
+DREF_HAS_JOYSTICK = "sim/joystick/has_joystick"
+DREF_NULLZONE = "sim/joystick/joystick_pitch_nullzone"  # one serves all axes
+DREF_AP_POWER = "sim/cockpit2/autopilot/autopilot_has_power"
+DREF_AP_FAIL = "sim/cockpit2/autopilot/otto_fail_warn"
+DREF_AP_DISCONNECT_WARNING = "sim/cockpit2/autopilot/autopilot_disconnect"
+# "Autopilot off" from Vimaan this recently is Vimaan's doing.
+VIMAAN_OFF_SEC = 5.0
+# A new flight or aircraft resets the autopilot: no callout for this long.
+RELOAD_QUIET_SEC = 10.0
 
 # What the aircraft is doing, logged as aircraft_state.
 STATE_FLOATS = {
@@ -385,6 +413,14 @@ class PythonInterface:
         self._bridge_on = False
         self._bridge_next = 0.0
         self._say_results = sim_bridge.SayResults()
+        # Autopilot-off diagnostics: stick history, autopilot-off commands
+        # seen (whoever fired them), and the command Vimaan is firing now.
+        self._stick = StickTrace()
+        self._off_commands = CommandTrace()
+        self._hooks: list[Any] = []  # command refs with our watch handler
+        self._hooked: set[str] = set()
+        self._firing: str | None = None
+        self._quiet_until = 0.0  # no disconnect callouts until then (reload)
 
         # Safety interlocks (Phase 6B): risky commands must be repeated to confirm.
         self._confirm_gate = ConfirmationGate(window_sec=self.CONFIRM_WINDOW_SEC)
@@ -523,6 +559,7 @@ class PythonInterface:
             "Vimaan: altitude capture by Vimaan on/off (aircraft that can't capture)",
             self._on_capture_cmd,
         )
+        self._hook_off_commands()
         self._start_overlay()
 
         # Flight loop: worker replies, dispatch, verification, engine cranks.
@@ -545,6 +582,10 @@ class PythonInterface:
         for cmd_ref, handler in self._commands:
             xp.unregisterCommandHandler(cmd_ref, handler, 1, None)
         self._commands = []
+        for cmd_ref, name in self._hooks:
+            xp.unregisterCommandHandler(cmd_ref, self._on_off_command, 1, name)
+        self._hooks = []
+        self._hooked = set()
         if self.worker is not None:
             self.worker.stop()
         for hotkey in (self.hotkeyPress, self.hotkeyRelease, self.hotkeySelfTest):
@@ -564,7 +605,95 @@ class PythonInterface:
         self.tel.event("plugin_disable")
 
     def XPluginReceiveMessage(self, inFromWho, inMessage, inParam):
-        pass
+        # A new flight or aircraft resets the autopilot: that's not a disconnect.
+        if inMessage == xp.MSG_AIRPORT_LOADED or (
+            inMessage == xp.MSG_PLANE_LOADED and inParam == 0
+        ):
+            self._autopilot_state = None
+            self._quiet_until = time.perf_counter() + RELOAD_QUIET_SEC
+
+    # ------------------------------------------------------------------
+    # Autopilot-off diagnostics (vimaan_nlu.disconnect)
+    # ------------------------------------------------------------------
+    def _hook_off_commands(self):
+        """Watch every autopilot-off command, whoever fires it. Aircraft
+        commands exist only once that aircraft loads, so this runs again on
+        each aircraft change."""
+        for name in WATCHED_COMMANDS:
+            if name in self._hooked:
+                continue
+            cmd_ref = xp.findCommand(name)
+            if not cmd_ref:
+                continue
+            xp.registerCommandHandler(cmd_ref, self._on_off_command, 1, name)
+            self._hooks.append((cmd_ref, name))
+            self._hooked.add(name)
+
+    def _on_off_command(self, cmd_ref, phase, name):
+        if phase == xp.CommandBegin:
+            self._off_commands.add(time.perf_counter(), name, by_vimaan=self._firing == name)
+        return 1  # never swallow it: X-Plane and the aircraft still act on it
+
+    def _sample_stick(self):
+        now = time.perf_counter()
+        if self._stick.due(now):
+            self._stick.add(now, {axis: self._read_float(n) for axis, n in STICK_INPUT.items()})
+
+    def _joystick_setup(self):
+        """Logged per aircraft: a null zone of 0 lets a resting stick fly the
+        aircraft, and on airliners take the autopilot off."""
+        nullzone = self._read_float(DREF_NULLZONE)
+        return {
+            "has_joystick": self._read_int(DREF_HAS_JOYSTICK),
+            "nullzone": None if nullzone is None else round(nullzone, 3),
+            "stick": {a: _round(self._read_float(n), 3) for a, n in STICK_INPUT.items()},
+        }
+
+    def _on_autopilot_drop(self, previous, state, now):
+        last = self._last_action
+        # "Flight director off" takes the servos with it in X-Plane.
+        vimaan_off = bool(
+            last
+            and last["intent"] in ("toggle_autopilot", "toggle_flight_director")
+            and now - last["t"] <= VIMAAN_OFF_SEC
+        )
+        commands = self._off_commands.recent(now)
+        peak = self._stick.peak(now)
+        found = diagnose(
+            stick_peak=peak,
+            commands=commands,
+            has_power=self._read_int(DREF_AP_POWER),
+            fail_warn=self._read_int(DREF_AP_FAIL),
+            vimaan_turned_off=vimaan_off,
+            probe_running=self._probe is not None,
+            reloading=now < self._quiet_until,
+        )
+        floats = {k: _round(self._read_float(n), 1) for k, n in STATE_FLOATS.items()}
+        self.tel.event(
+            "autopilot_disconnect",
+            logging.INFO if found["say"] is None else logging.WARNING,
+            cause=found["cause"],
+            detail=found["detail"],
+            said=found["say"],
+            changed={k: [previous[k], state[k]] for k in state if previous[k] != state[k]},
+            commands=commands,
+            stick_peak=peak,
+            servo={a: _round(self._read_float(n), 3) for a, n in SERVO_OUTPUT.items()},
+            has_power=self._read_int(DREF_AP_POWER),
+            fail_warn=self._read_int(DREF_AP_FAIL),
+            disconnect_warning=self._read_int(DREF_AP_DISCONNECT_WARNING),
+            last_vimaan_cmd=last["cmd"] if last else None,
+            last_vimaan_intent=last["intent"] if last else None,
+            sec_since_vimaan_action=round(now - last["t"], 1) if last else None,
+            **self._joystick_setup(),
+            **floats,
+        )
+        if found["say"]:
+            previous_cmd, self._current_cmd = self._current_cmd, None
+            try:
+                self._say(found["say"])
+            finally:
+                self._current_cmd = previous_cmd
 
     def _start_overlay(self):
         if self.overlay_state.mode == "off":
@@ -692,6 +821,7 @@ class PythonInterface:
             self._service_follow_ups()
             self._service_probe()
             self._service_bridge()
+            self._sample_stick()
             self._watch_state()
             if self.overlay is not None:
                 self.overlay.update()
@@ -1218,7 +1348,11 @@ class PythonInterface:
                 reason="command_not_found",
             )
             return False
-        xp.commandOnce(cmd_ref)
+        self._firing = command_path  # our own, to the autopilot-off watch
+        try:
+            xp.commandOnce(cmd_ref)
+        finally:
+            self._firing = None
         self.tel.event("sim_command", cmd=self._current_cmd, command=command_path, ok=True)
         return True
 
@@ -1283,6 +1417,8 @@ class PythonInterface:
             sec_since_vimaan_action=round(now - last["t"], 1) if last else None,
             **state,
         )
+        if dropped(previous, state):
+            self._on_autopilot_drop(previous, state, now)
 
     # ------------------------------------------------------------------
     # Automated-test bridge (vimaan_nlu.sim_bridge, Phase A)
@@ -1342,7 +1478,9 @@ class PythonInterface:
                 xp.placeUserAtAirport(req["icao"])
             elif op == "aircraft":
                 xp.setUsersAircraft(req["path"])
-            self._autopilot_state = None  # a new position resets the autopilot
+            # A new position resets the autopilot: not a disconnect to call out.
+            self._autopilot_state = None
+            self._quiet_until = time.perf_counter() + RELOAD_QUIET_SEC
             return {"ok": True}
         except Exception as exc:
             self.tel.error("test_request_failed", exc, request=req["id"], op=op)
@@ -1531,6 +1669,8 @@ class PythonInterface:
         info = self._aircraft_info(icao, acf_path)
         self.profile = resolve(info, self._has_command, self._probe_results(info.key))
         self.tel.event("aircraft", **self.profile.summary())
+        self._hook_off_commands()
+        self.tel.event("joystick", **self._joystick_setup())
         self._capture = None
         self._baro_step = None
         self._athr_scan = (acf_path, None)

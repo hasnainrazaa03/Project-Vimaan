@@ -9,11 +9,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%88%EF%B8%8F%3C/text%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="/static/style.css?v=6" />
+  <link rel="stylesheet" href="/static/style.css?v=7" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
-  <script src="/static/app.js?v=5" defer></script>
+  <script src="/static/app.js?v=6" defer></script>
   <script src="/static/live.js?v=3" defer></script>
   <script src="/static/evals.js?v=2" defer></script>
+  <script src="/static/flights.js?v=1" defer></script>
 </head>
 <body>
   <!-- animated aurora backdrop -->
@@ -37,6 +38,7 @@
       <button class="tab is-active" data-tab="inference" role="tab">Inference</button>
       <button class="tab" data-tab="training" role="tab">Training</button>
       <button class="tab" data-tab="evals" role="tab">Evals</button>
+      <button class="tab" data-tab="flights" role="tab">Flights</button>
     </nav>
 
     <div class="top-actions">
@@ -321,6 +323,49 @@
           <div id="eval-diffs" class="diff-list"></div>
         </section>
       </div>
+    </div>
+
+    <!-- ============================= FLIGHTS ============================= -->
+    <div class="panel" id="panel-flights" role="tabpanel">
+      <section class="card glass">
+        <header class="card-head">
+          <h2>Flights</h2>
+          <div class="head-actions">
+            <span class="badge ghost" id="flights-badge">—</span>
+            <button class="icon-btn" id="refresh-flights" title="Reload and follow the newest flight">↻</button>
+          </div>
+        </header>
+        <div class="table-wrap fl-list"><table class="data-table clickable" id="flights-table"></table></div>
+        <p class="live-note" id="flights-note">Every X-Plane session Vimaan logged. A flight in progress updates live. Click one to review it.</p>
+      </section>
+
+      <section class="card glass">
+        <header class="card-head live-head">
+          <div class="live-title">
+            <h2 id="flight-title">Flight</h2>
+            <span class="live-chip" id="flight-chip" data-status="none"><span class="dot"></span><span class="label">—</span></span>
+            <span class="live-phase" id="flight-meta"></span>
+          </div>
+        </header>
+        <div class="kpis" id="flight-kpis"></div>
+        <div class="fl-controls">
+          <label class="mini">Show
+            <select id="flight-filter">
+              <option value="all">Everything</option>
+              <option value="issues">Only what needs a look</option>
+              <option value="done">Only commands that worked</option>
+              <option value="autopilot">Only the autopilot</option>
+            </select>
+          </label>
+          <input type="search" id="flight-search" class="fl-search" placeholder="Search what was said or replied" aria-label="Search the flight" />
+          <label class="mini check"><input type="checkbox" id="flight-autopilot" checked /> Autopilot changes</label>
+          <label class="mini check"><input type="checkbox" id="flight-system" /> Probe steps and other details</label>
+          <label class="mini check"><input type="checkbox" id="flight-newest" /> Newest first</label>
+          <span class="badge ghost" id="flight-count"></span>
+        </div>
+        <div class="table-wrap"><table class="data-table fl-timeline" id="flight-timeline"></table></div>
+        <p class="live-note">Click a command for what was sent to X-Plane and what was checked afterwards. ▶ plays what the microphone recorded.</p>
+      </section>
     </div>
   </main>
 
