@@ -106,6 +106,10 @@ class Step:
     vimaan_checks: bool = True  # Vimaan's own read-backs must pass
     settle_sec: float = 0.0  # wait before checking (a knob turning, a mode settling)
     note: str = ""
+    # Run only when this holds now (e.g. above flap speed); else skipped.
+    only_if: SimCheck | None = None
+    # Run only if the named step ran (wasn't skipped).
+    after: str | None = None
 
 
 @dataclass
@@ -121,8 +125,22 @@ class Runner:
     results: list[dict[str, Any]] = field(default_factory=list)
 
     def run(self, steps: Sequence[Step]) -> list[dict[str, Any]]:
+        ran: set[str] = set()
         for step in steps:
-            r = self.run_step(step)
+            skip = (step.after is not None and step.after not in ran) or (
+                step.only_if is not None and not self._check(step.only_if)["ok"]
+            )
+            if skip:
+                r = {
+                    "step": step.name,
+                    "skipped": True,
+                    "ok": True,
+                    "problems": [],
+                    "note": step.note,
+                }
+            else:
+                r = self.run_step(step)
+                ran.add(step.name)
             self.results.append(r)
             self.log(line(r))
         return self.results
@@ -226,6 +244,8 @@ class Runner:
 
 
 def line(r: dict[str, Any]) -> str:
+    if r.get("skipped"):
+        return f"· {r['step']}: skipped (doesn't apply now)"
     mark = "✓" if r["ok"] else "✕"
     heard = ""
     if r.get("understood_ok") is False:
@@ -238,10 +258,12 @@ def line(r: dict[str, Any]) -> str:
 
 def summary(results: Sequence[dict[str, Any]]) -> dict[str, Any]:
     said = [r for r in results if r.get("heard_ok") is not None]
+    ran = [r for r in results if not r.get("skipped")]
     return {
-        "steps": len(results),
-        "passed": sum(r["ok"] for r in results),
-        "failed": [r["step"] for r in results if not r["ok"]],
+        "steps": len(ran),
+        "skipped": len(results) - len(ran),
+        "passed": sum(r["ok"] for r in ran),
+        "failed": [r["step"] for r in ran if not r["ok"]],
         "heard_exactly": sum(bool(r["heard_ok"]) for r in said),
         "understood_by_voice": sum(bool(r.get("understood_ok")) for r in said),
         "said_by_voice": len(said),

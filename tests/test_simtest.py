@@ -221,3 +221,14 @@ def test_safe_mode_is_spotted(tmp_path):
     (tmp_path / "Log.txt").write_text("Log.txt for X-Plane 12.4.3\nFetching plugins\n")
     assert not xplane.safe_mode(tmp_path)
     assert not xplane.safe_mode(tmp_path / "missing")
+
+
+def test_flap_limits_come_from_the_aircraft_file(tmp_path):
+    from simtest.aircraft_file import flap_limits
+
+    acf = tmp_path / "b738.acf"
+    acf.write_bytes(
+        b"I\n1200 version\nP acf/_Vfe1_kts 250.000000000\nP acf/_Vfem_kts 162.000000000\n"
+    )
+    assert flap_limits(acf) == {"first": 250.0, "full": 162.0}
+    assert flap_limits(tmp_path / "missing.acf") == {}

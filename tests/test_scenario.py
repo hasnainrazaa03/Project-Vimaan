@@ -183,6 +183,7 @@ def test_summary_and_report(tmp_path):
     s = scenario.summary(results)
     assert s == {
         "steps": 3,
+        "skipped": 0,
         "passed": 2,
         "failed": ["b"],
         "heard_exactly": 1,
@@ -210,3 +211,24 @@ def test_tier1_scenarios_are_complete(aircraft):
     ):
         assert must in said
     assert ("mach point seven eight" in said) == tier1.SETUPS[aircraft].jet
+
+
+def test_steps_can_depend_on_the_sim_and_on_each_other(tmp_path, fake_voice):
+    b = FakeBridge(tmp_path / "e.jsonl", {"sim/fast": 0})
+    fast = equals("fast", "sim/fast", 1)
+    results = run(
+        b,
+        [
+            Step("held", say="flaps full", only_if=fast),
+            Step("cancel", say="cancel", after="held"),
+            Step("done", say="flaps full"),
+            Step("up", say="flaps up", after="done"),
+        ],
+    )
+    assert [(r["step"], bool(r.get("skipped"))) for r in results] == [
+        ("held", True),
+        ("cancel", True),
+        ("done", False),
+        ("up", False),
+    ]
+    assert scenario.summary(results)["skipped"] == 2

@@ -5,7 +5,7 @@ files in ``~/Vimaan_Logs/test/``. The bridge does nothing until it's switched
 on (``python -m simtest bridge on``), and the plugin says when it is.
 
     python -m simtest launch                        # X-Plane through Steam
-    python -m simtest fly baron                     # in the air over Seattle, running
+    python -m simtest fly baron                     # in the air west of Portland, running
     python -m simtest bridge on
     python -m simtest status
     python -m simtest say "autopilot on"            # generated voice, through recognition

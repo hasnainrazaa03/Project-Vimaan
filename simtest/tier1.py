@@ -1,5 +1,5 @@
 """The Tier 1 checklist (PHASE_PLAN, T1 Part C) as scenarios, one per
-aircraft, flown in the air over Seattle with no one at the controls.
+aircraft, flown in the air west of Portland with no one at the controls.
 
 Ground items (engine start, parking brake, takeoff gear rule) wait for A3.
 """
@@ -16,6 +16,9 @@ BARO = "sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot"
 DIAL_SPEED = AP + "airspeed_dial_kts_mach"
 IS_MACH = AP + "airspeed_is_mach"
 DONE = ("executed",)
+FLAPS = "sim/cockpit2/controls/flap_handle_request_ratio"
+IAS = "sim/cockpit2/gauges/indicators/airspeed_kts_pilot"
+VFE = "sim/aircraft/view/acf_Vfe"
 DONE_OR_SET = ("executed", "no_op")  # "Heading already on" is fine too
 
 
@@ -42,17 +45,38 @@ SETUPS: dict[str, Setup] = {
 }
 
 
+def _faster_than_vfe(want: bool, vfe_full: float | None) -> SimCheck:
+    """Above (or below) the full-flap limit, clear of the line. That limit
+    comes from the .acf (``vfe_full``); X-Plane's acf_Vfe is the first notch's."""
+
+    def margin(r: dict) -> float | None:
+        limit = vfe_full or r.get(VFE)
+        if r.get(IAS) is None or not limit:
+            return None
+        return round(float(r[IAS]) - float(limit), 1)
+
+    return SimCheck(
+        "above full-flap speed" if want else "below full-flap speed",
+        (IAS, VFE),
+        lambda m: m is not None and (m > 5 if want else m < -5),
+        value=margin,
+        expected="IAS − Vfe(full) > 5" if want else "IAS − Vfe(full) < −5",
+    )
+
+
 def _baro(words: str, inhg: float, within: float = 35.0) -> Step:
     # The 737 turns its knob one click per frame: allow time.
     return Step(
         words,
         say=words,
-        outcomes=DONE_OR_SET,
+        outcomes=(*DONE_OR_SET, "pending"),  # "pending": the 737 turns its knob over frames
         sim=(equals(f"altimeter {inhg}", BARO, inhg, tol=0.012, within_sec=within),),
     )
 
 
-def steps(aircraft: str) -> list[Step]:
+def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:
+    """``vfe_full``: the full-flap limit from the aircraft file
+    (simtest.aircraft_file.flap_limits), if known."""
     s = SETUPS[aircraft]
     out = [
         Step(
@@ -235,27 +259,39 @@ def steps(aircraft: str) -> list[Step]:
             outcomes=DONE_OR_SET,
             sim=(equals("gear handle up", "sim/cockpit2/controls/gear_handle_down", 0),),
         ),
+        # The flap-speed rule follows X-Plane's acf_Vfe for this aircraft:
+        # held above it, done below it (then put back up).
         Step(
             "flaps full above Vfe is held",
             say="flaps full",
             outcomes=("safety_hold",),
             reply="Confirm flaps",
             vimaan_checks=False,
+            only_if=_faster_than_vfe(True, vfe_full),
         ),
         Step(
             "cancel the flaps",
             say="cancel",
             outcomes=("cancelled",),
             vimaan_checks=False,
-            sim=(
-                equals(
-                    "flaps still up",
-                    "sim/cockpit2/controls/flap_handle_request_ratio",
-                    0,
-                    tol=0.01,
-                    within_sec=2,
-                ),
-            ),
+            after="flaps full above Vfe is held",
+            sim=(equals("flaps still up", FLAPS, 0, tol=0.01, within_sec=2),),
+        ),
+        Step(
+            "flaps full below Vfe",
+            say="flaps full",
+            outcomes=DONE,
+            vimaan_checks=False,
+            only_if=_faster_than_vfe(False, vfe_full),
+            sim=(equals("flaps full", FLAPS, 1, tol=0.01, within_sec=3),),
+        ),
+        Step(
+            "flaps up again",
+            say="flaps up",
+            outcomes=DONE,
+            vimaan_checks=False,
+            after="flaps full below Vfe",
+            sim=(equals("flaps up", FLAPS, 0, tol=0.01, within_sec=3),),
         ),
         Step(
             "autopilot off, no callout",
@@ -264,10 +300,13 @@ def steps(aircraft: str) -> list[Step]:
             sim=(equals("servos off", SERVOS, 0, within_sec=3),),
             no_callout="Autopilot disconnected",
         ),
+        # Wait: Vimaan treats an autopilot drop within 5 s of its own
+        # "autopilot ..." as its doing (a plugin fix is pending for "on").
         Step(
             "autopilot on again",
             say="autopilot on",
             outcomes=DONE,
+            settle_sec=6,
             sim=(equals("servos on", SERVOS, 1, within_sec=3),),
         ),
         Step(

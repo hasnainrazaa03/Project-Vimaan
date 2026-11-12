@@ -67,12 +67,13 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("launch", help="start X-Plane through Steam and wait for it")
     f = sub.add_parser("fly", help="start a flight in the air, engines running, and get it running")
     f.add_argument("aircraft", help=f"one of {', '.join(xplane.AIRCRAFT)}, or an .acf path")
-    f.add_argument("--lat", type=float, default=47.45)  # over Seattle
-    f.add_argument("--lon", type=float, default=-122.31)
+    f.add_argument("--lat", type=float, default=xplane.TEST_AREA[0])  # west of Portland
+    f.add_argument("--lon", type=float, default=xplane.TEST_AREA[1])
     f.add_argument("--alt-ft", type=float, default=6000)
     f.add_argument("--hdg", type=float, default=180, help="degrees true")
     f.add_argument("--kt", type=float, default=150)
     sub.add_parser("quit", help="switch the bridge off and quit X-Plane")
+    sub.add_parser("screenshot", help="X-Plane's own screenshot of its window, to see a message")
     rn = sub.add_parser("run", help="run a checklist scenario, unattended, and write a report")
     rn.add_argument("checklist", choices=("tier1",))
     rn.add_argument("aircraft", choices=(*tier1.SETUPS, "all"))
@@ -88,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.cmd == "voices":
         return _voices(args)
-    if args.cmd in ("launch", "fly", "quit"):
+    if args.cmd in ("launch", "fly", "quit", "screenshot"):
         return _xplane(args)
     if args.cmd == "run":
         return _run(args)
@@ -152,6 +153,8 @@ def _xplane(args: argparse.Namespace) -> int:
             )
             xplane.start_flight(body)
             print(f"Flying: {args.aircraft} at {args.alt_ft:.0f} ft, {args.kt:.0f} kt.")
+        elif args.cmd == "screenshot":
+            print(xplane.screenshot() or "✕ no screenshot appeared")
         else:
             Bridge(args.log_dir).disable()
             xplane.quit_xplane()
@@ -199,7 +202,7 @@ def _run(args: argparse.Namespace) -> int:
                 if not xplane.running():
                     raise xplane.XPlaneError("X-Plane isn't running: python -m simtest launch")
                 xplane.start_flight(
-                    xplane.air_start_body(name, 47.45, -122.31, setup.alt_ft, 180, setup.kt)
+                    xplane.air_start_body(name, *xplane.TEST_AREA, setup.alt_ft, 180, setup.kt)
                 )
             br.enable()
             state = _wait_ready(br, setup.icao)
@@ -213,7 +216,10 @@ def _run(args: argparse.Namespace) -> int:
             from . import understand
 
             runner = scenario.Runner(br, voice=args.voice, understood=understand.same)
-        results = runner.run(tier1.steps(name))
+        from .aircraft_file import flap_limits
+
+        limits = flap_limits(state.get("aircraft", {}).get("acf") or "")
+        results = runner.run(tier1.steps(name, vfe_full=limits.get("full")))
         total = scenario.summary(results)
         path = scenario.write_report(
             br.log_dir / "test" / "reports",
@@ -224,6 +230,7 @@ def _run(args: argparse.Namespace) -> int:
                 "started": started,
                 "session": state.get("session"),
                 "voice": None if args.text else args.voice,
+                "flap_limits": limits,
                 "summary": total,
                 "steps": results,
             },
