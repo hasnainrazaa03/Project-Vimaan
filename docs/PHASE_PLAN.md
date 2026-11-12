@@ -20,7 +20,8 @@ Last updated 2026-11-11.
 | E1 | Training data v2 + command families → **v17** | ✅ merged; flown twice | #29 |
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | 🟡 merged, all four aircraft probed, v19 passes every gate and is installed; Part C flight next | #30–#34 |
 | D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | 🟡 PR open; install with the next plugin update | #35 |
-| T2 | Tier 2: radios & navigation → **v20** | ⬜ | |
+| A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 next (owner approved 2026-11-11) | |
+| T2 | Tier 2: radios & navigation → **v20** | ⬜ T2.0 groundwork (research, handlers, tests) after A2; training after T1 closes | |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v21** | ⬜ | |
 | T4 | Tier 4: questions (read-only) → **v22** | ⬜ | |
 | L | Later: relative commands, two commands in one breath, checklists, add-on aircraft profiles | ⬜ | |
@@ -30,6 +31,10 @@ recognition 2–3 ms; model ~11 ms; 0 frame stalls. Real-voice benchmark
 (33 labelled clips): Vosk 30/33, Google 32/33. Real-voice gate set: 118
 hand-labelled clips from five flights; v17 and v11 both 91 right / 26
 rejected / 1 wrong.
+
+Order from here (owner, 2026-11-11): D (#35) → A1 → A2, which runs the Tier 1
+flight checklist and so closes T1 → T2.0 groundwork → A3 → A4 → T2 build,
+train and gate, tested by the runner → T3 → T4.
 
 Model versions: E1 was planned as v12; v12–v16 were intermediate runs and
 v17 is the result. Tier 1's first model, v18, failed the gate and v19 passed,
@@ -462,6 +467,57 @@ flights had the same. No stick position or button presses were logged.
   flight, that a deliberate stick pull with the autopilot on is called out as
   "Stick moved".
 
+## Phase A: automated testing in the sim 🟡
+
+Goal: the tier checklists run with no one at the controls. The owner starts
+or approves a run and reads the report; a short check with the real
+microphone and voice stays manual.
+
+What X-Plane 12.4 offers (checked 2026-11-11 in the installed build):
+- starting a flight from a file (`--new_flight_json`): `ramp_start`,
+  `runway_start` (with `final_distance` in nm, i.e. on final approach),
+  `lle_ground_start`, `lle_air_start` (airborne at a position and altitude);
+- plugin calls `setUsersAircraft`, `placeUserAtAirport`, `placeUserAtLocation`
+  (airborne, engines running, at a speed);
+- overrides for the stick, throttle and brakes, so a script can fly and a
+  stray joystick can't interfere;
+- the local web API (port 8086, on in this install).
+
+Rules: a run happens only when the owner starts or approves it, never while
+they fly. The bridge is off unless switched on, says so when it is, and
+gives the controls back at the end of a run.
+
+- [ ] **A1 Test bridge and recorded voice.**
+  - Plugin bridge, off by default; on while `~/Vimaan_Logs/test/bridge.on`
+    exists (announced). Requests are files in `test/inbox/`, results in
+    `test/outbox/`: say (a WAV through the voice engine, or text through the
+    model only), read, write, command, place in the air, airport, aircraft,
+    state. A say result carries the outcome, replies and actions.
+  - Voice worker: a `wav` request runs a recording through recognition and
+    the model exactly as a push-to-talk recording would.
+  - Runner `simtest` (terminal): status, say (speech generated with macOS
+    `say`, or a recorded clip), read / write / command, place.
+  - Launching X-Plane straight into a flight from a file: check whether the
+    Steam build allows a direct launch.
+  - Done when: with X-Plane running and no one at the controls, "autopilot on"
+    in a generated voice engages the autopilot and the result comes back to
+    the terminal.
+- [ ] **A2 In-air runner for Tier 1.** One scenario per aircraft (Baron, 737,
+  A330, King Air): placed in the air, set up, then each checklist command is
+  said and the sim is checked: targets, modes, the level-off at the selected
+  altitude, COM 2, altimeter, flaps. Pass or fail per step in a report the
+  dashboard shows. Done when: all four run unattended and their failures are
+  the ones a pilot would see. This closes T1 Part C, plus one short real-voice
+  check by the owner.
+- [ ] **A3 Ground and takeoff.** Start with engines off ("start both
+  engines"), taxi (parking brake at speed, override), take off (gear up below
+  1,000 ft with a positive rate, flaps up), climb to the A2 start.
+- [ ] **A4 Approach and landing.** Start on final (`runway_start` with a final
+  distance). Autoland where the aircraft has it (737 and A330: to confirm); a
+  scripted approach and flare for the Baron and King Air, tuned per aircraft.
+
+---
+
 ## Tier 2: radios and navigation → v20
 
 | Intent | Slots | Say | Binding | Verify | Safety |
@@ -481,6 +537,20 @@ script (`A333.transponder`): check in step 1.
 Checklist: tune COM1 standby + flip, NAV1 110.50 + course 090 (ILS), squawk
 4217 then 1200, transponder alt / standby / ident, emergency code asks to
 confirm.
+
+### T2.0 Groundwork (no training), after A2
+- Research on all four aircraft, from their files and with the A1 bridge:
+  COM and NAV standby and flip, NAV frequency and course, transponder code
+  and mode (X-Plane's mode enum; the A330's own `A333.transponder` script;
+  the 737's panel and whether it puts written values back, as its altimeter
+  did). Record each finding in `AIRCRAFT_PROFILES.md`, and add overrides to
+  the profiles where an aircraft needs its own control.
+- Slots and normalization: `Digits(4, 0–7)` squawk codes that keep leading
+  zeros and reject 8 and 9; NAV port absorbed into the frequency like COM.
+- Handlers, safety (7500 / 7600 / 7700 ask to confirm), command table
+  entries and templates, with tests against the fake sim.
+- Tier 2 scenarios for the A2 runner, so the checklist above runs unattended.
+- Then the per-tier procedure: data, train v20 (once T1 is closed), gate.
 
 ---
 
