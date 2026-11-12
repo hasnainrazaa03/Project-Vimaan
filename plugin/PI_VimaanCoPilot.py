@@ -64,7 +64,13 @@ if _ML_PATH not in sys.path:
 # Only light, stdlib-backed modules load into X-Plane; the heavy ones live in
 # the worker process.
 from vimaan_nlu import probe, sim_bridge  # noqa: E402
-from vimaan_nlu.aircraft import AircraftInfo, files_mention, resolve  # noqa: E402
+from vimaan_nlu.aircraft import (  # noqa: E402
+    AircraftInfo,
+    acf_flap_limits,
+    files_mention,
+    flap_limit_kt,
+    resolve,
+)
 from vimaan_nlu.ambiguity import TARGET_SLOTS, bare_number, chosen, two_or_to  # noqa: E402
 from vimaan_nlu.commands import (  # noqa: E402
     BY_INTENT,
@@ -162,6 +168,9 @@ DREF_AP_DISCONNECT_WARNING = "sim/cockpit2/autopilot/autopilot_disconnect"
 VIMAAN_OFF_SEC = 5.0
 # A new flight or aircraft resets the autopilot: no callout for this long.
 RELOAD_QUIET_SEC = 10.0
+# After an aircraft loads, look again for its overrides (its scripts'
+# datarefs may come a moment later).
+OVERRIDE_RECHECK_SEC = (5.0, 15.0)
 
 # What the aircraft is doing, logged as aircraft_state.
 STATE_FLOATS = {
@@ -409,6 +418,9 @@ class PythonInterface:
         # Whether the loaded aircraft's own files use an autothrottle:
         # (acf path, True/False/None), scanned off the main thread.
         self._athr_scan: tuple[str, bool | None] | None = None
+        # The loaded aircraft's flap speed limits from its .acf, read with
+        # the scan: (acf path, {"first": kt, "full": kt}).
+        self._flap_limits: tuple[str, dict[str, float]] | None = None
         # The automated-test bridge (Phase A): off unless its switch file exists.
         self._bridge_on = False
         self._bridge_next = 0.0
@@ -651,10 +663,13 @@ class PythonInterface:
 
     def _on_autopilot_drop(self, previous, state, now):
         last = self._last_action
-        # "Flight director off" takes the servos with it in X-Plane.
+        # Only an "off" from Vimaan is its doing ("flight director off" takes
+        # the servos with it in X-Plane). A pilot disconnect seconds after
+        # "autopilot on" was missed until 2026-11-12.
         vimaan_off = bool(
             last
             and last["intent"] in ("toggle_autopilot", "toggle_flight_director")
+            and last.get("state") == "off"
             and now - last["t"] <= VIMAAN_OFF_SEC
         )
         commands = self._off_commands.recent(now)
@@ -1143,7 +1158,7 @@ class PythonInterface:
         # Safety interlock: gate irreversible/dangerous commands on a
         # confirmation (repeat the command) when risky in the current flight
         # context. Fails safe if the relevant datarefs are unavailable.
-        ctx = self._read_safety_context()
+        ctx = self._read_safety_context(slots)
         verdict = evaluate_safety(intent, slots, ctx, skip=skip)
         token = command_token(intent, slots)
         if verdict.requires_confirmation and not self._confirm_gate.confirm(token):
@@ -1174,7 +1189,12 @@ class PythonInterface:
         if outcome in ("executed", "pending"):
             # What the autopilot watch blames a mode change on: every command
             # that reached the sim, not only the ones that set a target.
-            self._last_action = {"cmd": cmd, "intent": intent, "t": time.perf_counter()}
+            self._last_action = {
+                "cmd": cmd,
+                "intent": intent,
+                "state": slots.get("state"),
+                "t": time.perf_counter(),
+            }
         # A different command that actually ran cancels a pending
         # confirmation and the open "to or two?" question; a misheard or
         # incomplete one ("engine") must not.
@@ -1667,8 +1687,12 @@ class PythonInterface:
 
     def _load_aircraft(self, icao, acf_path):
         info = self._aircraft_info(icao, acf_path)
-        self.profile = resolve(info, self._has_command, self._probe_results(info.key))
+        self.profile = self._resolve(info)
         self.tel.event("aircraft", **self.profile.summary())
+        # An aircraft's scripts may register their datarefs after the load is
+        # seen: look again shortly after.
+        for delay in OVERRIDE_RECHECK_SEC:
+            self._later(delay, lambda ident=(icao, acf_path): self._recheck_overrides(ident))
         self._hook_off_commands()
         self.tel.event("joystick", **self._joystick_setup())
         self._capture = None
@@ -1678,15 +1702,68 @@ class PythonInterface:
             target=self._scan_aircraft_files, args=(acf_path,), daemon=True, name="vimaan-acf-scan"
         ).start()
 
+    def _resolve(self, info):
+        return resolve(
+            info, self._has_command, self._probe_results(info.key), has_dataref=self._dataref_live
+        )
+
+    def _recheck_overrides(self, identity):
+        """Re-resolve if the aircraft is the same but its overrides changed
+        (its scripts registered their datarefs after the load was seen)."""
+        if identity != self._aircraft:
+            return
+        profile = self._resolve(self.profile.info)
+        if profile.overrides != self.profile.overrides:
+            self.profile = profile
+            self.tel.event("aircraft", reason="overrides_changed", **profile.summary())
+
+    @staticmethod
+    def _dataref_live(name):
+        """Registered right now: an aircraft's own datarefs go when it unloads."""
+        ref = xp.findDataRef(name)
+        return ref is not None and bool(xp.isDataRefGood(ref))
+
     def _scan_aircraft_files(self, acf_path):
         """Background thread: file reads only, no X-Plane calls."""
         try:
             shown = files_mention(acf_path)
         except Exception:  # never let a scan take the plugin down
             shown = None
+        try:
+            limits = acf_flap_limits(acf_path)
+        except Exception:
+            limits = {}
         if self._athr_scan and self._athr_scan[0] == acf_path:
             self._athr_scan = (acf_path, shown)
-            self.tel.event("aircraft_files", acf=acf_path, autothrottle_shown=shown)
+            self._flap_limits = (acf_path, limits)
+            self.tel.event(
+                "aircraft_files", acf=acf_path, autothrottle_shown=shown, flap_limits=limits
+            )
+
+    def _flap_target_notch(self, slots):
+        """The notch a "flaps full" / "flaps 15" asks for (None if unknown)."""
+        detents = self.profile.info.flap_detents
+        if not detents:
+            return None
+        if slots.get("position") == "full":
+            return detents
+        value, ok, _ = validate_slot("flap_setting", slots.get("flap_setting"))
+        return self.profile.flap_notch(int(float(value))) if ok else None
+
+    def _flap_limit_for(self, slots):
+        """The speed limit for the flap setting asked for. X-Plane publishes
+        only the first notch's (acf_Vfe); the full-flap one comes from the
+        .acf, read in the background on load. Unknown notch: the lowest."""
+        info = self.profile.info
+        scan = self._flap_limits
+        limits = scan[1] if scan and scan[0] == info.acf_path else {}
+        first = limits.get("first") or info.vfe_kt or None
+        full = limits.get("full")
+        notch = self._flap_target_notch(slots)
+        if notch is None:
+            known = [v for v in (first, full) if v]
+            return min(known) if known else None
+        return flap_limit_kt(notch, info.flap_detents or 0, first, full)
 
     def _autothrottle_shown(self):
         scan = self._athr_scan
@@ -2152,7 +2229,7 @@ class PythonInterface:
                 return f"This aircraft has no {eng['label'].lower()}"
         return None
 
-    def _read_safety_context(self):
+    def _read_safety_context(self, slots=None):
         """Sample flight state for the safety interlocks. Missing datarefs stay
         None so the interlocks fail safe (treat the situation as risky)."""
         agl_m = self._read_float("sim/flightmodel/position/y_agl")
@@ -2165,7 +2242,10 @@ class PythonInterface:
             ias_kt=ias,
             on_ground=None if on_ground_i is None else bool(on_ground_i),
             vs_fpm=self._read_float(DREF_VERTICAL_SPEED_FPM),
-            vfe_kt=self.profile.info.vfe_kt or None,
+            # The limit for the flap setting asked for, when one is.
+            vfe_kt=self._flap_limit_for(slots)
+            if slots and (slots.get("position") == "full" or slots.get("flap_setting"))
+            else self.profile.info.vfe_kt or None,
         )
 
     # ------------------------------------------------------------------

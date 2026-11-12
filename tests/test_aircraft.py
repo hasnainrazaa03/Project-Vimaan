@@ -200,3 +200,38 @@ def test_own_controls_measured_as_no_change_are_tried_not_refused():
     assert p.supports("mode_nav") is None  # also its own (VOR/LOC)
     generic = resolve(AircraftInfo(), lambda n: n.startswith("sim/"), probed)
     assert generic.supports("mode_vnav") is False
+
+
+# ---------------------------------------------------------------------------
+# Fixes from the A2 runs (2026-11-12)
+# ---------------------------------------------------------------------------
+from vimaan_nlu.aircraft import acf_flap_limits, flap_limit_kt  # noqa: E402
+
+
+def test_overrides_need_their_aircrafts_datarefs_too():
+    has_all = lambda _name: True  # noqa: E731
+    gone = lambda _name: False  # noqa: E731
+    assert resolve(AircraftInfo(), has_all, has_dataref=has_all).overrides
+    assert resolve(AircraftInfo(), has_all, has_dataref=gone).overrides == ()
+    assert all(o.live for o in OVERRIDES), "every override names a dataref its aircraft owns"
+
+
+def test_flap_limits_from_an_acf(tmp_path):
+    acf = tmp_path / "b738.acf"
+    acf.write_bytes(
+        b"I\n1200 version\nP acf/_Vfe1_kts 250.000000000\nP acf/_Vfem_kts 162.000000000\n"
+        b"P acf/_Vfe1_kts_extra 1\n"
+    )
+    assert acf_flap_limits(str(acf)) == {"first": 250.0, "full": 162.0}
+    assert acf_flap_limits(str(tmp_path / "missing.acf")) == {}
+
+
+def test_flap_limit_per_notch():
+    # The 737: flaps 1..40 over 8 notches, first-notch 250, full 162.
+    limits = [flap_limit_kt(n, 8, 250.0, 162.0) for n in range(1, 9)]
+    assert limits == [250.0, 237.4, 224.9, 212.3, 199.7, 187.1, 174.6, 162.0]
+    assert flap_limit_kt(2, 2, 152.0, 122.0) == 122.0  # Baron full
+    assert flap_limit_kt(1, 2, 152.0, 122.0) == 152.0  # Baron approach
+    assert flap_limit_kt(1, 2, 152.0, None) == 152.0  # no .acf yet: the published one
+    assert flap_limit_kt(1, 2, None, 122.0) == 122.0
+    assert flap_limit_kt(0, 2, 152.0, 122.0) is None

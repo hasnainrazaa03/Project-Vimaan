@@ -109,7 +109,13 @@ DEFAULT_COMMANDS: Mapping[str, str | None] = MappingProxyType(
 
 @dataclass(frozen=True)
 class Override:
-    """Layer 3: replaces roles, only when every ``requires`` command exists."""
+    """Layer 3: replaces roles, only when every ``requires`` command exists
+    and every ``live`` dataref is registered.
+
+    ``live`` names a dataref the aircraft's own scripts create. Their commands
+    stay registered for the rest of the X-Plane session after the aircraft is
+    unloaded, but their datarefs go with it: on 2026-11-12 an A330 loaded
+    after the 737 picked up the 737's overrides and pressed its MCP buttons."""
 
     name: str
     requires: tuple[str, ...]
@@ -117,7 +123,13 @@ class Override:
     source: str  # where the finding comes from
     # Non-command facts, e.g. flap handle labels.
     settings: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+    live: tuple[str, ...] = ()
 
+
+# Datarefs each aircraft's own scripts create (create_dataref in its xlua),
+# present only while it's loaded.
+B738_LIVE = "laminar/B738/autopilot/cmd_a_status"
+A333_LIVE = "laminar/A333/autopilot/ap1_pos"
 
 OVERRIDES: tuple[Override, ...] = (
     Override(
@@ -146,6 +158,7 @@ OVERRIDES: tuple[Override, ...] = (
         ),
         source="Laminar A330-300 xlua A333.autopilot: create_command(...) and its "
         "*_CMDhandler functions, X-Plane 12.4.3",
+        live=(A333_LIVE,),
         settings=MappingProxyType(
             {
                 # CONF 1, 2, 3, FULL (4 detents); "full" is its own word.
@@ -179,6 +192,7 @@ OVERRIDES: tuple[Override, ...] = (
             }
         ),
         source="Laminar 737-800 xlua B738 scripts: create_command(...), X-Plane 12.4.3",
+        live=(B738_LIVE,),
         # Handle labels, notch 1..8 (POH); X-Plane's modelled angles differ
         # (notch 5 is 12 degrees), so they can't be derived. Used only when
         # the aircraft reports 8 detents.
@@ -210,6 +224,7 @@ OVERRIDES: tuple[Override, ...] = (
         ),
         source="Laminar 737-800 xlua B738.glareshield: create_command(...) and its "
         "*_CMDhandler functions, X-Plane 12.4.3",
+        live=(B738_LIVE,),
     ),
     Override(
         name="b738_efis_baro",
@@ -218,6 +233,7 @@ OVERRIDES: tuple[Override, ...] = (
             {"baro_std": "laminar/B738/EFIS_control/capt/push_button/std_press"}
         ),
         source="Laminar 737-800 xlua B738.glareshield: create_command(...), X-Plane 12.4.3",
+        live=(B738_LIVE,),
     ),
 )
 
@@ -385,14 +401,18 @@ def resolve(
     info: AircraftInfo,
     has_command: Callable[[str], bool],
     probed: Mapping[str, str] | None = None,
+    has_dataref: Callable[[str], bool] = lambda _name: True,
 ) -> Profile:
-    """Layers 1-4 -> the profile the plugin uses for this aircraft."""
+    """Layers 1-4 -> the profile the plugin uses for this aircraft.
+    ``has_dataref``: is a dataref registered now (for ``Override.live``)."""
     commands: dict[str, str | None] = dict(DEFAULT_COMMANDS)
     settings: dict[str, Any] = {}
     applied = []
     overridden: set[str] = set()
     for override in OVERRIDES:
-        if all(has_command(name) for name in override.requires):
+        if all(has_command(name) for name in override.requires) and all(
+            has_dataref(name) for name in override.live
+        ):
             commands.update(override.commands)
             settings.update(override.settings)
             applied.append(override.name)
@@ -447,8 +467,46 @@ def files_mention(acf_path: str, needle: bytes = AUTOTHROTTLE_NEEDLE) -> bool | 
     return False
 
 
+_FLAP_LIMIT = re.compile(rb"^P acf/(_Vfe1_kts|_Vfem_kts) ([0-9.]+)\s*$", re.M)
+
+
+def acf_flap_limits(acf_path: str) -> dict[str, float]:
+    """The flap speed limits in an aircraft's .acf, KIAS: ``first`` for the
+    first notch (``_Vfe1_kts``, which X-Plane publishes as acf_Vfe) and
+    ``full`` for full flaps (``_Vfem_kts``, which it doesn't publish).
+
+    Read on X-Plane 12.4.3 (2026-11-12): Baron 58 152 / 122, King Air C90B
+    190 / 150, 737-800 250 / 162, A330-300 215 / 180. Using acf_Vfe as the
+    full-flap limit let the 737 take full flaps at 240 kt."""
+    try:
+        with open(acf_path, "rb") as fh:
+            data = fh.read()
+    except OSError:
+        return {}
+    names = {b"_Vfe1_kts": "first", b"_Vfem_kts": "full"}
+    return {names[m.group(1)]: float(m.group(2)) for m in _FLAP_LIMIT.finditer(data)}
+
+
+def flap_limit_kt(
+    notch: int, detents: int, first: float | None, full: float | None
+) -> float | None:
+    """The speed limit for flap notch ``notch`` of ``detents``: the first
+    notch's limit at notch 1, the full-flap limit at the last, evenly in
+    between (only those two are published). On the 737 that gives 250, 237,
+    225, 212, 200, 187, 175, 162 kt for flaps 1 to 40, within a few knots of
+    its placard (250, 250, 250, 210, 200, 190, 175, 162)."""
+    if notch <= 0 or detents <= 0:
+        return None
+    if full is None or first is None:
+        return full if first is None else first
+    if detents == 1 or notch >= detents:
+        return full
+    return round(first + (full - first) * (notch - 1) / (detents - 1), 1)
+
+
 def override_names() -> tuple[str, ...]:
-    """Every aircraft-specific control the overrides use (reference checker)."""
-    names = {n for o in OVERRIDES for n in o.requires}
+    """Every aircraft-specific command and dataref the overrides use
+    (reference checker)."""
+    names = {n for o in OVERRIDES for n in (*o.requires, *o.live)}
     names |= {v for o in OVERRIDES for v in o.commands.values() if v}
     return tuple(sorted(names))
