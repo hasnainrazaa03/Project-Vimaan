@@ -1098,6 +1098,119 @@ def test_aircraft_type_logged_once(sim, monkeypatch):
     assert [e["icao"] for e in events(plugin, "aircraft")] == ["BE58"]
 
 
+# ---------------------------------------------------------------------------
+# Autopilot-off diagnostics (vimaan_nlu.disconnect)
+# ---------------------------------------------------------------------------
+SERVOS = "sim/cockpit2/autopilot/servos_on"
+AP_ON = "sim/cockpit2/autopilot/autopilot_on"
+
+
+@pytest.fixture
+def flying(sim, monkeypatch):
+    """Autopilot on, state watch every loop, every stick reading kept."""
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "STATE_WATCH_SEC", 0.0)
+    plugin._stick = module.StickTrace(every_sec=0.0)
+    xp.datarefs[SERVOS] = xp.datarefs[AP_ON] = 1
+    plugin._next_state_watch = 0.0
+    plugin._flight_loop()  # the watch sees the autopilot on
+    return module, plugin, xp
+
+
+def drop(xp):
+    xp.datarefs[SERVOS] = xp.datarefs[AP_ON] = 0
+
+
+def test_a_stick_pull_that_drops_the_autopilot_is_called_out(flying):
+    # Flight 203741: the Baron went from level to +1,250 ft/min in ALT HOLD,
+    # then the autopilot dropped, with nothing in the log to say why.
+    _, plugin, xp = flying
+    xp.datarefs["sim/joystick/yoke_pitch_ratio"] = 0.62
+    plugin._flight_loop()
+    xp.datarefs["sim/joystick/yoke_pitch_ratio"] = 0.05
+    drop(xp)
+    before = len(xp.spoken)
+    plugin._flight_loop()
+    assert xp.spoken[before:] == ["Autopilot disconnected. Stick moved."]
+    (e,) = events(plugin, "autopilot_disconnect")
+    assert e["cause"] == "stick" and e["stick_peak"]["pitch"] == 0.62
+    assert e["detail"] == "stick pitch +0.62" and e["nullzone"] == 0.0
+    assert e["changed"]["servos_on"] == [1, 0]
+    assert events(plugin, "speak")[-1]["cmd"] is None  # not a reply to a command
+
+
+def test_a_disconnect_button_is_named(flying):
+    _, plugin, xp = flying
+    xp.effects["sim/autopilot/servos_fdir_off"] = drop
+    xp.commandOnce("sim/autopilot/servos_fdir_off")  # a yoke button, not Vimaan
+    before = len(xp.spoken)
+    plugin._flight_loop()
+    assert xp.spoken[before:] == ["Autopilot disconnected by a switch or button."]
+    (e,) = events(plugin, "autopilot_disconnect")
+    assert e["cause"] == "command"
+    assert [(c["command"], c["by_vimaan"]) for c in e["commands"]] == [
+        ("sim/autopilot/servos_fdir_off", False)
+    ]
+
+
+def test_autopilot_off_from_vimaan_is_not_called_out_again(flying):
+    _, plugin, xp = flying
+    xp.effects["sim/autopilot/servos_toggle"] = drop
+    spoken = say(plugin, "autopilot off", "toggle_autopilot", {"state": "off"})
+    assert spoken == ["Autopilot 1 off"]
+    before = len(xp.spoken)
+    plugin._flight_loop()
+    assert xp.spoken[before:] == []
+    (e,) = events(plugin, "autopilot_disconnect")
+    assert e["cause"] == "vimaan" and e["commands"][0]["by_vimaan"] is True
+
+
+def test_no_power_and_unknown_causes(flying):
+    _, plugin, xp = flying
+    xp.datarefs["sim/cockpit2/autopilot/autopilot_has_power"] = 0
+    drop(xp)
+    before = len(xp.spoken)
+    plugin._flight_loop()
+    assert xp.spoken[before:] == ["Autopilot disconnected. The autopilot has no power."]
+    xp.datarefs["sim/cockpit2/autopilot/autopilot_has_power"] = 1
+    xp.datarefs[SERVOS] = xp.datarefs[AP_ON] = 1
+    plugin._flight_loop()
+    drop(xp)
+    before = len(xp.spoken)
+    plugin._flight_loop()
+    assert xp.spoken[before:] == ["Autopilot disconnected."]
+
+
+def test_a_new_flight_is_not_a_disconnect(flying):
+    _, plugin, xp = flying
+    plugin.XPluginReceiveMessage(0, xp.MSG_PLANE_LOADED, 0)
+    drop(xp)
+    plugin._flight_loop()  # the reload reset the baseline: no change to report
+    xp.datarefs[SERVOS] = xp.datarefs[AP_ON] = 1
+    plugin._flight_loop()
+    drop(xp)
+    before = len(xp.spoken)
+    plugin._flight_loop()  # within the quiet window after the reload
+    assert xp.spoken[before:] == []
+    assert [e["cause"] for e in events(plugin, "autopilot_disconnect")] == ["reload"]
+
+
+def test_the_joystick_setup_is_logged_per_aircraft(sim):
+    _, plugin, _ = sim
+    (e,) = events(plugin, "joystick")
+    assert e["has_joystick"] == 1 and e["nullzone"] == 0.0
+    assert e["stick"] == {"pitch": 0.0, "roll": 0.0, "yaw": 0.0}
+
+
+def test_watch_handlers_never_swallow_the_command(sim):
+    _, plugin, xp = sim
+    assert xp.hooks["sim/autopilot/servos_off_any"]
+    assert plugin._on_off_command("sim/autopilot/servos_off_any", xp.CommandBegin, "x") == 1
+    plugin.XPluginStop()
+    assert not any(xp.hooks.values())
+    plugin.XPluginStop = lambda: None  # the fixture stops it again
+
+
 def test_one_digit_heading_asks_again(sim):
     _, plugin, xp = sim
     # in-sim: "heading one eighty" with the last word lost -> heading 001

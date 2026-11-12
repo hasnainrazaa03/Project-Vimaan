@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import evals, run_metrics
+from . import evals, flights, run_metrics
 from .paths import (
     ensure_dirs,
     list_datasets,
@@ -283,6 +283,78 @@ def api_eval(version: str) -> dict[str, Any]:
     if detail is None:
         raise HTTPException(status_code=404, detail=f"no model {version!r}")
     return detail
+
+
+# ---- flights: the plugin's session logs ------------------------------------
+
+FLIGHT_POLL_SEC = 1.0
+
+
+@app.get("/api/flights")
+def api_flights() -> dict[str, Any]:
+    """Every X-Plane session Vimaan logged, newest first."""
+    return {"flights": flights.list_flights(), "log_dir": str(flights.log_dir())}
+
+
+@app.get("/api/flights/{session}")
+def api_flight(session: str) -> dict[str, Any]:
+    detail = flights.load(session)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"no flight {session!r}")
+    return detail
+
+
+@app.get("/api/flights/{session}/stream")
+async def api_flight_stream(
+    session: str, request: Request, follow: bool = True
+) -> StreamingResponse:
+    """Server-sent events: the whole flight as ``flight``, again each time its
+    log grows, until the session ends. ``follow=false`` sends it once."""
+    first = flights.load(session)
+    if first is None:
+        raise HTTPException(status_code=404, detail=f"no flight {session!r}")
+
+    async def events() -> AsyncIterator[str]:
+        stamp = flights.stamp(session)
+        yield _sse("flight", first)
+        if first["summary"]["status"] == "ended":
+            return
+        last_ping = time.monotonic()
+        while follow:
+            if await request.is_disconnected():
+                return
+            await asyncio.sleep(FLIGHT_POLL_SEC)
+            now_stamp = flights.stamp(session)
+            if now_stamp is None:
+                return
+            now = time.monotonic()
+            if now_stamp != stamp:
+                stamp = now_stamp
+                detail = flights.load(session)
+                if detail is None:
+                    return
+                yield _sse("flight", detail)
+                last_ping = now
+                if detail["summary"]["status"] == "ended":
+                    return
+            elif now - last_ping >= STREAM_PING_SEC:
+                yield ": ping\n\n"
+                last_ping = now
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/api/flights/{session}/audio/{cmd}")
+def api_flight_audio(session: str, cmd: str) -> FileResponse:
+    """The recording of one push-to-talk command."""
+    path = flights.audio_path(session, cmd)
+    if path is None:
+        raise HTTPException(status_code=404, detail="no recording")
+    return FileResponse(path, media_type="audio/wav")
 
 
 # ---- static (mount last so /api/* wins) ------------------------------------

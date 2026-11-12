@@ -146,6 +146,8 @@ worst draw time per frame.
 
 **Target vs aircraft:** commands other than modes and climbs set targets and don't engage autopilot modes. `aircraft_state` events record modes, actual heading and altitude, and COM values when a target or radio is set and 10 s and 30 s later; `autopilot_state_change` records changes Vimaan didn't make. The log report shows both.
 
+**Autopilot disconnects:** when the autopilot drops and Vimaan didn't do it, Vimaan says so with the likely cause: "Autopilot disconnected. Stick moved." (pilot stick input in the last 4 s), "…by a switch or button." (an autopilot-off command from a key, joystick button or cockpit click), "…The autopilot has no power.", "…Autopilot failure.", or just "Autopilot disconnected." It stays quiet when you asked Vimaan for "autopilot off", during the probe, and for 10 s after a flight or aircraft loads. Each one is logged as `autopilot_disconnect` with the stick peak, the commands seen, power and fail flags and the joystick null zone; the null zone is also logged per aircraft as `joystick`. A null zone of 0% lets a resting stick fly the aircraft (and, on airliners, take the autopilot off): 10–15% is usual.
+
 **Push-to-talk on a yoke button:** Settings → Joystick → search `vimaan` →
 bind **Vimaan: push to talk** (and optionally **Vimaan: run self test**).
 
@@ -159,6 +161,12 @@ Results land in `~/Vimaan_Logs/aircraft/` and are used from the next load of
 that aircraft.
 
 ## 5. Reading what happened
+
+**In the browser:** `python -m dashboard`, open http://127.0.0.1:8765/?tab=flights.
+Every session is listed, the newest is followed live, and each command can be
+replayed from its recording. See [dashboard/README.md](../dashboard/README.md#flights-what-happened-in-the-sim).
+
+**In the terminal:**
 
 ```bash
 python scripts/vimaan_log_report.py          # newest session

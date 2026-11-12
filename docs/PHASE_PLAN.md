@@ -5,7 +5,7 @@ steps, each with a concrete "done when". Work happens strictly in the order of
 the status board; a phase starts only when the previous one has passed its
 gate. After each step: tick it here, commit, and keep the board current.
 
-Last updated 2026-10-30.
+Last updated 2026-11-11.
 
 ---
 
@@ -17,11 +17,12 @@ Last updated 2026-10-30.
 | S | Offline speech recognition (Vosk), saved audio, benchmark | ✅ merged | #25 |
 | O | In-sim overlay (live transcript, meaning, outcome) | ✅ merged and flown (ImGui, worst draw 1.1 ms) | #26, #27 |
 | E0 | Command table: one source of truth (no behaviour change) | ✅ merged; smoke-flown on v11 | #28 |
-| E1 | Training data v2 + command families → **v17** | 🟡 all gates and ONNX parity pass; flown twice; installed for general use; awaiting merge | #29 |
-| T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v18** | ⬜ next | |
-| T2 | Tier 2: radios & navigation → **v19** | ⬜ | |
-| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v20** | ⬜ | |
-| T4 | Tier 4: questions (read-only) → **v21** | ⬜ | |
+| E1 | Training data v2 + command families → **v17** | ✅ merged; flown twice | #29 |
+| T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | 🟡 merged, all four aircraft probed, v19 passes every gate and is installed; Part C flight next | #30–#34 |
+| D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | 🟡 PR open; install with the next plugin update | #35 |
+| T2 | Tier 2: radios & navigation → **v20** | ⬜ | |
+| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v21** | ⬜ | |
+| T4 | Tier 4: questions (read-only) → **v22** | ⬜ | |
 | L | Later: relative commands, two commands in one breath, checklists, add-on aircraft profiles | ⬜ | |
 
 Measured so far (in-sim, Vosk): speech end → action **p50 330 ms**;
@@ -31,7 +32,8 @@ hand-labelled clips from five flights; v17 and v11 both 91 right / 26
 rejected / 1 wrong.
 
 Model versions: E1 was planned as v12; v12–v16 were intermediate runs and
-v17 is the result, so the tiers continue from v18.
+v17 is the result. Tier 1's first model, v18, failed the gate and v19 passed,
+so the later tiers moved up one (T2 → v20).
 
 ---
 
@@ -287,7 +289,7 @@ specific to each tier.
 
 ---
 
-## Tier 1: autopilot core + aircraft profiles → v18
+## Tier 1: autopilot core + aircraft profiles → v19
 
 Used in every phase of every flight.
 
@@ -413,7 +415,8 @@ An aircraft never seen before gets layers 1, 2 and 5 automatically, and layer 4 
   - FMS modes on airliners explain a failure ("needs a flight plan in the F M C"); A330 managed modes push the FCU knobs;
   - autothrottle is refused where the aircraft's own files never use one (X-Plane's generic A/T "worked" on the Baron and King Air); the A330's armed A/THR counts as on;
   - the 737's altimeter is turned with its knob, since it puts written values back.
-- **Still to do:** B10 PR; install v19 (owner's approval); Part C flight.
+- **Done since:** B10 merged (#34); v19 installed (2026-11-08), v17 and v11 kept for rollback.
+- **Still to do:** Part C flight.
 
 ### Part C — Tier 1 flight (Baron, 737, A330, plus one aircraft with no override)
 On each aircraft:
@@ -433,7 +436,33 @@ Then logs, fixes, merge.
 
 ---
 
-## Tier 2: radios and navigation → v19
+## Phase D: flight review 🟡
+
+Flight 203741 (Baron) lost the autopilot 17 min 38 s in, with nothing in the
+log to say why: Vimaan's last action was 31 s earlier, and the aircraft had
+gone from level to +1,250 ft/min in altitude hold a second before. The 737
+flights had the same. No stick position or button presses were logged.
+
+- [x] D.1 Diagnostics (`vimaan_nlu/disconnect.py`): the plugin keeps 6 s of
+  pilot stick input (`sim/joystick/yoke_*_ratio`, not the servo output) and
+  watches every autopilot-off command (X-Plane's, and the 737's disengage bar
+  and CMD A/B) whoever fires it. When the autopilot drops it logs
+  `autopilot_disconnect` with a cause (reload, probe, Vimaan, no power,
+  failure, switch or button, stick, unknown), the stick peak, the null zone,
+  power and fail flags, and says "Autopilot disconnected" plus the cause,
+  except when Vimaan or the probe did it or a flight was just loaded.
+  The joystick setup (null zone) is logged per aircraft.
+- [x] D.2 Dashboard Flights tab: every session in `~/Vimaan_Logs` (or
+  `VIMAAN_LOG_DIR`) as a timeline: each command with what was heard and
+  understood, Vimaan's reply, what was sent to X-Plane and checked, outcome,
+  speech-to-action time and the recording; autopilot changes and whether
+  Vimaan made them; startup, joystick, probe and problems. A flight in
+  progress updates live.
+- [ ] D.3 Install the plugin update (owner's approval) and check, on the next
+  flight, that a deliberate stick pull with the autopilot on is called out as
+  "Stick moved".
+
+## Tier 2: radios and navigation → v20
 
 | Intent | Slots | Say | Binding | Verify | Safety |
 | --- | --- | --- | --- | --- | --- |
@@ -455,7 +484,7 @@ confirm.
 
 ---
 
-## Tier 3: switches by phase of flight → v20
+## Tier 3: switches by phase of flight → v21
 
 | Intent | Slots | Say | Binding | Verify | Safety |
 | --- | --- | --- | --- | --- | --- |
@@ -476,7 +505,7 @@ shutdown.
 
 ---
 
-## Tier 4: questions (read-only) → v21
+## Tier 4: questions (read-only) → v22
 
 | Intent | Answer from | Spoken |
 | --- | --- | --- |

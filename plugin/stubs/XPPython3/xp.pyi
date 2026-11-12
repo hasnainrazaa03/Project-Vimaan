@@ -47,6 +47,10 @@ CommandBegin: int
 CommandContinue: int
 CommandEnd: int
 
+# XPluginReceiveMessage: a new aircraft (inParam 0 = the user's) or flight.
+MSG_PLANE_LOADED: int
+MSG_AIRPORT_LOADED: int
+
 # --- hotkeys ----------------------------------------------------------------
 def registerHotKey(
     key: int, flags: int, description: str, callback: Callable[..., Any], refCon: Any = ...
