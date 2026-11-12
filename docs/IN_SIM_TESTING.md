@@ -182,6 +182,23 @@ python -m simtest place --lat 47.45 --lon -122.31 --alt-ft 6000 --hdg 180 --kt 1
 python -m simtest quit             # bridge off, then X-Plane quits
 ```
 
+**The Tier 1 checklist, unattended (A2):**
+
+```bash
+python -m simtest launch
+python -m simtest run tier1 baron        # or kingair, 737, a330, all; --text skips recognition
+```
+
+Each aircraft starts in the air west of Portland (every scenery tile around
+it is installed; over Seattle X-Plane stops with "Missing scenery"). About 30
+steps are said in a generated voice and each is checked against the sim:
+values, modes, the turn to the new heading, the level-off after a V/S descent,
+the autothrottle answer, altimeter, COM, the flap-speed hold, the autopilot
+off without a callout, and a pilot disconnect with one. A voice that's
+misunderstood is scored, then the step is redone as text so the check is about
+the sim. Reports: `~/Vimaan_Logs/test/reports/<time>_<aircraft>.json`.
+`python -m simtest screenshot` shows what has the sim paused, if it stops.
+
 Two clicks remain until they're switched off once: Steam's launch-option
 question (set a default for X-Plane 12 in Steam), and X-Plane's "Quit the
 simulator?" (tick "Don't ask again").

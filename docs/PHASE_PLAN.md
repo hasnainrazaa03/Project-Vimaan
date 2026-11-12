@@ -527,13 +527,28 @@ gives the controls back at the end of a run.
       closes it.
     - `sim/operation/quit` asks to confirm unless "Don't ask again" was
       ticked once.
-- [ ] **A2 In-air runner for Tier 1.** One scenario per aircraft (Baron, 737,
+- [ ] **A2 In-air runner for Tier 1.** *Built (`simtest run tier1`), first live runs 2026-11-12; re-run after the fixes below.* One scenario per aircraft (Baron, 737,
   A330, King Air): placed in the air, set up, then each checklist command is
   said and the sim is checked: targets, modes, the level-off at the selected
   altitude, COM 2, altimeter, flaps. Pass or fail per step in a report the
   dashboard shows. Done when: all four run unattended and their failures are
   the ones a pilot would see. This closes T1 Part C, plus one short real-voice
   check by the owner.
+  - **First runs (2026-11-12, session 013647):** Baron 24/27, King Air 27/27,
+    737 27/30, A330 17/30. The Baron's and the 737's failures were the
+    scenario's own (fixed). They found three Vimaan bugs (fix PR):
+    1. **Aircraft overrides leaked across a switch.** They were detected by
+       command existence, and the 737's commands stay registered after it
+       unloads, so the A330 got the 737's autopilot buttons and never engaged.
+    2. **The flap-speed hold used the first notch's limit.** X-Plane's
+       `acf_Vfe` is `_Vfe1_kts`; the full-flap limit is `_Vfem_kts` in the
+       .acf (Baron 152 / 122, King Air 190 / 150, 737 250 / 162,
+       A330 215 / 180 kt). The 737 took full flaps at about 240 kt.
+    3. **No callout for a pilot disconnect within 5 s of "autopilot on"**:
+       Vimaan's own "autopilot …" counted as the cause, on or off.
+  - By voice (Daniel): 24–27 of 26–29 understood per aircraft. "q n h one
+    zero one three" and "tune com one to one two one decimal five" were
+    misheard every time; check them with a real voice.
 - [ ] **A3 Ground and takeoff.** Start with engines off ("start both
   engines"), taxi (parking brake at speed, override), take off (gear up below
   1,000 ft with a positive rate, flaps up), climb to the A2 start.
