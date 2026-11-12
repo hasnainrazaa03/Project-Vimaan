@@ -23,7 +23,7 @@ class FakeBridge:
         self.events_path = events_path
         self.readings = readings or {}  # name -> value, or list of values (one per read)
         self.voice_hears = voice_hears or {}  # phrase -> what the voice is heard as
-        self.texts, self.wavs, self.commands = [], [], []
+        self.texts, self.wavs, self.commands, self.writes = [], [], [], []
 
     def _result(self, text, heard=None):
         intent = {"autopilot on": "toggle_autopilot", "autopilot of": "toggle_autopilot"}.get(
@@ -64,6 +64,11 @@ class FakeBridge:
     def command(self, name):
         self.commands.append(name)
         return {"ok": True}
+
+    def write(self, name, value):
+        self.writes.append((name, value))
+        self.readings[name] = value
+        return {"ok": True, "readback": value}
 
     def state(self):
         return {"events": str(self.events_path)}
@@ -200,7 +205,7 @@ def test_tier1_scenarios_are_complete(aircraft):
     steps = tier1.steps(aircraft)
     names = [s.name for s in steps]
     assert len(names) == len(set(names)), "step names are unique (the report keys on them)"
-    assert all(bool(s.say) != bool(s.command) for s in steps)
+    assert all(sum(map(bool, (s.say, s.command, s.write))) == 1 for s in steps)
     said = " | ".join(s.say for s in steps if s.say)
     for must in (
         "autopilot on",
@@ -232,3 +237,24 @@ def test_steps_can_depend_on_the_sim_and_on_each_other(tmp_path, fake_voice):
         ("up", False),
     ]
     assert scenario.summary(results)["skipped"] == 2
+
+
+def test_a_pilot_write_step(tmp_path, fake_voice):
+    b = FakeBridge(tmp_path / "e.jsonl")
+    throttle = "sim/cockpit2/engine/actuators/throttle_ratio_all"
+    (r,) = run(b, [Step("levers", write=(throttle, 0.53), sim=(equals("CL", throttle, 0.53),))])
+    assert r["ok"] and b.writes == [(throttle, 0.53)]
+
+
+@pytest.mark.parametrize("aircraft", ["737", "a330"])
+def test_jets_manage_thrust_straight_after_autopilot_on(aircraft):
+    names = [s.name for s in tier1.steps(aircraft)]
+    start = names.index("autopilot on")
+    thrust = (
+        ["thrust levers to CL (pilot)", "autothrottle on"]
+        if aircraft == "a330"
+        else ["autothrottle on"]
+    )
+    assert names[start + 1 : start + 1 + len(thrust)] == thrust
+    assert names.index("autothrottle on") < names.index("speed 250") < names.index("mach .78")
+    assert "autothrottle on again" in names

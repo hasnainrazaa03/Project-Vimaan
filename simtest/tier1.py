@@ -34,14 +34,42 @@ class Setup:
     speed: int
     speed_words: str
     jet: bool
-    autothrottle: str  # "none" (refused), "generic" (737) or "airbus" (A/THR, lever-dependent)
+    autothrottle: str  # "none" (refused), "generic" (737) or "airbus" (A/THR)
+    # Thrust levers set by the pilot before the autothrottle (A330: CL detent,
+    # _fadec_tla 0.53; A/THR stays armed at FLX/MCT 0.76 and TOGA 1.0).
+    levers: float | None = None
+    athr_on_from: int = 1  # autothrottle_enabled from this counts as on (A330: armed, 0)
+    athr_arm_status: str | None = None  # an arm switch Vimaan arms first (737)
 
 
 SETUPS: dict[str, Setup] = {
     "baron": Setup("BE58", 6000, 150, 4000, "four thousand", 160, "one six zero", False, "none"),
     "kingair": Setup("BE9L", 8000, 180, 6000, "six thousand", 160, "one six zero", False, "none"),
-    "737": Setup("B738", 10000, 250, 8000, "eight thousand", 250, "two five zero", True, "generic"),
-    "a330": Setup("A333", 10000, 250, 8000, "eight thousand", 250, "two five zero", True, "airbus"),
+    "737": Setup(
+        "B738",
+        10000,
+        250,
+        8000,
+        "eight thousand",
+        250,
+        "two five zero",
+        True,
+        "generic",
+        athr_arm_status="laminar/B738/autopilot/autothrottle_arm_pos",
+    ),
+    "a330": Setup(
+        "A333",
+        10000,
+        250,
+        8000,
+        "eight thousand",
+        250,
+        "two five zero",
+        True,
+        "airbus",
+        levers=0.53,
+        athr_on_from=0,
+    ),
 }
 
 
@@ -61,6 +89,61 @@ def _faster_than_vfe(want: bool, vfe_full: float | None) -> SimCheck:
         lambda m: m is not None and (m > 5 if want else m < -5),
         value=margin,
         expected="IAS − Vfe(full) > 5" if want else "IAS − Vfe(full) < −5",
+    )
+
+
+THROTTLE = "sim/cockpit2/engine/actuators/throttle_ratio_all"
+ATHR = AP + "autothrottle_enabled"
+
+
+def _athr(s: Setup, on: bool) -> SimCheck:
+    return SimCheck(
+        "autothrottle on" if on else "autothrottle off",
+        (ATHR,),
+        (lambda v: v is not None and v >= s.athr_on_from)
+        if on
+        else (lambda v: v is not None and v < s.athr_on_from),
+        within_sec=4,  # the 737 arms its switch, then engages 0.5 s later
+        expected=f"≥ {s.athr_on_from}" if on else f"< {s.athr_on_from}",
+    )
+
+
+def _manage_thrust(s: Setup) -> list[Step]:
+    """Jets: thrust managed from the start. Unmanaged, the A330 left at its
+    air-start thrust reached 337 kt (Vmo 330) and its high-speed protection
+    took the autopilot (re-run, 2026-11-12)."""
+    steps = []
+    if s.levers is not None:
+        steps.append(
+            Step(
+                "thrust levers to CL (pilot)",
+                write=(THROTTLE, s.levers),
+                sim=(equals("levers at CL", THROTTLE, s.levers, tol=0.02, within_sec=2),),
+            )
+        )
+    sim = [_athr(s, True)]
+    if s.athr_arm_status:
+        sim.append(equals("A/T arm switch armed", s.athr_arm_status, 1, tol=0.5, within_sec=4))
+    steps.append(
+        Step(
+            "autothrottle on",
+            say="auto throttle on",
+            outcomes=DONE_OR_SET,
+            sim=tuple(sim),
+            note="the 737 arms its A/T switch first if it's off",
+        )
+    )
+    return steps
+
+
+def _ias_near(kt: float, tol: float, within_sec: float) -> SimCheck:
+    return SimCheck(
+        f"airspeed settles at {kt:.0f}",
+        (IAS,),
+        lambda v: v is not None and abs(float(v) - kt) <= tol,
+        value=lambda r: None if r.get(IAS) is None else round(float(r[IAS])),
+        within_sec=within_sec,
+        expected=f"{kt:.0f} ± {tol:.0f} kt",
     )
 
 
@@ -109,9 +192,13 @@ def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:
             f"speed {s.speed}",
             say=f"speed {s.speed_words}",
             outcomes=DONE_OR_SET,
-            sim=(equals(f"speed bug {s.speed}", DIAL_SPEED, s.speed, tol=1),),
+            sim=(equals(f"speed bug {s.speed}", DIAL_SPEED, s.speed, tol=1),)
+            # With the autothrottle on, the aircraft has to get there.
+            + ((_ias_near(s.speed, 20, 120),) if s.jet else ()),
         ),
     ]
+    if s.jet:
+        out[1:1] = _manage_thrust(s)  # straight after "autopilot on"
     if s.jet:
         out += [
             Step(
@@ -180,52 +267,19 @@ def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:
                 vimaan_checks=False,
             )
         )
-    elif s.autothrottle == "generic":
+    else:  # off, then on again, so the speed stays managed for the rest
         out += [
-            Step(
-                "autothrottle on",
-                say="auto throttle on",
-                outcomes=DONE_OR_SET,
-                sim=(
-                    SimCheck(
-                        "autothrottle engaged",
-                        (AP + "autothrottle_enabled",),
-                        lambda v: v is not None and v >= 1,
-                        within_sec=3,
-                        expected="≥ 1",
-                    ),
-                ),
-            ),
             Step(
                 "autothrottle off",
                 say="auto throttle off",
                 outcomes=DONE_OR_SET,
-                sim=(
-                    SimCheck(
-                        "autothrottle off",
-                        (AP + "autothrottle_enabled",),
-                        lambda v: v is not None and v <= 0,
-                        within_sec=3,
-                        expected="≤ 0",
-                    ),
-                ),
+                sim=(_athr(s, False),),
             ),
-        ]
-    else:  # Airbus A/THR: what it does depends on the thrust levers (AIRCRAFT_PROFILES)
-        out += [
             Step(
-                "A/THR on",
+                "autothrottle on again",
                 say="auto throttle on",
-                outcomes=("executed", "no_op", "rejected", "failed"),
-                vimaan_checks=False,
-                note="depends on the thrust levers; recorded, not judged",
-            ),
-            Step(
-                "A/THR off",
-                say="auto throttle off",
-                outcomes=("executed", "no_op", "rejected", "failed"),
-                vimaan_checks=False,
-                note="depends on the thrust levers; recorded, not judged",
+                outcomes=DONE_OR_SET,
+                sim=(_athr(s, True),),
             ),
         ]
     out += [

@@ -98,6 +98,7 @@ class Step:
     name: str
     say: str | None = None  # a phrase for Vimaan
     command: str | None = None  # or an X-Plane command, as the pilot
+    write: tuple[str, float] | None = None  # or a dataref the pilot sets (thrust levers)
     outcomes: tuple[str, ...] = ("executed",)
     reply: str | None = None  # words one of Vimaan's replies must contain
     sim: tuple[SimCheck, ...] = ()
@@ -147,7 +148,12 @@ class Runner:
 
     # ------------------------------------------------------------------
     def run_step(self, step: Step) -> dict[str, Any]:
-        r: dict[str, Any] = {"step": step.name, "said": step.say, "command": step.command}
+        r: dict[str, Any] = {
+            "step": step.name,
+            "said": step.say,
+            "command": step.command,
+            "write": step.write,
+        }
         started = datetime.now()
         problems: list[str] = []
         if step.say:
@@ -180,6 +186,10 @@ class Runner:
             done = self.bridge.command(step.command)
             if not done.get("ok"):
                 problems.append(f"command: {done.get('error')}")
+        elif step.write:
+            done = self.bridge.write(*step.write)
+            if not done.get("ok"):
+                problems.append(f"write: {done.get('error') or done.get('readback')}")
         if step.settle_sec:
             time.sleep(step.settle_sec)
         r["sim"] = []
