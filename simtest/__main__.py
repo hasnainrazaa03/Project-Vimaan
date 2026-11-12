@@ -7,7 +7,7 @@ import json
 import sys
 from typing import Any
 
-from . import voice
+from . import voice, xplane
 from .bridge import Bridge, NoAnswer
 
 
@@ -64,6 +64,16 @@ def main(argv: list[str] | None = None) -> int:
     ac = sub.add_parser("aircraft", help="load an aircraft (.acf path)")
     ac.add_argument("path")
 
+    sub.add_parser("launch", help="start X-Plane through Steam and wait for it")
+    f = sub.add_parser("fly", help="start a flight in the air, engines running, and get it running")
+    f.add_argument("aircraft", help=f"one of {', '.join(xplane.AIRCRAFT)}, or an .acf path")
+    f.add_argument("--lat", type=float, default=47.45)  # over Seattle
+    f.add_argument("--lon", type=float, default=-122.31)
+    f.add_argument("--alt-ft", type=float, default=6000)
+    f.add_argument("--hdg", type=float, default=180, help="degrees true")
+    f.add_argument("--kt", type=float, default=150)
+    sub.add_parser("quit", help="switch the bridge off and quit X-Plane")
+
     v = sub.add_parser("voices", help="offline: what Vimaan's recogniser hears in generated speech")
     v.add_argument("phrases", nargs="+")
     v.add_argument("--voice", action="append", help="voices to try (default: a few clear ones)")
@@ -71,6 +81,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.cmd == "voices":
         return _voices(args)
+    if args.cmd in ("launch", "fly", "quit"):
+        return _xplane(args)
 
     br = Bridge(args.log_dir)
     if args.cmd == "bridge":
@@ -112,6 +124,30 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "aircraft":
             _print(br.aircraft(args.path))
     except NoAnswer as exc:
+        print(f"✕ {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _xplane(args: argparse.Namespace) -> int:
+    try:
+        if args.cmd == "launch":
+            print("Starting X-Plane through Steam (pick “X-Plane” if Steam asks)...")
+            xplane.launch()
+            print("X-Plane is up.")
+        elif args.cmd == "fly":
+            if not xplane.running():
+                raise xplane.XPlaneError("X-Plane isn't running: python -m simtest launch")
+            body = xplane.air_start_body(
+                args.aircraft, args.lat, args.lon, args.alt_ft, args.hdg, args.kt
+            )
+            xplane.start_flight(body)
+            print(f"Flying: {args.aircraft} at {args.alt_ft:.0f} ft, {args.kt:.0f} kt.")
+        else:
+            Bridge(args.log_dir).disable()
+            xplane.quit_xplane()
+            print("Asked X-Plane to quit (it asks to confirm unless told not to once).")
+    except xplane.XPlaneError as exc:
         print(f"✕ {exc}", file=sys.stderr)
         return 2
     return 0

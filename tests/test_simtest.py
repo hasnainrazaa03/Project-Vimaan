@@ -146,3 +146,70 @@ def test_the_runner_drives_the_plugin(monkeypatch, tmp_path):
     assert said["outcome"] == "executed" and said["replies"] == ["Autopilot 1 on"]
     assert results["read"] == {"sim/cockpit2/autopilot/servos_on": 1}
     assert json.dumps(said)  # plain JSON all the way
+
+
+# ---- X-Plane itself (simtest/xplane.py), with the web API faked ----------
+from simtest import xplane  # noqa: E402
+
+
+def test_air_start_body():
+    body = xplane.air_start_body("baron", 47.45, -122.31, 6000, 180, 150)
+    d = body["data"]
+    assert d["aircraft"]["path"].endswith("Beechcraft Baron 58/Baron_58.acf")
+    assert d["lle_air_start"] == {
+        "latitude": 47.45,
+        "longitude": -122.31,
+        "elevation_in_meters": 1828.8,
+        "heading_true": 180,
+        "speed_in_meters_per_second": 77.17,
+    }
+    assert d["engine_status"] == {"all_engines": {"running": True}}
+    assert xplane.air_start_body("Aircraft/x/y.acf", 0, 0, 0, 0, 0)["data"]["aircraft"]["path"] == (
+        "Aircraft/x/y.acf"
+    )
+
+
+class FakeAPI:
+    """X-Plane's web API: a flight that loads, paused under its Flight
+    Configuration screen until that's toggled."""
+
+    def __init__(self):
+        self.state = {"sim/flightmodel/position/latitude": 0.0, "sim/time/paused": 1}
+        self.commands = []
+
+    def get(self, path):
+        if path.startswith(("/datarefs?", "/commands?")):
+            name = xplane.urllib.parse.unquote(path.split("=", 1)[1])
+            return {"data": [{"id": hash(name) & 0xFFFF, "name": name}]}
+        name = next(n for n in self.state if str(hash(n) & 0xFFFF) in path)
+        return {"data": self.state[name]}
+
+    def post(self, path, body):
+        if path == "/flight":
+            self.state["sim/flightmodel/position/latitude"] = body["data"]["lle_air_start"][
+                "latitude"
+            ]
+        else:
+            cid = int(path.split("/")[2])
+            name = next(
+                n
+                for n in (
+                    "sim/operation/toggle_flight_config",
+                    "sim/operation/pause_off",
+                    "sim/operation/quit",
+                )
+                if hash(n) & 0xFFFF == cid
+            )
+            self.commands.append(name)
+            if name == "sim/operation/toggle_flight_config":
+                self.state["sim/time/paused"] = 0
+
+
+def test_a_started_flight_is_brought_out_from_under_the_config_screen(monkeypatch):
+    api = FakeAPI()
+    monkeypatch.setattr(xplane, "_get", api.get)
+    monkeypatch.setattr(xplane, "_post", api.post)
+    monkeypatch.setattr(xplane.time, "sleep", lambda s: None)
+    xplane.start_flight(xplane.air_start_body("baron", 47.45, -122.31, 6000, 180, 150))
+    assert api.commands == ["sim/operation/toggle_flight_config"]
+    assert api.state["sim/time/paused"] == 0

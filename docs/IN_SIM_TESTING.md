@@ -168,6 +168,8 @@ bridge is **off** unless you switch it on, and Vimaan says "Test bridge on" /
 "Test bridge off" when it changes. Don't fly while it's on.
 
 ```bash
+python -m simtest launch           # X-Plane through Steam (pick "X-Plane" if Steam asks)
+python -m simtest fly baron        # in the air over Seattle at 6,000 ft, running (or kingair, 737, a330)
 python -m simtest bridge on        # creates ~/Vimaan_Logs/test/bridge.on
 python -m simtest status           # Vimaan ready? aircraft, autopilot, altitude, speed
 python -m simtest say "autopilot on"           # generated voice (macOS 'say'), through recognition
@@ -177,8 +179,12 @@ python -m simtest read sim/cockpit2/autopilot/servos_on "sim/flightmodel/engine/
 python -m simtest write sim/cockpit2/autopilot/altitude_dial_ft 5000
 python -m simtest command sim/autopilot/heading            # counts as the pilot's, not Vimaan's
 python -m simtest place --lat 47.45 --lon -122.31 --alt-ft 6000 --hdg 180 --kt 150
-python -m simtest bridge off
+python -m simtest quit             # bridge off, then X-Plane quits
 ```
+
+Two clicks remain until they're switched off once: Steam's launch-option
+question (set a default for X-Plane 12 in Steam), and X-Plane's "Quit the
+simulator?" (tick "Don't ask again").
 
 A said command answers when it's done and its read-backs are checked: what
 was heard and understood, the outcome, Vimaan's replies, what was sent to
