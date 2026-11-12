@@ -300,13 +300,12 @@ def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:
             sim=(equals("servos off", SERVOS, 0, within_sec=3),),
             no_callout="Autopilot disconnected",
         ),
-        # Wait: Vimaan treats an autopilot drop within 5 s of its own
-        # "autopilot ..." as its doing (a plugin fix is pending for "on").
+        # Straight after "autopilot on": until #38, Vimaan took a disconnect
+        # within 5 s of its own "autopilot on" as its doing, and stayed quiet.
         Step(
             "autopilot on again",
             say="autopilot on",
             outcomes=DONE,
-            settle_sec=6,
             sim=(equals("servos on", SERVOS, 1, within_sec=3),),
         ),
         Step(
