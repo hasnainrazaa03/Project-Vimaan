@@ -164,6 +164,7 @@ DREF_NULLZONE = "sim/joystick/joystick_pitch_nullzone"  # one serves all axes
 DREF_AP_POWER = "sim/cockpit2/autopilot/autopilot_has_power"
 DREF_AP_FAIL = "sim/cockpit2/autopilot/otto_fail_warn"
 DREF_AP_DISCONNECT_WARNING = "sim/cockpit2/autopilot/autopilot_disconnect"
+DREF_MACH = "sim/flightmodel/misc/machno"
 # "Autopilot off" from Vimaan this recently is Vimaan's doing.
 VIMAAN_OFF_SEC = 5.0
 # A new flight or aircraft resets the autopilot: no callout for this long.
@@ -171,6 +172,9 @@ RELOAD_QUIET_SEC = 10.0
 # After an aircraft loads, look again for its overrides (its scripts'
 # datarefs may come a moment later).
 OVERRIDE_RECHECK_SEC = (5.0, 15.0)
+# After arming an autothrottle switch, engage this much later (the 737's
+# scripts take the switch on their next frames).
+ATHR_ARM_SETTLE_SEC = 0.5
 
 # What the aircraft is doing, logged as aircraft_state.
 STATE_FLOATS = {
@@ -646,6 +650,18 @@ class PythonInterface:
             self._off_commands.add(time.perf_counter(), name, by_vimaan=self._firing == name)
         return 1  # never swallow it: X-Plane and the aircraft still act on it
 
+    def _overspeed(self):
+        """ "335 kt, limit 330" when above the aircraft's Vne (Vmo on jets) or
+        Mmo, else None."""
+        info = self.profile.info
+        ias = self._read_float(STATE_FLOATS["ias_actual"])
+        if ias is not None and info.vne_kt and ias > info.vne_kt:
+            return f"{ias:.0f} kt, limit {info.vne_kt:.0f}"
+        mach = self._read_float(DREF_MACH)
+        if mach is not None and info.mmo and mach > info.mmo:
+            return f"Mach {mach:.2f}, limit {info.mmo:.2f}"
+        return None
+
     def _sample_stick(self):
         now = time.perf_counter()
         if self._stick.due(now):
@@ -674,6 +690,7 @@ class PythonInterface:
         )
         commands = self._off_commands.recent(now)
         peak = self._stick.peak(now)
+        overspeed = self._overspeed()
         found = diagnose(
             stick_peak=peak,
             commands=commands,
@@ -682,6 +699,7 @@ class PythonInterface:
             vimaan_turned_off=vimaan_off,
             probe_running=self._probe is not None,
             reloading=now < self._quiet_until,
+            overspeed=overspeed,
         )
         floats = {k: _round(self._read_float(n), 1) for k, n in STATE_FLOATS.items()}
         self.tel.event(
@@ -697,6 +715,7 @@ class PythonInterface:
             has_power=self._read_int(DREF_AP_POWER),
             fail_warn=self._read_int(DREF_AP_FAIL),
             disconnect_warning=self._read_int(DREF_AP_DISCONNECT_WARNING),
+            overspeed=overspeed,
             last_vimaan_cmd=last["cmd"] if last else None,
             last_vimaan_intent=last["intent"] if last else None,
             sec_since_vimaan_action=round(now - last["t"], 1) if last else None,
@@ -1458,7 +1477,9 @@ class PythonInterface:
             self._say("Test bridge on" if on else "Test bridge off")
         if not on:
             return
-        checking = {v["cmd"] for v in self._verifications}
+        # A command still has work due: read-backs, or a deferred step (the
+        # 737's autothrottle engages after its arm switch).
+        checking = {v["cmd"] for v in self._verifications} | {d["cmd"] for d in self._deferred}
         for result in self._say_results.finished(now, checking):
             sim_bridge.write_json(outbox / f"{result['id']}.json", result)
         for req in sim_bridge.take_requests(inbox):
@@ -2619,17 +2640,53 @@ class PythonInterface:
                 self._say("Cannot read autothrottle state")
                 return "failed"
             command = self.profile.command("autothrottle_toggle")
+        if want_on and self._autothrottle_switch_off():
+            # The 737's A/T ARM switch: arm it, then engage once its scripts
+            # have taken the switch (the next frames).
+            arm = self.profile.command("autothrottle_arm")
+            if not self._fire_command(arm):
+                self._say("Cannot arm the autothrottle")
+                return "failed"
+            status = self.profile.settings["athr_arm_status"]
+            self._expect(
+                "Autothrottle arm switch",
+                lambda: None if (r := self._read_float(status)) is None else r > 0.5,
+                True,
+            )
+            self._say("Arming the autothrottle")
+            self._later(
+                ATHR_ARM_SETTLE_SEC, lambda: self._engage_autothrottle(command, on_from, hint)
+            )
+            return "executed"
         if not (command and self._fire_command(command)):
             self._say("No autothrottle on this aircraft")
             return "rejected"
+        self._expect_autothrottle(want_on, on_from, hint)
+        self._say(f"Autothrottle {state}")
+        return "executed"
+
+    def _autothrottle_switch_off(self):
+        """An arm switch this aircraft's autothrottle needs, and it's off."""
+        status = self.profile.settings.get("athr_arm_status")
+        if not (status and self.profile.command("autothrottle_arm")):
+            return False
+        value = self._read_float(status)
+        return value is not None and value < 0.5
+
+    def _engage_autothrottle(self, command, on_from, hint):
+        if not (command and self._fire_command(command)):
+            self._say("No autothrottle on this aircraft")
+            return
+        self._expect_autothrottle(True, on_from, hint)
+        self._say("Autothrottle on")
+
+    def _expect_autothrottle(self, want_on, on_from, hint):
         self._expect(
             "Autothrottle",
             lambda: None if (r := self._read_int(DREF_AUTOTHROTTLE)) is None else r >= on_from,
             want_on,
             fail=f"Autothrottle did not respond. {hint}." if hint else None,
         )
-        self._say(f"Autothrottle {state}")
-        return "executed"
 
     def _set_altimeter(self, slots, intent):
         if not slots.get("setting") and not slots.get("pressure"):

@@ -98,6 +98,7 @@ aircraft folders. `scripts/check_xplane_refs.py` re-checks every name.
 - The baro has its own controls (`laminar/B738/EFIS_control/{capt,fo}/push_button/std_press`, `baro_in_hpa_up/dn`), and the scripts replace `sim/instruments/barometer_up/down`. Override `b738_efis_baro` covers STD.
 - The fuel cutoff is the condition levers (`laminar/B738/engines/condition_lever_{1,2}_{idle,cutoff}`). Override `b738_condition_levers` covers a turbine start.
 - The start switches are `laminar/B738/knob/starter{1,2}_{up,dn}`. Not used yet; the generic starter is tried first and logged.
+- **A/T ARM switch** (`laminar/B738/autopilot/autothrottle_arm_toggle`, state `autothrottle_arm_pos`). With it off, the sim's autothrottle stays hard off (-1), and "autothrottle on" did nothing in the A2 re-run (2026-11-12). Override `b738_autothrottle_arm`: "autothrottle on" arms it ("Arming the autothrottle"), then engages half a second later, once the 737's scripts have taken the switch. "Autothrottle off" leaves the switch armed.
 
 - **Probed 2026-11-07**, all 18 steps (sessions `vimaan_20261107_211836` and `_224940`):
   - **Works:** HDG, VOR/LOC, APP, back course, ALT HOLD, ALT ARM, V/S, LVL CHG, autothrottle, knots/Mach, the speed, V/S and altitude dials, and the flap handle.

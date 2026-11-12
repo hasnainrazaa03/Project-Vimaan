@@ -94,6 +94,7 @@ DEFAULT_DATAREFS: dict[str, Any] = {
     "sim/cockpit2/autopilot/autopilot_has_power": 1,
     "sim/cockpit2/autopilot/otto_fail_warn": 0,
     "sim/cockpit2/autopilot/autopilot_disconnect": 0,
+    "sim/flightmodel/misc/machno": 0.0,
 }
 
 # xp.getNthAircraftModel(0): (file name, full path).

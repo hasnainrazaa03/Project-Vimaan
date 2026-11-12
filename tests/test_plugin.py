@@ -2863,3 +2863,75 @@ def test_a_pilot_disconnect_right_after_autopilot_on_is_called_out(flying):
     plugin._flight_loop()
     assert xp.spoken[before:] == ["Autopilot disconnected by a switch or button."]
     assert events(plugin, "autopilot_disconnect")[-1]["cause"] == "command"
+
+
+# ---------------------------------------------------------------------------
+# From the A2 re-run (2026-11-12): the 737's A/T ARM switch; overspeed
+# ---------------------------------------------------------------------------
+ATHR = "sim/cockpit2/autopilot/autothrottle_enabled"
+ARM_POS = "laminar/B738/autopilot/autothrottle_arm_pos"
+ARM = "laminar/B738/autopilot/autothrottle_arm_toggle"
+
+
+def b738_with_athr_switch(plugin, xp, armed):
+    xp.datarefs[ARM_POS] = 1 if armed else 0
+    xp.datarefs[ATHR] = 0 if armed else -1
+
+    def arm(x):
+        x.datarefs[ARM_POS] = 1 - x.datarefs[ARM_POS]
+        x.datarefs[ATHR] = 0 if x.datarefs[ARM_POS] else -1
+
+    def engage(x):  # the sim's A/T engages only with the switch armed
+        if x.datarefs[ARM_POS]:
+            x.datarefs[ATHR] = 1
+
+    xp.effects[ARM] = arm
+    xp.effects["sim/autopilot/autothrottle_on"] = engage
+    return load_aircraft(plugin, xp, 7, commands=(*B738_MCP, ARM))
+
+
+def test_737_autothrottle_on_arms_its_switch_first(sim, monkeypatch):
+    # Re-run: the switch was off, the A/T stayed at -1: "did not respond".
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "ATHR_ARM_SETTLE_SEC", 0.0)
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    assert "b738_autothrottle_arm" in b738_with_athr_switch(plugin, xp, armed=False).overrides
+    assert say(plugin, "auto throttle on", "toggle_autothrottle", {"state": "on"}) == [
+        "Arming the autothrottle"
+    ]
+    assert xp.commands_fired == [ARM]
+    before = len(xp.spoken)
+    plugin._flight_loop()  # the deferred engage, then the read-backs
+    plugin._flight_loop()
+    assert xp.commands_fired == [ARM, "sim/autopilot/autothrottle_on"]
+    assert xp.spoken[before:] == ["Autothrottle on"] and xp.datarefs[ATHR] == 1
+    assert all(e["ok"] for e in events(plugin, "verify"))
+
+
+def test_737_autothrottle_already_armed_engages_straight_away(sim):
+    _, plugin, xp = sim
+    b738_with_athr_switch(plugin, xp, armed=True)
+    assert say(plugin, "auto throttle on", "toggle_autothrottle", {"state": "on"}) == [
+        "Autothrottle on"
+    ]
+    assert xp.commands_fired == ["sim/autopilot/autothrottle_on"]
+
+
+def test_autothrottle_off_leaves_the_arm_switch_alone(sim):
+    _, plugin, xp = sim
+    b738_with_athr_switch(plugin, xp, armed=True)
+    xp.datarefs[ATHR] = 1
+    say(plugin, "auto throttle off", "toggle_autothrottle", {"state": "off"})
+    assert ARM not in xp.commands_fired and xp.datarefs[ARM_POS] == 1
+
+
+def test_an_overspeed_disconnect_is_called_out(flying):
+    # A330 at 335 kt (Vmo 330): its high-speed protection took the autopilot.
+    _, plugin, xp = flying
+    xp.datarefs["sim/cockpit2/gauges/indicators/airspeed_kts_pilot"] = 240.0  # Baron Vne 223
+    drop(xp)
+    before = len(xp.spoken)
+    plugin._flight_loop()
+    assert xp.spoken[before:] == ["Autopilot disconnected. Overspeed."]
+    e = events(plugin, "autopilot_disconnect")[-1]
+    assert e["cause"] == "overspeed" and e["overspeed"] == "240 kt, limit 223"
