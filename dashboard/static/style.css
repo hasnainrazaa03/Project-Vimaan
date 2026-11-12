@@ -475,3 +475,87 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: var(--ring)
 .bl-fill.err { background: var(--series-2); }
 .badge:empty { display: none; }
 .mini { white-space: nowrap; }
+
+/* ============================================================
+   Flights (v7): status colours mark results and events, always next to
+   an icon and a word; text stays in the ink tokens.
+   ============================================================ */
+.fl-list { max-height: 330px; overflow-y: auto; }
+.head-actions .badge { max-width: none; }
+.fl-status { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--fg-dim); }
+.fl-status.live { color: var(--fg); }
+.fl-status.live .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--series-1); animation: blink 1.1s ease-in-out infinite; }
+.fl-status.warn::before { content: "⚠"; color: var(--warning); }
+.fl-flag { font-weight: 700; }
+.fl-flag::first-letter { color: var(--warning); }
+.kpi.flag { border-color: var(--warning); box-shadow: inset 3px 0 0 var(--warning); }
+
+.fl-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 16px 0 10px; }
+.fl-search { flex: 1 1 220px; max-width: 340px; padding: 7px 12px; font-size: 12.5px; }
+
+.fl-timeline td { white-space: normal; vertical-align: top; }
+.fl-timeline .num { text-align: right; white-space: nowrap; }
+.fl-time { white-space: nowrap !important; }
+.fl-time b { display: block; font-variant-numeric: tabular-nums; font-weight: 600; }
+.fl-time small, .fl-said small { display: block; font-size: 10.5px; }
+.fl-said { display: flex; gap: 8px; align-items: flex-start; min-width: 190px; }
+.fl-play { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--fg); font-size: 10px; cursor: pointer; }
+.fl-play:hover { border-color: var(--series-1); }
+.fl-play:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
+.fl-play.is-playing { background: var(--series-1); border-color: var(--series-1); color: #fff; }
+.fl-play.none { cursor: default; color: var(--fg-dim); border-style: dashed; }
+.fl-slot { display: inline-block; margin: 1px 2px; padding: 1px 7px; border-radius: 999px; font-size: 11.5px; background: var(--surface-2); border: 1px solid var(--border); }
+.fl-reply { display: block; }
+.fl-result { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; color: var(--fg); border: 1px solid var(--border-strong); background: var(--surface-2); }
+.fl-result.g-done { border-color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.fl-result.g-done span { color: var(--good); }
+.fl-result.g-warn { border-color: var(--warning); background: color-mix(in srgb, var(--warning) 12%, transparent); }
+.fl-result.g-warn span { color: var(--warning); }
+.fl-result.g-bad { border-color: var(--critical); background: color-mix(in srgb, var(--critical) 12%, transparent); }
+.fl-result.g-bad span { color: var(--critical); }
+
+.fl-cmd { cursor: pointer; }
+.fl-cmd:hover td { background: var(--surface-2); }
+.fl-cmd:focus-visible { outline: 2px solid var(--series-1); outline-offset: -2px; }
+.fl-cmd.is-open td { background: color-mix(in srgb, var(--series-1) 8%, transparent); border-bottom-color: transparent; }
+.fl-detail td { background: color-mix(in srgb, var(--series-1) 4%, transparent); }
+.fl-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 22px; font-size: 12px; padding: 2px 0 6px; }
+.fl-detail-grid h4 { margin: 0 0 4px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--fg-dim); }
+.fl-detail-grid p { margin: 0 0 3px; }
+.fl-detail-grid ul { margin: 0; padding-left: 16px; display: grid; gap: 3px; }
+.fl-detail-grid li.bad::marker, .fl-detail-grid li.warn::marker { color: var(--critical); }
+.fl-detail-grid li.warn::marker { color: var(--warning); }
+.fl-detail-grid code { font-size: 11px; word-break: break-all; }
+
+.fl-event td { font-size: 12px; color: var(--fg-dim); }
+.fl-event.tone-warn td, .fl-event.tone-bad td { color: var(--fg); }
+.fl-event.tone-warn td { background: color-mix(in srgb, var(--warning) 9%, transparent); }
+.fl-event.tone-bad td { background: color-mix(in srgb, var(--critical) 9%, transparent); }
+.fl-ev-ic { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 8px; border-radius: 4px; font-size: 11px; font-weight: 800; color: #fff; vertical-align: -3px; }
+.tone-warn .fl-ev-ic { background: var(--warning); color: #1a1205; }
+.tone-bad .fl-ev-ic { background: var(--critical); }
+.tone-good .fl-ev-ic { background: var(--good); }
+.fl-who { margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; border: 1px solid var(--border-strong); }
+.fl-who.warn { border-color: var(--warning); }
+.fl-changes { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; font-size: 11.5px; color: var(--fg-dim); }
+.fl-changes b { color: var(--fg); font-weight: 600; }
+@media (max-width: 700px) {
+  .fl-controls { gap: 8px 12px; }
+  .fl-search { max-width: none; }
+  /* the timeline as stacked rows: one block per command or event */
+  .fl-timeline thead { display: none; }
+  .fl-timeline, .fl-timeline tbody, .fl-timeline tr, .fl-timeline td { display: block; width: 100%; }
+  .fl-timeline tr { padding: 8px 2px; border-bottom: 1px solid var(--border); }
+  .fl-timeline td { border: 0; padding: 3px 4px; }
+  .fl-time b, .fl-time small { display: inline !important; margin-right: 6px; }
+  .fl-timeline .num { text-align: left; }
+  .fl-timeline td.fl-said { display: flex; min-width: 0; }
+  .fl-detail td:first-child { display: none; }
+}
+
+/* phones: the tabs get a row of their own (four don't fit beside the brand) */
+@media (max-width: 760px) {
+  .topbar { flex-wrap: wrap; padding: 12px 16px; row-gap: 10px; }
+  .tabs { order: 3; width: 100%; overflow-x: auto; }
+  .tab { flex: 1; padding: 7px 10px; }
+}

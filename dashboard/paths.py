@@ -13,6 +13,8 @@ DATASETS_FINAL = DATASETS_ROOT / "05_final_merged"
 UPLOAD_DIR = DATASETS_ROOT / "dashboard_uploads"
 TRAIN_SCRIPT = ML_DIR / "train_nlu_model.py"
 TRAINING_RUNS = ML_DIR / "training_runs"
+# The plugin's session logs and recordings (ML/vimaan_nlu/telemetry.py).
+FLIGHT_LOGS = Path(os.environ.get("VIMAAN_LOG_DIR") or Path.home() / "Vimaan_Logs")
 
 
 def ensure_dirs() -> None:

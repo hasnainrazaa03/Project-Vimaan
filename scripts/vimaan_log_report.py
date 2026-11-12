@@ -201,6 +201,23 @@ def report(path: Path) -> str:
                 f"{e.get('last_vimaan_cmd')} {e.get('last_vimaan_intent') or ''} "
                 f"{e.get('sec_since_vimaan_action')}s earlier"
             )
+    drops = [e for e in events if e["kind"] == "autopilot_disconnect"]
+    if drops:
+        w("")
+        w("Autopilot disconnects (cause, what was seen, stick peak in the last 4 s):")
+        for e in drops:
+            w(
+                f"  t={e.get('t')}s {e.get('cause')}: {e.get('detail') or '-'}  "
+                f"stick {e.get('stick_peak')}  power {e.get('has_power')}  "
+                f"fail {e.get('fail_warn')}  null zone {e.get('nullzone')}  "
+                f"alt {e.get('altitude_actual')} vs {e.get('vs_actual')} ias {e.get('ias_actual')}"
+                + (f'  said "{e["said"]}"' if e.get("said") else "")
+            )
+    for e in (e for e in events if e["kind"] == "joystick"):
+        w(
+            f"Joystick t={e.get('t')}s: present {e.get('has_joystick')}, "
+            f"null zone {e.get('nullzone')}, stick at load {e.get('stick')}"
+        )
     for e in (e for e in events if e["kind"] == "aircraft"):
         w("")
         w(

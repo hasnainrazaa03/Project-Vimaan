@@ -14,7 +14,7 @@ const EXAMPLES = [
 const els = {
   // nav / chrome
   tabs: document.querySelectorAll(".tab"),
-  panels: { inference: $("panel-inference"), training: $("panel-training"), evals: $("panel-evals") },
+  panels: { inference: $("panel-inference"), training: $("panel-training"), evals: $("panel-evals"), flights: $("panel-flights") },
   themeToggle: $("theme-toggle"),
   connState: $("conn-state"),
 
