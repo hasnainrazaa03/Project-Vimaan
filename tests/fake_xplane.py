@@ -246,6 +246,25 @@ def make_xp() -> types.ModuleType:
 
     xp.setDatavf = setDatav
     xp.setDatavi = setDatav
+
+    # Dataref types (XPLMDataTypeID bits): int 1, float 2, double 4,
+    # float array 8, int array 16, data 32; from the stored Python value.
+    def getDataRefTypes(ref):
+        v = xp.datarefs[ref]
+        if isinstance(v, list):
+            return 16 if all(isinstance(x, int) for x in v) else 8
+        if isinstance(v, str):
+            return 32
+        return 1 if isinstance(v, int) else 2 | 4
+
+    xp.getDataRefTypes = getDataRefTypes
+    xp.read_only = set()  # datarefs X-Plane won't let a plugin write
+    xp.canWriteDataRef = lambda ref: ref not in xp.read_only
+    # Moving the user's aircraft (recorded; the fake doesn't fly anywhere).
+    xp.placed = []
+    xp.placeUserAtLocation = lambda *a: xp.placed.append(("location", *a))
+    xp.placeUserAtAirport = lambda icao: xp.placed.append(("airport", icao))
+    xp.setUsersAircraft = lambda path: xp.placed.append(("aircraft", path))
     # Windows + 2D drawing (the overlay). Windows are recorded; drawing calls
     # are recorded as (text, x, y, rgb) so tests can read the screen.
     xp.windows = {}  # id -> {"geom", "visible", "draw", "title", ...}

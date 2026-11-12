@@ -2477,3 +2477,167 @@ def test_new_altitude_while_climbing_arms_capture(sim, monkeypatch):
     ]
     plugin._flight_loop()
     assert xp.commands_fired == ["sim/autopilot/altitude_arm"]
+
+
+# ---------------------------------------------------------------------------
+# Automated-test bridge (vimaan_nlu.sim_bridge, Phase A)
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def bridged(sim, monkeypatch, tmp_path):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "BRIDGE_POLL_SEC", 0.0)
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    root = tmp_path / "Vimaan_Logs" / "test"
+    (root / "inbox").mkdir(parents=True)
+    (root / "bridge.on").write_text("")
+    plugin._bridge_next = 0.0  # the fixture's first loop scheduled the next look
+    return module, plugin, xp, root
+
+
+_REQ = iter(range(10**6))
+
+
+def ask(plugin, root, loops=8, **req):
+    """Send one request through the inbox; run the flight loop until answered."""
+    rid = req.setdefault("id", f"r{next(_REQ)}")
+    (root / "inbox" / f"{rid}.json").write_text(json.dumps(req))
+    out = root / "outbox" / f"{rid}.json"
+    for _ in range(loops):
+        plugin._flight_loop()
+        if out.exists():
+            return json.loads(out.read_text())
+    return None
+
+
+def test_the_bridge_is_off_unless_switched_on(sim, tmp_path):
+    _, plugin, xp = sim
+    inbox = tmp_path / "Vimaan_Logs" / "test" / "inbox"
+    inbox.mkdir(parents=True)
+    (inbox / "r1.json").write_text(json.dumps({"id": "r1", "op": "state"}))
+    plugin._bridge_next = 0.0
+    plugin._flight_loop()
+    assert (inbox / "r1.json").exists()  # nobody read it
+    assert "Test bridge on" not in xp.spoken
+
+
+def test_switching_the_bridge_on_and_off_is_announced(bridged):
+    _, plugin, xp, root = bridged
+    state = ask(plugin, root, op="state")
+    assert xp.spoken[-1] == "Test bridge on"
+    assert state["ok"] and state["ready"] and state["aircraft"]["icao"] == "BE58"
+    assert state["autopilot"]["servos_on"] == 0 and state["on_ground"] == 1
+    (root / "bridge.on").unlink()
+    plugin._flight_loop()
+    assert xp.spoken[-1] == "Test bridge off"
+    assert [e["on"] for e in events(plugin, "test_bridge")] == [True, False]
+
+
+def test_a_said_command_comes_back_with_what_happened(bridged):
+    _, plugin, xp, root = bridged
+    NLU["autopilot on"] = ("toggle_autopilot", {"state": "on"}, 0.99)
+    xp.effects["sim/autopilot/servos_toggle"] = lambda x: x.datarefs.update(
+        {"sim/cockpit2/autopilot/servos_on": 1}
+    )
+    r = ask(plugin, root, op="say", text="autopilot on")
+    assert r["ok"] and r["outcome"] == "executed" and r["heard"] == "autopilot on"
+    assert r["intent"] == "toggle_autopilot" and r["replies"] == ["Autopilot 1 on"]
+    assert {"command": "sim/autopilot/servos_toggle", "ok": True} in r["actions"]
+    assert r["checks"] and all(c["ok"] for c in r["checks"])  # waited for the read-back
+    press = events(plugin, "ptt_press")[-1]
+    assert press["source"] == "test" and press["text"] == "autopilot on"
+
+
+def test_a_recording_goes_through_recognition(bridged, tmp_path):
+    import wave
+
+    _, plugin, xp, root = bridged
+    wav = tmp_path / "gear.wav"
+    with wave.open(str(wav), "wb") as f:
+        f.setnchannels(1)
+        f.setsampwidth(2)
+        f.setframerate(16000)
+        f.writeframes(struct.pack("<2h", 8000, -8000) * 8000)
+    STT["next"] = "gear down"
+    NLU["gear down"] = ("toggle_landing_gear", {"state": "down"}, 0.99)
+    r = ask(plugin, root, op="say", wav=str(wav))
+    assert r["heard"] == "gear down" and r["intent"] == "toggle_landing_gear"
+    capture = [e for e in events(plugin, "stage") if e.get("stage") == "capture"][-1]
+    assert capture["source_file"] == str(wav)  # saving a copy: test_voice_worker
+
+
+def test_one_said_command_at_a_time(bridged):
+    _, plugin, xp, root = bridged
+    NLU["gear up"] = ("toggle_landing_gear", {"state": "up"}, 0.99)
+    (root / "inbox" / "a.json").write_text(json.dumps({"id": "a", "op": "say", "text": "gear up"}))
+    (root / "inbox" / "b.json").write_text(json.dumps({"id": "b", "op": "say", "text": "gear up"}))
+    plugin._flight_loop()
+    busy = json.loads((root / "outbox" / "b.json").read_text())
+    assert busy == {"id": "b", "ok": False, "error": "busy"}
+
+
+def test_read_write_and_commands(bridged):
+    _, plugin, xp, root = bridged
+    alt = "sim/cockpit2/autopilot/altitude_dial_ft"
+    r = ask(
+        plugin,
+        root,
+        op="read",
+        datarefs=[
+            "sim/cockpit2/autopilot/servos_on",
+            "sim/flightmodel/engine/ENGN_running[1]",
+            "sim/aircraft/view/acf_ICAO",
+            "sim/nope",
+        ],
+    )
+    assert r["values"] == {
+        "sim/cockpit2/autopilot/servos_on": 0,
+        "sim/flightmodel/engine/ENGN_running[1]": 0,
+        "sim/aircraft/view/acf_ICAO": "BE58",
+        "sim/nope": None,
+    }
+    assert (
+        len(
+            ask(plugin, root, op="read", datarefs=["sim/flightmodel/engine/ENGN_running"])[
+                "values"
+            ]["sim/flightmodel/engine/ENGN_running"]
+        )
+        == 16
+    )
+    assert ask(plugin, root, op="write", dataref=alt, value=7000) == {
+        "id": "r" + str(int(events(plugin, "test_request")[-1]["request"][1:])),
+        "ok": True,
+        "readback": 7000.0,
+    }
+    xp.read_only.add(alt)
+    assert "read-only" in ask(plugin, root, op="write", dataref=alt, value=1)["error"]
+    assert ask(plugin, root, op="command", name="sim/autopilot/servos_fdir_off")["ok"] is False
+    assert ask(plugin, root, op="command", name="sim/autopilot/heading")["ok"] is True
+    cmd = events(plugin, "sim_command")[-1]
+    assert (
+        cmd["origin"] == "test"
+        and cmd["cmd"] is None
+        and xp.commands_fired[-1] == "sim/autopilot/heading"
+    )
+    assert "unknown op" in ask(plugin, root, op="fly")["error"]
+
+
+def test_placing_the_aircraft_converts_units(bridged):
+    _, plugin, xp, root = bridged
+    r = ask(
+        plugin,
+        root,
+        op="place",
+        latitude=47.5,
+        longitude=-122.3,
+        elevation_ft=6000,
+        heading_true=180,
+        speed_kt=150,
+    )
+    assert r["ok"]
+    kind, lat, lon, elev_m, hdg, mps = xp.placed[-1]
+    assert (kind, lat, lon, hdg) == ("location", 47.5, -122.3, 180.0)
+    assert elev_m == pytest.approx(1828.8) and mps == pytest.approx(77.17, abs=0.01)
+    assert ask(plugin, root, op="airport", icao="KSEA")["ok"] and xp.placed[-1] == (
+        "airport",
+        "KSEA",
+    )

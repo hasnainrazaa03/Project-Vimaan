@@ -158,6 +158,47 @@ expect are in [AIRCRAFT_PROFILES.md](AIRCRAFT_PROFILES.md#running-the-probe).
 Results land in `~/Vimaan_Logs/aircraft/` and are used from the next load of
 that aircraft.
 
+## 4c. Automated tests: the test bridge (Phase A)
+
+With X-Plane running and Vimaan loaded, a script on this Mac can say
+commands to Vimaan and read or set the sim, with no one at the controls. The
+bridge is **off** unless you switch it on, and Vimaan says "Test bridge on" /
+"Test bridge off" when it changes. Don't fly while it's on.
+
+```bash
+python -m simtest bridge on        # creates ~/Vimaan_Logs/test/bridge.on
+python -m simtest status           # Vimaan ready? aircraft, autopilot, altitude, speed
+python -m simtest say "autopilot on"           # generated voice (macOS 'say'), through recognition
+python -m simtest say --text "autopilot on"    # straight to the model: no recognition
+python -m simtest say --wav ~/Vimaan_Logs/audio/20261107_203741_c0014.wav   # a real recording
+python -m simtest read sim/cockpit2/autopilot/servos_on "sim/flightmodel/engine/ENGN_running[0]"
+python -m simtest write sim/cockpit2/autopilot/altitude_dial_ft 5000
+python -m simtest command sim/autopilot/heading            # counts as the pilot's, not Vimaan's
+python -m simtest place --lat 47.45 --lon -122.31 --alt-ft 6000 --hdg 180 --kt 150
+python -m simtest bridge off
+```
+
+A said command answers when it's done and its read-backs are checked: what
+was heard and understood, the outcome, Vimaan's replies, what was sent to
+X-Plane, and the checks. It shows in the overlay and the Flights tab like a
+spoken one (push-to-talk source `test`).
+
+Generated voices are recognised like a real one, mistakes included. To see
+which voices Vosk hears correctly, without X-Plane:
+
+```bash
+python -m simtest voices "descend at one thousand five hundred feet per minute" "mach point seven eight"
+```
+
+On ten Tier 1 phrases, Daniel (the default) was heard right 9 times out of 10,
+Samantha, Karen and Moira 7, Fred 4 and Ralph 3. Use `--text` when a check is
+about what the sim does, not what was heard.
+
+How it works: requests are files in `~/Vimaan_Logs/test/inbox/`, results in
+`test/outbox/` (`ML/vimaan_nlu/sim_bridge.py` documents the format). The
+plugin looks four times a second, only for the switch file while the bridge
+is off.
+
 ## 5. Reading what happened
 
 ```bash

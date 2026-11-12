@@ -33,10 +33,10 @@ jobs:
             fastapi 'uvicorn[standard]' python-multipart httpx
 
       - name: Ruff lint
-        run: ruff check ML plugin tests dashboard scripts
+        run: ruff check ML plugin tests dashboard scripts simtest
 
       - name: Ruff format check
-        run: ruff format --check ML plugin tests dashboard scripts
+        run: ruff format --check ML plugin tests dashboard scripts simtest
 
       - name: Mypy (type-check vimaan_nlu + plugin)
         # torch/transformers are intentionally absent in CI; the mypy config
@@ -44,7 +44,7 @@ jobs:
         run: mypy
 
       - name: Compileall (syntax sanity)
-        run: python -m compileall -q ML plugin dashboard scripts
+        run: python -m compileall -q ML plugin dashboard scripts simtest
 
       - name: Pytest (skips torch-only tests)
         run: pytest -q --cov=ML/vimaan_nlu --cov=ML/utils --cov=dashboard --cov-report=term-missing

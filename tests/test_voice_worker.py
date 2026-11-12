@@ -348,3 +348,60 @@ def test_real_worker_process(tmp_path):
         assert json.dumps(result)  # protocol stays JSON-clean
     finally:
         client.stop()
+
+
+# ---------------------------------------------------------------------------
+# A recording from a file (the automated-test bridge, Phase A)
+# ---------------------------------------------------------------------------
+def write_wav(path, pcm, rate=16000, channels=1):
+    import wave
+
+    with wave.open(str(path), "wb") as f:
+        f.setnchannels(channels)
+        f.setsampwidth(2)
+        f.setframerate(rate)
+        f.writeframes(pcm)
+    return str(path)
+
+
+def test_a_wav_is_recognised_like_a_recording(tmp_path):
+    w, out, sd, clock = make_worker()
+    w.audio_dir, w.audio_prefix = str(tmp_path / "audio"), "20261111_120000_"
+    path = write_wav(tmp_path / "gear.wav", LOUD)
+    w.handle({"op": "wav", "cmd": "c7", "path": path})
+    assert types_of(out) == ["captured", "result"]
+    captured, result = out
+    assert captured["source_file"] == path and captured["audio_sec"] == 1.0
+    assert captured["audio_file"].endswith("20261111_120000_c7.wav")  # kept for review
+    assert result["cmd"] == "c7" and result["text"] == "gear up" and result["stt_ms"] is not None
+
+
+def test_a_wav_goes_through_the_streaming_recogniser_from_the_start(tmp_path):
+    w, out, sd, clock = make_worker(transcript=RuntimeError("batch STT must not run"))
+    w.stream_stt = FakeStream("autopilot on")
+    w.stream_stt.feed(b"left over from an earlier recording")
+    w.handle({"op": "wav", "cmd": "c8", "path": write_wav(tmp_path / "a.wav", LOUD)})
+    assert w.stream_stt.begun == 1 and w.stream_stt.fed == LOUD
+    assert out[-1]["text"] == "autopilot on"
+
+
+@pytest.mark.parametrize(
+    ("make", "why"),
+    [
+        (lambda p: write_wav(p, LOUD, rate=44100), "sample rate 44100"),
+        (lambda p: write_wav(p, LOUD, channels=2), "16-bit mono"),
+        (lambda p: str(p) + ".missing", "No such file"),
+    ],
+)
+def test_unusable_wavs_are_errors_not_crashes(tmp_path, make, why):
+    w, out, sd, clock = make_worker()
+    w.handle({"op": "wav", "cmd": "c9", "path": make(tmp_path / "x.wav")})
+    (e,) = out
+    assert e["type"] == "error" and e["outcome"] == "worker_error" and why in e["error"]
+
+
+def test_short_and_silent_wavs_are_reported_as_such(tmp_path):
+    w, out, sd, clock = make_worker()
+    w.handle({"op": "wav", "cmd": "c1", "path": write_wav(tmp_path / "s.wav", LOUD[:3200])})
+    w.handle({"op": "wav", "cmd": "c2", "path": write_wav(tmp_path / "q.wav", b"\0\0" * 16000)})
+    assert [m.get("outcome") for m in out if m["type"] == "error"] == ["too_short", "silent_mic"]
