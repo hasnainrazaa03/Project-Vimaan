@@ -213,3 +213,11 @@ def test_a_started_flight_is_brought_out_from_under_the_config_screen(monkeypatc
     xplane.start_flight(xplane.air_start_body("baron", 47.45, -122.31, 6000, 180, 150))
     assert api.commands == ["sim/operation/toggle_flight_config"]
     assert api.state["sim/time/paused"] == 0
+
+
+def test_safe_mode_is_spotted(tmp_path):
+    (tmp_path / "Log.txt").write_text("...\n0:00:08.769 I/SYS: **   SAFE MODE   **\n")
+    assert xplane.safe_mode(tmp_path)
+    (tmp_path / "Log.txt").write_text("Log.txt for X-Plane 12.4.3\nFetching plugins\n")
+    assert not xplane.safe_mode(tmp_path)
+    assert not xplane.safe_mode(tmp_path / "missing")

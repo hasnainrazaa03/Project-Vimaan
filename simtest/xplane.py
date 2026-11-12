@@ -19,10 +19,12 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 API = "http://127.0.0.1:8086/api/v3"
 STEAM_APP_ID = 2014780
+FOLDER = Path.home() / "Library/Application Support/Steam/steamapps/common/X-Plane 12"
 FEET = 0.3048
 KNOT = 0.514444
 # The four Tier 1 aircraft, relative to the X-Plane folder.
@@ -100,6 +102,15 @@ def air_start_body(
     }
 
 
+def safe_mode(folder: Path = FOLDER) -> bool:
+    """Did this X-Plane session start in Safe Mode (plugins, so Vimaan, off)?"""
+    try:
+        head = (folder / "Log.txt").read_text(errors="replace")[:20000]
+    except OSError:
+        return False
+    return "SAFE MODE" in head
+
+
 def launch(wait_sec: float = 300.0, poll_sec: float = 2.0) -> None:
     """Start X-Plane through Steam and wait for its web API. Steam may ask
     which launch option to use: someone has to pick "X-Plane" once."""
@@ -109,6 +120,11 @@ def launch(wait_sec: float = 300.0, poll_sec: float = 2.0) -> None:
     deadline = time.monotonic() + wait_sec
     while time.monotonic() < deadline:
         if running():
+            time.sleep(poll_sec)  # the log's header is written by now
+            if safe_mode():
+                raise XPlaneError(
+                    "X-Plane started in Safe Mode (plugins off, so no Vimaan): quit and launch again"
+                )
             return
         time.sleep(poll_sec)
     raise XPlaneError("X-Plane didn't come up: is Steam waiting for a launch option to be picked?")

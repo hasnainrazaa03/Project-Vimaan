@@ -7,7 +7,7 @@ import json
 import sys
 from typing import Any
 
-from . import voice, xplane
+from . import scenario, tier1, voice, xplane
 from .bridge import Bridge, NoAnswer
 
 
@@ -73,6 +73,13 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--hdg", type=float, default=180, help="degrees true")
     f.add_argument("--kt", type=float, default=150)
     sub.add_parser("quit", help="switch the bridge off and quit X-Plane")
+    rn = sub.add_parser("run", help="run a checklist scenario, unattended, and write a report")
+    rn.add_argument("checklist", choices=("tier1",))
+    rn.add_argument("aircraft", choices=(*tier1.SETUPS, "all"))
+    rn.add_argument("--text", action="store_true", help="no generated voice: text to the model")
+    rn.add_argument("--voice", default=voice.DEFAULT_VOICE)
+    rn.add_argument("--no-fly", action="store_true", help="use the flight already running")
+    rn.add_argument("--quit", action="store_true", help="quit X-Plane at the end")
 
     v = sub.add_parser("voices", help="offline: what Vimaan's recogniser hears in generated speech")
     v.add_argument("phrases", nargs="+")
@@ -83,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
         return _voices(args)
     if args.cmd in ("launch", "fly", "quit"):
         return _xplane(args)
+    if args.cmd == "run":
+        return _run(args)
 
     br = Bridge(args.log_dir)
     if args.cmd == "bridge":
@@ -151,6 +160,86 @@ def _xplane(args: argparse.Namespace) -> int:
         print(f"✕ {exc}", file=sys.stderr)
         return 2
     return 0
+
+
+def _wait_ready(br: Bridge, icao: str, wait_sec: float = 240.0) -> dict[str, Any]:
+    """Until Vimaan is ready, on this aircraft, in the air, and idle."""
+    import time
+
+    deadline = time.monotonic() + wait_sec
+    last: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        try:
+            last = br.request("state", timeout=5)
+        except NoAnswer:
+            time.sleep(2)
+            continue
+        if (
+            last.get("ready")
+            and last.get("aircraft", {}).get("icao") == icao
+            and not last.get("on_ground")
+            and not last.get("busy")
+        ):
+            return last
+        time.sleep(2)
+    raise NoAnswer(f"Vimaan not ready on {icao}: last state {last.get('aircraft')}")
+
+
+def _run(args: argparse.Namespace) -> int:
+    from datetime import datetime
+
+    br = Bridge(args.log_dir)
+    names = list(tier1.SETUPS) if args.aircraft == "all" else [args.aircraft]
+    failed = 0
+    for name in names:
+        setup = tier1.SETUPS[name]
+        print(f"\n=== Tier 1 on {name} ({setup.icao}) ===")
+        try:
+            if not args.no_fly:
+                if not xplane.running():
+                    raise xplane.XPlaneError("X-Plane isn't running: python -m simtest launch")
+                xplane.start_flight(
+                    xplane.air_start_body(name, 47.45, -122.31, setup.alt_ft, 180, setup.kt)
+                )
+            br.enable()
+            state = _wait_ready(br, setup.icao)
+        except (xplane.XPlaneError, NoAnswer) as exc:
+            print(f"✕ {exc}", file=sys.stderr)
+            return 2
+        started = datetime.now().isoformat(timespec="seconds")
+        if args.text:
+            runner = scenario.Runner(br, voice=None)
+        else:
+            from . import understand
+
+            runner = scenario.Runner(br, voice=args.voice, understood=understand.same)
+        results = runner.run(tier1.steps(name))
+        total = scenario.summary(results)
+        path = scenario.write_report(
+            br.log_dir / "test" / "reports",
+            {
+                "checklist": "tier1",
+                "aircraft": name,
+                "icao": setup.icao,
+                "started": started,
+                "session": state.get("session"),
+                "voice": None if args.text else args.voice,
+                "summary": total,
+                "steps": results,
+            },
+        )
+        failed += len(total["failed"])
+        heard = (
+            f", by voice: understood {total['understood_by_voice']}/{total['said_by_voice']}"
+            f" (heard word for word {total['heard_exactly']})"
+            if total["said_by_voice"]
+            else ""
+        )
+        print(f"{name}: {total['passed']}/{total['steps']} passed{heard}. Report: {path}")
+    if args.quit:
+        br.disable()
+        xplane.quit_xplane()
+    return 1 if failed else 0
 
 
 def _voices(args: argparse.Namespace) -> int:
