@@ -546,6 +546,21 @@ gives the controls back at the end of a run.
        A330 215 / 180 kt). The 737 took full flaps at about 240 kt.
     3. **No callout for a pilot disconnect within 5 s of "autopilot on"**:
        Vimaan's own "autopilot …" counted as the cause, on or off.
+  - **Re-run on #38 (2026-11-12, 02:37):** Baron 27/27, King Air 27/27, 737
+    27/28, A330 27/30. All three fixes held. The failures were the runner's:
+    the jets' thrust wasn't managed (A330 at 337 kt, Vmo 330; 737 A/T arm
+    switch off). Fixed in #37/#38: thrust levers to CL on the A330, A/T engaged
+    first, overspeed callout.
+  - **Third run (2026-11-12, 21:00, main 0b0684d):** Baron 27/27, King Air
+    27/27, A330 **31/32**, 737 23/29.
+    - The 737's A/T arm override used names its script has commented out, so
+      it never applied: no A/T, the speed decayed to 161 kt, and the descent
+      failed. Fix: arm a hard-off autothrottle with X-Plane's own
+      `sim/autopilot/autothrottle_arm` (the 737's switch), on any aircraft. The
+      name checker now skips commented-out lines.
+    - The A330's one failure: "level change" at the selected altitude (an
+      Airbus doesn't change mode then). The runner now selects a new altitude
+      first.
   - By voice (Daniel): 24–27 of 26–29 understood per aircraft. "q n h one
     zero one three" and "tune com one to one two one decimal five" were
     misheard every time; check them with a real voice.

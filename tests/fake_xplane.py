@@ -137,6 +137,8 @@ KNOWN_COMMANDS = {
     "sim/autopilot/autothrottle_on",
     "sim/autopilot/autothrottle_off",
     "sim/autopilot/autothrottle_toggle",
+    "sim/autopilot/autothrottle_arm",
+    "sim/autopilot/autothrottle_hard_off",
     "sim/autopilot/knots_mach_toggle",
     "sim/instruments/barometer_std",
     "sim/instruments/barometer_up",

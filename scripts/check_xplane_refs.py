@@ -75,7 +75,10 @@ def aircraft_commands(xplane_root: str) -> set[str]:
             if fname.endswith(".lua"):
                 path = os.path.join(folder, fname)
                 with open(path, encoding="utf-8", errors="replace") as fh:
-                    created.update(CREATED_RE.findall(fh.read()))
+                    # Not commented-out lines: the 737's autothrottle_arm_toggle
+                    # is "--create_command(...)", and doesn't exist in the sim.
+                    live = "\n".join(ln for ln in fh if not ln.lstrip().startswith("--"))
+                    created.update(CREATED_RE.findall(live))
     return created
 
 
