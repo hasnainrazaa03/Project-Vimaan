@@ -2640,17 +2640,17 @@ class PythonInterface:
                 self._say("Cannot read autothrottle state")
                 return "failed"
             command = self.profile.command("autothrottle_toggle")
-        if want_on and self._autothrottle_switch_off():
-            # The 737's A/T ARM switch: arm it, then engage once its scripts
-            # have taken the switch (the next frames).
-            arm = self.profile.command("autothrottle_arm")
+        arm = self.profile.command("autothrottle_arm")
+        hard_off = raw is not None and raw < 0 and on_from >= 1  # (the A330 arms at 0)
+        if want_on and hard_off and self._has_command(arm):
+            # Hard off (-1: the 737's A/T ARM switch off): arm it, then engage
+            # once the aircraft has taken the switch (the next frames).
             if not self._fire_command(arm):
                 self._say("Cannot arm the autothrottle")
                 return "failed"
-            status = self.profile.settings["athr_arm_status"]
             self._expect(
-                "Autothrottle arm switch",
-                lambda: None if (r := self._read_float(status)) is None else r > 0.5,
+                "Autothrottle armed",
+                lambda: None if (r := self._read_int(DREF_AUTOTHROTTLE)) is None else r >= 0,
                 True,
             )
             self._say("Arming the autothrottle")
@@ -2664,14 +2664,6 @@ class PythonInterface:
         self._expect_autothrottle(want_on, on_from, hint)
         self._say(f"Autothrottle {state}")
         return "executed"
-
-    def _autothrottle_switch_off(self):
-        """An arm switch this aircraft's autothrottle needs, and it's off."""
-        status = self.profile.settings.get("athr_arm_status")
-        if not (status and self.profile.command("autothrottle_arm")):
-            return False
-        value = self._read_float(status)
-        return value is not None and value < 0.5
 
     def _engage_autothrottle(self, command, on_from, hint):
         if not (command and self._fire_command(command)):

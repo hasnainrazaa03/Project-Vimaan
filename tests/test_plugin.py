@@ -2869,33 +2869,31 @@ def test_a_pilot_disconnect_right_after_autopilot_on_is_called_out(flying):
 # From the A2 re-run (2026-11-12): the 737's A/T ARM switch; overspeed
 # ---------------------------------------------------------------------------
 ATHR = "sim/cockpit2/autopilot/autothrottle_enabled"
-ARM_POS = "laminar/B738/autopilot/autothrottle_arm_pos"
-ARM = "laminar/B738/autopilot/autothrottle_arm_toggle"
+ARM = "sim/autopilot/autothrottle_arm"  # the 737's A/T ARM switch (its cockpit object)
 
 
 def b738_with_athr_switch(plugin, xp, armed):
-    xp.datarefs[ARM_POS] = 1 if armed else 0
+    """The 737's autothrottle: -1 with the ARM switch off, 0 armed, 1 holding speed."""
     xp.datarefs[ATHR] = 0 if armed else -1
 
     def arm(x):
-        x.datarefs[ARM_POS] = 1 - x.datarefs[ARM_POS]
-        x.datarefs[ATHR] = 0 if x.datarefs[ARM_POS] else -1
+        x.datarefs[ATHR] = max(x.datarefs[ATHR], 0)
 
-    def engage(x):  # the sim's A/T engages only with the switch armed
-        if x.datarefs[ARM_POS]:
+    def engage(x):  # engages only once armed
+        if x.datarefs[ATHR] >= 0:
             x.datarefs[ATHR] = 1
 
     xp.effects[ARM] = arm
     xp.effects["sim/autopilot/autothrottle_on"] = engage
-    return load_aircraft(plugin, xp, 7, commands=(*B738_MCP, ARM))
+    return load_aircraft(plugin, xp, 7, commands=B738_MCP)
 
 
-def test_737_autothrottle_on_arms_its_switch_first(sim, monkeypatch):
-    # Re-run: the switch was off, the A/T stayed at -1: "did not respond".
+def test_a_hard_off_autothrottle_is_armed_first(sim, monkeypatch):
+    # Re-runs: the 737's switch was off, the A/T stayed at -1: "did not respond".
     module, plugin, xp = sim
     monkeypatch.setattr(module, "ATHR_ARM_SETTLE_SEC", 0.0)
     monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
-    assert "b738_autothrottle_arm" in b738_with_athr_switch(plugin, xp, armed=False).overrides
+    b738_with_athr_switch(plugin, xp, armed=False)
     assert say(plugin, "auto throttle on", "toggle_autothrottle", {"state": "on"}) == [
         "Arming the autothrottle"
     ]
@@ -2908,7 +2906,7 @@ def test_737_autothrottle_on_arms_its_switch_first(sim, monkeypatch):
     assert all(e["ok"] for e in events(plugin, "verify"))
 
 
-def test_737_autothrottle_already_armed_engages_straight_away(sim):
+def test_an_armed_autothrottle_engages_straight_away(sim):
     _, plugin, xp = sim
     b738_with_athr_switch(plugin, xp, armed=True)
     assert say(plugin, "auto throttle on", "toggle_autothrottle", {"state": "on"}) == [
@@ -2917,12 +2915,21 @@ def test_737_autothrottle_already_armed_engages_straight_away(sim):
     assert xp.commands_fired == ["sim/autopilot/autothrottle_on"]
 
 
-def test_autothrottle_off_leaves_the_arm_switch_alone(sim):
+def test_autothrottle_off_leaves_it_armed(sim):
     _, plugin, xp = sim
     b738_with_athr_switch(plugin, xp, armed=True)
     xp.datarefs[ATHR] = 1
     say(plugin, "auto throttle off", "toggle_autothrottle", {"state": "off"})
-    assert ARM not in xp.commands_fired and xp.datarefs[ARM_POS] == 1
+    assert ARM not in xp.commands_fired
+    assert "sim/autopilot/autothrottle_hard_off" not in xp.commands_fired
+
+
+def test_the_a330s_armed_a_thr_is_not_armed_again(sim):
+    # A/THR counts armed (0) as on; its own toggle, never the generic arm.
+    _, plugin, xp = sim
+    aircraft(plugin, xp, commands=A333, **{ATHR: -1})
+    say(plugin, "auto throttle on", "toggle_autothrottle", {"state": "on"})
+    assert ARM not in xp.commands_fired
 
 
 def test_an_overspeed_disconnect_is_called_out(flying):

@@ -87,9 +87,10 @@ DEFAULT_COMMANDS: Mapping[str, str | None] = MappingProxyType(
         "autothrottle_on": "sim/autopilot/autothrottle_on",
         "autothrottle_off": "sim/autopilot/autothrottle_off",
         "autothrottle_toggle": "sim/autopilot/autothrottle_toggle",
-        # An arm switch the autothrottle needs before it engages (737 A/T ARM).
-        # None: no such switch.
-        "autothrottle_arm": None,
+        # Arms an autothrottle that is hard off (autothrottle_enabled -1) so
+        # it can engage: the 737's A/T ARM switch is this command (its cockpit
+        # object), as are other X-Plane autothrottles with an arm switch.
+        "autothrottle_arm": "sim/autopilot/autothrottle_arm",
         "baro_std": "sim/instruments/barometer_std",
         # One step of the altimeter knob, for aircraft whose own logic owns
         # the setting (the 737 put written values back; its scripts handle
@@ -148,6 +149,7 @@ OVERRIDES: tuple[Override, ...] = (
                 "autothrottle_toggle": "laminar/A333/autopilot/a_thr_toggle",
                 "autothrottle_on": None,
                 "autothrottle_off": None,
+                "autothrottle_arm": None,
                 # Pull = selected (fly the dialled value), push = managed.
                 "speed_select": "laminar/A333/autopilot/speed_knob_pull",
                 "heading_select": "laminar/A333/autopilot/heading_knob_pull",
@@ -227,21 +229,6 @@ OVERRIDES: tuple[Override, ...] = (
         ),
         source="Laminar 737-800 xlua B738.glareshield: create_command(...) and its "
         "*_CMDhandler functions, X-Plane 12.4.3",
-        live=(B738_LIVE,),
-    ),
-    Override(
-        # The 737's A/T ARM switch: with it off, the sim's autothrottle stays
-        # hard off (-1) and "autothrottle on" does nothing (A2 run, 2026-11-12).
-        name="b738_autothrottle_arm",
-        requires=("laminar/B738/autopilot/autothrottle_arm_toggle",),
-        commands=MappingProxyType(
-            {"autothrottle_arm": "laminar/B738/autopilot/autothrottle_arm_toggle"}
-        ),
-        source="Laminar 737-800 xlua B738 scripts: create_command(...) and "
-        "create_dataref(autothrottle_arm_pos), X-Plane 12.4.3",
-        settings=MappingProxyType(
-            {"athr_arm_status": "laminar/B738/autopilot/autothrottle_arm_pos"}
-        ),
         live=(B738_LIVE,),
     ),
     Override(

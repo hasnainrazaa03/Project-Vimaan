@@ -39,7 +39,6 @@ class Setup:
     # _fadec_tla 0.53; A/THR stays armed at FLX/MCT 0.76 and TOGA 1.0).
     levers: float | None = None
     athr_on_from: int = 1  # autothrottle_enabled from this counts as on (A330: armed, 0)
-    athr_arm_status: str | None = None  # an arm switch Vimaan arms first (737)
 
 
 SETUPS: dict[str, Setup] = {
@@ -55,7 +54,6 @@ SETUPS: dict[str, Setup] = {
         "two five zero",
         True,
         "generic",
-        athr_arm_status="laminar/B738/autopilot/autothrottle_arm_pos",
     ),
     "a330": Setup(
         "A333",
@@ -92,6 +90,7 @@ def _faster_than_vfe(want: bool, vfe_full: float | None) -> SimCheck:
     )
 
 
+THOUSANDS = {5000: "five thousand", 7000: "seven thousand", 9000: "nine thousand"}
 THROTTLE = "sim/cockpit2/engine/actuators/throttle_ratio_all"
 ATHR = AP + "autothrottle_enabled"
 
@@ -122,8 +121,6 @@ def _manage_thrust(s: Setup) -> list[Step]:
             )
         )
     sim = [_athr(s, True)]
-    if s.athr_arm_status:
-        sim.append(equals("A/T arm switch armed", s.athr_arm_status, 1, tol=0.5, within_sec=4))
     steps.append(
         Step(
             "autothrottle on",
@@ -238,6 +235,14 @@ def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:
             reply=f"to {s.descend_to}",
             sim=(levelled_at(s.descend_to, within_sec=climb_sec),),
             note="the main Tier 1 check: the aircraft levels off by itself",
+        ),
+        # Somewhere to go first: at the selected altitude an Airbus doesn't
+        # change mode (re-run 2026-11-12: "Level change mode did not respond").
+        Step(
+            f"altitude {s.descend_to + 1000} for level change",
+            say=f"altitude {THOUSANDS[s.descend_to + 1000]}",
+            outcomes=DONE_OR_SET,
+            sim=(equals("altitude bug", AP + "altitude_dial_ft", s.descend_to + 1000, tol=1),),
         ),
         Step("level change", say="level change", outcomes=DONE_OR_SET),
         Step(
