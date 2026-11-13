@@ -318,7 +318,11 @@ def _vocab() -> tuple[list[str], set[str], set[str]]:
 
 def negative_rows(n: int, rng: random.Random) -> list[dict[str, Any]]:
     filler, command_words, value_words = _vocab()
-    numbers = [w for w in value_words if w in spoken.ONES or w in spoken.TENS or w in spoken.TEENS]
+    # Sorted: a set's order changes with every process, and the dataset must
+    # come out the same for the same seed.
+    numbers = sorted(
+        w for w in value_words if w in spoken.ONES or w in spoken.TENS or w in spoken.TEENS
+    )
     states = ["on", "off", "up", "down"]
     rows = []
     for i in range(n):

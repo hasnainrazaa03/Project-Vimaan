@@ -41,6 +41,30 @@ def test_no_text_holds_a_placeholder(data):
     assert [w for w in filler if "{" in w or "}" in w or "=" in w] == []
 
 
+def test_same_seed_same_data_in_any_process():
+    # Python orders sets differently in every process (hash seed); the data
+    # must not depend on that (data v11 differed in 774 bare-number negatives).
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    ml = Path(generate_v2.__file__).resolve().parents[1]
+    code = (
+        "import hashlib, json; from data import generate_v2; "
+        "rows, _ = generate_v2.generate(per_intent=40, seed=3); "
+        "print(hashlib.sha256(json.dumps(rows).encode()).hexdigest())"
+    )
+    digests = set()
+    for hash_seed in ("1", "2"):
+        env = {**os.environ, "PYTHONHASHSEED": hash_seed, "PYTHONPATH": str(ml)}
+        out = subprocess.run(
+            [sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True
+        )
+        digests.add(out.stdout.strip())
+    assert len(digests) == 1, "generate_v2 depends on set order"
+
+
 def test_held_out_templates_never_trained_on(data):
     rows, _ = data
     split_of = defaultdict(set)
