@@ -631,7 +631,10 @@ COMMANDS: tuple[Command, ...] = (
                         "nav": ("navigation",),
                         "approach": (),
                         "back course": (),
-                        "altitude hold": ("alt hold", "hold altitude"),
+                        # "alt mode" / "altitude mode": the ALT button is
+                        # altitude hold (real-voice check, 2026-11-12: both
+                        # got "Which mode?").
+                        "altitude hold": ("alt hold", "hold altitude", "altitude", "alt"),
                         "vertical speed": ("v s",),
                         "level change": ("flight level change",),
                         "v nav": ("vertical navigation",),
