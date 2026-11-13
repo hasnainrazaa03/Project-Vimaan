@@ -290,3 +290,33 @@ def test_a_longer_choice_value_wins_over_one_inside_it():
     for value in ("v nav", "l nav", "nav"):
         out = canonicalize_choices({"mode": value}, f"engage {value}", "set_autopilot_mode")
         assert out["mode"] == value
+
+
+@pytest.mark.parametrize(
+    ("text", "tagged"),
+    [
+        ("alt mode", "alt"),
+        ("altitude mode", "altitude"),
+        ("alt hold", "alt hold"),
+        ("select alt", "alt"),
+    ],
+)
+def test_alt_and_altitude_mode_mean_altitude_hold(text, tagged):
+    # Real-voice check (2026-11-12): "alt mode" and "altitude mode" got "Which mode?".
+    assert (
+        canonicalize_choices({"mode": tagged}, text, "set_autopilot_mode")["mode"]
+        == "altitude hold"
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "tagged", "mode"),
+    [
+        ("vertical speed mode", "vertical speed", "vertical speed"),
+        ("level change", "level change", "level change"),
+        ("heading mode", "heading", "heading"),
+        ("v nav", "v nav", "v nav"),
+    ],
+)
+def test_other_modes_are_not_taken_for_altitude_hold(text, tagged, mode):
+    assert canonicalize_choices({"mode": tagged}, text, "set_autopilot_mode")["mode"] == mode

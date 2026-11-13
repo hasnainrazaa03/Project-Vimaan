@@ -18,10 +18,10 @@ Last updated 2026-11-11.
 | O | In-sim overlay (live transcript, meaning, outcome) | ✅ merged and flown (ImGui, worst draw 1.1 ms) | #26, #27 |
 | E0 | Command table: one source of truth (no behaviour change) | ✅ merged; smoke-flown on v11 | #28 |
 | E1 | Training data v2 + command families → **v17** | ✅ merged; flown twice | #29 |
-| T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | 🟡 Part C flown unattended by the A2 runner, all pass; owner's short real-voice check left | #30–#34, #38–#40 |
+| T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | ✅ closed 2026-11-12: Part C flown unattended (121/121 on four aircraft) and the owner's real-voice check passed | #30–#34, #38–#42 |
 | D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim (switch); stick pull still to check | #35 |
 | A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
-| T2 | Tier 2: radios & navigation → **v20** | ⬜ T2.0 groundwork (research, handlers, tests) after A2; training after T1 closes | |
+| T2 | Tier 2: radios & navigation → **v20** | ⬜ next: T2.0 groundwork (research, handlers, tests), then data, training, gate | |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v21** | ⬜ | |
 | T4 | Tier 4: questions (read-only) → **v22** | ⬜ | |
 | L | Later: relative commands, two commands in one breath, checklists, add-on aircraft profiles | ⬜ | |
@@ -572,7 +572,16 @@ gives the controls back at the end of a run.
   - By voice (Daniel): 25–29 of 27–31 understood per aircraft. The same two
     phrases missed on every aircraft and every run: "q n h one zero one
     three" (heard "zero one three") and "tune com one to one two one decimal
-    five" (heard "decimal five"). They're for the owner's real-voice check. "q n h one
+    five" (heard "decimal five"). They're for the owner's real-voice check.
+  - **Owner's real-voice check (2026-11-12, 22:03, A330, session 220331,
+    EarPods):** all six checklist phrases were understood and done, 315–342 ms
+    speech to action. Both phrases the generated voice missed worked:
+    "q n h one zero one three" was heard "q in h one zero one three", and the
+    COM 1 phrase "doing com one two one two one decimal five". One digit was
+    misheard: "133.1" as "133.5", which was read back, so the pilot hears it.
+    Frequencies are Tier 2's core: measure digit accuracy there. "alt mode" and
+    "altitude mode" got "Which mode?"; they're now altitude hold (#42).
+    **Tier 1 closed.** "q n h one
     zero one three" and "tune com one to one two one decimal five" were
     misheard every time; check them with a real voice.
 - [ ] **A3 Ground and takeoff.** Start with engines off ("start both
