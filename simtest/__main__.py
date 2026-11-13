@@ -7,7 +7,7 @@ import json
 import sys
 from typing import Any
 
-from . import voice, xplane
+from . import scenario, tier1, voice, xplane
 from .bridge import Bridge, NoAnswer
 
 
@@ -67,12 +67,20 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("launch", help="start X-Plane through Steam and wait for it")
     f = sub.add_parser("fly", help="start a flight in the air, engines running, and get it running")
     f.add_argument("aircraft", help=f"one of {', '.join(xplane.AIRCRAFT)}, or an .acf path")
-    f.add_argument("--lat", type=float, default=47.45)  # over Seattle
-    f.add_argument("--lon", type=float, default=-122.31)
+    f.add_argument("--lat", type=float, default=xplane.TEST_AREA[0])  # west of Portland
+    f.add_argument("--lon", type=float, default=xplane.TEST_AREA[1])
     f.add_argument("--alt-ft", type=float, default=6000)
     f.add_argument("--hdg", type=float, default=180, help="degrees true")
     f.add_argument("--kt", type=float, default=150)
     sub.add_parser("quit", help="switch the bridge off and quit X-Plane")
+    sub.add_parser("screenshot", help="X-Plane's own screenshot of its window, to see a message")
+    rn = sub.add_parser("run", help="run a checklist scenario, unattended, and write a report")
+    rn.add_argument("checklist", choices=("tier1",))
+    rn.add_argument("aircraft", choices=(*tier1.SETUPS, "all"))
+    rn.add_argument("--text", action="store_true", help="no generated voice: text to the model")
+    rn.add_argument("--voice", default=voice.DEFAULT_VOICE)
+    rn.add_argument("--no-fly", action="store_true", help="use the flight already running")
+    rn.add_argument("--quit", action="store_true", help="quit X-Plane at the end")
 
     v = sub.add_parser("voices", help="offline: what Vimaan's recogniser hears in generated speech")
     v.add_argument("phrases", nargs="+")
@@ -81,8 +89,10 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.cmd == "voices":
         return _voices(args)
-    if args.cmd in ("launch", "fly", "quit"):
+    if args.cmd in ("launch", "fly", "quit", "screenshot"):
         return _xplane(args)
+    if args.cmd == "run":
+        return _run(args)
 
     br = Bridge(args.log_dir)
     if args.cmd == "bridge":
@@ -143,6 +153,8 @@ def _xplane(args: argparse.Namespace) -> int:
             )
             xplane.start_flight(body)
             print(f"Flying: {args.aircraft} at {args.alt_ft:.0f} ft, {args.kt:.0f} kt.")
+        elif args.cmd == "screenshot":
+            print(xplane.screenshot() or "✕ no screenshot appeared")
         else:
             Bridge(args.log_dir).disable()
             xplane.quit_xplane()
@@ -151,6 +163,90 @@ def _xplane(args: argparse.Namespace) -> int:
         print(f"✕ {exc}", file=sys.stderr)
         return 2
     return 0
+
+
+def _wait_ready(br: Bridge, icao: str, wait_sec: float = 240.0) -> dict[str, Any]:
+    """Until Vimaan is ready, on this aircraft, in the air, and idle."""
+    import time
+
+    deadline = time.monotonic() + wait_sec
+    last: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        try:
+            last = br.request("state", timeout=5)
+        except NoAnswer:
+            time.sleep(2)
+            continue
+        if (
+            last.get("ready")
+            and last.get("aircraft", {}).get("icao") == icao
+            and not last.get("on_ground")
+            and not last.get("busy")
+        ):
+            return last
+        time.sleep(2)
+    raise NoAnswer(f"Vimaan not ready on {icao}: last state {last.get('aircraft')}")
+
+
+def _run(args: argparse.Namespace) -> int:
+    from datetime import datetime
+
+    br = Bridge(args.log_dir)
+    names = list(tier1.SETUPS) if args.aircraft == "all" else [args.aircraft]
+    failed = 0
+    for name in names:
+        setup = tier1.SETUPS[name]
+        print(f"\n=== Tier 1 on {name} ({setup.icao}) ===")
+        try:
+            if not args.no_fly:
+                if not xplane.running():
+                    raise xplane.XPlaneError("X-Plane isn't running: python -m simtest launch")
+                xplane.start_flight(
+                    xplane.air_start_body(name, *xplane.TEST_AREA, setup.alt_ft, 180, setup.kt)
+                )
+            br.enable()
+            state = _wait_ready(br, setup.icao)
+        except (xplane.XPlaneError, NoAnswer) as exc:
+            print(f"✕ {exc}", file=sys.stderr)
+            return 2
+        started = datetime.now().isoformat(timespec="seconds")
+        if args.text:
+            runner = scenario.Runner(br, voice=None)
+        else:
+            from . import understand
+
+            runner = scenario.Runner(br, voice=args.voice, understood=understand.same)
+        from .aircraft_file import flap_limits
+
+        limits = flap_limits(state.get("aircraft", {}).get("acf") or "")
+        results = runner.run(tier1.steps(name, vfe_full=limits.get("full")))
+        total = scenario.summary(results)
+        path = scenario.write_report(
+            br.log_dir / "test" / "reports",
+            {
+                "checklist": "tier1",
+                "aircraft": name,
+                "icao": setup.icao,
+                "started": started,
+                "session": state.get("session"),
+                "voice": None if args.text else args.voice,
+                "flap_limits": limits,
+                "summary": total,
+                "steps": results,
+            },
+        )
+        failed += len(total["failed"])
+        heard = (
+            f", by voice: understood {total['understood_by_voice']}/{total['said_by_voice']}"
+            f" (heard word for word {total['heard_exactly']})"
+            if total["said_by_voice"]
+            else ""
+        )
+        print(f"{name}: {total['passed']}/{total['steps']} passed{heard}. Report: {path}")
+    if args.quit:
+        br.disable()
+        xplane.quit_xplane()
+    return 1 if failed else 0
 
 
 def _voices(args: argparse.Namespace) -> int:

@@ -19,10 +19,16 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 API = "http://127.0.0.1:8086/api/v3"
 STEAM_APP_ID = 2014780
+FOLDER = Path.home() / "Library/Application Support/Steam/steamapps/common/X-Plane 12"
+# Where test flights start: west of Portland, where every surrounding scenery
+# tile is in the installed demo areas (+44..+46, -122..-125). Over Seattle,
+# X-Plane stops the flight with "Missing scenery" (2026-11-12).
+TEST_AREA = (45.5, -123.5)
 FEET = 0.3048
 KNOT = 0.514444
 # The four Tier 1 aircraft, relative to the X-Plane folder.
@@ -100,6 +106,15 @@ def air_start_body(
     }
 
 
+def safe_mode(folder: Path = FOLDER) -> bool:
+    """Did this X-Plane session start in Safe Mode (plugins, so Vimaan, off)?"""
+    try:
+        head = (folder / "Log.txt").read_text(errors="replace")[:20000]
+    except OSError:
+        return False
+    return "SAFE MODE" in head
+
+
 def launch(wait_sec: float = 300.0, poll_sec: float = 2.0) -> None:
     """Start X-Plane through Steam and wait for its web API. Steam may ask
     which launch option to use: someone has to pick "X-Plane" once."""
@@ -109,6 +124,11 @@ def launch(wait_sec: float = 300.0, poll_sec: float = 2.0) -> None:
     deadline = time.monotonic() + wait_sec
     while time.monotonic() < deadline:
         if running():
+            time.sleep(poll_sec)  # the log's header is written by now
+            if safe_mode():
+                raise XPlaneError(
+                    "X-Plane started in Safe Mode (plugins off, so no Vimaan): quit and launch again"
+                )
             return
         time.sleep(poll_sec)
     raise XPlaneError("X-Plane didn't come up: is Steam waiting for a launch option to be picked?")
@@ -130,16 +150,36 @@ def start_flight(body: dict[str, Any], wait_sec: float = 120.0, poll_sec: float 
             break
     else:
         raise XPlaneError("the flight didn't load")
-    for _ in range(3):
-        if not read("sim/time/paused"):
-            return
-        command("sim/operation/toggle_flight_config")  # only while it's showing (paused)
-        time.sleep(3)
+    time.sleep(8)  # let the flight finish loading before touching the screen
     if read("sim/time/paused"):
-        command("sim/operation/pause_off")
-        time.sleep(1)
+        # Toggle once only: there's no dataref saying whether the screen is
+        # showing, and a second toggle while it's closing reopens it.
+        for _ in range(2):  # a toggle too early can be undone by the load; one retry
+            command("sim/operation/toggle_flight_config")
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline and read("sim/time/paused"):
+                time.sleep(poll_sec)
+            if not read("sim/time/paused"):
+                break
     if read("sim/time/paused"):
-        raise XPlaneError("the flight is still paused")
+        raise XPlaneError(
+            "the flight is still paused: X-Plane may be showing a message "
+            "(python -m simtest screenshot to see it)"
+        )
+
+
+def screenshot() -> Path | None:
+    """X-Plane's own screenshot of its window (Output/screenshots): the
+    runner's way to see a message that has the sim paused."""
+    shots = FOLDER / "Output" / "screenshots"
+    before = set(shots.glob("*.png")) if shots.is_dir() else set()
+    command("sim/operation/screenshot")
+    for _ in range(20):
+        time.sleep(0.5)
+        new = set(shots.glob("*.png")) - before if shots.is_dir() else set()
+        if new:
+            return max(new, key=lambda p: p.stat().st_mtime)
+    return None
 
 
 def quit_xplane() -> None:
