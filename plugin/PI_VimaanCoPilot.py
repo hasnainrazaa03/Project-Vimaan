@@ -287,6 +287,11 @@ AUTOPILOT_MODES = {
     "l nav": ("mode_gpss", "sim/cockpit2/autopilot/gpss_status"),
 }
 MODE_SPOKEN = {"nav": "Nav", "v nav": "V NAV", "l nav": "L NAV"}
+# Modes where armed (status 1) isn't on. Altitude hold armed means "capture
+# the selected altitude later" (after level change on the 737 and A330);
+# "altitude hold" asks to hold now. Nav and approach armed are on: waiting
+# to capture is what they do.
+ACTIVE_ONLY_MODES = ("altitude hold",)
 FMS_MODES = ("v nav", "l nav")
 # cockpit2/controls/parking_brake_ratio is deprecated in 12.4 (X-Plane logs
 # "has been replaced" on every read); this is its replacement.
@@ -2587,7 +2592,8 @@ class PythonInterface:
         if status is None and state == "off":
             self._say(f"Cannot read {name} mode state")  # a blind press could turn it on
             return "failed"
-        if status is not None and (status >= 1) == (state == "on"):
+        on_at = 2 if mode in ACTIVE_ONLY_MODES else 1
+        if status is not None and (status >= on_at) == (state == "on"):
             self._say(f"{name} already {state}")
             return "no_op"
         if not self._fire_command(command):
@@ -2601,7 +2607,7 @@ class PythonInterface:
         )
         self._expect(
             f"{name} mode",
-            lambda: None if (r := self._read_int(status_dref)) is None else r >= 1,
+            lambda: None if (r := self._read_int(status_dref)) is None else r >= on_at,
             want_on,
             fail=f"{name} did not engage. It needs a flight plan in the F M C."
             if fms and want_on
