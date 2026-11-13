@@ -561,7 +561,13 @@ gives the controls back at the end of a run.
     - The A330's one failure: "level change" at the selected altitude (an
       Airbus doesn't change mode then). The runner now selects a new altitude
       first.
-  - By voice (Daniel): 24–27 of 26–29 understood per aircraft. "q n h one
+  - **Fourth run, jets only (2026-11-12, 21:25, main eb559a2):** 737 **31/32**,
+    A330 **32/33**. The autothrottle armed and engaged on the 737. Both had
+    the same one failure, a Vimaan bug: after level change, altitude hold is
+    armed (status 1, capture at the selected altitude), and "altitude hold"
+    said "already on" while they kept climbing. Fix: for altitude hold, on
+    means holding (2).
+  - By voice (Daniel): 24–29 of 26–31 understood per aircraft. "q n h one
     zero one three" and "tune com one to one two one decimal five" were
     misheard every time; check them with a real voice.
 - [ ] **A3 Ground and takeoff.** Start with engines off ("start both

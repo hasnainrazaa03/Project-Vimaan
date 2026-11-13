@@ -2942,3 +2942,51 @@ def test_an_overspeed_disconnect_is_called_out(flying):
     assert xp.spoken[before:] == ["Autopilot disconnected. Overspeed."]
     e = events(plugin, "autopilot_disconnect")[-1]
     assert e["cause"] == "overspeed" and e["overspeed"] == "240 kt, limit 223"
+
+
+# ---------------------------------------------------------------------------
+# From the fourth run (2026-11-12): altitude hold armed is not on
+# ---------------------------------------------------------------------------
+ALT_HOLD = "sim/cockpit2/autopilot/altitude_hold_status"
+
+
+def test_altitude_hold_armed_is_pressed_to_hold_now(sim, monkeypatch):
+    # After level change the 737 and A330 had altitude hold armed (1), and
+    # "altitude hold" said "already on" while they kept climbing.
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    xp.datarefs[ALT_HOLD] = 1
+    xp.effects["sim/autopilot/altitude_hold"] = lambda x: x.datarefs.update({ALT_HOLD: 2})
+    assert say(plugin, "altitude hold", "set_autopilot_mode", {"mode": "altitude hold"}) == [
+        "Altitude hold on"
+    ]
+    assert xp.commands_fired == ["sim/autopilot/altitude_hold"]
+    plugin._flight_loop()
+    assert events(plugin, "verify")[-1]["ok"] is True
+
+
+def test_altitude_hold_holding_is_already_on(sim):
+    _, plugin, xp = sim
+    xp.datarefs[ALT_HOLD] = 2
+    assert say(plugin, "altitude hold", "set_autopilot_mode", {"mode": "altitude hold"}) == [
+        "Altitude hold already on"
+    ]
+    assert xp.commands_fired == []
+
+
+def test_altitude_hold_off_while_only_armed_presses_nothing(sim):
+    # A press would engage it, the opposite of what was asked.
+    _, plugin, xp = sim
+    xp.datarefs[ALT_HOLD] = 1
+    assert say(
+        plugin, "altitude hold off", "set_autopilot_mode", {"mode": "altitude hold", "state": "off"}
+    ) == ["Altitude hold already off"]
+    assert xp.commands_fired == []
+
+
+def test_approach_armed_still_counts_as_on(sim):
+    _, plugin, xp = sim
+    xp.datarefs["sim/cockpit2/autopilot/approach_status"] = 1
+    assert say(plugin, "approach", "set_autopilot_mode", {"mode": "approach"}) == [
+        "Approach already on"
+    ]
