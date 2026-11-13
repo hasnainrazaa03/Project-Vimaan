@@ -34,6 +34,7 @@ def getDataRefTypes(
     ref: DataRef,
 ) -> int: ...  # bits: int 1, float 2, double 4, arrays 8/16, data 32
 def canWriteDataRef(ref: DataRef) -> int: ...
+def isDataRefGood(ref: DataRef) -> int: ...
 def placeUserAtLocation(
     latitude: float, longitude: float, elevation: float, heading: float, speed: float
 ) -> None: ...  # metres MSL, degrees true, metres per second; engines running

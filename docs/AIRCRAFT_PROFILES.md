@@ -15,7 +15,7 @@ and layer 4 after one probe.
 | --- | --- | --- |
 | 1. Standard controls | X-Plane's `sim/...` commands and datarefs | `sim/autopilot/heading` for heading mode |
 | 2. What X-Plane reports | datarefs read when the aircraft loads | `acf_en_type` = 7 (jet) gives a turbine start |
-| 3. Overrides | used only if the aircraft *has* the custom control | `laminar/A333/autopilot/a_thr_toggle` exists, so A/THR presses it |
+| 3. Overrides | used only if the aircraft *has* the custom control, and its own scripts are loaded now | `laminar/A333/autopilot/a_thr_toggle` exists and `laminar/A333/autopilot/ap1_pos` is registered, so A/THR presses it |
 | 4. Probe results | measured on this aircraft, saved per aircraft file | V/S mode "no change" means "not on this aircraft", for X-Plane's generic commands. The aircraft's own control (an override) measured as "no change" is still tried and verified: it exists, and did nothing in that moment |
 | 5. Verification | read-back after every action | "Autopilot 1 did not respond" |
 
@@ -23,6 +23,16 @@ and layer 4 after one probe.
 "Alex Unruh" as author, and its A330 lists five individuals, not "Laminar
 Research". Add-ons reuse ICAO codes too: the Zibo 737 is also `B738`. A
 control's existence is what decides, because that is what the action needs.
+
+**Why a live dataref too (2026-11-12).** An aircraft's custom *commands* stay
+registered for the rest of the X-Plane session after it unloads; its
+*datarefs* go with it. In the A2 run, an A330 loaded after the 737 picked up
+the 737's overrides and Vimaan pressed its CMD A, so the A330's autopilot never
+engaged. Each override now also names a dataref its aircraft's scripts create
+(`create_dataref`): 737 `laminar/B738/autopilot/cmd_a_status`, A330
+`laminar/A333/autopilot/ap1_pos`. It applies only while that is registered,
+and the profile is looked at again 5 s and 15 s after a load, in case the
+scripts register late. `scripts/check_xplane_refs.py` checks those names too.
 
 ## Layer 2: what X-Plane reports (read on every aircraft load)
 
@@ -33,6 +43,7 @@ control's existence is what decides, because that is what the action needs.
 | Retractable gear | `sim/aircraft/gear/acf_gear_retract` | "This aircraft has fixed gear" |
 | Autopilot type | `sim/aircraft/autopilot/preconfigured_ap_type`, `single_axis_autopilot` | logged; probe context |
 | V-speeds | `sim/aircraft/view/acf_Vso`, `acf_Vfe`, `acf_Vno`, `acf_Vne`, `acf_Mmo` | speed and flap safety rules (Part B) |
+| Flap speed limits | the `.acf`: `_Vfe1_kts` (first notch, which X-Plane publishes as `acf_Vfe`) and `_Vfem_kts` (full flaps, not published), read in the background at load | the flap-speed hold, per notch |
 | Identity | `acf_ICAO`, `acf_author`, `acf_descrip`, `xp.getNthAircraftModel(0)` | logs; the probe file's name |
 | Autothrottle in the cockpit | the aircraft's own files: `.acf`, then scripts, then objects (not liveries), searched for "autothrottle", in a background thread at load | refusing "autothrottle on" where the aircraft has none |
 
@@ -45,6 +56,23 @@ Air C90B, C172, SR22 and Citation X don't. An aircraft's own A/T control (an
 override) always counts.
 
 Each load is logged as an `aircraft` event with the full profile.
+
+**Flap limits per notch (2026-11-12).** `acf_Vfe` was taken as the full-flap
+limit, but it is the first notch's: the A2 run's 737 took full flaps at about
+240 kt. The `.acf` has both:
+
+| Aircraft | First notch `_Vfe1_kts` | Full `_Vfem_kts` |
+| --- | --- | --- |
+| Baron 58 | 152 | 122 |
+| King Air C90B | 190 | 150 |
+| 737-800 | 250 | 162 |
+| A330-300 | 215 | 180 |
+
+The hold uses the first-notch limit at notch 1, the full-flap limit at the
+last, and evenly between (`aircraft.flap_limit_kt`). For the 737 that's 250,
+237, 225, 212, 200, 187, 175, 162 kt for flaps 1 to 40, against a placard of
+250, 250, 250, 210, 200, 190, 175, 162. Until the file is read, `acf_Vfe`.
+"Override" still goes through.
 
 **Flap angles are not handle labels.** `acf_flap_dn[0]` is 0 (up) and
 `[1..detents]` are the modelled surface angles. The 737's are 3, 5, 8, 10, 12,
@@ -70,6 +98,7 @@ aircraft folders. `scripts/check_xplane_refs.py` re-checks every name.
 - The baro has its own controls (`laminar/B738/EFIS_control/{capt,fo}/push_button/std_press`, `baro_in_hpa_up/dn`), and the scripts replace `sim/instruments/barometer_up/down`. Override `b738_efis_baro` covers STD.
 - The fuel cutoff is the condition levers (`laminar/B738/engines/condition_lever_{1,2}_{idle,cutoff}`). Override `b738_condition_levers` covers a turbine start.
 - The start switches are `laminar/B738/knob/starter{1,2}_{up,dn}`. Not used yet; the generic starter is tried first and logged.
+- **A/T ARM switch** (`laminar/B738/autopilot/autothrottle_arm_toggle`, state `autothrottle_arm_pos`). With it off, the sim's autothrottle stays hard off (-1), and "autothrottle on" did nothing in the A2 re-run (2026-11-12). Override `b738_autothrottle_arm`: "autothrottle on" arms it ("Arming the autothrottle"), then engages half a second later, once the 737's scripts have taken the switch. "Autothrottle off" leaves the switch armed.
 
 - **Probed 2026-11-07**, all 18 steps (sessions `vimaan_20261107_211836` and `_224940`):
   - **Works:** HDG, VOR/LOC, APP, back course, ALT HOLD, ALT ARM, V/S, LVL CHG, autothrottle, knots/Mach, the speed, V/S and altitude dials, and the flap handle.

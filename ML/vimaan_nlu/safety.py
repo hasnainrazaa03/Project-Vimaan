@@ -45,7 +45,7 @@ class SafetyContext:
     ias_kt: float | None = None
     on_ground: bool | None = None
     vs_fpm: float | None = None  # vertical speed, + is up
-    vfe_kt: float | None = None  # the aircraft's full-flap limit (acf_Vfe)
+    vfe_kt: float | None = None  # the flap speed limit for the setting asked for
 
 
 @dataclass(frozen=True)
@@ -124,8 +124,9 @@ _RULE_LIST: tuple[_Rule, ...] = (
         message="Confirm engine shutdown in flight",
     ),
     _Rule(
-        # Conservative: X-Plane exposes only the full-flap limit, so a first
-        # notch inside its own (higher) limit may still ask. Override is there.
+        # The plugin passes the limit for the setting asked for: from the
+        # .acf's first-notch and full-flap limits, evenly in between
+        # (aircraft.flap_limit_kt). Override is there.
         name="flaps_above_vfe",
         applies_to=lambda s: s.get("position") == "full" or bool(s.get("flap_setting")),
         risky_when=_flaps_fast,

@@ -64,7 +64,13 @@ if _ML_PATH not in sys.path:
 # Only light, stdlib-backed modules load into X-Plane; the heavy ones live in
 # the worker process.
 from vimaan_nlu import probe, sim_bridge  # noqa: E402
-from vimaan_nlu.aircraft import AircraftInfo, files_mention, resolve  # noqa: E402
+from vimaan_nlu.aircraft import (  # noqa: E402
+    AircraftInfo,
+    acf_flap_limits,
+    files_mention,
+    flap_limit_kt,
+    resolve,
+)
 from vimaan_nlu.ambiguity import TARGET_SLOTS, bare_number, chosen, two_or_to  # noqa: E402
 from vimaan_nlu.commands import (  # noqa: E402
     BY_INTENT,
@@ -158,10 +164,17 @@ DREF_NULLZONE = "sim/joystick/joystick_pitch_nullzone"  # one serves all axes
 DREF_AP_POWER = "sim/cockpit2/autopilot/autopilot_has_power"
 DREF_AP_FAIL = "sim/cockpit2/autopilot/otto_fail_warn"
 DREF_AP_DISCONNECT_WARNING = "sim/cockpit2/autopilot/autopilot_disconnect"
+DREF_MACH = "sim/flightmodel/misc/machno"
 # "Autopilot off" from Vimaan this recently is Vimaan's doing.
 VIMAAN_OFF_SEC = 5.0
 # A new flight or aircraft resets the autopilot: no callout for this long.
 RELOAD_QUIET_SEC = 10.0
+# After an aircraft loads, look again for its overrides (its scripts'
+# datarefs may come a moment later).
+OVERRIDE_RECHECK_SEC = (5.0, 15.0)
+# After arming an autothrottle switch, engage this much later (the 737's
+# scripts take the switch on their next frames).
+ATHR_ARM_SETTLE_SEC = 0.5
 
 # What the aircraft is doing, logged as aircraft_state.
 STATE_FLOATS = {
@@ -409,6 +422,9 @@ class PythonInterface:
         # Whether the loaded aircraft's own files use an autothrottle:
         # (acf path, True/False/None), scanned off the main thread.
         self._athr_scan: tuple[str, bool | None] | None = None
+        # The loaded aircraft's flap speed limits from its .acf, read with
+        # the scan: (acf path, {"first": kt, "full": kt}).
+        self._flap_limits: tuple[str, dict[str, float]] | None = None
         # The automated-test bridge (Phase A): off unless its switch file exists.
         self._bridge_on = False
         self._bridge_next = 0.0
@@ -634,6 +650,18 @@ class PythonInterface:
             self._off_commands.add(time.perf_counter(), name, by_vimaan=self._firing == name)
         return 1  # never swallow it: X-Plane and the aircraft still act on it
 
+    def _overspeed(self):
+        """ "335 kt, limit 330" when above the aircraft's Vne (Vmo on jets) or
+        Mmo, else None."""
+        info = self.profile.info
+        ias = self._read_float(STATE_FLOATS["ias_actual"])
+        if ias is not None and info.vne_kt and ias > info.vne_kt:
+            return f"{ias:.0f} kt, limit {info.vne_kt:.0f}"
+        mach = self._read_float(DREF_MACH)
+        if mach is not None and info.mmo and mach > info.mmo:
+            return f"Mach {mach:.2f}, limit {info.mmo:.2f}"
+        return None
+
     def _sample_stick(self):
         now = time.perf_counter()
         if self._stick.due(now):
@@ -651,14 +679,18 @@ class PythonInterface:
 
     def _on_autopilot_drop(self, previous, state, now):
         last = self._last_action
-        # "Flight director off" takes the servos with it in X-Plane.
+        # Only an "off" from Vimaan is its doing ("flight director off" takes
+        # the servos with it in X-Plane). A pilot disconnect seconds after
+        # "autopilot on" was missed until 2026-11-12.
         vimaan_off = bool(
             last
             and last["intent"] in ("toggle_autopilot", "toggle_flight_director")
+            and last.get("state") == "off"
             and now - last["t"] <= VIMAAN_OFF_SEC
         )
         commands = self._off_commands.recent(now)
         peak = self._stick.peak(now)
+        overspeed = self._overspeed()
         found = diagnose(
             stick_peak=peak,
             commands=commands,
@@ -667,6 +699,7 @@ class PythonInterface:
             vimaan_turned_off=vimaan_off,
             probe_running=self._probe is not None,
             reloading=now < self._quiet_until,
+            overspeed=overspeed,
         )
         floats = {k: _round(self._read_float(n), 1) for k, n in STATE_FLOATS.items()}
         self.tel.event(
@@ -682,6 +715,7 @@ class PythonInterface:
             has_power=self._read_int(DREF_AP_POWER),
             fail_warn=self._read_int(DREF_AP_FAIL),
             disconnect_warning=self._read_int(DREF_AP_DISCONNECT_WARNING),
+            overspeed=overspeed,
             last_vimaan_cmd=last["cmd"] if last else None,
             last_vimaan_intent=last["intent"] if last else None,
             sec_since_vimaan_action=round(now - last["t"], 1) if last else None,
@@ -1143,7 +1177,7 @@ class PythonInterface:
         # Safety interlock: gate irreversible/dangerous commands on a
         # confirmation (repeat the command) when risky in the current flight
         # context. Fails safe if the relevant datarefs are unavailable.
-        ctx = self._read_safety_context()
+        ctx = self._read_safety_context(slots)
         verdict = evaluate_safety(intent, slots, ctx, skip=skip)
         token = command_token(intent, slots)
         if verdict.requires_confirmation and not self._confirm_gate.confirm(token):
@@ -1174,7 +1208,12 @@ class PythonInterface:
         if outcome in ("executed", "pending"):
             # What the autopilot watch blames a mode change on: every command
             # that reached the sim, not only the ones that set a target.
-            self._last_action = {"cmd": cmd, "intent": intent, "t": time.perf_counter()}
+            self._last_action = {
+                "cmd": cmd,
+                "intent": intent,
+                "state": slots.get("state"),
+                "t": time.perf_counter(),
+            }
         # A different command that actually ran cancels a pending
         # confirmation and the open "to or two?" question; a misheard or
         # incomplete one ("engine") must not.
@@ -1438,7 +1477,9 @@ class PythonInterface:
             self._say("Test bridge on" if on else "Test bridge off")
         if not on:
             return
-        checking = {v["cmd"] for v in self._verifications}
+        # A command still has work due: read-backs, or a deferred step (the
+        # 737's autothrottle engages after its arm switch).
+        checking = {v["cmd"] for v in self._verifications} | {d["cmd"] for d in self._deferred}
         for result in self._say_results.finished(now, checking):
             sim_bridge.write_json(outbox / f"{result['id']}.json", result)
         for req in sim_bridge.take_requests(inbox):
@@ -1667,8 +1708,12 @@ class PythonInterface:
 
     def _load_aircraft(self, icao, acf_path):
         info = self._aircraft_info(icao, acf_path)
-        self.profile = resolve(info, self._has_command, self._probe_results(info.key))
+        self.profile = self._resolve(info)
         self.tel.event("aircraft", **self.profile.summary())
+        # An aircraft's scripts may register their datarefs after the load is
+        # seen: look again shortly after.
+        for delay in OVERRIDE_RECHECK_SEC:
+            self._later(delay, lambda ident=(icao, acf_path): self._recheck_overrides(ident))
         self._hook_off_commands()
         self.tel.event("joystick", **self._joystick_setup())
         self._capture = None
@@ -1678,15 +1723,68 @@ class PythonInterface:
             target=self._scan_aircraft_files, args=(acf_path,), daemon=True, name="vimaan-acf-scan"
         ).start()
 
+    def _resolve(self, info):
+        return resolve(
+            info, self._has_command, self._probe_results(info.key), has_dataref=self._dataref_live
+        )
+
+    def _recheck_overrides(self, identity):
+        """Re-resolve if the aircraft is the same but its overrides changed
+        (its scripts registered their datarefs after the load was seen)."""
+        if identity != self._aircraft:
+            return
+        profile = self._resolve(self.profile.info)
+        if profile.overrides != self.profile.overrides:
+            self.profile = profile
+            self.tel.event("aircraft", reason="overrides_changed", **profile.summary())
+
+    @staticmethod
+    def _dataref_live(name):
+        """Registered right now: an aircraft's own datarefs go when it unloads."""
+        ref = xp.findDataRef(name)
+        return ref is not None and bool(xp.isDataRefGood(ref))
+
     def _scan_aircraft_files(self, acf_path):
         """Background thread: file reads only, no X-Plane calls."""
         try:
             shown = files_mention(acf_path)
         except Exception:  # never let a scan take the plugin down
             shown = None
+        try:
+            limits = acf_flap_limits(acf_path)
+        except Exception:
+            limits = {}
         if self._athr_scan and self._athr_scan[0] == acf_path:
             self._athr_scan = (acf_path, shown)
-            self.tel.event("aircraft_files", acf=acf_path, autothrottle_shown=shown)
+            self._flap_limits = (acf_path, limits)
+            self.tel.event(
+                "aircraft_files", acf=acf_path, autothrottle_shown=shown, flap_limits=limits
+            )
+
+    def _flap_target_notch(self, slots):
+        """The notch a "flaps full" / "flaps 15" asks for (None if unknown)."""
+        detents = self.profile.info.flap_detents
+        if not detents:
+            return None
+        if slots.get("position") == "full":
+            return detents
+        value, ok, _ = validate_slot("flap_setting", slots.get("flap_setting"))
+        return self.profile.flap_notch(int(float(value))) if ok else None
+
+    def _flap_limit_for(self, slots):
+        """The speed limit for the flap setting asked for. X-Plane publishes
+        only the first notch's (acf_Vfe); the full-flap one comes from the
+        .acf, read in the background on load. Unknown notch: the lowest."""
+        info = self.profile.info
+        scan = self._flap_limits
+        limits = scan[1] if scan and scan[0] == info.acf_path else {}
+        first = limits.get("first") or info.vfe_kt or None
+        full = limits.get("full")
+        notch = self._flap_target_notch(slots)
+        if notch is None:
+            known = [v for v in (first, full) if v]
+            return min(known) if known else None
+        return flap_limit_kt(notch, info.flap_detents or 0, first, full)
 
     def _autothrottle_shown(self):
         scan = self._athr_scan
@@ -2152,7 +2250,7 @@ class PythonInterface:
                 return f"This aircraft has no {eng['label'].lower()}"
         return None
 
-    def _read_safety_context(self):
+    def _read_safety_context(self, slots=None):
         """Sample flight state for the safety interlocks. Missing datarefs stay
         None so the interlocks fail safe (treat the situation as risky)."""
         agl_m = self._read_float("sim/flightmodel/position/y_agl")
@@ -2165,7 +2263,10 @@ class PythonInterface:
             ias_kt=ias,
             on_ground=None if on_ground_i is None else bool(on_ground_i),
             vs_fpm=self._read_float(DREF_VERTICAL_SPEED_FPM),
-            vfe_kt=self.profile.info.vfe_kt or None,
+            # The limit for the flap setting asked for, when one is.
+            vfe_kt=self._flap_limit_for(slots)
+            if slots and (slots.get("position") == "full" or slots.get("flap_setting"))
+            else self.profile.info.vfe_kt or None,
         )
 
     # ------------------------------------------------------------------
@@ -2539,17 +2640,53 @@ class PythonInterface:
                 self._say("Cannot read autothrottle state")
                 return "failed"
             command = self.profile.command("autothrottle_toggle")
+        if want_on and self._autothrottle_switch_off():
+            # The 737's A/T ARM switch: arm it, then engage once its scripts
+            # have taken the switch (the next frames).
+            arm = self.profile.command("autothrottle_arm")
+            if not self._fire_command(arm):
+                self._say("Cannot arm the autothrottle")
+                return "failed"
+            status = self.profile.settings["athr_arm_status"]
+            self._expect(
+                "Autothrottle arm switch",
+                lambda: None if (r := self._read_float(status)) is None else r > 0.5,
+                True,
+            )
+            self._say("Arming the autothrottle")
+            self._later(
+                ATHR_ARM_SETTLE_SEC, lambda: self._engage_autothrottle(command, on_from, hint)
+            )
+            return "executed"
         if not (command and self._fire_command(command)):
             self._say("No autothrottle on this aircraft")
             return "rejected"
+        self._expect_autothrottle(want_on, on_from, hint)
+        self._say(f"Autothrottle {state}")
+        return "executed"
+
+    def _autothrottle_switch_off(self):
+        """An arm switch this aircraft's autothrottle needs, and it's off."""
+        status = self.profile.settings.get("athr_arm_status")
+        if not (status and self.profile.command("autothrottle_arm")):
+            return False
+        value = self._read_float(status)
+        return value is not None and value < 0.5
+
+    def _engage_autothrottle(self, command, on_from, hint):
+        if not (command and self._fire_command(command)):
+            self._say("No autothrottle on this aircraft")
+            return
+        self._expect_autothrottle(True, on_from, hint)
+        self._say("Autothrottle on")
+
+    def _expect_autothrottle(self, want_on, on_from, hint):
         self._expect(
             "Autothrottle",
             lambda: None if (r := self._read_int(DREF_AUTOTHROTTLE)) is None else r >= on_from,
             want_on,
             fail=f"Autothrottle did not respond. {hint}." if hint else None,
         )
-        self._say(f"Autothrottle {state}")
-        return "executed"
 
     def _set_altimeter(self, slots, intent):
         if not slots.get("setting") and not slots.get("pressure"):

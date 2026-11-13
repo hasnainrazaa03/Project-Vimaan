@@ -84,3 +84,12 @@ def test_silent_causes():
 def test_watched_commands_are_unique_and_namespaced():
     assert len(set(d.WATCHED_COMMANDS)) == len(d.WATCHED_COMMANDS)
     assert all(n.startswith(("sim/autopilot/", "laminar/B738/")) for n in d.WATCHED_COMMANDS)
+
+
+def test_overspeed_comes_after_a_command_and_before_the_stick():
+    fast = "335 kt, limit 330"
+    assert diag(overspeed=fast)["cause"] == "overspeed"
+    assert diag(overspeed=fast)["detail"] == "overspeed 335 kt, limit 330"
+    assert diag(overspeed=fast)["say"] == "Autopilot disconnected. Overspeed."
+    assert diag(overspeed=fast, commands=[BUTTON])["cause"] == "command"
+    assert diag(overspeed=fast, stick_peak={"pitch": 0.8})["cause"] == "overspeed"

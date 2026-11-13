@@ -34,8 +34,9 @@ DEFAULT_SOURCES = (
     "ML/vimaan_nlu/probe.py",
 )
 NAME_RE = re.compile(r"[\"'](sim/[A-Za-z0-9_/\[\]]+)[\"']")
-# create_command("laminar/A333/autopilot/a_thr_toggle", ...) in an xlua script.
-CREATED_RE = re.compile(r"create_command\(\s*[\"']([^\"']+)[\"']")
+# create_command("laminar/A333/autopilot/a_thr_toggle", ...) in an xlua
+# script, or create_dataref(...) for the datarefs overrides need live.
+CREATED_RE = re.compile(r"create_(?:command|dataref)\(\s*[\"']([^\"']+)[\"']")
 
 
 def load_names(xplane_root: str) -> tuple[set[str], set[str]]:
@@ -67,7 +68,7 @@ def names_in(path: str) -> set[str]:
 
 
 def aircraft_commands(xplane_root: str) -> set[str]:
-    """Commands the installed aircraft create in their xlua scripts."""
+    """Commands and datarefs the installed aircraft create in their xlua scripts."""
     created: set[str] = set()
     for folder, _dirs, files in os.walk(os.path.join(xplane_root, "Aircraft")):
         for fname in files:

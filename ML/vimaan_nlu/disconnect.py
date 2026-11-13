@@ -57,7 +57,17 @@ STICK_MOVED = 0.2
 AXES = ("pitch", "roll", "yaw")
 
 # Who disconnected it, in the order they are checked.
-CAUSES = ("reload", "probe", "vimaan", "power", "failure", "command", "stick", "unknown")
+CAUSES = (
+    "reload",
+    "probe",
+    "vimaan",
+    "power",
+    "failure",
+    "command",
+    "overspeed",
+    "stick",
+    "unknown",
+)
 
 CALLOUTS: Mapping[str, str | None] = {
     "reload": None,  # a new flight or aircraft
@@ -66,6 +76,9 @@ CALLOUTS: Mapping[str, str | None] = {
     "power": "Autopilot disconnected. The autopilot has no power.",
     "failure": "Autopilot disconnected. Autopilot failure.",
     "command": "Autopilot disconnected by a switch or button.",
+    # Above the aircraft's limit: Airbus high-speed protection, for one,
+    # takes the autopilot off (A330 at 335 kt, A2 run 2026-11-12).
+    "overspeed": "Autopilot disconnected. Overspeed.",
     "stick": "Autopilot disconnected. Stick moved.",
     "unknown": "Autopilot disconnected.",
 }
@@ -135,11 +148,14 @@ def diagnose(
     vimaan_turned_off: bool = False,
     probe_running: bool = False,
     reloading: bool = False,
+    overspeed: str | None = None,
 ) -> dict[str, Any]:
     """The most likely cause, what to show, and what to say (None: silent).
 
     ``commands`` are the recent autopilot-off commands (``CommandTrace``);
-    ``vimaan_turned_off`` is true when the pilot asked Vimaan for it."""
+    ``vimaan_turned_off`` is true when the pilot asked Vimaan for it;
+    ``overspeed`` describes an airspeed or Mach above the aircraft's limit
+    ("335 kt, limit 330"), or None."""
     commands = list(commands)
     others = [c for c in commands if not c.get("by_vimaan")]
     moved = {a: v for a, v in stick_peak.items() if abs(v) >= STICK_MOVED}
@@ -162,6 +178,9 @@ def diagnose(
         detail.insert(0, "autopilot fail warning")
     elif others:
         cause = "command"
+    elif overspeed:
+        cause = "overspeed"
+        detail.insert(0, f"overspeed {overspeed}")
     elif moved:
         cause = "stick"
     else:

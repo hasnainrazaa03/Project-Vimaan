@@ -631,11 +631,19 @@ N2 = "sim/cockpit2/engine/indicators/N2_percent"
 RUNNING = "sim/flightmodel/engine/ENGN_running"
 
 
-def load_aircraft(plugin, xp, engine_type, commands=()):
-    """Switch the fake sim to another aircraft and let the plugin notice."""
+def load_aircraft(plugin, xp, engine_type, commands=(), live=None):
+    """Switch the fake sim to another aircraft and let the plugin notice.
+    Its scripts' datarefs (Override.live) come with its commands unless
+    ``live`` says otherwise."""
+    from vimaan_nlu.aircraft import OVERRIDES
+
     xp.datarefs["sim/aircraft/prop/acf_en_type"] = [engine_type] * 16
     for name in commands:
         xp.custom_commands[name] = None
+    if live is None:
+        live = {d for o in OVERRIDES if set(o.requires) <= set(commands) for d in o.live}
+    for name in live:
+        xp.datarefs[name] = 0
     xp.aircraft_model = ("other.acf", f"/Aircraft/Other {engine_type}/other.acf")
     plugin._next_state_watch = 0.0
     plugin._flight_loop()
@@ -730,7 +738,7 @@ def test_aircraft_profile_logged_with_what_xplane_reports(sim):
     assert event["icao"] == "BE58" and event["key"] == "Beechcraft_Baron_58__Baron_58"
     assert event["engine_kind"] == "piston" and event["engines"] == 2
     assert event["flap_notch_degrees"] == [0.0, 13.0, 30.0]
-    assert event["v_speeds"]["vfe"] == 122.0 and event["overrides"] == []
+    assert event["v_speeds"]["vfe"] == 152.0 and event["overrides"] == []
 
 
 def test_switching_aircraft_rebuilds_the_profile(sim):
@@ -1989,9 +1997,17 @@ def test_flaps_full(sim):
     assert xp.datarefs[FLAP_HANDLE] == 1.0
 
 
+BARON_FLAP_LIMITS = {"first": 152.0, "full": 122.0}  # its .acf: _Vfe1_kts, _Vfem_kts
+
+
+def baron_flap_limits(plugin):
+    plugin._flap_limits = (plugin.profile.info.acf_path, dict(BARON_FLAP_LIMITS))
+
+
 def test_flaps_above_flap_speed_need_confirmation_and_can_be_overridden(sim):
     _, plugin, xp = sim
-    xp.datarefs["sim/cockpit2/gauges/indicators/airspeed_kts_pilot"] = 150.0  # Baron Vfe 122
+    baron_flap_limits(plugin)
+    xp.datarefs["sim/cockpit2/gauges/indicators/airspeed_kts_pilot"] = 140.0
     assert say(plugin, "flaps", "set_flaps", {"flap_setting": "30"}) == [
         "Confirm flaps, above flap speed. Say override, or repeat to confirm."
     ]
@@ -2769,3 +2785,153 @@ def test_a_disconnect_through_the_bridge_is_diagnosed_like_the_pilots(bridged, m
     (e,) = events(plugin, "autopilot_disconnect")
     assert e["cause"] == "command" and e["commands"][0]["by_vimaan"] is False
     assert "Autopilot disconnected by a switch or button." in xp.spoken
+
+
+# ---------------------------------------------------------------------------
+# Fixes from the A2 runs (2026-11-12)
+# ---------------------------------------------------------------------------
+def test_full_flaps_are_held_above_the_full_flap_limit_not_the_first_notchs(sim):
+    # The 737 took full flaps at 240 kt: acf_Vfe (250) is its first notch's limit.
+    _, plugin, xp = sim
+    baron_flap_limits(plugin)
+    xp.datarefs["sim/cockpit2/gauges/indicators/airspeed_kts_pilot"] = 140.0  # 122 < 140 < 152
+    assert say(plugin, "flaps", "set_flaps", {"position": "full"})[0].startswith("Confirm flaps")
+    hold = events(plugin, "safety_hold")[-1]
+    assert hold["rule"] == "flaps_above_vfe" and hold["context"]["vfe_kt"] == 122.0
+    say(plugin, "cancel")
+    # The first notch (approach, 13 degrees) is allowed to 152 kt.
+    assert say(plugin, "flaps", "set_flaps", {"flap_setting": "15"}) == ["Flaps 15"]
+    assert xp.datarefs[FLAP_HANDLE] == pytest.approx(0.5)
+
+
+def test_flap_limits_are_read_from_the_acf_on_load(sim, tmp_path):
+    _, plugin, xp = sim
+    acf = tmp_path / "Baron_58.acf"
+    acf.write_bytes(
+        b"I\n1200 version\nP acf/_Vfe1_kts 152.000000000\nP acf/_Vfem_kts 122.000000000\n"
+    )
+    plugin._athr_scan = (str(acf), None)
+    plugin._scan_aircraft_files(str(acf))
+    assert plugin._flap_limits == (str(acf), BARON_FLAP_LIMITS)
+    assert events(plugin, "aircraft_files")[-1]["flap_limits"] == BARON_FLAP_LIMITS
+
+
+def test_without_the_acf_limits_the_published_one_is_used(sim):
+    _, plugin, xp = sim
+    xp.datarefs["sim/cockpit2/gauges/indicators/airspeed_kts_pilot"] = 160.0  # above acf_Vfe 152
+    assert say(plugin, "flaps", "set_flaps", {"position": "full"})[0].startswith("Confirm flaps")
+
+
+def test_an_aircrafts_overrides_go_with_it(sim):
+    # A330 loaded after the 737: the 737's commands stay registered, so its
+    # overrides applied and Vimaan pressed the 737's CMD A on the A330.
+    _, plugin, xp = sim
+    assert "b738_mcp" in load_aircraft(plugin, xp, 7, commands=B738_MCP).overrides
+    del xp.datarefs["laminar/B738/autopilot/cmd_a_status"]  # the 737 unloads; commands stay
+    xp.datarefs["sim/aircraft/view/acf_ICAO"] = "A333"
+    profile = load_aircraft(plugin, xp, 7, commands=A333)
+    assert profile.overrides == ("airbus_fcu",)
+    xp.datarefs["sim/cockpit2/autopilot/servos_on"] = 0
+    say(plugin, "autopilot on", "toggle_autopilot", {"state": "on"})
+    assert "laminar/B738/autopilot/cmd_a_press" not in xp.commands_fired
+
+
+def test_overrides_are_looked_for_again_after_a_load(sim):
+    _, plugin, xp = sim
+    profile = load_aircraft(plugin, xp, 7, commands=B738_MCP, live=())
+    assert "b738_mcp" not in profile.overrides  # its scripts' datarefs not there yet
+    xp.datarefs["laminar/B738/autopilot/cmd_a_status"] = 0
+    plugin._recheck_overrides(plugin._aircraft)
+    assert "b738_mcp" in plugin.profile.overrides
+    assert events(plugin, "aircraft")[-1]["reason"] == "overrides_changed"
+    plugin._recheck_overrides(("other", "/x.acf"))  # another aircraft by now: nothing
+    assert len(events(plugin, "aircraft")) == 3
+
+
+def test_a_pilot_disconnect_right_after_autopilot_on_is_called_out(flying):
+    # 2026-11-12: Vimaan's "autopilot on" 2.5 s earlier was taken as the cause.
+    _, plugin, xp = flying
+    plugin._last_action = {
+        "cmd": "c1",
+        "intent": "toggle_autopilot",
+        "state": "on",
+        "t": time.perf_counter(),
+    }
+    xp.effects["sim/autopilot/servos_fdir_off"] = drop
+    xp.commandOnce("sim/autopilot/servos_fdir_off")
+    before = len(xp.spoken)
+    plugin._flight_loop()
+    assert xp.spoken[before:] == ["Autopilot disconnected by a switch or button."]
+    assert events(plugin, "autopilot_disconnect")[-1]["cause"] == "command"
+
+
+# ---------------------------------------------------------------------------
+# From the A2 re-run (2026-11-12): the 737's A/T ARM switch; overspeed
+# ---------------------------------------------------------------------------
+ATHR = "sim/cockpit2/autopilot/autothrottle_enabled"
+ARM_POS = "laminar/B738/autopilot/autothrottle_arm_pos"
+ARM = "laminar/B738/autopilot/autothrottle_arm_toggle"
+
+
+def b738_with_athr_switch(plugin, xp, armed):
+    xp.datarefs[ARM_POS] = 1 if armed else 0
+    xp.datarefs[ATHR] = 0 if armed else -1
+
+    def arm(x):
+        x.datarefs[ARM_POS] = 1 - x.datarefs[ARM_POS]
+        x.datarefs[ATHR] = 0 if x.datarefs[ARM_POS] else -1
+
+    def engage(x):  # the sim's A/T engages only with the switch armed
+        if x.datarefs[ARM_POS]:
+            x.datarefs[ATHR] = 1
+
+    xp.effects[ARM] = arm
+    xp.effects["sim/autopilot/autothrottle_on"] = engage
+    return load_aircraft(plugin, xp, 7, commands=(*B738_MCP, ARM))
+
+
+def test_737_autothrottle_on_arms_its_switch_first(sim, monkeypatch):
+    # Re-run: the switch was off, the A/T stayed at -1: "did not respond".
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "ATHR_ARM_SETTLE_SEC", 0.0)
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    assert "b738_autothrottle_arm" in b738_with_athr_switch(plugin, xp, armed=False).overrides
+    assert say(plugin, "auto throttle on", "toggle_autothrottle", {"state": "on"}) == [
+        "Arming the autothrottle"
+    ]
+    assert xp.commands_fired == [ARM]
+    before = len(xp.spoken)
+    plugin._flight_loop()  # the deferred engage, then the read-backs
+    plugin._flight_loop()
+    assert xp.commands_fired == [ARM, "sim/autopilot/autothrottle_on"]
+    assert xp.spoken[before:] == ["Autothrottle on"] and xp.datarefs[ATHR] == 1
+    assert all(e["ok"] for e in events(plugin, "verify"))
+
+
+def test_737_autothrottle_already_armed_engages_straight_away(sim):
+    _, plugin, xp = sim
+    b738_with_athr_switch(plugin, xp, armed=True)
+    assert say(plugin, "auto throttle on", "toggle_autothrottle", {"state": "on"}) == [
+        "Autothrottle on"
+    ]
+    assert xp.commands_fired == ["sim/autopilot/autothrottle_on"]
+
+
+def test_autothrottle_off_leaves_the_arm_switch_alone(sim):
+    _, plugin, xp = sim
+    b738_with_athr_switch(plugin, xp, armed=True)
+    xp.datarefs[ATHR] = 1
+    say(plugin, "auto throttle off", "toggle_autothrottle", {"state": "off"})
+    assert ARM not in xp.commands_fired and xp.datarefs[ARM_POS] == 1
+
+
+def test_an_overspeed_disconnect_is_called_out(flying):
+    # A330 at 335 kt (Vmo 330): its high-speed protection took the autopilot.
+    _, plugin, xp = flying
+    xp.datarefs["sim/cockpit2/gauges/indicators/airspeed_kts_pilot"] = 240.0  # Baron Vne 223
+    drop(xp)
+    before = len(xp.spoken)
+    plugin._flight_loop()
+    assert xp.spoken[before:] == ["Autopilot disconnected. Overspeed."]
+    e = events(plugin, "autopilot_disconnect")[-1]
+    assert e["cause"] == "overspeed" and e["overspeed"] == "240 kt, limit 223"

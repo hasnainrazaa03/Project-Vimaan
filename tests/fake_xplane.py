@@ -63,7 +63,7 @@ DEFAULT_DATAREFS: dict[str, Any] = {
     "sim/aircraft/autopilot/preconfigured_ap_type": 0,
     "sim/aircraft/autopilot/single_axis_autopilot": 0,
     "sim/aircraft/view/acf_Vso": 74.0,
-    "sim/aircraft/view/acf_Vfe": 122.0,
+    "sim/aircraft/view/acf_Vfe": 152.0,  # the first notch's limit (.acf _Vfe1_kts)
     "sim/aircraft/view/acf_Vno": 195.0,
     "sim/aircraft/view/acf_Vne": 223.0,
     "sim/aircraft/view/acf_Mmo": 0.0,
@@ -94,6 +94,7 @@ DEFAULT_DATAREFS: dict[str, Any] = {
     "sim/cockpit2/autopilot/autopilot_has_power": 1,
     "sim/cockpit2/autopilot/otto_fail_warn": 0,
     "sim/cockpit2/autopilot/autopilot_disconnect": 0,
+    "sim/flightmodel/misc/machno": 0.0,
 }
 
 # xp.getNthAircraftModel(0): (file name, full path).
@@ -306,6 +307,7 @@ def make_xp() -> types.ModuleType:
     xp.getDataRefTypes = getDataRefTypes
     xp.read_only = set()  # datarefs X-Plane won't let a plugin write
     xp.canWriteDataRef = lambda ref: ref not in xp.read_only
+    xp.isDataRefGood = lambda ref: ref in xp.datarefs
     # Moving the user's aircraft (recorded; the fake doesn't fly anywhere).
     xp.placed = []
     xp.placeUserAtLocation = lambda *a: xp.placed.append(("location", *a))
