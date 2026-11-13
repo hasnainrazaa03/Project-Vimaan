@@ -1196,9 +1196,11 @@ COMMANDS: tuple[Command, ...] = (
             "put the transponder in {xpdr_mode}",
             "select transponder {xpdr_mode}",
             "transponder {xpdr_mode} now",
+            # The spoken forms: "transponder identify", "squawk charlie".
+            "transponder {xpdr_mode_verb}",
+            "squawk {xpdr_mode_verb}",
             "{xpdr_mode=ident}",
             "{xpdr_mode=ident} please",
-            "{xpdr_mode=identify}",
             "squawk {xpdr_mode=ident}",
         ),
         slots=_frozen(

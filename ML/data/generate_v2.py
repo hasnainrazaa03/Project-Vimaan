@@ -47,6 +47,10 @@ NOISE_SHARE = 0.2
 NEGATIVE_SHARE = 0.1  # of the actionable rows
 CONVERSATION_ROWS = 400  # per conversational intent
 TWO_DIGIT_HEADING_SHARE = 0.15  # "change heading to eighty", beside three-digit forms
+# "speed eighty" (60-95 kt), beside three-digit speeds. Without it v20 (data
+# v9) left "eighty" untagged after "speed": the stray leading "eighty" of
+# LEADING_NOISE grows with the number of commands, the speed rows don't.
+TWO_DIGIT_SPEED_SHARE = 0.15
 
 INSTANCE_SAY = {"1": "one", "2": "two"}
 INSTANCE_ORD = {"1": ("first", "left"), "2": ("second", "right")}
@@ -141,6 +145,8 @@ def render_number(kind: str, rng: random.Random) -> str:
         return rng.choice(spoken.squawk(_squawk(rng)))
     # Tier 1
     if kind == "speed":
+        if rng.random() < TWO_DIGIT_SPEED_SHARE:
+            return rng.choice(spoken.speed(rng.randrange(60, 100, 5)))
         return rng.choice(spoken.speed(rng.randrange(60, 401, 5)))
     if kind == "mach":
         return rng.choice(spoken.mach(f"0.{rng.randrange(40, 96):02d}"))
