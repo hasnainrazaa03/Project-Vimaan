@@ -21,7 +21,7 @@ Last updated 2026-11-11.
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | ✅ closed 2026-11-12: Part C flown unattended (121/121 on four aircraft) and the owner's real-voice check passed | #30–#34, #38–#42 |
 | D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim (switch); stick pull still to check | #35 |
 | A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
-| T2 | Tier 2: radios & navigation → **v20** | 🟡 T2.0 groundwork done (research, 8 commands, handlers, 737/A330 transponder selectors, tests); next: runner scenarios, then data, training, gate | this PR |
+| T2 | Tier 2: radios & navigation → **v20** | 🟡 T2.0 groundwork done (research, 8 commands, handlers, 737/A330 transponder selectors, tests); next: runner scenarios, then data, training, gate | #43 |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v21** | ⬜ | |
 | T4 | Tier 4: questions (read-only) → **v22** | ⬜ | |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
