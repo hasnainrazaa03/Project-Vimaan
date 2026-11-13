@@ -199,6 +199,22 @@ misunderstood is scored, then the step is redone as text so the check is about
 the sim. Reports: `~/Vimaan_Logs/test/reports/<time>_<aircraft>.json`.
 `python -m simtest screenshot` shows what has the sim paused, if it stops.
 
+**The Tier 2 checklist (radios and transponder):**
+
+```bash
+python -m simtest run tier2 baron        # or kingair, 737, a330, all
+```
+
+The same start, with the autopilot flying (and the jets' thrust managed),
+then: COM 1 standby and flip, COM 2 standby, NAV 1 110.50 and course 090,
+NAV 2 standby, flip and course 180, squawk 4217, 0120 and 1200, an emergency
+squawk held and cancelled, then the transponder: alt, standby, ident refused
+in standby, on, ident, off (refused on the 737 and A330, which have none),
+and alt again. The transponder is checked the way each aircraft shows it:
+X-Plane's mode on the Baron and King Air, the selector position on the 737,
+TA or TA/RA on the A330. It needs a model trained on Tier 2 (v20 or later)
+and refuses to start on an older one.
+
 Two clicks remain until they're switched off once: Steam's launch-option
 question (set a default for X-Plane 12 in Steam), and X-Plane's "Quit the
 simulator?" (tick "Don't ask again").

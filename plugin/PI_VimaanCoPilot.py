@@ -260,6 +260,12 @@ DREF_XPDR_IDENT = "sim/cockpit2/radios/indicators/transponder_id"
 XPDR_SETS = {"off": 0, "standby": 1, "on": 2, "alt": 3}
 XPDR_ALREADY = {"off": {0}, "standby": {1}, "on": {2, 3, 5, 6, 7}, "alt": {3, 6, 7}}
 XPDR_SPOKEN = {"off": "off", "standby": "standby", "on": "on", "alt": "altitude"}
+XPDR_ALREADY_SPOKEN = {
+    "off": "Transponder already off",
+    "standby": "Transponder already in standby",
+    "on": "Transponder already on",
+    "alt": "Transponder already reporting altitude",
+}
 # Transponder selectors turned by clicks (737, A330).
 KNOB_STEP_MAX_PRESSES = 12
 KNOB_STEP_MAX_SEC = 10.0
@@ -1630,6 +1636,9 @@ class PythonInterface:
             "ready": self.ready,
             "busy": self._active is not None or self._say_results.busy,
             "probe": self._probe is not None,
+            # What the loaded model knows (a runner refuses a checklist the
+            # model wasn't trained for); None from a worker that doesn't say.
+            "model_intents": None if self._model_intents is None else sorted(self._model_intents),
             "aircraft": {
                 "icao": info.icao,
                 "key": info.key,
@@ -3007,15 +3016,14 @@ class PythonInterface:
         knobs = self.profile.settings.get("xpdr_knobs")
         if knobs:
             return self._transponder_knobs(value, knobs)
-        spoken = XPDR_SPOKEN[value]
         if self._read_int(DREF_XPDR_MODE) in XPDR_ALREADY[value]:
-            self._say(f"Transponder already {spoken}")
+            self._say(XPDR_ALREADY_SPOKEN[value])
             return "no_op"
         if not self._fire_command(CMD_XPDR[value]):
             self._say("Cannot set the transponder")
             return "failed"
         self._expect("Transponder", lambda: self._read_int(DREF_XPDR_MODE), XPDR_SETS[value])
-        self._say(f"Transponder {spoken}")
+        self._say(f"Transponder {XPDR_SPOKEN[value]}")
         return "executed"
 
     def _transponder_ident(self):
@@ -3038,9 +3046,8 @@ class PythonInterface:
         if not steps:
             self._say("This transponder has no off. Say standby.")
             return "rejected"
-        spoken = f"Transponder {XPDR_SPOKEN[value]}"
         if all(self._knob_at(k) for k in steps):
-            self._say(spoken.replace("Transponder", "Transponder already", 1))
+            self._say(XPDR_ALREADY_SPOKEN[value])
             return "no_op"
         if not all(self._has_command(n) for k in steps for n in (k.down, k.up)):
             self._say("Cannot set the transponder on this aircraft")
@@ -3053,7 +3060,7 @@ class PythonInterface:
             "presses": 0,
             "waiting": None,  # position before the last click, until it moves
             "stuck": 0,
-            "spoken": spoken,
+            "spoken": f"Transponder {XPDR_SPOKEN[value]}",
             "deadline": time.perf_counter() + KNOB_STEP_MAX_SEC,
         }
         self.tel.event("knob_step_start", cmd=self._current_cmd, mode=value, knobs=len(steps))

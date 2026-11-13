@@ -651,7 +651,12 @@ confirm.
   worker's ready message), so v19 still reports 15 of 15.
 - [x] **Gold set** `GOLD_TIER2` (15 phrases): skipped for older models,
   required by the gate.
-- [ ] **Tier 2 scenarios** for the A2 runner, so the checklist runs unattended.
+- [x] **Tier 2 scenarios** for the A2 runner (`simtest/tier2.py`, `simtest run
+  tier2 <aircraft>`): the checklist above, 23 steps on the Baron and King Air,
+  24 on the 737 and 25 on the A330 (their thrust steps), with the transponder
+  checked the way each aircraft shows it. They run end to end on the fake sim in CI (Baron, 737 selector, A330
+  selectors), so the expectations are right before X-Plane. The runner
+  refuses to start on a model that predates Tier 2.
 - [ ] Then the per-tier procedure: data, train v20, gate, then the runner.
 
 ---

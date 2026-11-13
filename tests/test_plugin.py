@@ -3172,13 +3172,22 @@ def test_transponder_mode_with_x_planes_commands(sim, monkeypatch):
     assert events(plugin, "verify")[-1]["ok"] is True
 
 
-@pytest.mark.parametrize(("mode", "said"), [(3, "on"), (6, "on"), (7, "alt"), (1, "standby")])
-def test_transponder_already_there_presses_nothing(sim, mode, said):
+@pytest.mark.parametrize(
+    ("mode", "said", "reply"),
+    [
+        (3, "on", "Transponder already on"),
+        (6, "on", "Transponder already on"),
+        (7, "alt", "Transponder already reporting altitude"),
+        (1, "standby", "Transponder already in standby"),
+        (0, "off", "Transponder already off"),
+    ],
+)
+def test_transponder_already_there_presses_nothing(sim, mode, said, reply):
     # "On" means replying: it never drops altitude reporting to mode A.
     _, plugin, xp = sim
     xp.datarefs[XPDR_MODE] = mode
     spoken = say(plugin, "transponder " + said, "set_transponder_mode", {"xpdr_mode": said})
-    assert spoken[0].startswith("Transponder already") and xp.commands_fired == []
+    assert spoken == [reply] and xp.commands_fired == []
 
 
 def test_transponder_mode_missing_is_asked(sim):
