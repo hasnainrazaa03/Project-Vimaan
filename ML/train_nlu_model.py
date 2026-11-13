@@ -9,12 +9,14 @@ import torch
 from sklearn.metrics import f1_score
 from sklearn.model_selection import train_test_split
 from torch.optim import AdamW
+from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from transformers import DistilBertTokenizerFast
 from utils import find_latest_version_path, get_model_versions_dir
 from utils.device import resolve_device
 from utils.eval_metrics import per_intent_accuracy, per_slot_f1
+from utils.lr_schedule import SCHEDULES, lr_factor
 from utils.run_logger import RunLogger
 from utils.slot_alignment import align_offsets_to_labels, find_slot_char_spans
 from vimaan_nlu import (
@@ -94,6 +96,8 @@ def train_model(
     model_save_dir=None,
     device=None,
     runs_dir=None,
+    schedule="constant",
+    warmup=0.06,
 ):
     # Reproducibility (T1.10): the pipeline was fully unseeded except the split.
     random.seed(42)
@@ -157,6 +161,18 @@ def train_model(
     print(f"Using device: {device}")
     model = JointIntentAndSlotModel(num_intents=len(intent_map), num_slots=len(slot_map)).to(device)
     optimizer = AdamW(model.parameters(), lr=lr)
+    # "linear": warm up over the first `warmup` share of steps, then fall to
+    # zero at the last step (utils/lr_schedule.py). Early stopping cuts the
+    # decay short, so pair it with patience >= epochs.
+    if schedule not in SCHEDULES:
+        raise ValueError(f"schedule must be one of {SCHEDULES}, not {schedule!r}")
+    total_steps = len(train_loader) * num_epochs
+    warmup_steps = int(total_steps * warmup) if schedule == "linear" else 0
+    scheduler = (
+        LambdaLR(optimizer, lambda step: lr_factor(step, total_steps, warmup_steps))
+        if schedule == "linear"
+        else None
+    )
 
     best_val_loss = float("inf")
     epochs_no_improve = 0
@@ -188,6 +204,8 @@ def train_model(
         batch_size=batch_size,
         epochs=num_epochs,
         lr=lr,
+        lr_schedule=schedule,
+        warmup_steps=warmup_steps,
         patience=patience,
         num_intents=len(intent_map),
         num_slots=len(slot_map),
@@ -236,6 +254,8 @@ def train_model(
                     elapsed=time.time() - start_time,
                     **extra,
                 )
+                if scheduler is not None:
+                    scheduler.step()  # after logging: the rate logged is the one used
 
             avg_train_loss = total_train_loss / len(train_loader)
             print(f"Epoch {epoch + 1} - Average Training Loss: {avg_train_loss:.4f}")
@@ -341,6 +361,8 @@ def train_model(
                         "max_length": max_length,
                         "epochs": numOfEpochs,
                         "lr": lr,
+                        "lr_schedule": schedule,
+                        "warmup_steps": warmup_steps,
                         "batch_size": batch_size,
                         "optimizer": "AdamW",
                         "early_stopping_patience": patience,
@@ -405,6 +427,18 @@ if __name__ == "__main__":
     parser.add_argument("--max-length", type=int, default=64)
     parser.add_argument("--patience", type=int, default=2)
     parser.add_argument(
+        "--schedule",
+        choices=SCHEDULES,
+        default="constant",
+        help="Learning rate: constant, or linear warmup then decay to zero.",
+    )
+    parser.add_argument(
+        "--warmup",
+        type=float,
+        default=0.06,
+        help="Share of all steps spent warming up (linear schedule only).",
+    )
+    parser.add_argument(
         "--model-save-dir",
         type=str,
         default=None,
@@ -446,4 +480,6 @@ if __name__ == "__main__":
         patience=args.patience,
         model_save_dir=args.model_save_dir,
         device=args.device,
+        schedule=args.schedule,
+        warmup=args.warmup,
     )
