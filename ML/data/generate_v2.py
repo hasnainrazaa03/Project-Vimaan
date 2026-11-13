@@ -309,7 +309,9 @@ def _vocab() -> tuple[list[str], set[str], set[str]]:
         if not c.actionable:
             continue  # "hello vimaan" is a greeting, not salad
         for t in c.templates:
-            words.update(re.sub(r"\{\w+\}", " ", t).split())
+            # Every placeholder, "{xpdr_mode=ident}" too: left in, it reached
+            # the negatives verbatim and taught "ident" as noise (data v9/v10).
+            words.update(re.sub(r"\{[^}]*\}", " ", t).split())
     filler = sorted(words - command_words - value_words - {"_"})
     return filler, command_words, value_words
 

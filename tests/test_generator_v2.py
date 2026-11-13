@@ -32,6 +32,15 @@ def test_no_text_has_two_labels(data):
     assert [t for t, i in labels.items() if len(i) > 1] == []
 
 
+def test_no_text_holds_a_placeholder(data):
+    # Templates are filled, and the negatives' word salad is built from
+    # template words with every placeholder removed, "{slot=word}" included.
+    rows, _ = data
+    assert [r["text"] for r in rows if "{" in r["text"] or "}" in r["text"]] == []
+    filler, _, _ = generate_v2._vocab()
+    assert [w for w in filler if "{" in w or "}" in w or "=" in w] == []
+
+
 def test_held_out_templates_never_trained_on(data):
     rows, _ = data
     split_of = defaultdict(set)
