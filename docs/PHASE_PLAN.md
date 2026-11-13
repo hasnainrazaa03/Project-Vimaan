@@ -18,9 +18,9 @@ Last updated 2026-11-11.
 | O | In-sim overlay (live transcript, meaning, outcome) | ✅ merged and flown (ImGui, worst draw 1.1 ms) | #26, #27 |
 | E0 | Command table: one source of truth (no behaviour change) | ✅ merged; smoke-flown on v11 | #28 |
 | E1 | Training data v2 + command families → **v17** | ✅ merged; flown twice | #29 |
-| T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | 🟡 merged, all four aircraft probed, v19 passes every gate and is installed; Part C flight next | #30–#34 |
+| T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | 🟡 Part C flown unattended by the A2 runner, all pass; owner's short real-voice check left | #30–#34, #38–#40 |
 | D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim (switch); stick pull still to check | #35 |
-| A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 done and flown (2026-11-12); A2 next | #36 |
+| A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
 | T2 | Tier 2: radios & navigation → **v20** | ⬜ T2.0 groundwork (research, handlers, tests) after A2; training after T1 closes | |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v21** | ⬜ | |
 | T4 | Tier 4: questions (read-only) → **v22** | ⬜ | |
@@ -527,7 +527,7 @@ gives the controls back at the end of a run.
       closes it.
     - `sim/operation/quit` asks to confirm unless "Don't ask again" was
       ticked once.
-- [ ] **A2 In-air runner for Tier 1.** *Built (`simtest run tier1`), first live runs 2026-11-12; re-run after the fixes below.* One scenario per aircraft (Baron, 737,
+- [x] **A2 In-air runner for Tier 1.** *Done 2026-11-12 (#37, fixes #38–#40): the final pass on `main` 9ffae19 passed every step on all four aircraft, 121/121.* One scenario per aircraft (Baron, 737,
   A330, King Air): placed in the air, set up, then each checklist command is
   said and the sim is checked: targets, modes, the level-off at the selected
   altitude, COM 2, altimeter, flaps. Pass or fail per step in a report the
@@ -567,7 +567,12 @@ gives the controls back at the end of a run.
     armed (status 1, capture at the selected altitude), and "altitude hold"
     said "already on" while they kept climbing. Fix: for altitude hold, on
     means holding (2).
-  - By voice (Daniel): 24–29 of 26–31 understood per aircraft. "q n h one
+  - **Final pass (2026-11-12, 21:38, main 9ffae19, session 213808): Baron
+    28/28, King Air 28/28, 737 32/32, A330 33/33.** No errors; clean shutdown.
+  - By voice (Daniel): 25–29 of 27–31 understood per aircraft. The same two
+    phrases missed on every aircraft and every run: "q n h one zero one
+    three" (heard "zero one three") and "tune com one to one two one decimal
+    five" (heard "decimal five"). They're for the owner's real-voice check. "q n h one
     zero one three" and "tune com one to one two one decimal five" were
     misheard every time; check them with a real voice.
 - [ ] **A3 Ground and takeoff.** Start with engines off ("start both
