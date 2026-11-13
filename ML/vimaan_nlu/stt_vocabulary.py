@@ -42,7 +42,7 @@ _DIGIT_WORDS = dict(enumerate("zero one two three four five six seven eight nine
 
 
 def _words(text: str) -> list[str]:
-    text = re.sub(r"\{\w+\}", " ", text.lower()).replace("-", " ")
+    text = re.sub(r"\{[^}]*\}", " ", text.lower()).replace("-", " ")
     out = []
     for w in text.split():
         if w.isdigit():

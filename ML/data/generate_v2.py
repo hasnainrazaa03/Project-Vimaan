@@ -102,6 +102,18 @@ def _frequency(rng: random.Random) -> str:
     return mhz + "0" if mhz.endswith(".") else mhz
 
 
+def _nav_frequency(rng: random.Random) -> str:
+    """108.00-117.95 MHz on 50 kHz channels."""
+    mhz = f"{rng.randrange(10800, 11796, 5) / 100:.2f}".rstrip("0")
+    return mhz + "0" if mhz.endswith(".") else mhz
+
+
+def _squawk(rng: random.Random) -> str:
+    if rng.random() < 0.2:  # the codes pilots hear most
+        return rng.choice(("1200", "7000", "2000", "0120", "4000"))
+    return "".join(rng.choice("01234567") for _ in range(4))
+
+
 def _altitude(rng: random.Random) -> int:
     if rng.random() < 0.5:
         return rng.randrange(1000, 45001, 1000)
@@ -122,6 +134,11 @@ def render_number(kind: str, rng: random.Random) -> str:
         return rng.choice(spoken.frequency(_frequency(rng)))
     if kind == "port":
         return rng.choice(("one", "two"))
+    # Tier 2
+    if kind == "nav_frequency":
+        return rng.choice(spoken.frequency(_nav_frequency(rng)))
+    if kind == "squawk":
+        return rng.choice(spoken.squawk(_squawk(rng)))
     # Tier 1
     if kind == "speed":
         return rng.choice(spoken.speed(rng.randrange(60, 401, 5)))
@@ -141,12 +158,19 @@ def render_number(kind: str, rng: random.Random) -> str:
 # ---------------------------------------------------------------------------
 # Rows
 # ---------------------------------------------------------------------------
+# {slot}, {slot_verb}, {instance_ord} or {slot=word}.
+PLACEHOLDER = re.compile(r"\{(\w+)(?:=([^}]+))?\}")
+
+
 def fill(c: Command, template: str, rng: random.Random) -> tuple[str, dict[str, str]]:
     """Fill ``template``; returns (text, slot -> spoken surface)."""
     surfaces: dict[str, str] = {}
 
     def sub(match: re.Match[str]) -> str:
-        name = match.group(1)
+        name, fixed = match.group(1), match.group(2)
+        if fixed is not None:  # {slot=word}: that word, tagged as the slot
+            surfaces[name] = fixed
+            return fixed
         if name.endswith("_verb"):
             slot = c.slots[name[: -len("_verb")]]
             value = rng.choice([v for v in slot.synonyms if slot.synonyms[v]])
@@ -167,7 +191,7 @@ def fill(c: Command, template: str, rng: random.Random) -> tuple[str, dict[str, 
         surfaces[name] = word
         return word
 
-    text = re.sub(r"\{(\w+)\}", sub, template)
+    text = re.sub(PLACEHOLDER, sub, template)
     return text, surfaces
 
 

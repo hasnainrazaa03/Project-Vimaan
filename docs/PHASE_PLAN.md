@@ -21,9 +21,11 @@ Last updated 2026-11-11.
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | ✅ closed 2026-11-12: Part C flown unattended (121/121 on four aircraft) and the owner's real-voice check passed | #30–#34, #38–#42 |
 | D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim (switch); stick pull still to check | #35 |
 | A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
-| T2 | Tier 2: radios & navigation → **v20** | ⬜ next: T2.0 groundwork (research, handlers, tests), then data, training, gate | |
+| T2 | Tier 2: radios & navigation → **v20** | 🟡 T2.0 groundwork done (research, 8 commands, handlers, 737/A330 transponder selectors, tests); next: runner scenarios, then data, training, gate | this PR |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v21** | ⬜ | |
 | T4 | Tier 4: questions (read-only) → **v22** | ⬜ | |
+| F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
+| C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
 | L | Later: relative commands, two commands in one breath, checklists, add-on aircraft profiles | ⬜ | |
 
 Measured so far (in-sim, Vosk): speech end → action **p50 330 ms**;
@@ -34,7 +36,9 @@ rejected / 1 wrong.
 
 Order from here (owner, 2026-11-11): D (#35) → A1 → A2, which runs the Tier 1
 flight checklist and so closes T1 → T2.0 groundwork → A3 → A4 → T2 build,
-train and gate, tested by the runner → T3 → T4.
+train and gate, tested by the runner → T3 → T4 → F → C (F and C added
+2026-11-12, at the owner's question about flight-envelope awareness and a
+talking copilot).
 
 Model versions: E1 was planned as v12; v12–v16 were intermediate runs and
 v17 is the result. Tier 1's first model, v18, failed the gate and v19 passed,
@@ -595,37 +599,60 @@ gives the controls back at the end of a run.
 
 ## Tier 2: radios and navigation → v20
 
+Eight intents. The first design had six, with one standby and one swap intent
+taking a `radio` com/nav slot; separate COM and NAV intents keep each one's
+slots small and its frequency range single, as `set_com_frequency` already
+is (2026-11-12).
+
 | Intent | Slots | Say | Binding | Verify | Safety |
 | --- | --- | --- | --- | --- | --- |
-| `set_standby_frequency` | `radio` com/nav; `port` 1–2; `frequency` (COM 118.000–136.975 at 8.33 kHz; NAV 108.00–117.95) | "com one standby one two one decimal five" | `radios/actuators/com{N}_standby_frequency_hz_833` (kHz) / `nav{N}_standby_frequency_hz` (10 kHz) | read-back | — |
-| `swap_frequency` | `radio`, `port` | "flip com one", "swap nav two" | `sim/radios/com{N}_standy_flip`, `nav{N}_standy_flip` (X-Plane's spelling) | active = previous standby | — |
-| `set_nav_frequency` | `port`, `frequency` 108.00–117.95 | "nav one one one zero decimal five" | `radios/actuators/nav{N}_frequency_hz` | read-back | — |
-| `set_course` | `port` (default 1), `degrees` 0–360, 3 digits | "course zero niner zero" | `radios/actuators/nav{N}_obs_deg_mag_pilot` | ±0.5° | — |
-| `set_transponder_code` | `squawk` Digits(4, 0–7) | "squawk four two one seven", "squawk one two zero zero" | `radios/actuators/transponder_code` | read-back | 7500 / 7600 / 7700 → confirm |
-| `set_transponder_mode` | `mode` off/standby/on/alt; `ident` | "transponder alt", "squawk standby", "ident" | `sim/transponder/transponder_off`, `_standby`, `_on`, `_alt`, `_ident` | `radios/actuators/transponder_mode` (enum from step 1) | — |
+| `set_com_standby` | `com_port` 1–2 (default 1); `frequency` 118.000–136.975 | "com one standby one two one decimal five" | `radios/actuators/com{N}_standby_frequency_hz_833` (kHz) | still set 1 s later | — |
+| `swap_com_frequency` | `com_port` | "flip com one" | `sim/radios/com{N}_standy_flip` (X-Plane's spelling) | active = the previous standby | — |
+| `set_nav_frequency` | `nav_port` 1–2 (default 1); `nav_frequency` 108.00–117.95 | "tune nav one to one one zero decimal five" | `radios/actuators/nav{N}_frequency_hz` (10 kHz: 110.50 → 11050) | still set | — |
+| `set_nav_standby` | `nav_port`; `nav_frequency` | "nav two standby one one three decimal niner" | `radios/actuators/nav{N}_standby_frequency_hz` | still set | — |
+| `swap_nav_frequency` | `nav_port` | "swap nav two" | `sim/radios/nav{N}_standy_flip` | active = the previous standby | — |
+| `set_course` | `degrees` 0–360, three digits; `nav_port` | "course zero niner zero" | `radios/actuators/nav{N}_obs_deg_mag_pilot` | ±0.5° | — |
+| `set_transponder_code` | `squawk`: `Digits(4, 0–7)`, leading zeros kept | "squawk four two one seven", "squawk twelve hundred" | `radios/actuators/transponder_code` (0120 → 120) | still set | 7500 / 7600 / 7700 → confirm |
+| `set_transponder_mode` | `xpdr_mode` off / standby / on / alt / ident | "transponder alt", "squawk standby", "ident" | `sim/transponder/transponder_{off,standby,on,alt,ident}`; the 737 and A330 turn their own selectors | `transponder_mode`; 737 and A330: the selector positions; ident: `indicators/transponder_id` | — |
 
-Specific work: squawk codes keep leading zeros and reject 8/9 (normalizer
-must not join them into other numbers); NAV port absorbed into the frequency
-("nav one one one zero…") handled like COM; A330 has its own transponder
-script (`A333.transponder`): check in step 1.
+Behaviour:
+- **"On" means replying.** A transponder already on alt, TA or TA/RA says
+  "Transponder already on": it is never turned down to mode A.
+- **Ident** only when the transponder is on ("Transponder is in standby. Say
+  transponder on first.").
+- The 737 and A330 have **no off** ("This transponder has no off. Say standby.").
+- The slot is `xpdr_mode`, not `mode`, which is the autopilot's.
+- Templates may name one value with `{slot=word}`: bare "ident" is
+  `{xpdr_mode=ident}`. A template with no slot would repeat the same text.
+- Vosk lacks "localizer", "preselect" and "VOR", so no template uses them
+  (`tests/test_vosk_vocabulary.py`); "ILS" and "nav" are in it.
+
+Per-aircraft findings: `AIRCRAFT_PROFILES.md`, "Tier 2 findings".
 
 Checklist: tune COM1 standby + flip, NAV1 110.50 + course 090 (ILS), squawk
 4217 then 1200, transponder alt / standby / ident, emergency code asks to
 confirm.
 
-### T2.0 Groundwork (no training), after A2
-- Research on all four aircraft, from their files and with the A1 bridge:
-  COM and NAV standby and flip, NAV frequency and course, transponder code
-  and mode (X-Plane's mode enum; the A330's own `A333.transponder` script;
-  the 737's panel and whether it puts written values back, as its altimeter
-  did). Record each finding in `AIRCRAFT_PROFILES.md`, and add overrides to
-  the profiles where an aircraft needs its own control.
-- Slots and normalization: `Digits(4, 0–7)` squawk codes that keep leading
-  zeros and reject 8 and 9; NAV port absorbed into the frequency like COM.
-- Handlers, safety (7500 / 7600 / 7700 ask to confirm), command table
-  entries and templates, with tests against the fake sim.
-- Tier 2 scenarios for the A2 runner, so the checklist above runs unattended.
-- Then the per-tier procedure: data, train v20 (once T1 is closed), gate.
+### T2.0 Groundwork (no training)
+- [x] **Research** on all four aircraft from their scripts: the 737 and A330
+  own their transponder mode; everything else is X-Plane's standard controls.
+- [x] **Slots and normalization:** `Digits(4, 0–7)` squawk codes keep leading
+  zeros and reject 8 and 9; a NAV port absorbed into the frequency ("nav
+  1110.5" → "nav 1 110.5") is split like COM; the NAV port and squawk code are
+  taken from the text when the model leaves them untagged.
+- [x] **Handlers and safety:** the eight handlers with read-back
+  verification; overrides `b738_transponder` and `a333_transponder` turn the
+  selectors one click a frame (`aircraft.Knob`); 7500 / 7600 / 7700 ask to
+  confirm, and a repeat of a different code doesn't confirm it.
+- [x] **Command table:** at least 15 templates each; data renderers for NAV
+  frequencies and squawk codes, round-trip tested on every NAV channel and all
+  4,096 codes; STT vocabulary and `COMMANDS.md` regenerated.
+- [x] **Self-test** probes only the intents the loaded model knows (from the
+  worker's ready message), so v19 still reports 15 of 15.
+- [x] **Gold set** `GOLD_TIER2` (15 phrases): skipped for older models,
+  required by the gate.
+- [ ] **Tier 2 scenarios** for the A2 runner, so the checklist runs unattended.
+- [ ] Then the per-tier procedure: data, train v20, gate, then the runner.
 
 ---
 
@@ -668,6 +695,37 @@ No safety rules, no writes; the overlay shows the answer. Checklist: ask each
 in cruise and compare against the instruments.
 
 ---
+
+## Phase F: flight context → after T4
+
+Today Vimaan knows the aircraft only when a command asks (each safety rule
+reads its own datarefs) and logs its state at intervals. Phase F keeps a
+model of the flight, updated every second:
+
+- **Phase of flight**: parked, taxi, takeoff roll, initial climb, climb,
+  cruise, descent, approach, landing, rollout, from on-ground, ground speed,
+  vertical speed, height above ground, gear, flaps and thrust.
+- **Envelope margins**: airspeed against stall, flap, gear and maximum speeds
+  (from the `.acf`, as the flap limits already are), Mach, bank, sink rate,
+  configuration for the height (gear down by 1,000 ft on approach).
+- **Uses**: safety rules read the phase instead of separate datarefs;
+  optional callouts ("Speed", "Gear", "Approaching flap limit"), ranked and
+  rate-limited so they don't chatter; Tier 4 answers and phase C get it as
+  context. Phase changes are logged and shown on the dashboard's Flights tab.
+- **Tests**: recorded flights (the A3 takeoffs and A4 landings) replayed
+  through the tracker; the transitions must match. Pure Python, no training.
+
+## Phase C: conversational copilot → after F
+
+The trained model stays the fast path for commands (6–11 ms, offline,
+predictable). What it doesn't take as a command (questions, conversation, low
+confidence) can go to a language model given the phase F context and tools
+mapped to the existing handlers. Every action it proposes goes through the
+same validators, safety rules and read-backs: it never writes to the sim
+itself. Also a better speaking voice and free-speech recognition (Whisper).
+Opt-in. Decisions for the owner: which model (cloud, or local if X-Plane leaves
+GPU room), what is sent (the transcript and flight state only), cost, and the
+latency allowed.
 
 ## Later (L)
 

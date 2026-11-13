@@ -139,6 +139,41 @@ aircraft folders. `scripts/check_xplane_refs.py` re-checks every name.
 
 **Not yet checked:** the Citation X (`C750`, jet, no override).
 
+## Tier 2 findings: radios and transponder (X-Plane 12.4.3, 2026-11-12)
+
+From each aircraft's xlua scripts, comment lines skipped (the A/T ARM lesson
+above). Not yet checked in the sim: that's the Tier 2 runner's job.
+
+X-Plane's own names, all in DataRefs.txt / Commands.txt:
+`radios/actuators/com{1,2}_standby_frequency_hz_833` (kHz),
+`nav{1,2}_frequency_hz` and `nav{1,2}_standby_frequency_hz` (10 kHz:
+110.50 MHz is 11050), `nav{1,2}_obs_deg_mag_pilot`, `transponder_code`
+(the code's digits as a number: 0120 is 120), `transponder_mode` (off 0,
+standby 1, on/mode A 2, alt/mode C 3, test 4, ground 5, TA only 6, TA/RA 7),
+`radios/indicators/transponder_id` (1 while identing); commands
+`sim/radios/{com,nav}{1,2}_standy_flip` (X-Plane's spelling) and
+`sim/transponder/transponder_{off,standby,on,alt,ident}`.
+
+| Aircraft | Radios and course | Transponder | Override |
+| --- | --- | --- | --- |
+| Baron 58 | only reads the NAV 1/2 frequencies (for its DME) | standard | none |
+| King Air C90B | writes the OBS only in its course-sync handler; its flip buttons call X-Plane's | replaces `sim/transponder/transponder_up/dn` with its knob, which writes the mode only on those presses, so the generic mode commands hold | none |
+| 737-800 | its NAV transfer buttons call `sim/radios/nav{N}_standy_flip`; writes no frequency | the mode is set only by its selector, `laminar/B738/knob/transponder_mode_up/dn`, position `laminar/B738/knob/transponder_pos`: 0 TEST, 1 STBY, 2 ALT RPTG OFF, 3 XPNDR, 4 TA ONLY, 5 TA/RA. X-Plane's mode reads 2 for all of 2–5, so the selector, not the mode, is checked. No off. Ident `laminar/B738/push_button/transponder_ident_dn` (calls X-Plane's). The code is not written by its scripts | `b738_transponder` |
+| A330-300 | its COM flip calls X-Plane's | `A333.transponder` recomputes X-Plane's mode every frame from three selectors, so a written mode doesn't hold: `auto_on_knob_pos` (-1 STBY, 0 AUTO, 1 ON; `auto_on_off_left/right`), `alt_rpt_knob_pos` (0/1; `alt_rpt_off/on`), `ta_ra_knob_pos` (TCAS 0 STBY, 1 TA, 2 TA/RA; `ta_ra_left/right`), plus AC power, gear and airspeed. TCAS STBY also leaves the transponder in standby. AUTO replies only once rolling. No off. It wraps X-Plane's ident and code digits; the code is written only at quick start, so a write holds | `a333_transponder` |
+
+**Turning selectors** (`aircraft.Knob`): one click, then wait for the
+position to move before the next, so a click the aircraft handles a frame late
+can't overshoot; at most 12 clicks or 10 s, and "Transponder not set: the
+selector did not move" if 30 frames pass without a change. A target is a
+range, so a selector already in it is left alone: on the 737 "transponder on"
+accepts ALT RPTG OFF through TA/RA, "alt" accepts XPNDR through TA/RA; on the
+A330 "on" is AUTO or ON with TCAS TA or TA/RA, "alt" adds altitude reporting.
+
+**"On" means replying.** On any aircraft, a transponder already reporting
+altitude (alt, TA, TA/RA) answers "Transponder already on" instead of being
+turned down to mode A. Ident is refused in standby ("Say transponder on
+first").
+
 ## Engine start by type
 
 | Type | Sequence | Limit | Failure message |

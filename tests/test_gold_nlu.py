@@ -82,7 +82,37 @@ GOLD_TIER1 = [
     ("flaps fifteen", "set_flaps", {"flap_setting": "15"}),
     ("flaps full", "set_flaps", {"position": "full"}),
 ]
-GOLD = GOLD + GOLD_TIER1
+# Tier 2 (v20): radios and transponder.
+GOLD_TIER2 = [
+    (
+        "com two standby one two one decimal niner",
+        "set_com_standby",
+        {"com_port": "2", "frequency": "121.9"},
+    ),
+    ("flip com one", "swap_com_frequency", {"com_port": "1"}),
+    (
+        "tune nav one to one one zero decimal five",
+        "set_nav_frequency",
+        {"nav_port": "1", "nav_frequency": "110.5"},
+    ),
+    (
+        "nav two standby one one three decimal niner",
+        "set_nav_standby",
+        {"nav_port": "2", "nav_frequency": "113.9"},
+    ),
+    ("swap nav two", "swap_nav_frequency", {"nav_port": "2"}),
+    ("course zero niner zero", "set_course", {"degrees": "090"}),
+    ("nav two course one eight zero", "set_course", {"degrees": "180", "nav_port": "2"}),
+    ("squawk four two one seven", "set_transponder_code", {"squawk": "4217"}),
+    ("squawk zero one two zero", "set_transponder_code", {"squawk": "0120"}),
+    ("squawk twelve hundred", "set_transponder_code", {"squawk": "1200"}),
+    ("transponder alt", "set_transponder_mode", {"xpdr_mode": "alt"}),
+    ("transponder mode charlie", "set_transponder_mode", {"xpdr_mode": "alt"}),
+    ("squawk standby", "set_transponder_mode", {"xpdr_mode": "standby"}),
+    ("ident", "set_transponder_mode", {"xpdr_mode": "ident"}),
+    ("squawk ident", "set_transponder_mode", {"xpdr_mode": "ident"}),
+]
+GOLD = GOLD + GOLD_TIER1 + GOLD_TIER2
 
 # Bare numbers and fragments must never be acted on (scripts/model_gate.py
 # checks these through the plugin's decision rules).
@@ -116,9 +146,11 @@ def gold_model():
 def test_gold_intent_and_slots(gold_model, text, intent, slots):
     from vimaan_nlu import predict
 
-    tier1_model = "set_autopilot_speed" in gold_model.intent_map_rev.values()
-    if (text, intent, slots) in GOLD_TIER1 and not tier1_model:
+    known = set(gold_model.intent_map_rev.values())
+    if (text, intent, slots) in GOLD_TIER1 and "set_autopilot_speed" not in known:
         pytest.skip("the installed model predates Tier 1")  # the gate still requires these
+    if (text, intent, slots) in GOLD_TIER2 and "set_transponder_code" not in known:
+        pytest.skip("the installed model predates Tier 2")
 
     r = predict(
         text,

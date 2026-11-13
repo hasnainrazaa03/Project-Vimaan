@@ -1249,6 +1249,24 @@ def test_self_test_checks_intent_and_slots(sim):
     assert 0 <= stage["ms"] < 5000  # was measured from 0 (in-sim: 376928216 ms)
 
 
+def test_self_test_skips_commands_the_model_was_not_trained_on(sim):
+    # v19 predates Tier 2: its self-test covers the commands it knows.
+    module, plugin, xp = sim
+    probes = module.PythonInterface.SELF_TEST_PROBES
+    known = {intent for _, intent in probes if not intent.startswith(("swap_", "set_nav", "set_t"))}
+    known -= {"set_com_standby", "set_course"}
+    plugin._on_worker_message({"type": "ready", "intents": sorted(known | {"None"})})
+    for text, intent in probes:
+        NLU[text] = (intent, {s: "1" for s in module.REQUIRED_SLOTS[intent]}, 0.99)
+    plugin._run_self_test()
+    plugin._flight_loop()
+    sent = plugin.worker.sent[-1]["probes"]
+    assert {intent for _, intent in sent} == known and len(sent) < len(probes)
+    assert xp.spoken[-1] == f"Self test complete. {len(sent)} of {len(sent)} passed."
+    (stage,) = [e for e in events(plugin, "stage") if e["stage"] == "self_test"]
+    assert stage["not_in_model"] == len(probes) - len(sent) == 8
+
+
 def test_push_to_talk_command_binding(sim, monkeypatch):
     module, plugin, xp = sim
     calls = []
@@ -2494,6 +2512,7 @@ def test_altimeter_by_knob_steps_where_writes_dont_hold(sim, step, final):
     assert xp.datarefs[BARO] == pytest.approx(final, abs=1e-4)
     end = events(plugin, "baro_step_end")[-1]
     assert end["ok"] and end["presses"] >= 6 and plugin._baro_step is None
+    assert events(plugin, "speak")[-1]["cmd"] == "c9999"  # the reply is the command's
 
 
 def test_altimeter_knob_that_does_nothing_is_reported(sim):
@@ -2692,6 +2711,29 @@ def test_a_recording_goes_through_recognition(bridged, tmp_path):
     assert r["heard"] == "gear down" and r["intent"] == "toggle_landing_gear"
     capture = [e for e in events(plugin, "stage") if e.get("stage") == "capture"][-1]
     assert capture["source_file"] == str(wav)  # saving a copy: test_voice_worker
+
+
+def test_a_said_command_waits_for_the_selector_it_turns(bridged):
+    # The 737's transponder: the result comes back with the reply after the
+    # last click, not when the command returned "pending".
+    _, plugin, xp, root = bridged
+    aircraft(plugin, xp, commands=B738_XPDR)
+    xp.datarefs[B738_XPDR_POS] = 1
+    turn = selector(xp, B738_XPDR_POS, *B738_XPDR[:2], 0, 5, delay=2)
+    NLU["transponder alt"] = ("set_transponder_mode", {"xpdr_mode": "alt"}, 0.99)
+    rid = "sel"
+    (root / "inbox" / f"{rid}.json").write_text(
+        json.dumps({"id": rid, "op": "say", "text": "transponder alt"})
+    )
+    out = root / "outbox" / f"{rid}.json"
+    for _ in range(30):
+        turn()
+        plugin._flight_loop()
+        if out.exists():
+            break
+    r = json.loads(out.read_text())
+    assert r["outcome"] == "pending" and r["replies"] == ["Transponder altitude"]
+    assert xp.datarefs[B738_XPDR_POS] == 3
 
 
 def test_one_said_command_at_a_time(bridged):
@@ -2989,4 +3031,304 @@ def test_approach_armed_still_counts_as_on(sim):
     xp.datarefs["sim/cockpit2/autopilot/approach_status"] = 1
     assert say(plugin, "approach", "set_autopilot_mode", {"mode": "approach"}) == [
         "Approach already on"
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Tier 2: radios and transponder
+# ---------------------------------------------------------------------------
+RADIO = "sim/cockpit2/radios/actuators/"
+XPDR_MODE = RADIO + "transponder_mode"
+
+
+def swaps(active, standby):
+    def press(x):
+        x.datarefs[active], x.datarefs[standby] = x.datarefs[standby], x.datarefs[active]
+
+    return press
+
+
+def test_com_standby_written_in_khz(sim):
+    _, plugin, xp = sim
+    spoken = say(
+        plugin, "com 2 standby 121.9", "set_com_standby", {"com_port": "2", "frequency": "121.9"}
+    )
+    assert xp.datarefs[RADIO + "com2_standby_frequency_hz_833"] == 121900
+    assert xp.datarefs[RADIO + "com2_frequency_hz_833"] == 122800  # active untouched
+    assert spoken == ["COM 2 standby one two one decimal niner"]
+
+
+def test_com_flip_reads_back_the_new_active(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    xp.effects["sim/radios/com1_standy_flip"] = swaps(
+        RADIO + "com1_frequency_hz_833", RADIO + "com1_standby_frequency_hz_833"
+    )
+    spoken = say(plugin, "flip com 1", "swap_com_frequency", {"com_port": "1"})
+    assert spoken == ["COM 1 active one two one decimal five"]
+    assert xp.commands_fired == ["sim/radios/com1_standy_flip"]
+    plugin._flight_loop()
+    assert events(plugin, "verify")[-1]["ok"] is True
+
+
+def test_com_flip_the_radio_ignores_is_reported(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    say(plugin, "flip com", "swap_com_frequency", {})
+    assert settle(plugin, xp, loops=1) == ["COM 1 active did not respond"]
+
+
+def test_nav_frequency_written_in_10_khz(sim):
+    _, plugin, xp = sim
+    spoken = say(
+        plugin,
+        "tune nav 2 to 113.9",
+        "set_nav_frequency",
+        {"nav_port": "2", "nav_frequency": "113.9"},
+    )
+    assert xp.datarefs[RADIO + "nav2_frequency_hz"] == 11390
+    assert spoken == ["NAV 2 set to one one three decimal niner"]
+
+
+@pytest.mark.parametrize("frequency", ["121.5", "107.9", "118.0"])
+def test_nav_frequency_outside_the_nav_band_is_not_written(sim, frequency):
+    _, plugin, xp = sim
+    spoken = say(plugin, "nav 1 " + frequency, "set_nav_frequency", {"nav_frequency": frequency})
+    assert xp.writes == [] and spoken == ["Frequency out of range"]
+
+
+def test_nav_standby_then_flip(sim):
+    _, plugin, xp = sim
+    xp.effects["sim/radios/nav1_standy_flip"] = swaps(
+        RADIO + "nav1_frequency_hz", RADIO + "nav1_standby_frequency_hz"
+    )
+    assert say(
+        plugin,
+        "nav 1 standby 109.5",
+        "set_nav_standby",
+        {"nav_port": "1", "nav_frequency": "109.5"},
+    ) == ["NAV 1 standby one zero niner decimal five"]
+    assert say(plugin, "swap nav 1", "swap_nav_frequency", {"nav_port": "1"}) == [
+        "NAV 1 active one zero niner decimal five"
+    ]
+    assert xp.datarefs[RADIO + "nav1_frequency_hz"] == 10950
+
+
+def test_nav_port_3_rejected(sim):
+    _, plugin, xp = sim
+    spoken = say(plugin, "swap nav 3", "swap_nav_frequency", {"nav_port": "3"})
+    assert xp.commands_fired == [] and "not supported" in spoken[-1]
+
+
+def test_course_sets_the_obs(sim):
+    _, plugin, xp = sim
+    assert say(plugin, "course 090", "set_course", {"degrees": "090"}) == ["Course zero niner zero"]
+    assert xp.datarefs[RADIO + "nav1_obs_deg_mag_pilot"] == 90.0
+    assert say(plugin, "nav 2 course 180", "set_course", {"degrees": "180", "nav_port": "2"}) == [
+        "NAV 2 course one eight zero"
+    ]
+    assert xp.datarefs[RADIO + "nav2_obs_deg_mag_pilot"] == 180.0
+
+
+def test_squawk_keeps_leading_zeros(sim):
+    _, plugin, xp = sim
+    assert say(plugin, "squawk 0120", "set_transponder_code", {"squawk": "0120"}) == [
+        "Squawk zero one two zero"
+    ]
+    assert xp.datarefs[RADIO + "transponder_code"] == 120
+
+
+@pytest.mark.parametrize("code", ["1280", "123", "12345"])
+def test_squawk_that_is_not_four_octal_digits_is_refused(sim, code):
+    _, plugin, xp = sim
+    spoken = say(plugin, "squawk " + code, "set_transponder_code", {"squawk": code})
+    assert xp.writes == [] and spoken == ["Invalid squawk. Four digits, zero to seven."]
+
+
+def test_emergency_squawk_needs_the_pilot_to_confirm(sim):
+    _, plugin, xp = sim
+    assert say(plugin, "squawk 7700", "set_transponder_code", {"squawk": "7700"}) == [
+        "Confirm emergency squawk. Say override, or repeat to confirm."
+    ]
+    assert xp.writes == []
+    # A different code is not a confirmation of this one.
+    say(plugin, "squawk 7600", "set_transponder_code", {"squawk": "7600"})
+    assert xp.writes == []
+    assert say(plugin, "squawk 7600", "set_transponder_code", {"squawk": "7600"}) == [
+        "Squawk seven six zero zero"
+    ]
+    assert xp.datarefs[RADIO + "transponder_code"] == 7600
+
+
+def test_transponder_mode_with_x_planes_commands(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    xp.effects["sim/transponder/transponder_alt"] = lambda x: x.datarefs.update({XPDR_MODE: 3})
+    assert say(plugin, "transponder alt", "set_transponder_mode", {"xpdr_mode": "alt"}) == [
+        "Transponder altitude"
+    ]
+    assert xp.commands_fired == ["sim/transponder/transponder_alt"]
+    plugin._flight_loop()
+    assert events(plugin, "verify")[-1]["ok"] is True
+
+
+@pytest.mark.parametrize(("mode", "said"), [(3, "on"), (6, "on"), (7, "alt"), (1, "standby")])
+def test_transponder_already_there_presses_nothing(sim, mode, said):
+    # "On" means replying: it never drops altitude reporting to mode A.
+    _, plugin, xp = sim
+    xp.datarefs[XPDR_MODE] = mode
+    spoken = say(plugin, "transponder " + said, "set_transponder_mode", {"xpdr_mode": said})
+    assert spoken[0].startswith("Transponder already") and xp.commands_fired == []
+
+
+def test_transponder_mode_missing_is_asked(sim):
+    _, plugin, _ = sim
+    assert say(plugin, "transponder", "set_transponder_mode", {}) == [
+        "Transponder off, standby, on, or altitude?"
+    ]
+
+
+def test_ident(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    assert say(plugin, "ident", "set_transponder_mode", {"xpdr_mode": "ident"}) == [
+        "Transponder is in standby. Say transponder on first."
+    ]
+    xp.datarefs[XPDR_MODE] = 3
+    xp.effects["sim/transponder/transponder_ident"] = lambda x: x.datarefs.update(
+        {RADIO.replace("actuators", "indicators") + "transponder_id": 1}
+    )
+    assert say(plugin, "ident", "set_transponder_mode", {"xpdr_mode": "ident"}) == ["Ident"]
+    assert xp.commands_fired == ["sim/transponder/transponder_ident"]
+    plugin._flight_loop()
+    assert events(plugin, "verify")[-1]["ok"] is True
+
+
+B738_XPDR_POS = "laminar/B738/knob/transponder_pos"
+B738_XPDR = (
+    "laminar/B738/knob/transponder_mode_up",
+    "laminar/B738/knob/transponder_mode_dn",
+    "laminar/B738/push_button/transponder_ident_dn",
+)
+
+
+def selector(xp, position, up, down, low, high, delay=0):
+    """A selector one click moves, ``delay`` frames after the click."""
+    queued = []
+
+    def click(sign):
+        def press(x):
+            queued.append([delay, sign])
+
+        return press
+
+    def apply():
+        for q in list(queued):
+            if q[0] <= 0:
+                queued.remove(q)
+                xp.datarefs[position] = max(low, min(high, xp.datarefs[position] + q[1]))
+            else:
+                q[0] -= 1
+
+    xp.effects[up], xp.effects[down] = click(1), click(-1)
+    return apply
+
+
+def run_selectors(plugin, xp, *applies, loops=20):
+    before = len(xp.spoken)
+    for _ in range(loops):
+        for apply in applies:
+            apply()
+        plugin._flight_loop()
+    return xp.spoken[before:]
+
+
+def test_737_transponder_turns_its_selector(sim):
+    _, plugin, xp = sim
+    assert "b738_transponder" in aircraft(plugin, xp, commands=B738_XPDR).overrides
+    xp.datarefs[B738_XPDR_POS] = 1  # STBY
+    turn = selector(xp, B738_XPDR_POS, *B738_XPDR[:2], 0, 5)
+    assert say(plugin, "transponder alt", "set_transponder_mode", {"xpdr_mode": "alt"}) == []
+    assert run_selectors(plugin, xp, turn) == ["Transponder altitude"]
+    assert xp.datarefs[B738_XPDR_POS] == 3  # XPNDR
+    assert xp.commands_fired == [B738_XPDR[0]] * 2 and plugin._knob_step is None
+    assert events(plugin, "speak")[-1]["cmd"] == "c9999"
+    # XPNDR, TA and TA/RA all reply: "on" leaves it there.
+    assert say(plugin, "transponder on", "set_transponder_mode", {"xpdr_mode": "on"}) == [
+        "Transponder already on"
+    ]
+    assert say(plugin, "transponder off", "set_transponder_mode", {"xpdr_mode": "off"}) == [
+        "This transponder has no off. Say standby."
+    ]
+    say(plugin, "transponder standby", "set_transponder_mode", {"xpdr_mode": "standby"})
+    assert run_selectors(plugin, xp, turn) == ["Transponder standby"]
+    assert xp.datarefs[B738_XPDR_POS] == 1
+
+
+def test_selector_that_moves_a_frame_late_is_not_overshot(sim):
+    _, plugin, xp = sim
+    aircraft(plugin, xp, commands=B738_XPDR)
+    xp.datarefs[B738_XPDR_POS] = 1
+    turn = selector(xp, B738_XPDR_POS, *B738_XPDR[:2], 0, 5, delay=2)
+    say(plugin, "transponder alt", "set_transponder_mode", {"xpdr_mode": "alt"})
+    assert run_selectors(plugin, xp, turn) == ["Transponder altitude"]
+    assert xp.datarefs[B738_XPDR_POS] == 3 and len(xp.commands_fired) == 2
+
+
+def test_selector_that_never_moves_is_reported(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "KNOB_STUCK_FRAMES", 3)
+    aircraft(plugin, xp, commands=B738_XPDR)
+    xp.datarefs[B738_XPDR_POS] = 1
+    say(plugin, "transponder alt", "set_transponder_mode", {"xpdr_mode": "alt"})
+    assert run_selectors(plugin, xp, loops=6) == ["Transponder not set: the selector did not move."]
+    assert events(plugin, "knob_step_end")[-1]["ok"] is False
+
+
+def test_737_ident_uses_its_own_button(sim):
+    _, plugin, xp = sim
+    aircraft(plugin, xp, commands=B738_XPDR)
+    xp.datarefs[XPDR_MODE] = 2
+    assert say(plugin, "ident", "set_transponder_mode", {"xpdr_mode": "ident"}) == ["Ident"]
+    assert xp.commands_fired == ["laminar/B738/push_button/transponder_ident_dn"]
+
+
+A333_XPDR = "laminar/A333/transponder/"
+A333_XPDR_COMMANDS = tuple(
+    A333_XPDR + n
+    for n in (
+        "auto_on_off_left",
+        "auto_on_off_right",
+        "alt_rpt_off",
+        "alt_rpt_on",
+        "ta_ra_left",
+        "ta_ra_right",
+    )
+)
+
+
+def test_a330_transponder_turns_its_three_selectors(sim):
+    _, plugin, xp = sim
+    profile = aircraft(
+        plugin,
+        xp,
+        commands=A333_XPDR_COMMANDS,
+        **{A333_XPDR + "alt_rpt_knob_pos": 0, A333_XPDR + "ta_ra_knob_pos": 0},
+    )
+    assert "a333_transponder" in profile.overrides
+    xp.datarefs[A333_XPDR + "auto_on_knob_pos"] = -1  # STBY
+    c = A333_XPDR_COMMANDS
+    turns = (
+        selector(xp, A333_XPDR + "auto_on_knob_pos", c[1], c[0], -1, 1),
+        selector(xp, A333_XPDR + "alt_rpt_knob_pos", c[3], c[2], 0, 1),
+        selector(xp, A333_XPDR + "ta_ra_knob_pos", c[5], c[4], 0, 2),
+    )
+    say(plugin, "transponder alt", "set_transponder_mode", {"xpdr_mode": "alt"})
+    assert run_selectors(plugin, xp, *turns) == ["Transponder altitude"]
+    # AUTO, altitude reporting on, TCAS TA: the aircraft's normal setting.
+    knobs = [xp.datarefs[f"{A333_XPDR}{n}_knob_pos"] for n in ("auto_on", "alt_rpt", "ta_ra")]
+    assert knobs == [0, 1, 1]
+    assert xp.commands_fired == [c[1], c[3], c[5]]
+    assert say(plugin, "transponder off", "set_transponder_mode", {"xpdr_mode": "off"}) == [
+        "This transponder has no off. Say standby."
     ]

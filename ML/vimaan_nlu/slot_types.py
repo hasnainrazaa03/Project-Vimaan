@@ -82,3 +82,31 @@ class AnyOf:
             if ok:
                 return coerced, True, reason
         return None, False, "not a valid value"
+
+
+@dataclass(frozen=True)
+class Digits:
+    """A fixed number of digits, each from ``allowed``, kept as a string so
+    leading zeros survive: a squawk code is four octal digits ("0120",
+    "7700"); 8 and 9 aren't on a transponder."""
+
+    length: int
+    allowed: str = "0123456789"
+
+    def _clean(self, value: Any) -> str:
+        s = str(value).strip().replace(" ", "")
+        return s[:-2] if s.endswith(".0") else s  # 1200.0 from a float
+
+    def contains(self, value: Any) -> bool:
+        s = self._clean(value)
+        return len(s) == self.length and all(c in self.allowed for c in s)
+
+    def validate(self, value: Any) -> tuple[str | None, bool, str]:
+        s = self._clean(value)
+        if not s.isdigit():
+            return None, False, "not digits"
+        if len(s) != self.length:
+            return None, False, f"{len(s)} digits, need {self.length}"
+        if any(c not in self.allowed for c in s):
+            return None, False, f"digits must be {self.allowed[0]}-{self.allowed[-1]}"
+        return s, True, "valid"

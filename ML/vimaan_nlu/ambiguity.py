@@ -31,6 +31,8 @@ TARGET_SLOTS = {
     "set_autopilot_speed": "speed",
     "set_vertical_speed": "vs",
     "set_flaps": "flap_setting",
+    # Tier 2: "course to one eight zero" heard as "course two one eight zero".
+    "set_course": "degrees",
 }
 # Said as three digits ("two seven zero", "speed two one zero"), the "two" is
 # taken as a digit.

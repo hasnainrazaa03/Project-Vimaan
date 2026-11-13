@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -42,7 +43,7 @@ SAFETY_TEXT = {
 
 
 def example(c: Command, template: str) -> str:
-    text = template
+    text = re.sub(r"\{\w+=([^}]+)\}", r"\1", template)
     for name, slot in c.slots.items():
         value = EXAMPLES.get(name)
         if value is None:

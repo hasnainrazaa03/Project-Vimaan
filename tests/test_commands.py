@@ -43,7 +43,7 @@ def test_actionable_command_is_complete(c):
         assert rule in RULES
     assert len(c.templates) >= 15, "E1: at least 15 phrasings per command"
     for template in c.templates:
-        used = re.findall(r"\{(\w+)\}", template)
+        used = re.findall(r"\{(\w+)(?:=[^}]+)?\}", template)
         bases = {re.sub(r"_(verb|ord)$", "", u) for u in used}
         assert bases, f"no slot in {template!r}"
         assert bases <= set(c.slots), f"unknown placeholder in {template!r}"
