@@ -386,6 +386,14 @@ def _round(value, digits):
     return None if value is None else round(value, digits)
 
 
+def _env_int(name, default):
+    """A whole-number setting from the environment; ``default`` if unset or bad."""
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
 def mhz_text(units, per_mhz):
     """A radio dataref's units as MHz text: 121500 kHz -> "121.5",
     11050 (10 kHz) -> "110.5", 118025 -> "118.025"."""
@@ -423,6 +431,12 @@ class PythonInterface:
     # with the vimaan/toggle_overlay command.
     OVERLAY_MODE = os.environ.get("VIMAAN_OVERLAY", "auto").lower()
     WHISPER_MODEL = os.environ.get("VIMAAN_WHISPER_MODEL", "base.en")
+    # The mic stays open while X-Plane runs (macOS shows its mic indicator), so
+    # each command starts with the last 300 ms of sound from before the key
+    # went down: the first word is no longer cut. That sound is kept only in
+    # memory, and only the newest 300 ms. VIMAAN_MIC_PREROLL_MS=0 opens the mic
+    # on each press instead.
+    MIC_PREROLL_MS = _env_int("VIMAAN_MIC_PREROLL_MS", 300)
 
     # Intents the model can emit that map to no sim command. "None" is a
     # deliberate out-of-scope reject sink (it improves precision on real
@@ -568,6 +582,8 @@ class PythonInterface:
             self.WHISPER_MODEL,
             "--backend",
             self.BACKEND,
+            "--preroll-ms",
+            str(self.MIC_PREROLL_MS),
         ]
         if not self.USE_QUANTIZED_MODEL:
             argv.append("--no-quantize")
