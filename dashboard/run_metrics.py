@@ -321,7 +321,8 @@ def list_runs() -> list[dict[str, Any]]:
                 out.append(s)
 
     def order(s: dict[str, Any]) -> tuple[int, float]:
-        m = re.fullmatch(r"v(\d+)", s["run"])
+        # "v26-a" (a run to be averaged into v26) counts as 26, newest first.
+        m = re.match(r"v(\d+)", s["run"])
         return (int(m.group(1)) if m else -1, s["updated"])
 
     out.sort(key=order, reverse=True)
