@@ -1275,6 +1275,10 @@ COMMANDS: tuple[Command, ...] = (
             # NAV mode, so no "{light} {switch}".
             "{light=beacon} {switch}",
             "{light=strobes} {switch}",
+            # Each pinned word in more than one template: the held-out one
+            # must not be the only place the model could learn it.
+            "turn {switch} the {light=beacon}",
+            "turn the {light=beacon} {switch}",
             "turn {switch} the {light} lights",
             "turn the {light} lights {switch}",
             "switch {switch} the {light} lights",
@@ -1522,6 +1526,13 @@ COMMANDS: tuple[Command, ...] = (
             "{ice=probe} heat {switch}",
             "{ice=windshield} heat {switch}",
             "{ice=boots} {switch}",
+            "turn {switch} the {ice=boots}",
+            "turn the {ice=boots} {switch}",
+            # "prop" and "probe" sound alike: two of four generated voices
+            # turned "prop heat on" into "probe heat on" (the pitot heat).
+            # "propeller" is heard right by all four.
+            "{ice=propeller} heat {switch}",
+            "turn {switch} the {ice=propeller} heat",
             "{ice} heat {switch=auto}",
             "{ice=probe} heat {switch=auto}",
         ),
@@ -1533,14 +1544,16 @@ COMMANDS: tuple[Command, ...] = (
                         "window": ("windshield",),
                         "wing": ("boots",),
                         "engine": (),
-                        "prop": (),
+                        "prop": ("propeller",),
                     }
                 ),
                 "switch": _choice({"on": (), "off": ()}),
             }
         ),
         required=("ice", "switch"),
-        command_words=frozenset({"heat", "ice", "pitot", "probe", "windshield", "boots"}),
+        command_words=frozenset(
+            {"heat", "ice", "pitot", "probe", "windshield", "boots", "propeller"}
+        ),
         # No "de ice": a short word the recogniser put in unsaid ("de engine two off").
         handler="_toggle_anti_ice",
         self_test="pitot heat on",
