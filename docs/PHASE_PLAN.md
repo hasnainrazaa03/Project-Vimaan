@@ -23,7 +23,7 @@ Last updated 2026-11-11.
 | A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
 | T2 | Tier 2: radios & navigation → **v25** | 🟡 groundwork, runner scenarios, data and model done: v25 passes all six gates (2026-11-13); installed 2026-11-13; runner in the sim 95/95 on four aircraft; next: the owner's real-voice check | #43, #46 |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | 🟡 T3.0a and T3.0b built (#50, #51); two v26 averages failed the gate (the second by one real-voice clip); data v16, v26-g/h/i training | #50, #51, #52, #54 |
-| G | Generalization: beyond the owner's voice (measured recognizer noise, other voices, calibration) | 🟡 measured on real voices (2026-11-14); lost-digit refusal built | this PR |
+| G | Generalization: beyond the owner's voice (measured recognizer noise, other voices, calibration) | 🟡 measured on real voices (2026-11-14); lost-digit refusal built | #55 |
 | T4 | Tier 4: questions (read-only) → **v27** | ⬜ | |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
