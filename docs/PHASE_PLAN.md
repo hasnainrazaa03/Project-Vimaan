@@ -22,7 +22,7 @@ Last updated 2026-11-11.
 | D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim (switch); stick pull still to check | #35 |
 | A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
 | T2 | Tier 2: radios & navigation → **v25** | 🟡 groundwork, runner scenarios, data and model done: v25 passes all six gates (2026-11-13); installed 2026-11-13; runner in the sim 95/95 on four aircraft; next: the owner's real-voice check | #43, #46 |
-| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | 🟡 research done; T3.0a (lights, signs, yaw damper, speed brake, autobrake) and T3.0b (anti-ice, electrical, fuel pumps) built, not trained; next data, v26, gate | #50, #51 |
+| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | 🟡 T3.0a and T3.0b built (#50, #51); the first v26 failed the gate; data v15 fixes the causes, v26-d/e/f training | #50, #51, #52, #54 |
 | T4 | Tier 4: questions (read-only) → **v27** | ⬜ | |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
@@ -820,10 +820,48 @@ training run (v26).
   A330.
 - [x] **Data v14:** 137,720 rows, 35 intents (8 new, 4,000 each): train
   105,448, dev 7,845, test 24,427; no text with two labels.
-- [ ] **v26** = the average of three runs of the v24 recipe on data v14
-  (`--name v26-a/b/c --run-seed 1/2/3`: the same starting weights, a
-  different data order and dropout), as v25 was; then the gate, install
-  (owner's approval) and the Tier 3 checklist in the sim.
+- [x] **First v26 failed the gate** (2026-11-14). It was the average of three
+  runs of the v24 recipe on data v14 (`--name v26-a/b/c --run-seed 1/2/3`),
+  kept as `v26-soup1`. Gates 2, 5 and 6 passed (old data 15,938/308/0, the
+  same as v25). The failures:
+  - **Gate 1** (anti-ice 0.662, lights 0.737) and **gate 3** (gold "boots on"
+    went to the flaps, "beacon off" to an autopilot mode) had one cause.
+    `{ice=boots} {switch}` and `{light=beacon} {switch}` were the only
+    templates pinning those words, and the hash held both out, so the model
+    never saw them. Every other held-out template scored 100%.
+  - **Gate 4** (real voice 87/30/1 vs 89/28/1): every right lost had a stray
+    word beside a whole command, a word that since Tier 3 belongs to another
+    command: "ice director on", "speed autopilot on", "fuel com two to …"
+    (plus a soup-only low confidence on "v confirm engine one off").
+  - The clean dev set was saturated (1.0, even on confidence), so it couldn't
+    show any of this. Ideas were compared on a "heard" dev set instead:
+    1,600 dev rows spoken by four generated voices and decoded with the
+    grammar. It is not a gate.
+- [x] **Data v15** (137,720 rows: train 105,723, dev 7,716, test 24,281):
+  - pinned words get training templates of their own, and a test holds every
+    command to it;
+  - a "stray" noise (7,461 rows): a command word that can't make its own
+    command with the rest of the sentence, before, in place of the first
+    word of, or after a command;
+  - "propeller" for prop heat: two of four generated voices hear "prop heat"
+    as "probe heat" (the pitot); none mishear "propeller".
+  - **Grammar:** "anti ice", "fuel pump(s)" and "fuel boost" are entered whole.
+    Vosk makes a bigram model of the lines, so the pair is likely, though
+    the words can still be heard alone. Real voice is rebuilt: **v25 91 / 27 /
+    0** (the grammar fixed its one wrong, "autopilot new on" → "two"). The
+    heard dev set is unchanged.
+- [ ] **v26** = the average of `v26-d/e/f` (run seeds 1/2/3) on data v15;
+  then the gate against v25, install (owner's approval) and the Tier 3
+  checklist in the sim.
+- Found on the way, not part of v26:
+  - **#54:** a held switch could be confirmed by another switch command
+    (the token lacked the switch slots).
+  - **Clipped first word:** the mic opens ~85 ms after the key press. With
+    150 ms cut from the generated clips, wrong actions went 29 → 76: "vertical
+    speed thirty two hundred" → "speed …" (320 kt), "nav two transfer" →
+    COM swap, "deactivate autopilot" → "activate". No model fixes a heard
+    text that is another valid command. Pre-roll audio would; it needs the
+    owner's decision (the mic stays open).
 
 Checklist: preflight battery/avionics/beacon/nav, taxi lights,
 landing + strobes on takeoff, pitot heat, fuel pump, yaw damper, seatbelt
