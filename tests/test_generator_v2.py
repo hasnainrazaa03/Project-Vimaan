@@ -172,6 +172,40 @@ def test_a_stray_word_cannot_make_its_own_command():
     assert "ident" not in fd and "v" not in fd  # a whole command; a letter
 
 
+def test_a_stray_word_takes_the_place_of_a_word_that_can_go():
+    fd = _cmd("toggle_flight_director")
+    assert generate_v2._replaceable(
+        fd, "flight director on".split(), 0, {"on"}
+    )  # "ice director on"
+    assert not generate_v2._replaceable(fd, "flight director on".split(), 2, {"on"})  # a slot word
+    flaps = _cmd("set_flaps")
+    assert not generate_v2._replaceable(
+        flaps, "flaps five".split(), 0, {"five"}
+    )  # none of its own left
+    vs = _cmd("set_vertical_speed")
+    # Without "vertical", "speed one thousand" is a speed of its own.
+    assert not generate_v2._replaceable(
+        vs, "vertical speed one thousand".split(), 0, {"one", "thousand"}
+    )
+
+
+def test_a_stray_word_is_mostly_in_place_of_an_end_word():
+    # The recogniser replaced end words and never added one (synthetic voices):
+    # a leading extra word taught "parking start engine one" as the engine.
+    import random
+
+    rng = random.Random(5)
+    fd = _cmd("toggle_flight_director")
+    text = "please turn the flight director on now"
+    outs = [generate_v2.add_stray(fd, text, "ice", {"on"}, rng) for _ in range(2000)]
+    added = sum(len(o.split()) > len(text.split()) for o in outs)
+    first = sum(o.startswith("ice turn") for o in outs)
+    last = sum(o.endswith("on ice") for o in outs)
+    assert 0.05 < added / len(outs) < 0.15
+    assert first > 4 * last > 0
+    assert generate_v2.add_stray(fd, "fd", "ice", set(), rng) in (None, "ice fd", "fd ice")
+
+
 def test_stray_rows_keep_their_command(data):
     rows, _ = data
     stray = [r for r in rows if r["noise"] == "stray"]
