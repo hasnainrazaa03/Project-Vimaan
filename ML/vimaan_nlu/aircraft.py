@@ -29,6 +29,9 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any
 
+from vimaan_nlu import switches
+from vimaan_nlu.switches import Knob
+
 # sim/aircraft/prop/acf_en_type (X-Plane 12.4.3 DataRefs.txt). Values the
 # list doesn't name are "unknown", which starts like a piston (hold the
 # starter until it runs) but is logged as unknown.
@@ -111,24 +114,6 @@ DEFAULT_COMMANDS: Mapping[str, str | None] = MappingProxyType(
         "xpdr_ident": None,
     }
 )
-
-
-@dataclass(frozen=True)
-class Knob:
-    """A cockpit selector turned one click at a time, on aircraft whose
-    scripts own a setting and put a written value back (the 737's and
-    A330's transponder mode). ``position`` is the aircraft's dataref for
-    where it sits; ``down`` / ``up`` turn it one click toward a lower /
-    higher position. Done when the position is in ``low``..``high``."""
-
-    position: str
-    down: str
-    up: str
-    low: int
-    high: int
-
-    def at(self, low: int, high: int | None = None) -> Knob:
-        return Knob(self.position, self.down, self.up, low, low if high is None else high)
 
 
 @dataclass(frozen=True)
@@ -344,6 +329,54 @@ OVERRIDES: tuple[Override, ...] = (
         "A333_transponder_mode_switching, X-Plane 12.4.3",
         live=(A333_AUTO_ON.position,),
     ),
+    # Tier 3 switches (vimaan_nlu.switches; findings in AIRCRAFT_PROFILES.md).
+    Override(
+        name="b58_switches",
+        requires=("laminar/b58/surface_ice_switch_up", "laminar/b58/surface_ice_switch_dn"),
+        commands=MappingProxyType({}),
+        settings=MappingProxyType({"switches": switches.B58}),
+        source="Laminar Baron 58 cockpit .obj manipulators and xlua B58_01_logic, X-Plane 12.4.3",
+        live=("laminar/b58/inst_press_ind_pos",),
+    ),
+    Override(
+        name="c90_switches",
+        requires=(switches.C90_SIGNS.down, switches.C90_SIGNS.up),
+        commands=MappingProxyType({}),
+        settings=MappingProxyType({"switches": switches.C90}),
+        source="Laminar King Air C90B cockpit .obj manipulators and xlua C90_sys, X-Plane 12.4.3",
+        live=(switches.C90_SIGNS.position,),
+    ),
+    Override(
+        name="b738_switches",
+        requires=(
+            switches.B738_POSITION.down,
+            switches.B738_POSITION.up,
+            switches.B738_SEATBELT.down,
+            switches.B738_SEATBELT.up,
+        ),
+        commands=MappingProxyType({}),
+        # In the air its speed brake lever stops at the flight detent.
+        settings=MappingProxyType({"switches": switches.B738, "speed_brake_air_max": "half"}),
+        source="Laminar 737-800 b738_cockpit.obj manipulators and xlua B738.lighting / "
+        "B738.systems, X-Plane 12.4.3",
+        live=(switches.B738_POSITION.position,),
+    ),
+    Override(
+        name="a333_switches",
+        requires=(
+            switches.A333_NAV.down,
+            switches.A333_NAV.up,
+            switches.A333_SEATBELT.down,
+            switches.A333_SEATBELT.up,
+        ),
+        commands=MappingProxyType({}),
+        settings=MappingProxyType(
+            {"switches": switches.A333, "autobrake_off": switches.A333_AUTOBRAKE_OFF}
+        ),
+        source="Laminar A330-300 A330_cockpit.obj manipulators and xlua A333.lighting / "
+        "A333.switches, X-Plane 12.4.3",
+        live=(switches.A333_STROBE,),
+    ),
 )
 
 
@@ -473,6 +506,14 @@ class Profile:
         if verdict == "no_change" and role in self.overridden:
             return None
         return verdict == "works"
+
+    def switch_plan(self, key: str, setting: str) -> tuple[str, switches.Plan]:
+        """How to reach ``setting`` of switch ``key`` here (switches.lookup).
+        Without an aircraft's own autobrake entry, only jets get X-Plane's."""
+        own = self.settings.get("switches") or {}
+        if key == "autobrake" and key not in own and self.info.engine_kind != "jet":
+            return "absent", ()
+        return switches.lookup(own, key, setting)
 
     def status_dataref(self, role: str, default: str) -> str:
         """Where this aircraft reports a mode's state (A330 VNAV: fms_vnav)."""
@@ -621,4 +662,8 @@ def override_names() -> tuple[str, ...]:
     for o in OVERRIDES:
         for knobs in (o.settings.get("xpdr_knobs") or {}).values():
             names |= {n for k in knobs for n in (k.position, k.down, k.up)}
+        # The aircraft's own switches; X-Plane's sim/... ones are checked
+        # against its lists with the rest of the source.
+        own = switches.plan_names(o.settings.get("switches") or {})
+        names |= {re.sub(r"\[\d+\]$", "", n) for n in own if not n.startswith("sim/")}
     return tuple(sorted(names))

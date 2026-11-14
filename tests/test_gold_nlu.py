@@ -112,7 +112,27 @@ GOLD_TIER2 = [
     ("ident", "set_transponder_mode", {"xpdr_mode": "ident"}),
     ("squawk ident", "set_transponder_mode", {"xpdr_mode": "ident"}),
 ]
-GOLD = GOLD + GOLD_TIER1 + GOLD_TIER2
+# Tier 3 (v26): lights, cabin signs, yaw damper, speed brake, autobrake.
+GOLD_TIER3 = [
+    ("landing lights on", "toggle_lights", {"light": "landing", "switch": "on"}),
+    ("strobes on", "toggle_lights", {"light": "strobe", "switch": "on"}),
+    ("beacon off", "toggle_lights", {"light": "beacon", "switch": "off"}),
+    ("turn the taxi lights off", "toggle_lights", {"light": "taxi", "switch": "off"}),
+    ("nav lights on", "toggle_lights", {"light": "nav", "switch": "on"}),
+    ("all lights off", "toggle_lights", {"light": "all", "switch": "off"}),
+    ("strobes auto", "toggle_lights", {"light": "strobe", "switch": "auto"}),
+    ("seat belt sign on", "toggle_signs", {"sign": "seat belt", "switch": "on"}),
+    ("seat belt sign auto", "toggle_signs", {"sign": "seat belt", "switch": "auto"}),
+    ("no smoking sign off", "toggle_signs", {"sign": "no smoking", "switch": "off"}),
+    ("yaw damper on", "toggle_yaw_damper", {"state": "on"}),
+    ("speed brake armed", "set_speed_brake", {"speedbrake": "armed"}),
+    ("stow the speed brakes", "set_speed_brake", {"speedbrake": "retract"}),
+    ("speed brakes up", "set_speed_brake", {"speedbrake": "up"}),
+    ("auto brake two", "set_autobrake", {"autobrake_level": "2"}),
+    ("auto brake max", "set_autobrake", {"autobrake": "max"}),
+    ("auto brake r t o", "set_autobrake", {"autobrake": "r t o"}),
+]
+GOLD = GOLD + GOLD_TIER1 + GOLD_TIER2 + GOLD_TIER3
 
 # Bare numbers and fragments must never be acted on (scripts/model_gate.py
 # checks these through the plugin's decision rules).
@@ -125,6 +145,8 @@ MUST_NOT_ACT = [
     "on",
     "down",
     "point seven eight",
+    "auto",
+    "armed",
 ]
 
 
@@ -151,6 +173,8 @@ def test_gold_intent_and_slots(gold_model, text, intent, slots):
         pytest.skip("the installed model predates Tier 1")  # the gate still requires these
     if (text, intent, slots) in GOLD_TIER2 and "set_transponder_code" not in known:
         pytest.skip("the installed model predates Tier 2")
+    if (text, intent, slots) in GOLD_TIER3 and "set_autobrake" not in known:
+        pytest.skip("the installed model predates Tier 3")
 
     r = predict(
         text,

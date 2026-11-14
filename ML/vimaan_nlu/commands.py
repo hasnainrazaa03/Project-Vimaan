@@ -103,6 +103,17 @@ SLOT_VALIDATORS: Mapping[str, Range | Enum | AnyOf | Digits] = MappingProxyType(
         # Four octal digits, leading zeros kept ("0120").
         "squawk": Digits(4, "01234567"),
         "xpdr_mode": Enum(("off", "standby", "on", "alt", "ident")),
+        # Tier 3: switches. Not "state": AUTO is a switch position (signs,
+        # the A330's strobes), and "state" stays on/off/up/down for the rest.
+        "light": Enum(
+            ("landing", "taxi", "beacon", "strobe", "nav", "logo", "wing", "runway", "all")
+        ),
+        "switch": Enum(("on", "off", "auto")),
+        "sign": Enum(("seat belt", "no smoking")),
+        "speedbrake": Enum(("retract", "armed", "half", "extend", "up", "down")),
+        # "r t o" as said: Vosk has no "rto".
+        "autobrake": Enum(("off", "r t o", "max", "low", "medium")),
+        "autobrake_level": Range(1, 3),
     }
 )
 
@@ -128,6 +139,11 @@ SLOT_DISPLAY: Mapping[str, str] = MappingProxyType(
         "nav_frequency": "freq",
         "squawk": "code",
         "xpdr_mode": "XPDR",
+        "light": "lights",
+        "sign": "sign",
+        "speedbrake": "spd brk",
+        "autobrake": "auto brk",
+        "autobrake_level": "auto brk",
     }
 )
 
@@ -1242,6 +1258,247 @@ COMMANDS: tuple[Command, ...] = (
             "sim/transponder/transponder_alt",
             "sim/transponder/transponder_ident",
             "sim/cockpit2/radios/actuators/transponder_mode",
+        ),
+    ),
+    # --- Tier 3: switches (vimaan_nlu.switches says how, per aircraft) ---
+    Command(
+        intent="toggle_lights",
+        display="Lights",
+        templates=(
+            "{light} lights {switch}",
+            "{light_verb} lights {switch}",
+            # Bare only where pilots say it bare: "nav on" is the autopilot's
+            # NAV mode, so no "{light} {switch}".
+            "{light=beacon} {switch}",
+            "{light=strobes} {switch}",
+            "turn {switch} the {light} lights",
+            "turn the {light} lights {switch}",
+            "switch {switch} the {light} lights",
+            "{light} lights {switch} please",
+            "set the {light} lights {switch}",
+            "{light} lights to {switch}",
+            "put the {light} lights {switch}",
+            "turn {switch} {light} lights",
+            "{light} lights {switch} now",
+            "the {light} lights {switch}",
+            "{light} lights {switch=auto}",
+            "{light=strobes} {switch=auto}",
+            "set the {light} lights to {switch=auto}",
+        ),
+        slots=_frozen(
+            {
+                "light": _choice(
+                    {
+                        "landing": (),
+                        "taxi": (),
+                        "beacon": (),
+                        "strobe": ("strobes",),
+                        "nav": ("navigation", "position"),
+                        "logo": (),
+                        "wing": (),
+                        "runway": (),
+                        "all": (),
+                    }
+                ),
+                "switch": _choice({"on": (), "off": ()}),
+            }
+        ),
+        required=("light", "switch"),
+        command_words=frozenset({"light", "lights", "beacon", "strobe", "strobes"}),
+        # No singular "light" or "anti collision": in the grammar, "light" took
+        # "flight" ("light level two forty", "light director on") and
+        # "collision" turned up unsaid; "lights" alone didn't.
+        handler="_toggle_lights",
+        self_test="landing lights on",
+        bindings=(
+            "sim/cockpit2/switches/landing_lights_on",
+            "sim/cockpit2/switches/taxi_light_on",
+            "sim/cockpit2/switches/beacon_on",
+            "sim/cockpit2/switches/strobe_lights_on",
+            "sim/cockpit2/switches/navigation_lights_on",
+            "sim/cockpit2/switches/landing_lights_switch",
+            "sim/cockpit2/switches/generic_lights_switch",
+            "sim/lights/landing_lights_on",
+            "sim/lights/landing_lights_off",
+            "sim/lights/landing_01_light_on",
+            "sim/lights/landing_01_light_off",
+            "sim/lights/landing_02_light_on",
+            "sim/lights/landing_02_light_off",
+            "sim/lights/taxi_lights_on",
+            "sim/lights/taxi_lights_off",
+            "sim/lights/beacon_lights_on",
+            "sim/lights/beacon_lights_off",
+            "sim/lights/strobe_lights_on",
+            "sim/lights/strobe_lights_off",
+            "sim/lights/nav_lights_on",
+            "sim/lights/nav_lights_off",
+        ),
+    ),
+    Command(
+        intent="toggle_signs",
+        display="Cabin sign",
+        templates=(
+            "{sign} sign {switch}",
+            "{sign} signs {switch}",
+            "{sign} {switch}",
+            "{sign_verb} sign {switch}",
+            "{sign_verb} signs {switch}",
+            "turn {switch} the {sign} sign",
+            "turn the {sign} sign {switch}",
+            "turn the {sign} signs {switch}",
+            "switch {switch} the {sign} sign",
+            "{sign} sign {switch} please",
+            "set the {sign} sign {switch}",
+            "{sign} sign to {switch}",
+            "put the {sign} sign {switch}",
+            "{sign} sign {switch} now",
+            "{sign} sign {switch=auto}",
+            "{sign} signs {switch=auto}",
+            "{sign_verb} sign {switch=auto}",
+            "set the {sign} sign to {switch=auto}",
+        ),
+        slots=_frozen(
+            {
+                "sign": _choice(
+                    {"seat belt": ("seatbelt", "seat belts", "fasten seat belt"), "no smoking": ()}
+                ),
+                "switch": _choice({"on": (), "off": ()}),
+            }
+        ),
+        required=("sign", "switch"),
+        command_words=frozenset({"sign", "signs", "seatbelt", "belt", "belts", "smoking"}),
+        handler="_toggle_signs",
+        self_test="seat belt sign on",
+        bindings=(
+            "sim/cockpit2/switches/fasten_seat_belts",
+            "sim/cockpit2/switches/no_smoking",
+            "sim/systems/seatbelt_sign_toggle",
+            "sim/systems/no_smoking_toggle",
+        ),
+    ),
+    Command(
+        intent="toggle_yaw_damper",
+        display="Yaw damper",
+        templates=(
+            "yaw damper {state}",
+            "yaw damper {state} please",
+            "turn {state} the yaw damper",
+            "turn the yaw damper {state}",
+            "{state_verb} the yaw damper",
+            "{state_verb} yaw damper",
+            "yaw damper {state_verb}",
+            "set yaw damper {state}",
+            "switch {state} the yaw damper",
+            "the yaw damper {state}",
+            "put the yaw damper {state}",
+            "yaw damper to {state}",
+            "yaw damper {state} now",
+            "can you turn the yaw damper {state}",
+            "{state_verb} the yaw damper please",
+        ),
+        slots=_frozen({"state": _choice({"on": ("engage",), "off": ("disengage",)})}),
+        required=("state",),
+        command_words=frozenset({"yaw", "damper", "dampers"}),
+        handler="_toggle_yaw_damper",
+        self_test="yaw damper on",
+        bindings=(
+            "sim/cockpit2/switches/yaw_damper_on",
+            "sim/systems/yaw_damper_on",
+            "sim/systems/yaw_damper_off",
+        ),
+    ),
+    Command(
+        intent="set_speed_brake",
+        display="Speed brake",
+        templates=(
+            "speed brake {speedbrake}",
+            "speed brakes {speedbrake}",
+            "speed brake {speedbrake_verb}",
+            "speed brakes {speedbrake_verb}",
+            "{speedbrake_verb} the speed brake",
+            "{speedbrake_verb} the speed brakes",
+            "{speedbrake_verb} speed brakes",
+            "spoilers {speedbrake}",
+            "{speedbrake_verb} the spoilers",
+            "set speed brake {speedbrake}",
+            "speed brake to {speedbrake}",
+            "speed brakes {speedbrake} please",
+            "move the speed brake to {speedbrake}",
+            "ground spoilers {speedbrake}",
+            "{speedbrake_verb} ground spoilers",
+            "put the speed brakes {speedbrake}",
+        ),
+        slots=_frozen(
+            {
+                # Up / down as on a Boeing lever: up is extended.
+                "speedbrake": _choice(
+                    {
+                        "retract": ("stow",),
+                        "armed": ("arm",),
+                        "half": (),
+                        "extend": ("deploy",),
+                        "up": (),
+                        "down": (),
+                    }
+                )
+            }
+        ),
+        required=("speedbrake",),
+        command_words=frozenset({"speed", "brake", "brakes", "spoiler", "spoilers"}),
+        handler="_set_speed_brake",
+        safety=("speed_brake_low",),
+        self_test="speed brake armed",
+        bindings=(
+            "sim/cockpit2/controls/speedbrake_ratio",
+            "sim/aircraft/parts/acf_sbrkEQ",
+        ),
+    ),
+    Command(
+        intent="set_autobrake",
+        display="Autobrake",
+        templates=(
+            "auto brake {autobrake}",
+            "auto brakes {autobrake}",
+            "auto brake {autobrake_verb}",
+            "set auto brake {autobrake}",
+            "set the auto brake to {autobrake}",
+            "auto brake to {autobrake}",
+            "auto brake {autobrake} please",
+            "select auto brake {autobrake}",
+            "auto brake {autobrake_verb} please",
+            "auto brake {autobrake_level}",
+            "auto brakes {autobrake_level}",
+            "set auto brake {autobrake_level}",
+            "set the auto brake to {autobrake_level}",
+            "auto brake to {autobrake_level}",
+            "auto brake {autobrake_level} please",
+            "auto brake setting {autobrake_level}",
+            "select auto brake {autobrake_level}",
+        ),
+        slots=_frozen(
+            {
+                "autobrake": _choice(
+                    {
+                        "off": (),
+                        "r t o": (),
+                        "max": ("maximum",),
+                        "low": (),
+                        "medium": (),
+                    }
+                ),
+                "autobrake_level": Slot("number", (1, 2, 3), render="autobrake"),
+            }
+        ),
+        # A setting (off / RTO / max / low / medium) or a level (1-3).
+        required=(),
+        command_words=frozenset({"auto", "brake", "brakes"}),
+        handler="_set_autobrake",
+        self_test="auto brake two",
+        bindings=(
+            "sim/cockpit2/switches/auto_brake_level",
+            "sim/flight_controls/brakes_1_auto",
+            "sim/flight_controls/brakes_2_auto",
+            "sim/flight_controls/brakes_rto_auto",
         ),
     ),
     # --- Out-of-scope intent ---

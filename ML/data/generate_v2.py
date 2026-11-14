@@ -162,6 +162,8 @@ def render_number(kind: str, rng: random.Random) -> str:
         if rng.random() < 0.6:  # inHg (the Americas) or hPa (most of the world)
             return rng.choice(spoken.pressure(f"{rng.randrange(2800, 3151) / 100:.2f}"))
         return rng.choice(spoken.pressure(str(rng.randrange(940, 1061))))
+    if kind == "autobrake":
+        return rng.choice(("one", "two", "three"))
     if kind == "flaps":
         return rng.choice(spoken.flaps(rng.choice((1, 2, 3, 5, 10, 15, 20, 25, 30, 40))))
     raise ValueError(kind)

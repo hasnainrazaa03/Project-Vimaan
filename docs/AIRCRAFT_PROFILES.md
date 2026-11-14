@@ -174,6 +174,71 @@ altitude (alt, TA, TA/RA) answers "Transponder already on" instead of being
 turned down to mode A. Ident is refused in standby ("Say transponder on
 first").
 
+## Tier 3 findings: switches (X-Plane 12.4.3, 2026-11-14)
+
+From each aircraft's cockpit `.obj` (which dataref animates a switch, which
+command clicks it) and its xlua scripts, comment lines skipped. Not yet
+checked in the sim. Everything an aircraft's own scripts create with
+`create_dataref` and no handler is read-only to other plugins (xlua
+`init.lua`), so its switch positions are read and its commands clicked.
+
+X-Plane's own names, all in DataRefs.txt / Commands.txt: lights
+`sim/lights/{landing,taxi,beacon,strobe,nav}_lights_on/_off` (and
+`landing_01/02_light_on/off`) and `cockpit2/switches/landing_lights_on`,
+`taxi_light_on`, `beacon_on`, `strobe_lights_on`, `navigation_lights_on`,
+`landing_lights_switch[16]`, `generic_lights_switch[128]`; signs
+`sim/systems/seatbelt_sign_toggle`, `no_smoking_toggle` (toggles only);
+`yaw_damper_on/off`; `controls/speedbrake_ratio` (-0.5 armed, 0 retracted,
+1 fully extended) and `aircraft/parts/acf_sbrkEQ` (has speed brakes: 0 on the
+Baron and King Air); `switches/auto_brake_level` (0 RTO, 1 off, 2-5 levels).
+No dataref says whether an aircraft has an autobrake: X-Plane's is offered on
+jets only.
+
+**Part A (lights, signs, yaw damper, speed brake, autobrake)**, as built in
+`vimaan_nlu/switches.py`:
+
+| Aircraft | Lights | Signs | Yaw damper | Speed brake | Autobrake | Override |
+| --- | --- | --- | --- | --- | --- | --- |
+| Baron 58 | X-Plane's; landing L/R are `landing_01/02` (`landing_lights_on` is only the first); "wing" is the wing-ice light, `generic_lights_switch[0]` | none | X-Plane's (its flight start turns it off once) | none | none | `b58_switches` |
+| King Air C90B | X-Plane's, landing L/R as the Baron; wing-ice light `laminar/c90/lighting/switch/wing_ice_up/_dn` | one 3-position switch, `no_smoke_fsb_pos` (1 NO SMOKING + SEAT BELT, 0 OFF, -1 SEAT BELT), `no_smoke_fsb_up/_dn`. Its handler leaves the seat belt sign lit going from -1 to 0, so Vimaan toggles it out after. No smoking alone isn't a position | X-Plane's | none | none | `c90_switches` |
+| 737-800 | landing: four switches, `landing_lights_switch[0..3]` written (belly [1] [2], wing root [0] [3]); taxi: `taxi_light_brightness_pos` 0-2, whose `_pos_up` turns it down; strobes and nav share the position switch `position_light_pos` (-1 STEADY, 0 OFF, 1 STROBE & STEADY), so strobes off goes to STEADY; logo / wing / runway turnoff `generic_lights_switch[1]` / `[0]` / `[2]` `[3]`. Nothing reads `taxi_light_on` | seat belt `seatbelt_sign_pos` 0 OFF / 1 AUTO / 2 ON, whose `_up` turns it toward OFF; no smoking not modelled | X-Plane's | the lever `laminar/B738/flt_ctrls/speedbrake_lever` (writable): DOWN 0, ARMED 0.0889, FLIGHT DETENT 0.667, UP 1.0. Disarming through X-Plane's ratio leaves the lever at ARMED. In the air it stops at the flight detent | X-Plane's, the knob follows (RTO / OFF / 1 / 2 / 3 / MAX) | `b738_switches` |
+| A330-300 | one LAND switch (`landing_01`); no taxi light, "taxi" is the nose light (`landing_lights_switch[1]` 0 / 0.5 TAXI / 1 T.O., `laminar/A333/switch/lighting/taxi_light_off/_taxi`); strobe `laminar/a333/switches/strobe_pos` 0 OFF / 1 AUTO / 2 ON (`strobe_pos_off/_auto/_on`) and nav & logo `nav_pos` 0-2 (`nav_light_pos_up/_dn`), both rewritten every frame; runway turnoff `rwy_turn_off_on/_off`; wing `generic_lights_switch[1]` | seat belt and no smoking each 0 OFF / 1 AUTO / 2 ON (`seatbelt_signs_up/_dn`, `smoking_signs_up/_dn`), the generic sign datarefs rewritten every frame | none (fly-by-wire) | X-Plane's ratio | LO / MED / MAX buttons: X-Plane's `brakes_1_auto` (level 3), `brakes_2_auto` (4), `brakes_rto_auto` (0 on the ground, 5 in the air), replaced by the A330; each toggles, so pressing the lit one turns it off. Needs nosewheel steering on. No "3" | `a333_switches` |
+
+**Part B (anti-ice, electrical, fuel pumps), for the next PR:**
+
+- **Baron:** pitot L/R, window heat and avionics are X-Plane's. Prop heat is one switch for both props, so use `sim/ice/prop_heat_on/off`: `prop_heat0` heats the left only. The boots are AUTO / OFF / MAN; the aircraft replaces `wing_boot*`, so `wing_boot_on` sets 2 and `_off` sets 0. There's no inlet heat. The two boost pumps are on/off only.
+- **King Air:** pitot, battery, avionics and boost pumps are X-Plane's. Its own commands are needed for:
+  - windshield L/R, three positions (NORMAL / OFF / HIGH): `windshield_antiice_{up,dn}_{L,R}`;
+  - boots: `surface_deice_up`, one 7-second cycle, with no latched on;
+  - prop heat: `prop_deice_up/_dn`; its 90-second timer undoes a write;
+  - generators: RESET / ON / OFF, `generator{1,2}_up/_dn`. Its generator 2 RESET branch checks generator 1.
+
+  Engine anti-ice is the ice vanes, `anti_ice_engine_air[0/1]`. Inlet heat is automatic and rewritten every frame. Its flight start turns off windshield, boots, prop and inlet heat.
+- **737:**
+  - **Probes and heat:** probe heat A/B uses `capt_probes_pos_on/off` and `fo_probes_pos_on/off`. Window heat ×4 is X-Plane's `window_heat`, `window2..4`. Wing anti-ice is X-Plane's `wing_heat_on/off` (the surface heat, not bleed air). Engine anti-ice is `inlet_heat0/1`.
+  - **Battery:** it is under a guard (`guard_cover00`, a toggle; state `guard_cover_pos[0]`), and the guard logic forces it on every frame while closed. So: open the guard, then switch off. Battery off also shuts the APU down if nothing else carries the load.
+  - **Generators:** GEN 1/2 are momentary `gen1_up` (OFF) / `gen1_dn` (ON).
+  - **Avionics:** no avionics master; it is forced every frame.
+  - **Fuel pumps:** paired per tank, `fuel_tank_pump_on[0 L, 1 C, 2 R]`.
+- **A330:**
+  - **Probes and window heat:** one button, AUTO / ON only, with no off: `probe_window_heat_toggle`.
+  - **Anti-ice:** wing anti-ice through the wrapped `sim/ice/wing_heat_tog`, engine anti-ice through `inlet_heat0/1_tog`, both with a state check.
+  - **Batteries:** `battery_1/2_toggle` (replaced) and `APU_batt_toggle`. Read the button state; `battery_on` isn't reliable.
+  - **Generators:** GEN 1 `generator_1_on/_off/_toggle`, GEN 2 `generator_2_toggle` only.
+  - **Avionics:** no avionics master.
+  - **Fuel pumps:** 8 buttons, `laminar/A333/switches/{left1,left2,left_stby,right1,right2,right_stby,center_left,center_right}_pump_toggle`. **Never use X-Plane's `sim/fuel/fuel_pump_N_*` here:** its `fuel_pump_on[0/1]` is set by the engine master switches (`A333.switches.lua` 6069-6094), i.e. it is the engine's fuel feed.
+
+**Switch steps** (`vimaan_nlu/switches.py`, run by the plugin one per frame, as
+the transponder selectors are):
+- **Knob:** click toward a position range.
+- **Button:** press unless the state already reads the value, then wait.
+- **Write:** write a dataref and check it holds.
+- **Check:** first step only; the setting is already made when a dataref reads a value.
+
+A button is pressed, and a dataref written, once per step: a toggle pressed
+twice would undo itself (an A330 button reads 1.2 while pressed). A switch
+that doesn't move in 30 frames answers "... not set: the switch did not move".
+
 ## Engine start by type
 
 | Type | Sequence | Limit | Failure message |
