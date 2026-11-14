@@ -207,7 +207,13 @@ def evaluate_safety(
 def command_token(intent: str, slots: dict) -> str:
     """Stable identity for a command so a *repeat* of the same command confirms
     it. Keyed on intent + which unit + the action (robust to minor STT
-    variation): "engine two off" must not confirm a pending "engine one off"."""
+    variation): "engine two off" must not confirm a pending "engine one off".
+
+    Every other slot of the command is part of it too. The switches name
+    what they act on in their own slots, so on intent, unit and action alone
+    a held "generator one off" was confirmed by "avionics off", and a held
+    "speed brake half" by "speed brake extend". A slot the command doesn't
+    have (a stray tag) is left out, as before."""
     slots = slots or {}
     action = (
         slots.get("state")
@@ -216,7 +222,16 @@ def command_token(intent: str, slots: dict) -> str:
         # A repeat of 7700 confirms 7700, never 7600.
         or slots.get("squawk", "")
     )
-    return f"{intent}:{slots.get('instance', '')}:{action}"
+    cmd = command(intent)
+    keyed = {"instance", "state", "position", "flap_setting", "squawk"}
+    rest = sorted(
+        (name, str(value))
+        for name, value in slots.items()
+        if name not in keyed and value not in (None, "") and (cmd is None or name in cmd.slots)
+    )
+    return f"{intent}:{slots.get('instance', '')}:{action}" + "".join(
+        f":{name}={value}" for name, value in rest
+    )
 
 
 class ConfirmationGate:

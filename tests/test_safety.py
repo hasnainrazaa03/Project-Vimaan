@@ -126,6 +126,29 @@ class TestConfirmationGate:
         assert off_1 != command_token("toggle_engine", {"state": "off", "instance": "2"})
         assert command_token("set_flaps", {"position": "up"}) == "set_flaps::up"
 
+    def test_a_held_switch_is_confirmed_only_by_the_same_switch(self):
+        # The switches' action and target are in their own slots.
+        gen_1 = command_token(
+            "toggle_electrical", {"power": "generator", "instance": "1", "switch": "off"}
+        )
+        assert gen_1 == "toggle_electrical:1::power=generator:switch=off"
+        assert gen_1 != command_token(
+            "toggle_electrical", {"power": "avionics", "instance": "1", "switch": "off"}
+        )
+        assert command_token("set_speed_brake", {"speedbrake": "half"}) != command_token(
+            "set_speed_brake", {"speedbrake": "extend"}
+        )
+        assert command_token("toggle_fuel_pump", {"switch": "off"}) != command_token(
+            "toggle_fuel_pump", {"switch": "on"}
+        )
+
+    def test_a_stray_slot_does_not_change_the_token(self):
+        # "v confirm engine one off" came with a "mode" tag the engine lacks.
+        assert (
+            command_token("toggle_engine", {"state": "off", "instance": "1", "mode": "v"})
+            == "toggle_engine:1:off"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Tier 1: flaps above the flap speed
