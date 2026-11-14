@@ -20,6 +20,13 @@ from .tier1 import DONE_OR_SET, SETUPS, hands_off
 
 SW = "sim/cockpit2/switches/"
 ICE = "sim/cockpit2/ice/"
+# No generated voice says "pitot" so the recogniser hears it ("radio heat
+# on", "feet heat on", "zero heat on", whatever the spelling). "probe" is
+# the same slot value; "pitot" itself is left to the owner's voice check.
+PITOT_SAY = "probe heat on"
+# Two of four generated voices hear "prop heat" as "probe heat" (the pitot
+# heat), "propeller" never. "prop" is left to the owner's voice check too.
+PROP_SAY = {"on": "propeller heat on", "off": "propeller heat off"}
 EL = "sim/cockpit2/electrical/"
 # Most Tier 3 settings take a few frames (steps wait for each switch).
 SET_OR_TURNING = (*DONE_OR_SET, "pending")
@@ -242,7 +249,7 @@ def _anti_ice(aircraft: str) -> list[Step]:
             C90 + "iceRain/switch/windshield_antiice_pos_R",
         )
         return [
-            _set("pitot heat on", "pitot heat on", *pitot),
+            _set("pitot heat on", PITOT_SAY, *pitot),
             _set(
                 "window heat on",
                 "window heat on",
@@ -270,23 +277,23 @@ def _anti_ice(aircraft: str) -> list[Step]:
             ),
             _set(
                 "prop heat on",
-                "prop heat on",
+                PROP_SAY["on"],
                 _is("prop de-ice switch", C90 + "iceRain/switch/prop_deice_pos", 1),
             ),
             _set(
                 "prop heat off",
-                "prop heat off",
+                PROP_SAY["off"],
                 _is("prop de-ice off", C90 + "iceRain/switch/prop_deice_pos", 0),
             ),
         ]
     return [  # Baron
-        _set("pitot heat on", "pitot heat on", *pitot),
+        _set("pitot heat on", PITOT_SAY, *pitot),
         _set("window heat on", "window heat on", _is("window heat", ICE + "ice_window_heat_on", 1)),
         _set("boots on", "boots on", _is("boots AUTO", ICE + "ice_surface_boot_on", 2)),
         _set("boots off", "boots off", _is("boots off", ICE + "ice_surface_boot_on", 0)),
         _refused("no engine anti ice", "engine anti ice on", "no engine anti"),
-        _set("prop heat on", "prop heat on", _is("prop heat", ICE + "ice_prop_heat_on", 1)),
-        _set("prop heat off", "prop heat off", _is("prop heat off", ICE + "ice_prop_heat_on", 0)),
+        _set("prop heat on", PROP_SAY["on"], _is("prop heat", ICE + "ice_prop_heat_on", 1)),
+        _set("prop heat off", PROP_SAY["off"], _is("prop heat off", ICE + "ice_prop_heat_on", 0)),
     ]
 
 

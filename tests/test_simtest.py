@@ -461,6 +461,7 @@ TIER3_NLU = {
             ("boots", "wing"),
             ("engine anti ice", "engine"),
             ("prop heat", "prop"),
+            ("propeller heat", "prop"),
         )
         for setting in ("on", "off", "auto")
     },
