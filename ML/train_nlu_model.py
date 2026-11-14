@@ -99,6 +99,8 @@ def train_model(
     runs_dir=None,
     schedule="constant",
     warmup=0.06,
+    name=None,
+    run_seed=None,
 ):
     # Reproducibility (T1.10): the pipeline was fully unseeded except the split.
     random.seed(42)
@@ -172,6 +174,12 @@ def train_model(
     device = resolve_device(device)  # cuda > mps (Apple GPU) > cpu, or forced
     print(f"Using device: {device}")
     model = JointIntentAndSlotModel(num_intents=len(intent_map), num_slots=len(slot_map)).to(device)
+    if run_seed is not None:
+        # Runs of one recipe to be averaged (ML/average_models.py): the same
+        # starting weights (seeded above), a different data order and dropout.
+        random.seed(42 + run_seed)
+        np.random.seed(42 + run_seed)
+        torch.manual_seed(42 + run_seed)
     optimizer = AdamW(model.parameters(), lr=lr)
     # "linear": warm up over the first `warmup` share of steps, then fall to
     # zero at the last step (utils/lr_schedule.py). Early stopping cuts the
@@ -200,8 +208,10 @@ def train_model(
                 except:
                     pass
 
-    next_version = f"v{latest_version + 1}"
+    next_version = name or f"v{latest_version + 1}"
     model_save_path = os.path.join(models_dir, next_version)
+    if name and os.path.exists(model_save_path):
+        raise SystemExit(f"{model_save_path} already exists")
 
     # Live metrics stream for the training monitor (ML/training_monitor.py).
     ml_dir = os.path.dirname(os.path.abspath(__file__))
@@ -386,6 +396,7 @@ def train_model(
                         "train_val_split": None if by_template else 0.85,
                         "validation": validation,
                         "random_state": 42,
+                        "run_seed": run_seed,
                         "base_model": base_model,
                         "best_val_loss": float(best_val_loss),
                         "best_epoch": epoch + 1,
@@ -463,6 +474,18 @@ if __name__ == "__main__":
         help="Override the parent dir for the new v<N> checkpoint.",
     )
     parser.add_argument(
+        "--name",
+        default=None,
+        help="Name the run and its folder (e.g. v26-a) instead of the next v<N>. "
+        "Not digits after the v, so nothing takes it for the latest model.",
+    )
+    parser.add_argument(
+        "--run-seed",
+        type=int,
+        default=None,
+        help="Vary the data order and dropout (not the starting weights), for runs to be averaged.",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default=None,
@@ -498,6 +521,8 @@ if __name__ == "__main__":
         patience=args.patience,
         model_save_dir=args.model_save_dir,
         device=args.device,
+        name=args.name,
+        run_seed=args.run_seed,
         schedule=args.schedule,
         warmup=args.warmup,
     )
