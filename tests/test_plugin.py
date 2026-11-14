@@ -3138,7 +3138,12 @@ def test_nav_port_3_rejected(sim):
 
 def test_course_sets_the_obs(sim):
     _, plugin, xp = sim
-    assert say(plugin, "course 090", "set_course", {"degrees": "090"}) == ["Course zero niner zero"]
+    # The radio is named even when it wasn't said: in the sim, speech
+    # recognition lost "nav two" from "nav two course one eight zero", NAV 1
+    # was set, and the old read-back "Course one eight zero" hid it.
+    assert say(plugin, "course 090", "set_course", {"degrees": "090"}) == [
+        "NAV 1 course zero niner zero"
+    ]
     assert xp.datarefs[RADIO + "nav1_obs_deg_mag_pilot"] == 90.0
     assert say(plugin, "nav 2 course 180", "set_course", {"degrees": "180", "nav_port": "2"}) == [
         "NAV 2 course one eight zero"

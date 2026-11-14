@@ -21,7 +21,7 @@ Last updated 2026-11-11.
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | ✅ closed 2026-11-12: Part C flown unattended (121/121 on four aircraft) and the owner's real-voice check passed | #30–#34, #38–#42 |
 | D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim (switch); stick pull still to check | #35 |
 | A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
-| T2 | Tier 2: radios & navigation → **v25** | 🟡 groundwork, runner scenarios, data and model done: v25 passes all six gates (2026-11-13); installed 2026-11-13; next: the Tier 2 runner in the sim | #43 |
+| T2 | Tier 2: radios & navigation → **v25** | 🟡 groundwork, runner scenarios, data and model done: v25 passes all six gates (2026-11-13); installed 2026-11-13; runner in the sim 95/95 on four aircraft; next: the owner's real-voice check | #43, #46 |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | ⬜ | |
 | T4 | Tier 4: questions (read-only) → **v27** | ⬜ | |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
@@ -619,6 +619,8 @@ is (2026-11-12).
 Behaviour:
 - **"On" means replying.** A transponder already on alt, TA or TA/RA says
   "Transponder already on": it is never turned down to mode A.
+- **Read-backs name the radio**, said or not: "course zero niner zero" answers
+  "NAV 1 course zero niner zero", so a lost "nav two" can't pass unnoticed.
 - **Ident** only when the transponder is on ("Transponder is in standby. Say
   transponder on first.").
 - The 737 and A330 have **no off** ("This transponder has no off. Say standby.").
@@ -697,7 +699,21 @@ instead of starting an engine); negatives 100%; p95 6.6 ms.
 - [x] Installed v25 with #43's plugin at 9ab507c (2026-11-13), checked byte
   for byte; v19, v17 and v11 kept for rollback.
 
-- [ ] `simtest run tier2` on all four aircraft.
+- [x] `simtest run tier2` on all four aircraft (2026-11-13, v25, main at
+  26e7481): **95/95 steps** (Baron 23, King Air 23, 737 24, A330 25), every
+  one checked in the sim. By voice 82 of 94 understood; the same three
+  phrases were misheard on every aircraft and passed when redone as text:
+  - "tune nav one to one one zero decimal five" heard "zero decimal five":
+    rejected, "Please repeat that".
+  - "transponder alt" heard "transponder hold": rejected with the question.
+  - "nav two course one eight zero" heard "course one eight zero": NAV 1's
+    course was set and the read-back said only "Course one eight zero". The
+    course read-back now names the radio (#46).
+  Cause: the Vosk grammar is the command words plus `[unk]`, which is dropped,
+  so a stretch it can't place vanishes. "Tune" was lost in all six test
+  voices; "transponder altitude" was heard right in all of them.
+- [ ] The owner's real-voice check of Tier 2 in flight.
+- [ ] Why Vosk drops words like "tune" (real-voice clips and test voices).
 
 ---
 
