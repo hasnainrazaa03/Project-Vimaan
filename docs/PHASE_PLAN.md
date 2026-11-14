@@ -811,10 +811,19 @@ training run (v26).
   no "de ice" (the recogniser put "de" in unsaid).
 - [x] `GOLD_TIER3` grows to 31 phrases.
 
-### T3.1 Data, training, gate, runner (next)
-- [ ] Runner scenarios (`simtest/tier3.py`), then data v14, training v26 (eight
-  new intents), the gate, install (owner's approval) and the Tier 3 checklist
-  in the sim.
+### T3.1 Data, training, gate, runner
+- [x] **Runner scenarios** (`simtest/tier3.py`, `simtest run tier3 <aircraft>`):
+  26 / 29 / 31 / 34 steps on the Baron / King Air / 737 / A330, each switch
+  checked the way its aircraft shows it; power and fuel pumps off held and
+  cancelled. End to end on the fake sim in CI: the whole Baron checklist, and
+  the lights, signs, anti-ice, speed brake and autobrake parts on the 737 and
+  A330.
+- [x] **Data v14:** 137,720 rows, 35 intents (8 new, 4,000 each): train
+  105,448, dev 7,845, test 24,427; no text with two labels.
+- [ ] **v26** = the average of three runs of the v24 recipe on data v14
+  (`--name v26-a/b/c --run-seed 1/2/3`: the same starting weights, a
+  different data order and dropout), as v25 was; then the gate, install
+  (owner's approval) and the Tier 3 checklist in the sim.
 
 Checklist: preflight battery/avionics/beacon/nav, taxi lights,
 landing + strobes on takeoff, pitot heat, fuel pump, yaw damper, seatbelt

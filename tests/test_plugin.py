@@ -3257,6 +3257,31 @@ def test_ident(sim, monkeypatch):
     assert events(plugin, "verify")[-1]["ok"] is True
 
 
+# Tier 3: the commands each aircraft's switch override needs.
+B58_COMMANDS = ("laminar/b58/surface_ice_switch_up", "laminar/b58/surface_ice_switch_dn")
+B738_SWITCHES = (
+    "laminar/B738/toggle_switch/position_light_down",
+    "laminar/B738/toggle_switch/position_light_up",
+    "laminar/B738/toggle_switch/seatbelt_sign_up",
+    "laminar/B738/toggle_switch/seatbelt_sign_dn",
+    "laminar/B738/toggle_switch/taxi_light_brightness_pos_up",
+    "laminar/B738/toggle_switch/taxi_light_brightness_pos_dn",
+)
+A333_SWITCHES = (
+    "laminar/A333/toggle_switch/nav_light_pos_dn",
+    "laminar/A333/toggle_switch/nav_light_pos_up",
+    "laminar/A333/switches/seatbelt_signs_dn",
+    "laminar/A333/switches/seatbelt_signs_up",
+    "laminar/A333/switches/smoking_signs_dn",
+    "laminar/A333/switches/smoking_signs_up",
+    "laminar/A333/toggle_switch/strobe_pos_on",
+    "laminar/A333/toggle_switch/strobe_pos_auto",
+    "laminar/A333/toggle_switch/strobe_pos_off",
+    "laminar/A333/switch/lighting/taxi_light_off",
+    "laminar/A333/switch/lighting/taxi_light_taxi",
+    "laminar/A333/buttons/probe_window_heat_toggle",
+)
+
 B738_XPDR_POS = "laminar/B738/knob/transponder_pos"
 B738_XPDR = (
     "laminar/B738/knob/transponder_mode_up",
