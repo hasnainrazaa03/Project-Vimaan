@@ -212,7 +212,7 @@ squawk held and cancelled, then the transponder: alt, standby, ident refused
 in standby, on, ident, off (refused on the 737 and A330, which have none),
 and alt again. The transponder is checked the way each aircraft shows it:
 X-Plane's mode on the Baron and King Air, the selector position on the 737,
-TA or TA/RA on the A330. It needs a model trained on Tier 2 (v20 or later)
+TA or TA/RA on the A330. It needs a model that knows Tier 2 (v20 or later; v25 passed the gate)
 and refuses to start on an older one.
 
 Two clicks remain until they're switched off once: Steam's launch-option

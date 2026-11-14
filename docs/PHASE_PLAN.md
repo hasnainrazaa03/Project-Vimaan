@@ -21,9 +21,9 @@ Last updated 2026-11-11.
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | ✅ closed 2026-11-12: Part C flown unattended (121/121 on four aircraft) and the owner's real-voice check passed | #30–#34, #38–#42 |
 | D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim (switch); stick pull still to check | #35 |
 | A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
-| T2 | Tier 2: radios & navigation → **v20** | 🟡 T2.0 groundwork done (research, 8 commands, handlers, 737/A330 transponder selectors, tests); next: runner scenarios, then data, training, gate | #43 |
-| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v21** | ⬜ | |
-| T4 | Tier 4: questions (read-only) → **v22** | ⬜ | |
+| T2 | Tier 2: radios & navigation → **v25** | 🟡 groundwork, runner scenarios, data and model done: v25 passes all six gates (2026-11-13); next: install (owner's approval), then the Tier 2 runner in the sim | #43 |
+| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | ⬜ | |
+| T4 | Tier 4: questions (read-only) → **v27** | ⬜ | |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
 | L | Later: relative commands, two commands in one breath, checklists, add-on aircraft profiles | ⬜ | |
@@ -42,7 +42,8 @@ talking copilot).
 
 Model versions: E1 was planned as v12; v12–v16 were intermediate runs and
 v17 is the result. Tier 1's first model, v18, failed the gate and v19 passed,
-so the later tiers moved up one (T2 → v20).
+so the later tiers moved up one (T2 → v20). Tier 2 took v20–v25 (v25 is the
+average of v22–v24; see Tier 2), so T3 → v26 and T4 → v27.
 
 ---
 
@@ -597,7 +598,7 @@ gives the controls back at the end of a run.
 
 ---
 
-## Tier 2: radios and navigation → v20
+## Tier 2: radios and navigation → v25
 
 Eight intents. The first design had six, with one standby and one swap intent
 taking a `radio` com/nav slot; separate COM and NAV intents keep each one's
@@ -657,11 +658,48 @@ confirm.
   checked the way each aircraft shows it. They run end to end on the fake sim in CI (Baron, 737 selector, A330
   selectors), so the expectations are right before X-Plane. The runner
   refuses to start on a model that predates Tier 2.
-- [ ] Then the per-tier procedure: data, train v20, gate, then the runner.
+- [x] Then the per-tier procedure: data, train, gate (below).
+
+### T2.1 Data, training and gate
+Every run: DistilBERT, length 40, batch 16, lr 5e-5, 4,000 rows per command,
+gated against v19 with the bars unchanged. Gate 1 ("new phrasings") asks every
+intent to reach 98.5% on phrasings held out of training (2–3 per command).
+
+| Model | Data | Result |
+| --- | --- | --- |
+| v20 | v9 | ✗ gates 1–2: bare "identify" was held out, so the word was never trained; "speed eighty" lost to the leading-noise word "eighty" |
+| v21 | v10 | ✗ gate 1: transponder 0.875, altitude 0.979. Found a data bug: `{slot=word}` placeholders leaked into the negatives |
+| v22 | v11 | ✗ gate 1: transponder 0.925 ("ident" inside word-salad negatives). From here 10 epochs with linear warmup and decay |
+| v23 | v12 | ✗ gate 1: transponder 0.901, altitude 0.967 |
+| v24 | v13 | ✗ gate 1: autopilot mode 0.967, swap NAV 0.856. First run with a development set |
+| **v25** | — | ✅ **all six gates**: the uniform average of v22, v23 and v24 (`ML/average_models.py`) |
+
+Fixes along the way, all in #43: placeholders out of the negatives, the same
+data from the same seed in every process, no whole command ("ident") inside
+word salad, the linear learning-rate schedule, and the development set (one
+more held-out phrasing per command, which picks the checkpoint).
+
+Why an average: after v21 every run missed 2–3 of the 87 held-out phrasings
+and never the same ones (v22–v24: no phrasing failed twice), so which run
+passed was luck. More data patches would have been aimed at the test
+phrasings. The three models start from the same base and sit 5% apart, so
+their average is one model of the same size and speed that evens out what
+each got wrong by chance. The development set scored 100% on every run and
+did not tell the runs apart; it still keeps the checkpoint choice off the
+trained phrasings.
+
+v25 against v19: new phrasings 0.9999 intent / 1.0000 slot F1 (every command
+1.000); old data 10,063 right / 225 rejected / 0 wrong, the same as v19; gold
+56/56 and 8/8 fragments; real voice 92 / 26 / 0 (v19 91 / 26 / 1: "parking
+bring on engine" is now rejected instead of starting an engine); negatives
+100%; p95 6.6 ms.
+
+- [ ] Install v25 with #43's plugin (owner's approval), keeping v19, v17, v11.
+- [ ] `simtest run tier2` on all four aircraft.
 
 ---
 
-## Tier 3: switches by phase of flight → v21
+## Tier 3: switches by phase of flight → v26
 
 | Intent | Slots | Say | Binding | Verify | Safety |
 | --- | --- | --- | --- | --- | --- |
@@ -682,7 +720,7 @@ shutdown.
 
 ---
 
-## Tier 4: questions (read-only) → v22
+## Tier 4: questions (read-only) → v27
 
 | Intent | Answer from | Spoken |
 | --- | --- | --- |

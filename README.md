@@ -331,6 +331,8 @@ Datasets from generator v2 split **by phrasing** instead:
 
 - **Test set:** template phrasings the model never trains on (`holdout_test.jsonl`, the gate's "new phrasings").
 - **Development set (from data v13):** one more held-out phrasing per command (`holdout_dev.jsonl`). The trainer keeps the checkpoint that does best on it, and training ideas are compared on it. The test phrasings are read only when a final candidate goes through the gate.
+- Short negatives and chit-chat lines can come up in both splits as the same sentence (553 distinct sentences in data v13), so those intents' test scores read slightly high; command phrasings are kept apart by template.
+- **Averaging models (`ML/average_models.py`):** runs of one recipe each miss a different few held-out phrasings, so the Tier 2 model, v25, is the average of the weights of three runs (v22–v24). It is one model of the same size and speed, and it passes the gate where each run alone did not.
 
 | Metric | v11 |
 | --- | --- |
