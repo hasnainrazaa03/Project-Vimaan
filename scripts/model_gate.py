@@ -95,7 +95,12 @@ def decision(p: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     Only the slots the command declares count: its handler ignores stray ones."""
     from vimaan_nlu.ambiguity import two_or_to
     from vimaan_nlu.commands import command, required_slots
-    from vimaan_nlu.validators import has_command_word, heading_too_short, validate_slot
+    from vimaan_nlu.validators import (
+        clipped_number,
+        has_command_word,
+        heading_too_short,
+        validate_slot,
+    )
 
     intent, slots = p["intent"], p["slots"]
     cmd = command(intent)
@@ -105,6 +110,8 @@ def decision(p: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         return "not_a_command", {}
     if not has_command_word(intent, p.get("normalized_text") or ""):
         return "no_command_word", {}
+    if clipped_number(p.get("original_text") or ""):
+        return "clipped_number", {}
     if intent == "set_autopilot_heading" and heading_too_short(slots.get("degrees")):
         return "one_digit_heading", {}
     if two_or_to(intent, p.get("original_text") or ""):

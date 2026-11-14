@@ -58,3 +58,17 @@ def test_gate_counts_an_ambiguous_target_as_not_acted_on():
     assert model_gate.decision(p) == ("ambiguous_two", {})
     p["original_text"] = "set altitude twenty one thousand feet"
     assert model_gate.decision(p)[0] == "act"
+
+
+def test_gate_counts_a_clipped_number_as_not_acted_on():
+    # As the plugin: "altitude thousand" lost the start of the number.
+    p = {
+        "intent": "set_autopilot_altitude",
+        "slots": {"altitude": "1000"},
+        "confidence": 0.99,
+        "normalized_text": "altitude 1000",
+        "original_text": "altitude thousand",
+    }
+    assert model_gate.decision(p) == ("clipped_number", {})
+    p["original_text"] = "altitude one thousand"
+    assert model_gate.decision(p)[0] == "act"

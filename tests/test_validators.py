@@ -142,6 +142,45 @@ class TestPlausibility:
 
         assert heading_too_short(value) is short
 
+    @pytest.mark.parametrize(
+        ("text", "clipped"),
+        [
+            # Heard in the Tier 2 tests: the number's start went unheard.
+            ("altitude thousand", True),
+            ("altitude full thousand", True),  # "four" heard as "full"
+            ("thousand five hundred see minute", True),
+            ("hundred knots", True),
+            ("altitude eight thousand", False),
+            ("altitude four thousand five hundred", False),
+            ("descend at one thousand five hundred feet per minute", False),
+            ("squawk twelve hundred", False),
+            ("flight level two hundred", False),
+            ("altitude 4 thousand", False),
+            ("heading two seven zero", False),
+        ],
+    )
+    def test_clipped_number(self, text, clipped):
+        from vimaan_nlu.validators import clipped_number
+
+        assert clipped_number(text) is clipped
+
+    @pytest.mark.parametrize(
+        ("value", "ok"),
+        [
+            ("0", True),
+            ("50", True),
+            ("1500", True),
+            ("6000", True),
+            ("20", False),
+            ("30", False),
+            ("1520", False),
+            ("6050", False),
+        ],
+    )
+    def test_vertical_speed_steps_of_fifty(self, value, ok):
+        # "we should be there in twenty minutes" was heard as "twenty minute".
+        assert validate_slot("vs", value)[1] is ok
+
 
 @pytest.mark.parametrize(
     ("text", "intent"),

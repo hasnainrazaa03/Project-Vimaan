@@ -26,6 +26,7 @@ __all__ = [
     "SLOT_VALIDATORS",
     "Enum",
     "Range",
+    "clipped_number",
     "has_command_word",
     "heading_too_short",
     "in_range",
@@ -89,6 +90,30 @@ def has_command_word(intent: str, text: str) -> bool:
     if words is None:
         return True
     return not words.isdisjoint(text.lower().split())
+
+
+# Words that can come before "thousand" / "hundred" in a spoken number.
+_COUNT_WORDS = frozenset(
+    "zero one two three four five six seven eight nine niner ten eleven twelve thirteen "
+    "fourteen fifteen sixteen seventeen eighteen nineteen twenty thirty forty fifty sixty "
+    "seventy eighty ninety".split()
+)
+_MULTIPLIERS = frozenset({"thousand", "hundred"})
+
+
+def clipped_number(text: str) -> bool:
+    """True if "thousand" or "hundred" has no number before it. Pilots always
+    say one ("eight thousand", "fifteen hundred"), so a bare one means the
+    number's start went unheard: "altitude thousand" was "altitude eight
+    thousand" (and would fly 1,000 ft), "thousand five hundred see minute"
+    was "descend at one thousand five hundred feet per minute" (and would
+    climb). No command phrasing in the training data has one."""
+    words = text.lower().split()
+    return any(
+        w in _MULTIPLIERS
+        and (i == 0 or not (words[i - 1] in _COUNT_WORDS or words[i - 1].isdigit()))
+        for i, w in enumerate(words)
+    )
 
 
 def heading_too_short(value: Any) -> bool:

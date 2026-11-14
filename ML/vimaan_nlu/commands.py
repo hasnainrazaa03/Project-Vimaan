@@ -68,7 +68,9 @@ SLOT_VALIDATORS: Mapping[str, Range | Enum | AnyOf | Digits] = MappingProxyType(
         "speed": Range(60, 400),
         "mach": Range(0.40, 0.95, integer=False, exact=True),
         # Vertical speed magnitude in ft/min; the sign comes from "direction".
-        "vs": Range(0, 6000),
+        # In steps of 50 (autopilot dials step 50 or 100): "we should be there
+        # in twenty minutes", heard as "twenty minute", was a V/S of 20.
+        "vs": Range(0, 6000, step=50),
         "direction": Enum(("up", "down")),
         # 29.92 (said with a decimal), 2992 (four digits), or 1013 hPa.
         "pressure": AnyOf(

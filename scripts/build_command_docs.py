@@ -60,7 +60,8 @@ def values(c: Command) -> str:
             parts.append(" / ".join(dict.fromkeys(str(x) for x in slot.values)))
         elif isinstance(v, Range):
             fmt = (lambda x: str(int(x))) if v.integer else str
-            parts.append(f"{SLOT_DISPLAY.get(name, name)} {fmt(v.lo)}–{fmt(v.hi)}")
+            steps = f" in steps of {fmt(v.step)}" if v.step else ""
+            parts.append(f"{SLOT_DISPLAY.get(name, name)} {fmt(v.lo)}–{fmt(v.hi)}{steps}")
         elif name == "pressure":
             parts.append("altimeter 28.00–31.50 inHg (or 2992) / 940–1060 hPa")
         elif slot.kind == "choice" and name != "position":
