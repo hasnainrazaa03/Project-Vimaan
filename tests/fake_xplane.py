@@ -119,9 +119,24 @@ DEFAULT_DATAREFS: dict[str, Any] = {
     "sim/cockpit2/switches/auto_brake_level": 1,  # off
     "sim/cockpit2/controls/speedbrake_ratio": 0.0,
     "sim/aircraft/parts/acf_sbrkEQ": 1,
+    # Tier 3, part B: anti-ice, electrical, fuel pumps (in flight: battery,
+    # generators and avionics on).
+    "sim/cockpit2/ice/ice_pitot_heat_on_pilot": 0,
+    "sim/cockpit2/ice/ice_pitot_heat_on_copilot": 0,
+    "sim/cockpit2/ice/ice_window_heat_on": 0,
+    "sim/cockpit2/ice/ice_window_heat_on_window": [0] * 4,
+    "sim/cockpit2/ice/ice_surfce_heat_on": 0,
+    "sim/cockpit2/ice/ice_surface_boot_on": 0,
+    "sim/cockpit2/ice/ice_inlet_heat_on_per_engine": [0] * 16,
+    "sim/cockpit2/ice/ice_prop_heat_on": 0,
+    "sim/cockpit2/ice/anti_ice_engine_air": [0.0] * 16,
+    "sim/cockpit2/electrical/generator_on": [1, 1] + [0] * 6,
+    "sim/cockpit2/switches/avionics_power_on": 1,
+    "sim/cockpit2/engine/actuators/fuel_pump_on": [0] * 16,
+    "sim/cockpit2/fuel/fuel_tank_pump_on": [0] * 9,
 }
 
-# What X-Plane's own Tier 3 commands do: (dataref, element or None, value);
+# What X-Plane's own Tier 3 commands do: (dataref, element or None, value),
 # value None toggles. Tests replace or drop these to model an aircraft.
 SWITCH_EFFECTS: dict[str, tuple[str, int | None, Any]] = {
     **{
@@ -152,12 +167,56 @@ SWITCH_EFFECTS: dict[str, tuple[str, int | None, Any]] = {
     "sim/flight_controls/brakes_2_auto": ("sim/cockpit2/switches/auto_brake_level", None, 3),
     "sim/flight_controls/brakes_rto_auto": ("sim/cockpit2/switches/auto_brake_level", None, 0),
 }
+ICE, EL = "sim/cockpit2/ice/", "sim/cockpit2/electrical/"
+PUMPS = "sim/cockpit2/engine/actuators/fuel_pump_on"
+for state, value in (("on", 1), ("off", 0)):
+    SWITCH_EFFECTS.update(
+        {
+            f"sim/ice/pitot_heat0_{state}": (ICE + "ice_pitot_heat_on_pilot", None, value),
+            f"sim/ice/pitot_heat1_{state}": (ICE + "ice_pitot_heat_on_copilot", None, value),
+            f"sim/ice/window_heat_{state}": (ICE + "ice_window_heat_on", None, value),
+            f"sim/ice/wing_heat_{state}": (ICE + "ice_surfce_heat_on", None, value),
+            f"sim/ice/wing_boot_{state}": (ICE + "ice_surface_boot_on", None, value),
+            f"sim/ice/prop_heat_{state}": (ICE + "ice_prop_heat_on", None, value),
+            f"sim/electrical/battery_1_{state}": (EL + "battery_on", 0, value),
+            f"sim/systems/avionics_{state}": (
+                "sim/cockpit2/switches/avionics_power_on",
+                None,
+                value,
+            ),
+            **{
+                f"sim/ice/window{n}_heat_{state}": (ICE + "ice_window_heat_on_window", n - 1, value)
+                for n in (2, 3, 4)
+            },
+            **{
+                f"sim/ice/inlet_heat{i}_{state}": (ICE + "ice_inlet_heat_on_per_engine", i, value)
+                for i in (0, 1)
+            },
+            **{
+                f"sim/electrical/generator_{n}_{state}": (EL + "generator_on", n - 1, value)
+                for n in (1, 2)
+            },
+            **{f"sim/fuel/fuel_pump_{n}_{state}": (PUMPS, n - 1, value) for n in (1, 2)},
+        }
+    )
+SWITCH_EFFECTS.update(
+    {
+        "sim/ice/wing_heat_tog": (ICE + "ice_surfce_heat_on", None, None),
+        "sim/ice/inlet_heat0_tog": (ICE + "ice_inlet_heat_on_per_engine", 0, None),
+        "sim/ice/inlet_heat1_tog": (ICE + "ice_inlet_heat_on_per_engine", 1, None),
+        "sim/electrical/battery_1_toggle": (EL + "battery_on", 0, None),
+        "sim/electrical/battery_2_toggle": (EL + "battery_on", 1, None),
+        "sim/electrical/generator_1_toggle": (EL + "generator_on", 0, None),
+        "sim/electrical/generator_2_toggle": (EL + "generator_on", 1, None),
+    }
+)
 
 
 def switch_effect(name: str, index: int | None, value: Any):
     def apply(x):
         if index is not None:
-            x.datarefs[name][index] = value
+            old = x.datarefs[name][index]
+            x.datarefs[name][index] = (1 - old) if value is None else value
         else:
             x.datarefs[name] = (1 - x.datarefs[name]) if value is None else value
 

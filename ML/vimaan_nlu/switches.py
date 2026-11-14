@@ -26,6 +26,7 @@ Pure Python: no X-Plane import, so it can be tested anywhere.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -117,6 +118,9 @@ def _frozen(d: Mapping) -> Mapping:
 
 
 SW = "sim/cockpit2/switches/"
+ICE = "sim/cockpit2/ice/"
+EL = "sim/cockpit2/electrical/"
+PUMP = "sim/cockpit2/engine/actuators/fuel_pump_on"  # per engine: 0 off, 1 on, 2 auto
 SPEEDBRAKE = "sim/cockpit2/controls/speedbrake_ratio"
 AUTOBRAKE = SW + "auto_brake_level"
 # Says whether the aircraft has speed brakes at all (0 on the Baron and King Air).
@@ -148,6 +152,12 @@ def _lights(name: str) -> tuple[str, str]:
 # are their slots' canonical values).
 LIGHTS = ("landing", "taxi", "beacon", "strobe", "nav", "logo", "wing", "runway")
 SIGNS = ("seat belt", "no smoking")
+ICES = ("pitot", "window", "wing", "engine", "prop")
+# Part B keys per spoken thing: a generator or fuel pump by number, or all.
+GENERATORS = {"1": ("power:generator1",), "2": ("power:generator2",)}
+FUEL_PUMPS = {"1": ("fuel:left",), "2": ("fuel:right",)}
+ALL_GENERATORS = ("power:generator1", "power:generator2")
+ALL_FUEL_PUMPS = ("fuel:left", "fuel:center", "fuel:right")
 SPEEDBRAKE_SETTINGS = ("retract", "armed", "half", "extend")
 AUTOBRAKE_SETTINGS = ("off", "rto", "1", "2", "3", "max")
 
@@ -177,6 +187,53 @@ GENERIC: Plans = _frozen(
                 "extend": (Write(SPEEDBRAKE, 1.0),),
             }
         ),
+        # --- part B: anti-ice, electrical, fuel pumps ---
+        "ice:pitot": _on_off(
+            ICE + "ice_pitot_heat_on_pilot", "sim/ice/pitot_heat0_on", "sim/ice/pitot_heat0_off"
+        ),
+        "ice:window": _on_off(
+            ICE + "ice_window_heat_on", "sim/ice/window_heat_on", "sim/ice/window_heat_off"
+        ),
+        # X-Plane's own spelling, "surfce".
+        "ice:wing": _on_off(
+            ICE + "ice_surfce_heat_on", "sim/ice/wing_heat_on", "sim/ice/wing_heat_off"
+        ),
+        "ice:engine": _frozen(
+            {
+                setting: tuple(
+                    Button(
+                        f"{ICE}ice_inlet_heat_on_per_engine[{i}]",
+                        f"sim/ice/inlet_heat{i}_{setting}",
+                        want,
+                    )
+                    for i in (0, 1)
+                )
+                for setting, want in (("on", 1), ("off", 0))
+            }
+        ),
+        # All props at once; ice_prop_heat_on is engine 1's (offered on propeller aircraft only).
+        "ice:prop": _on_off(
+            ICE + "ice_prop_heat_on", "sim/ice/prop_heat_on", "sim/ice/prop_heat_off"
+        ),
+        "power:battery": _on_off(
+            EL + "battery_on[0]", "sim/electrical/battery_1_on", "sim/electrical/battery_1_off"
+        ),
+        "power:avionics": _on_off(
+            SW + "avionics_power_on", "sim/systems/avionics_on", "sim/systems/avionics_off"
+        ),
+        "power:generator1": _on_off(
+            EL + "generator_on[0]",
+            "sim/electrical/generator_1_on",
+            "sim/electrical/generator_1_off",
+        ),
+        "power:generator2": _on_off(
+            EL + "generator_on[1]",
+            "sim/electrical/generator_2_on",
+            "sim/electrical/generator_2_off",
+        ),
+        "fuel:left": _on_off(PUMP + "[0]", "sim/fuel/fuel_pump_1_on", "sim/fuel/fuel_pump_1_off"),
+        "fuel:right": _on_off(PUMP + "[1]", "sim/fuel/fuel_pump_2_on", "sim/fuel/fuel_pump_2_off"),
+        "fuel:center": None,
         # 0 RTO, 1 off, 2-5 increasing levels ("max" is 5).
         "autobrake": _frozen(
             {
@@ -215,6 +272,27 @@ B58: Plans = _frozen(
         "light:wing": _written(SW + "generic_lights_switch[0]"),
         "sign:seat belt": None,
         "sign:no smoking": None,
+        "ice:pitot": _frozen(
+            {
+                "on": (
+                    Button(ICE + "ice_pitot_heat_on_pilot", "sim/ice/pitot_heat0_on", 1),
+                    Button(ICE + "ice_pitot_heat_on_copilot", "sim/ice/pitot_heat1_on", 1),
+                ),
+                "off": (
+                    Button(ICE + "ice_pitot_heat_on_pilot", "sim/ice/pitot_heat0_off", 0),
+                    Button(ICE + "ice_pitot_heat_on_copilot", "sim/ice/pitot_heat1_off", 0),
+                ),
+            }
+        ),
+        # Boots AUTO / OFF: it replaces wing_boot*, "on" setting 2 (single,
+        # auto-deflating) for wing and tail, "off" 0.
+        "ice:wing": _frozen(
+            {
+                "on": (Button(ICE + "ice_surface_boot_on", "sim/ice/wing_boot_on", 2),),
+                "off": (Button(ICE + "ice_surface_boot_on", "sim/ice/wing_boot_off", 0),),
+            }
+        ),
+        "ice:engine": None,
     }
 )
 
@@ -228,6 +306,34 @@ C90_SIGNS = Knob(
     "laminar/c90/lighting/switch/no_smoke_fsb_pos",
     "laminar/c90/lighting/switch/no_smoke_fsb_dn",
     "laminar/c90/lighting/switch/no_smoke_fsb_up",
+    -1,
+    1,
+)
+C90_WINDSHIELD_L = Knob(
+    "laminar/c90/iceRain/switch/windshield_antiice_pos_L",
+    "laminar/c90/iceRain/switch/windshield_antiice_dn_L",
+    "laminar/c90/iceRain/switch/windshield_antiice_up_L",
+    -1,
+    1,
+)
+C90_WINDSHIELD_R = Knob(
+    "laminar/c90/iceRain/switch/windshield_antiice_pos_R",
+    "laminar/c90/iceRain/switch/windshield_antiice_dn_R",
+    "laminar/c90/iceRain/switch/windshield_antiice_up_R",
+    -1,
+    1,
+)
+C90_GEN1 = Knob(
+    "laminar/c90/electrical/switch/gen1_switch_pos",
+    "laminar/c90/electrical/switch/generator1_dn",
+    "laminar/c90/electrical/switch/generator1_up",
+    -1,
+    1,
+)
+C90_GEN2 = Knob(
+    "laminar/c90/electrical/switch/gen2_switch_pos",
+    "laminar/c90/electrical/switch/generator2_dn",
+    "laminar/c90/electrical/switch/generator2_up",
     -1,
     1,
 )
@@ -256,6 +362,38 @@ C90: Plans = _frozen(
                 "off": (Check(SW + "no_smoking", 0), C90_SIGNS.at(-1)),
             }
         ),
+        "ice:pitot": B58["ice:pitot"],
+        # Windshield L / R: NORMAL (1) / OFF (0) / HIGH (-1), stepped.
+        "ice:window": _frozen(
+            {
+                "on": (C90_WINDSHIELD_L.at(1), C90_WINDSHIELD_R.at(1)),
+                "off": (C90_WINDSHIELD_L.at(0), C90_WINDSHIELD_R.at(0)),
+            }
+        ),
+        # Boots: one 7-second cycle per press (the boot dataref reads 3 while it
+        # runs); there is no latched on, and nothing to turn off.
+        "ice:wing": _frozen(
+            {
+                "on": (
+                    Button(
+                        ICE + "ice_surface_boot_on",
+                        "laminar/c90/iceRain/switch/surface_deice_up",
+                        3,
+                    ),
+                )
+            }
+        ),
+        # Engine anti-ice is the ice vanes; a write holds and moves the switch.
+        "ice:engine": _written(ICE + "anti_ice_engine_air[0]", ICE + "anti_ice_engine_air[1]"),
+        # Its own switch: its timer undoes a write to X-Plane's prop heat.
+        "ice:prop": _on_off(
+            "laminar/c90/iceRain/switch/prop_deice_pos",
+            "laminar/c90/iceRain/switch/prop_deice_up",
+            "laminar/c90/iceRain/switch/prop_deice_dn",
+        ),
+        # Generators RESET (1) / ON (0) / OFF (-1); RESET is never the target.
+        "power:generator1": _frozen({"on": (C90_GEN1.at(0),), "off": (C90_GEN1.at(-1),)}),
+        "power:generator2": _frozen({"on": (C90_GEN2.at(0),), "off": (C90_GEN2.at(-1),)}),
     }
 )
 
@@ -286,6 +424,12 @@ B738_SEATBELT = Knob(  # 0 OFF, 1 AUTO, 2 ON; its "up" command turns it toward O
 # holds the lever at the flight detent or below). Disarming through X-Plane's
 # ratio leaves the lever showing ARMED, so the lever itself is written.
 B738_SPEEDBRAKE = "laminar/B738/flt_ctrls/speedbrake_lever"
+# The battery switch's guard (0 closed, 1 open; it animates). While it is
+# closed the 737 holds the battery on every frame, so "battery off" opens it.
+B738_BATTERY_GUARD = Button(
+    "laminar/B738/button_switch/guard_cover_pos[0]", "laminar/B738/guard_cover00", 1
+)
+TANK_PUMPS = "sim/cockpit2/fuel/fuel_tank_pump_on"  # per tank: [0] left, [1] center, [2] right
 B738: Plans = _frozen(
     {
         # [1], [2] the retractable belly lights, [0], [3] the fixed wing-root ones.
@@ -314,6 +458,69 @@ B738: Plans = _frozen(
             }
         ),
         "sign:no smoking": None,  # no switch modelled
+        "ice:pitot": _frozen(  # probe heat A and B
+            {
+                "on": (
+                    Button(
+                        "laminar/B738/toggle_switch/capt_probes_pos",
+                        "laminar/B738/toggle_switch/capt_probes_pos_on",
+                        1,
+                    ),
+                    Button(
+                        "laminar/B738/toggle_switch/fo_probes_pos",
+                        "laminar/B738/toggle_switch/fo_probes_pos_on",
+                        1,
+                    ),
+                ),
+                "off": (
+                    Button(
+                        "laminar/B738/toggle_switch/capt_probes_pos",
+                        "laminar/B738/toggle_switch/capt_probes_pos_off",
+                        0,
+                    ),
+                    Button(
+                        "laminar/B738/toggle_switch/fo_probes_pos",
+                        "laminar/B738/toggle_switch/fo_probes_pos_off",
+                        0,
+                    ),
+                ),
+            }
+        ),
+        "ice:window": _frozen(  # L-FWD, R-FWD, L-SIDE, R-SIDE
+            {
+                setting: tuple(
+                    Button(
+                        f"{ICE}ice_window_heat_on_window[{i}]",
+                        f"sim/ice/{name}_heat_{setting}",
+                        want,
+                    )
+                    for i, name in enumerate(("window", "window2", "window3", "window4"))
+                )
+                for setting, want in (("on", 1), ("off", 0))
+            }
+        ),
+        "ice:prop": None,
+        "power:battery": _frozen(
+            {
+                "on": (Button(EL + "battery_on[0]", "sim/electrical/battery_1_on", 1),),
+                "off": (
+                    B738_BATTERY_GUARD,
+                    Button(EL + "battery_on[0]", "sim/electrical/battery_1_off", 0),
+                ),
+            }
+        ),
+        "power:avionics": None,  # none: its avionics follow the buses every frame
+        # GEN 1 / 2 are momentary: "dn" is ON, "up" is OFF.
+        "power:generator1": _on_off(
+            EL + "generator_on[0]", "laminar/B738/switch/gen1_dn", "laminar/B738/switch/gen1_up"
+        ),
+        "power:generator2": _on_off(
+            EL + "generator_on[1]", "laminar/B738/switch/gen2_dn", "laminar/B738/switch/gen2_up"
+        ),
+        # Each tank's forward and aft pumps are one switch here.
+        "fuel:left": _written(TANK_PUMPS + "[0]"),
+        "fuel:center": _written(TANK_PUMPS + "[1]"),
+        "fuel:right": _written(TANK_PUMPS + "[2]"),
         "speed_brake": _frozen(
             {
                 "retract": (Write(B738_SPEEDBRAKE, 0.0),),
@@ -354,6 +561,42 @@ A333_NO_SMOKING = Knob(  # 0 OFF, 1 AUTO, 2 ON
 A333_NOSE = SW + "landing_lights_switch[1]"  # nose light: 0 OFF, 0.5 TAXI, 1 T.O.
 
 
+A333_PROBE_WINDOW = _frozen(
+    {
+        "on": (
+            Button(
+                "laminar/A333/monitors/probe_window_heat",
+                "laminar/A333/buttons/probe_window_heat_toggle",
+                1,
+            ),
+        ),
+        "auto": (
+            Button(
+                "laminar/A333/monitors/probe_window_heat",
+                "laminar/A333/buttons/probe_window_heat_toggle",
+                0,
+            ),
+        ),
+    }
+)
+
+
+def _a333_pumps(*names: str) -> Mapping[str, Plan]:
+    return _frozen(
+        {
+            setting: tuple(
+                Button(
+                    f"laminar/A333/fuel/buttons/{n}_pump_pos",
+                    f"laminar/A333/switches/{n}_pump_toggle",
+                    want,
+                )
+                for n in names
+            )
+            for setting, want in (("on", 1), ("off", 0))
+        }
+    )
+
+
 def _three(knob: Knob) -> Mapping[str, Plan]:
     return _frozen({"on": (knob.at(2),), "auto": (knob.at(1),), "off": (knob.at(0),)})
 
@@ -387,6 +630,51 @@ A333: Plans = _frozen(
         "sign:seat belt": _three(A333_SEATBELT),
         "sign:no smoking": _three(A333_NO_SMOKING),
         "yaw_damper": None,  # fly-by-wire: no pilot switch
+        # One PROBE / WINDOW HEAT button, AUTO (0) or ON (1): there is no off.
+        "ice:pitot": A333_PROBE_WINDOW,
+        "ice:window": A333_PROBE_WINDOW,
+        "ice:wing": _toggled("laminar/A333/buttons/wing_anti_ice", "sim/ice/wing_heat_tog"),
+        "ice:engine": _frozen(
+            {
+                setting: tuple(
+                    Button(
+                        f"laminar/A333/buttons/engine_anti_ice{n}",
+                        f"sim/ice/inlet_heat{n - 1}_tog",
+                        want,
+                    )
+                    for n in (1, 2)
+                )
+                for setting, want in (("on", 1), ("off", 0))
+            }
+        ),
+        "ice:prop": None,
+        # Read the buttons: X-Plane's battery_on can read 0 with the button on.
+        "power:battery": _frozen(
+            {
+                setting: (
+                    Button(
+                        "laminar/A333/buttons/battery1_pos", "sim/electrical/battery_1_toggle", want
+                    ),
+                    Button(
+                        "laminar/A333/buttons/battery2_pos", "sim/electrical/battery_2_toggle", want
+                    ),
+                )
+                for setting, want in (("on", 1), ("off", 0))
+            }
+        ),
+        "power:avionics": None,
+        "power:generator1": _toggled(
+            "laminar/A333/buttons/gen1_pos", "sim/electrical/generator_1_toggle"
+        ),
+        "power:generator2": _toggled(
+            "laminar/A333/buttons/gen2_pos", "sim/electrical/generator_2_toggle"
+        ),
+        # Its own pump buttons only: X-Plane's fuel_pump_on is its engine feed
+        # (set by the engine master switches), so sim/fuel/fuel_pump_N_* could
+        # starve a running engine.
+        "fuel:left": _a333_pumps("left1", "left2"),
+        "fuel:right": _a333_pumps("right1", "right2"),
+        "fuel:center": _a333_pumps("center_left", "center_right"),
         # LO / MED / MAX pushbuttons (X-Plane levels 3 / 4 / RTO or 5); each
         # toggles, so it's pressed only when its level isn't already set.
         # Off: the lit one is pressed (A333_AUTOBRAKE_OFF). No "3".
@@ -409,6 +697,31 @@ A333_AUTOBRAKE_OFF: Mapping[int, str] = _frozen(
         5: "sim/flight_controls/brakes_rto_auto",
     }
 )
+
+
+def settings_of(overrides: Plans, key: str) -> tuple[str, ...]:
+    """The settings switch ``key`` has here, in a stable order."""
+    table = overrides[key] if key in overrides else GENERIC.get(key)
+    order = dict.fromkeys(("on", "off", "auto", *SPEEDBRAKE_SETTINGS, *AUTOBRAKE_SETTINGS))
+    return tuple(s for s in order if table and s in table)
+
+
+# Per-engine (or per-generator) datarefs, "name[i]": a step for engine i is
+# dropped on an aircraft with fewer engines.
+_ENGINE_INDEXED = re.compile(r"(per_engine|fuel_pump_on|generator_on)\[(\d+)\]$")
+
+
+def for_engines(plan: Plan, engines: int | None) -> Plan:
+    if not engines:
+        return plan
+    out = []
+    for step in plan:
+        m = next(
+            (_ENGINE_INDEXED.search(n) for n in names(step) if _ENGINE_INDEXED.search(n)), None
+        )
+        if m is None or int(m.group(2)) < engines:
+            out.append(step)
+    return tuple(out)
 
 
 def lookup(overrides: Plans, key: str, setting: str) -> tuple[str, Plan]:

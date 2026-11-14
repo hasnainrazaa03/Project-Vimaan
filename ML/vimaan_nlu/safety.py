@@ -161,6 +161,19 @@ _RULE_LIST: tuple[_Rule, ...] = (
         message="Confirm speed brake, low altitude",
     ),
     _Rule(
+        # Battery, generator or avionics off in the air.
+        name="power_off_in_flight",
+        applies_to=lambda s: s.get("switch") == "off",
+        risky_when=_airborne,
+        message="Confirm power off in flight",
+    ),
+    _Rule(
+        name="fuel_pump_off_in_flight",
+        applies_to=lambda s: s.get("switch") == "off",
+        risky_when=_airborne,
+        message="Confirm fuel pump off in flight",
+    ),
+    _Rule(
         name="parking_brake_at_speed",
         applies_to=lambda s: s.get("state") == "on",
         risky_when=_parking_brake_fast,
