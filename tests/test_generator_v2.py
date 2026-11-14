@@ -41,6 +41,16 @@ def test_no_text_holds_a_placeholder(data):
     assert [w for w in filler if "{" in w or "}" in w or "=" in w] == []
 
 
+def test_no_negative_holds_a_whole_command(data):
+    # "ident" alone is a command; word salad around it must not be labelled None.
+    rows, _ = data
+    whole = generate_v2.whole_commands()
+    assert "ident" in whole
+    salad = [r["text"] for r in rows if r["template"] == "None#neg1"]
+    assert salad
+    assert [t for t in salad if whole & set(t.split())] == []
+
+
 def test_same_seed_same_data_in_any_process():
     # Python orders sets differently in every process (hash seed); the data
     # must not depend on that (data v11 differed in 774 bare-number negatives).

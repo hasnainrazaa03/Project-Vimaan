@@ -316,8 +316,23 @@ def _vocab() -> tuple[list[str], set[str], set[str]]:
     return filler, command_words, value_words
 
 
+def whole_commands() -> set[str]:
+    """Words that are a complete command on their own: a template that is just
+    a fixed value ("{xpdr_mode=ident}": "ident" presses IDENT)."""
+    return {
+        m.group(1)
+        for c in COMMANDS
+        for t in c.templates
+        if (m := re.fullmatch(r"\{\w+=([^}]+)\}", t))
+    }
+
+
 def negative_rows(n: int, rng: random.Random) -> list[dict[str, Any]]:
     filler, command_words, value_words = _vocab()
+    # Salad may hold one command word, but not one that is a whole command:
+    # "put ident both switch" as None contradicts bare "ident", and v22 then
+    # called "put the transponder in ident" not a command.
+    salad_commands = sorted(command_words - whole_commands())
     # Sorted: a set's order changes with every process, and the dataset must
     # come out the same for the same seed.
     numbers = sorted(
@@ -332,7 +347,7 @@ def negative_rows(n: int, rng: random.Random) -> list[dict[str, Any]]:
         elif kind == 1:  # word salad: at most one command word, no values
             words = rng.sample(filler, rng.randint(2, 4))
             if rng.random() < 0.6:
-                words.insert(rng.randrange(len(words) + 1), rng.choice(sorted(command_words)))
+                words.insert(rng.randrange(len(words) + 1), rng.choice(salad_commands))
             text = " ".join(words)
         elif kind == 2:  # bare numbers ("seventy", "two forty")
             text = rng.choice(
