@@ -483,6 +483,25 @@ def test_power_off_in_flight_asks_to_confirm(sim):
     assert xp.datarefs[EL + "generator_on"][1] == 1
 
 
+def test_a_held_power_switch_is_not_confirmed_by_another(sim):
+    # On intent, unit and action alone, "avionics off" (unit 1, like the
+    # held generator) confirmed the generator's hold and went straight off.
+    _, plugin, xp = sim
+    airborne(xp)
+    gen = {"power": "generator", "instance": "1", "switch": "off"}
+    held = ["Confirm power off in flight. Say override, or repeat to confirm."]
+    assert say(plugin, "generator one off", "toggle_electrical", gen) == held
+    avionics = {"power": "avionics", "instance": "1", "switch": "off"}
+    assert say(plugin, "avionics off", "toggle_electrical", avionics) == held
+    assert (
+        xp.datarefs["sim/cockpit2/switches/avionics_power_on"] == 1
+        and xp.datarefs[EL + "generator_on"][0] == 1
+    )
+    say(plugin, "avionics off", "toggle_electrical", avionics)  # the repeat confirms it
+    assert run(plugin, xp) == ["Avionics off"]
+    assert xp.datarefs[EL + "generator_on"][0] == 1
+
+
 def test_one_generator_by_number(sim):
     _, plugin, xp = sim
     say(
