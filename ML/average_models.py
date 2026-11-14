@@ -1,6 +1,15 @@
 """Average trained models into one ("model soup"); see ML/utils/soup.py for why.
 
     python ML/average_models.py v22 v23 v24 --out v25 --holdout-from v24
+    python ML/average_models.py v26-j v26-k v26-l v26-m --greedy --out v26
+
+--greedy chooses the members on dev (the "greedy soup"): the candidates are
+ranked by their dev score, best first, and each is added only if the average
+scores at least as well on dev as without it. Dev is the candidates' shared
+holdout_dev.jsonl, scored the way the gate scores (utils/dev_score.py), never
+the gate's test. A weak run (v26-g: dev loss 0.0127 against 0.0091 and 0.0096,
+and lost "fly at ... thousand") is then left out by a rule set before the gate
+is run, not picked out after it.
 
 Members and --out are version folders under ML/models/vimaan_nlu_model_best/
 (--out may also be a path). The new folder gets the averaged weights, the
@@ -17,6 +26,8 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -86,6 +97,65 @@ def build(members: list[Path], out: Path, holdout_from: Path) -> dict:
     return manifest
 
 
+def _dataset_sha(member: Path) -> str | None:
+    return json.loads((member / "train_manifest.json").read_text()).get("dataset_sha256")
+
+
+def _dev_scorer(dev_file: Path) -> Callable[[Path], dict]:
+    from utils import dev_score
+
+    rows = [json.loads(line) for line in dev_file.read_text().splitlines() if line.strip()]
+    return lambda path: dev_score.score(dev_score.saved_runner(path), rows)
+
+
+def greedy(
+    candidates: list[Path],
+    out: Path,
+    holdout_from: Path,
+    score: Callable[[Path], dict] | None = None,
+) -> dict:
+    """Average the candidates that help on dev; see the module docstring.
+    ``score(path) -> {"score": ...}`` defaults to dev scored like the gate."""
+    if out.exists():
+        raise FileExistsError(f"{out} already exists")
+    if len({_dataset_sha(m) for m in candidates}) != 1:
+        raise ValueError("--greedy needs candidates trained on the same dataset (the same dev)")
+    dev_file = holdout_from / "holdout_dev.jsonl"
+    if score is None:
+        if not dev_file.exists():
+            raise ValueError(f"{dev_file} is missing: --greedy needs a dev set")
+        score = _dev_scorer(dev_file)
+    alone = {m: score(m) for m in candidates}
+    order = sorted(candidates, key=lambda m: alone[m]["score"], reverse=True)
+    kept, best = [order[0]], alone[order[0]]
+    trail = [{"try": [order[0].name], "kept": True, **best}]
+    with tempfile.TemporaryDirectory() as tmp:
+        for i, m in enumerate(order[1:]):
+            trial = Path(tmp) / f"trial{i}"
+            build(kept + [m], trial, holdout_from)
+            s = score(trial)
+            keep = s["score"] >= best["score"]
+            trail.append({"try": [k.name for k in kept] + [m.name], "kept": keep, **s})
+            if keep:
+                kept.append(m)
+                best = s
+            shutil.rmtree(trial)
+    if len(kept) == 1:  # nothing averaged in helped: the best candidate as it is
+        shutil.copytree(kept[0], out)
+        manifest = json.loads((out / "train_manifest.json").read_text())
+        manifest.update(soup_of=[kept[0].name])
+    else:
+        manifest = build(kept, out, holdout_from)
+    manifest.update(
+        soup_method="greedy on dev: candidates best-first, each kept only if the "
+        "average scores at least as well on dev",
+        soup_candidates={m.name: alone[m] for m in candidates},
+        soup_trail=trail,
+    )
+    (out / "train_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    return manifest
+
+
 def _resolve(name: str) -> Path:
     return Path(name) if "/" in name else MODELS / name
 
@@ -95,6 +165,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("members", nargs="+", help="model versions to average, e.g. v22 v23 v24")
     p.add_argument("--out", required=True, help="new version (or path) to write")
     p.add_argument("--holdout-from", help="member whose held-out files go along (default: last)")
+    p.add_argument("--greedy", action="store_true", help="choose the members on dev (see above)")
     args = p.parse_args(argv)
 
     members = [_resolve(m) for m in args.members]
@@ -102,7 +173,18 @@ def main(argv: list[str] | None = None) -> int:
     if holdout_from not in members:
         p.error("--holdout-from must be one of the members")
     try:
-        build(members, _resolve(args.out), holdout_from)
+        if args.greedy:
+            manifest = greedy(members, _resolve(args.out), holdout_from)
+            for t in manifest["soup_trail"]:
+                print(
+                    f"  {' + '.join(t['try']):40s} dev right/rejected/wrong "
+                    f"{t['right']}/{t['rejected']}/{t['wrong']} negatives acted "
+                    f"{t['negatives_acted']} score {t['score']:g} "
+                    f"{'kept' if t['kept'] else 'left out'}"
+                )
+            members = [_resolve(m) for m in manifest["soup_of"]]
+        else:
+            build(members, _resolve(args.out), holdout_from)
     except (ValueError, FileExistsError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

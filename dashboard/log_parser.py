@@ -6,7 +6,7 @@ import re
 
 _TRAIN_LOSS = re.compile(r"^Epoch (\d+) - Average Training Loss: ([0-9.]+)")
 _VAL_LOSS = re.compile(r"^Epoch (\d+) - Average Validation Loss: ([0-9.]+)")
-_SAVED = re.compile(r"^Validation loss improved! Saving best model to (.+)$")
+_SAVED = re.compile(r"^(?:Validation loss|Dev score) improved! Saving best model to (.+)$")
 _NO_IMPROVE = re.compile(r"^Validation loss did not improve\. Count: (\d+)/(\d+)")
 _EARLY_STOP = re.compile(r"^Early stopping triggered after (\d+) epochs\.")
 

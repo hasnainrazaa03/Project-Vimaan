@@ -61,3 +61,70 @@ def test_build_writes_an_averaged_model_the_gate_can_grade(tmp_path):
     assert json.loads((out / "train_manifest.json").read_text())["holdout_from"] == "v2"
     with pytest.raises(FileExistsError):
         build(members, out, holdout_from=members[1])
+
+
+def _weighted_models(tmp_path, values, dataset="sha"):
+    import torch
+    from average_models import BODY, HEAD
+    from safetensors.torch import save_file
+
+    out = []
+    for n, value in values.items():
+        d = model_dir(tmp_path, n)
+        save_file({"w": torch.full((1,), value)}, d / BODY)
+        torch.save({"weight": torch.full((1,), value)}, d / HEAD)
+        (d / "train_manifest.json").write_text(json.dumps({"dataset_sha256": dataset}))
+        (d / "holdout_dev.jsonl").write_text("")
+        out.append(d)
+    return out
+
+
+def _closeness_to(target):
+    """A dev score that is best when the model's weight is nearest ``target``."""
+    from average_models import BODY
+    from safetensors.torch import load_file
+
+    def score(path):
+        w = load_file(path / BODY)["w"].item()
+        return {
+            "score": -abs(w - target),
+            "right": 0,
+            "rejected": 0,
+            "wrong": 0,
+            "negatives_acted": 0,
+        }
+
+    return score
+
+
+@pytest.mark.requires_torch
+def test_greedy_leaves_out_a_member_that_makes_dev_worse(tmp_path):
+    from average_models import greedy
+
+    a, b, c = _weighted_models(tmp_path, {"a": 4.0, "b": 6.0, "g": 40.0})
+    manifest = greedy([c, a, b], tmp_path / "soup", a, score=_closeness_to(5.0))
+    assert manifest["soup_of"] == ["a", "b"]  # best-first; g would drag it to 16.7
+    assert [t["kept"] for t in manifest["soup_trail"]] == [True, True, False]
+    assert set(manifest["soup_candidates"]) == {"a", "b", "g"}
+    assert "greedy" in manifest["soup_method"]
+
+
+@pytest.mark.requires_torch
+def test_greedy_keeps_the_best_alone_when_averaging_never_helps(tmp_path):
+    from average_models import BODY, greedy
+    from safetensors.torch import load_file
+
+    a, b = _weighted_models(tmp_path, {"a": 5.0, "b": 9.0})
+    manifest = greedy([a, b], tmp_path / "soup", a, score=_closeness_to(5.0))
+    assert manifest["soup_of"] == ["a"]
+    assert load_file(tmp_path / "soup" / BODY)["w"].item() == 5.0
+
+
+@pytest.mark.requires_torch
+def test_greedy_needs_one_dev_set(tmp_path):
+    from average_models import greedy
+
+    (a,) = _weighted_models(tmp_path, {"a": 1.0})
+    (b,) = _weighted_models(tmp_path, {"b": 1.0}, dataset="other")
+    with pytest.raises(ValueError, match="same dataset"):
+        greedy([a, b], tmp_path / "soup", a, score=_closeness_to(1.0))

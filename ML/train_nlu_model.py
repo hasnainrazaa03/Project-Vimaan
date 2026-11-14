@@ -13,7 +13,8 @@ from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from transformers import DistilBertTokenizerFast
-from utils import find_latest_version_path, get_model_versions_dir
+from utils import dev_score, find_latest_version_path, get_model_versions_dir
+from utils.convergence import Convergence
 from utils.device import resolve_device
 from utils.eval_metrics import per_intent_accuracy, per_slot_f1
 from utils.lr_schedule import SCHEDULES, lr_factor
@@ -77,6 +78,29 @@ class AviationCommandDataset(Dataset):
 # THE TRAINING PROCESS
 # The gradient norm costs a device sync, so it is sampled, not taken every step.
 GRAD_NORM_EVERY = 25
+# What a dev check picks the best weights by: dev loss, or dev scored the way
+# the gate scores (utils/dev_score.py).
+SELECT = ("loss", "actions")
+# With "wsd" and "actions": dev must gain more than this share of its rows
+# (0.05%, ~4 of 7,708) to count as still improving.
+MIN_GAIN_SHARE = 0.0005
+
+
+def _trim(batch):
+    """Cut the batch's padding to its longest example. Rows are padded to
+    max_length (40) but the longest averages 12 tokens; padding is masked, so
+    the loss and outputs are the same (to ~1e-6) and a step is ~1.3x faster."""
+    n = int(batch["attention_mask"].sum(dim=1).max())
+    return {k: v[:, :n] if v.dim() == 2 else v for k, v in batch.items()}
+
+
+def _optimizer(model, lr, device):
+    """AdamW; fused into one kernel on a GPU (1.35x faster steps on an M5 GPU).
+    The same update: fused and plain differ by ~0.01% of a step's change after
+    30 steps, against ~0.0002% between two plain runs (MPS isn't deterministic)."""
+    if device.type in ("cuda", "mps"):
+        return AdamW(model.parameters(), lr=lr, fused=True), "AdamW (fused)"
+    return AdamW(model.parameters(), lr=lr), "AdamW"
 
 
 def _grad_norm(model):
@@ -101,6 +125,11 @@ def train_model(
     warmup=0.06,
     name=None,
     run_seed=None,
+    clip_grad=0.0,
+    eval_every=1.0,
+    select="loss",
+    decay_epochs=1.0,
+    save_last=False,
 ):
     # Reproducibility (T1.10): the pipeline was fully unseeded except the split.
     random.seed(42)
@@ -180,21 +209,40 @@ def train_model(
         random.seed(42 + run_seed)
         np.random.seed(42 + run_seed)
         torch.manual_seed(42 + run_seed)
-    optimizer = AdamW(model.parameters(), lr=lr)
+    optimizer, optimizer_name = _optimizer(model, lr, device)
     # "linear": warm up over the first `warmup` share of steps, then fall to
     # zero at the last step (utils/lr_schedule.py). Early stopping cuts the
     # decay short, so pair it with patience >= epochs.
+    # "wsd": warm up, hold the rate while dev improves, decay once it stops
+    # (utils/convergence.py); `num_epochs` is then a cap.
     if schedule not in SCHEDULES:
         raise ValueError(f"schedule must be one of {SCHEDULES}, not {schedule!r}")
-    total_steps = len(train_loader) * num_epochs
-    warmup_steps = int(total_steps * warmup) if schedule == "linear" else 0
-    scheduler = (
-        LambdaLR(optimizer, lambda step: lr_factor(step, total_steps, warmup_steps))
-        if schedule == "linear"
-        else None
-    )
+    if select not in SELECT:
+        raise ValueError(f"select must be one of {SELECT}, not {select!r}")
+    if not 0 < eval_every <= 1:
+        raise ValueError("eval_every is a share of an epoch: more than 0, at most 1")
+    steps_per_epoch = len(train_loader)
+    total_steps = steps_per_epoch * num_epochs
+    warmup_steps = int(total_steps * warmup) if schedule in ("linear", "wsd") else 0
+    eval_steps = max(1, round(eval_every * steps_per_epoch))
+    convergence = None
+    scheduler = None
+    if schedule == "wsd":
+        convergence = Convergence(
+            patience=patience,
+            total_steps=total_steps,
+            warmup_steps=warmup_steps,
+            decay_steps=max(1, min(total_steps, round(decay_epochs * steps_per_epoch))),
+            # Dev must gain more than this to count as still improving: a
+            # check or two of dev rows going either way is noise.
+            min_gain=MIN_GAIN_SHARE * len(val_data) if select == "actions" else 0.0,
+        )
+        scheduler = LambdaLR(optimizer, convergence.factor)
+    elif schedule == "linear":
+        scheduler = LambdaLR(optimizer, lambda step: lr_factor(step, total_steps, warmup_steps))
 
-    best_val_loss = float("inf")
+    best_val_loss = float("inf")  # dev loss at the best check
+    best_score = None  # the selection score at the best check (higher is better)
     epochs_no_improve = 0
 
     models_dir = model_save_dir or get_model_versions_dir()
@@ -210,8 +258,11 @@ def train_model(
 
     next_version = name or f"v{latest_version + 1}"
     model_save_path = os.path.join(models_dir, next_version)
+    last_save_path = f"{model_save_path}-last"
     if name and os.path.exists(model_save_path):
         raise SystemExit(f"{model_save_path} already exists")
+    if save_last and os.path.exists(last_save_path):
+        raise SystemExit(f"{last_save_path} already exists")
 
     # Live metrics stream for the training monitor (ML/training_monitor.py).
     ml_dir = os.path.dirname(os.path.abspath(__file__))
@@ -229,29 +280,214 @@ def train_model(
         lr_schedule=schedule,
         warmup_steps=warmup_steps,
         patience=patience,
+        optimizer=optimizer_name,
+        clip_grad=clip_grad,
+        eval_every=eval_every,
+        select=select,
+        decay_epochs=decay_epochs if schedule == "wsd" else None,
         num_intents=len(intent_map),
         num_slots=len(slot_map),
-        steps_per_epoch=len(train_loader),
+        steps_per_epoch=steps_per_epoch,
         split={"train": len(train_data), "val": len(val_data), "test": len(test_data)},
         validation=validation,
         intent_dist=dict(Counter(r["intent"] for r in train_data).most_common()),
     )
     print(f"Live metrics -> {run_dir}/metrics.jsonl  (watch: python ML/training_monitor.py)")
 
+    def hyperparams(at_epoch, val_loss):
+        return {
+            "max_length": max_length,
+            "epochs": num_epochs,
+            "lr": lr,
+            "lr_schedule": schedule,
+            "warmup_steps": warmup_steps,
+            "batch_size": batch_size,
+            "optimizer": optimizer_name,
+            "clip_grad": clip_grad,
+            "eval_every": eval_every,
+            "select": select,
+            "decay_epochs": decay_epochs if schedule == "wsd" else None,
+            "early_stopping_patience": patience,
+            "train_val_split": None if by_template else 0.85,
+            "validation": validation,
+            "random_state": 42,
+            "run_seed": run_seed,
+            "base_model": base_model,
+            "best_val_loss": float(val_loss),
+            "best_epoch": at_epoch,
+        }
+
+    def save(path, at_epoch, val_loss):
+        os.makedirs(path, exist_ok=True)
+        tokenizer.save_pretrained(path)
+        model.bert_for_slots.save_pretrained(path)
+        # .cpu() so the checkpoint is device-agnostic (e.g. saved from MPS).
+        torch.save(
+            {k: v.detach().cpu() for k, v in model.intent_classifier.state_dict().items()},
+            f"{path}/intent_classifier.bin",
+        )
+        with open(f"{path}/intent_map.json", "w") as f:
+            json.dump(intent_map, f)
+        with open(f"{path}/slot_map.json", "w") as f:
+            json.dump(slot_map, f)
+
+        # Held-out test set (never trained or early-stopped on) so the
+        # evaluator can measure true generalization — ML/evaluation/evaluator
+        # loads this in preference to re-slicing the training file.
+        with open(f"{path}/holdout_test.jsonl", "w", encoding="utf-8") as f:
+            for row in test_data:
+                f.write(json.dumps(row) + "\n")
+        if by_template:  # the dev set, for comparing ideas without the test
+            with open(f"{path}/holdout_dev.jsonl", "w", encoding="utf-8") as f:
+                for row in val_data:
+                    f.write(json.dumps(row) + "\n")
+
+        # Provenance sidecar (Phase 3 / B-015 manifest). Written every time
+        # the "best" model is overwritten so it always reflects the actually
+        # checkpointed weights.
+        manifest = build_manifest(
+            dataset_path=dataset_path,
+            dataset_rows=data,
+            hyperparams=hyperparams(at_epoch, val_loss),
+        )
+        write_manifest(path, manifest)
+
+    def evaluate(at_epoch):
+        """Dev loss, accuracy and F1; with select="actions" also dev scored
+        the way the gate scores (utils/dev_score.py)."""
+        model.eval()
+        total_val_loss = 0
+        intent_correct = 0
+        intent_total = 0
+        intent_true = []
+        intent_pred = []
+        slot_true = []
+        slot_pred = []
+        with torch.no_grad():
+            for batch in tqdm(val_loader, desc=f"Epoch {at_epoch:g} [Validation]"):
+                batch = _trim(batch)
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+                intent_labels = batch["intent_label"].to(device)
+                slot_labels = batch["slot_labels"].to(device)
+
+                loss, intent_logits, slot_logits = model(
+                    input_ids, attention_mask, intent_labels, slot_labels
+                )
+                total_val_loss += loss.item()
+
+                predicted = intent_logits.argmax(dim=-1)
+                intent_correct += (predicted == intent_labels).sum().item()
+                intent_total += intent_labels.numel()
+                intent_true.extend(intent_labels.cpu().tolist())
+                intent_pred.extend(predicted.cpu().tolist())
+
+                mask = slot_labels != -100
+                slot_true.extend(slot_labels[mask].cpu().tolist())
+                slot_pred.extend(slot_logits.argmax(dim=-1)[mask].cpu().tolist())
+            dev = None
+            if select == "actions":
+                run = dev_score.live_runner(model, tokenizer, device, intent_map, slot_map)
+                dev = dev_score.score(run, val_data)
+        model.train()
+        val_slot_f1 = (
+            f1_score(slot_true, slot_pred, average="macro", zero_division=0) if slot_true else 0.0
+        )
+        return {
+            "val_loss": total_val_loss / len(val_loader),
+            "val_intent_acc": intent_correct / max(intent_total, 1),
+            "val_slot_f1": float(val_slot_f1),
+            "per_intent": per_intent_accuracy(intent_true, intent_pred, intent_map),
+            "per_slot": per_slot_f1(slot_true, slot_pred, slot_map),
+            "dev": dev,
+        }
+
     print("\nStarting training...")
-    numOfEpochs = num_epochs
     start_time = time.time()
     global_step = 0
     best_epoch = 0
     stopped_early = False
+    last_eval = None  # (at_epoch, val_loss) of the latest check
+
+    def _check(epoch, window_loss, window_steps):
+        """One dev check: log it, save the best, decide whether to go on."""
+        nonlocal best_val_loss, best_score, epochs_no_improve, best_epoch, last_eval
+        at_epoch = round(global_step / steps_per_epoch, 2)
+        if at_epoch == int(at_epoch):
+            at_epoch = int(at_epoch)
+        avg_train_loss = window_loss / max(window_steps, 1)
+        print(f"Epoch {at_epoch:g} - Average Training Loss: {avg_train_loss:.4f}")
+        val_started = time.time()
+        logger.log(type="phase", phase="validate", epoch=epoch, elapsed=val_started - start_time)
+        m = evaluate(at_epoch)
+        dev = m["dev"]
+        print(
+            f"Epoch {at_epoch:g} - Val Loss: {m['val_loss']:.4f}  "
+            f"Intent Acc: {m['val_intent_acc']:.4f}  Slot F1(macro): {m['val_slot_f1']:.4f}"
+            + (
+                f"  Dev right/rejected/wrong {dev['right']}/{dev['rejected']}/{dev['wrong']}"
+                f" negatives acted {dev['negatives_acted']} score {dev['score']:g}"
+                if dev
+                else ""
+            )
+        )
+        score = dev["score"] if dev else -m["val_loss"]
+        if convergence is not None:
+            was_decaying = convergence.decaying
+            is_best = convergence.check(global_step, score)
+            if convergence.decaying and not was_decaying:
+                print(
+                    f"Dev has not improved for {patience} checks: converged at epoch "
+                    f"{at_epoch:g}. Settling the rate to zero over {decay_epochs:g} epochs."
+                )
+        else:
+            is_best = best_score is None or score > best_score
+            epochs_no_improve = 0 if is_best else epochs_no_improve + 1
+        logger.log(
+            type="epoch",
+            epoch=at_epoch,
+            train_loss=avg_train_loss,
+            val_loss=m["val_loss"],
+            val_intent_acc=m["val_intent_acc"],
+            val_slot_f1=m["val_slot_f1"],
+            dev=dev,
+            lr=optimizer.param_groups[0]["lr"],
+            decaying=bool(convergence and convergence.decaying),
+            best=bool(is_best),
+            elapsed=time.time() - start_time,
+            val_seconds=time.time() - val_started,
+            epochs_no_improve=(
+                convergence.checks_without_gain if convergence is not None else epochs_no_improve
+            ),
+            patience=patience,
+            per_intent=m["per_intent"],
+            per_slot=m["per_slot"],
+        )
+        last_eval = (at_epoch, m["val_loss"])
+        if is_best:
+            best_score = score
+            best_val_loss = m["val_loss"]
+            best_epoch = at_epoch
+            logger.log(type="phase", phase="save", epoch=epoch, elapsed=time.time() - start_time)
+            what = "Dev score" if dev else "Validation loss"
+            print(f"{what} improved! Saving best model to {model_save_path}")
+            save(model_save_path, at_epoch, m["val_loss"])
+            return False
+        if convergence is None:
+            print(f"Validation loss did not improve. Count: {epochs_no_improve}/{patience}")
+            if epochs_no_improve >= patience:
+                print(f"Early stopping triggered after {at_epoch:g} epochs.")
+                return True
+        return False
 
     def _epochs():
-        nonlocal global_step, best_val_loss, epochs_no_improve, best_epoch, stopped_early
-        for epoch in range(numOfEpochs):
+        nonlocal global_step, stopped_early
+        for epoch in range(1, num_epochs + 1):
             model.train()
-            total_train_loss = 0
-            for batch in tqdm(train_loader, desc=f"Epoch {epoch + 1} [Training]"):
+            window_loss, window_steps = 0.0, 0
+            for i, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch} [Training]")):
                 optimizer.zero_grad()
+                batch = _trim(batch)
                 input_ids = batch["input_ids"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
                 intent_labels = batch["intent_label"].to(device)
@@ -260,17 +496,20 @@ def train_model(
                 loss, _, _ = model(input_ids, attention_mask, intent_labels, slot_labels)
 
                 step_loss = loss.item()
-                total_train_loss += step_loss
+                window_loss += step_loss
+                window_steps += 1
                 loss.backward()
                 global_step += 1
                 extra = {}
                 if global_step % GRAD_NORM_EVERY == 1:
-                    extra["grad_norm"] = _grad_norm(model)
+                    extra["grad_norm"] = _grad_norm(model)  # before clipping
+                if clip_grad > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), clip_grad)
                 optimizer.step()
 
                 logger.log(
                     type="step",
-                    epoch=epoch + 1,
+                    epoch=epoch,
                     step=global_step,
                     loss=step_loss,
                     lr=optimizer.param_groups[0]["lr"],
@@ -279,142 +518,25 @@ def train_model(
                 )
                 if scheduler is not None:
                     scheduler.step()  # after logging: the rate logged is the one used
-
-            avg_train_loss = total_train_loss / len(train_loader)
-            print(f"Epoch {epoch + 1} - Average Training Loss: {avg_train_loss:.4f}")
-            val_started = time.time()
-            logger.log(
-                type="phase", phase="validate", epoch=epoch + 1, elapsed=val_started - start_time
-            )
-
-            model.eval()
-            total_val_loss = 0
-            intent_correct = 0
-            intent_total = 0
-            intent_true = []
-            intent_pred = []
-            slot_true = []
-            slot_pred = []
-            with torch.no_grad():
-                for batch in tqdm(val_loader, desc=f"Epoch {epoch + 1} [Validation]"):
-                    input_ids = batch["input_ids"].to(device)
-                    attention_mask = batch["attention_mask"].to(device)
-                    intent_labels = batch["intent_label"].to(device)
-                    slot_labels = batch["slot_labels"].to(device)
-
-                    loss, intent_logits, slot_logits = model(
-                        input_ids, attention_mask, intent_labels, slot_labels
-                    )
-                    total_val_loss += loss.item()
-
-                    predicted = intent_logits.argmax(dim=-1)
-                    intent_correct += (predicted == intent_labels).sum().item()
-                    intent_total += intent_labels.numel()
-                    intent_true.extend(intent_labels.cpu().tolist())
-                    intent_pred.extend(predicted.cpu().tolist())
-
-                    mask = slot_labels != -100
-                    slot_true.extend(slot_labels[mask].cpu().tolist())
-                    slot_pred.extend(slot_logits.argmax(dim=-1)[mask].cpu().tolist())
-
-            avg_val_loss = total_val_loss / len(val_loader)
-            val_intent_acc = intent_correct / max(intent_total, 1)
-            val_slot_f1 = (
-                f1_score(slot_true, slot_pred, average="macro", zero_division=0)
-                if slot_true
-                else 0.0
-            )
-            print(
-                f"Epoch {epoch + 1} - Val Loss: {avg_val_loss:.4f}  "
-                f"Intent Acc: {val_intent_acc:.4f}  Slot F1(macro): {val_slot_f1:.4f}"
-            )
-            is_best = avg_val_loss < best_val_loss
-            logger.log(
-                type="epoch",
-                epoch=epoch + 1,
-                train_loss=avg_train_loss,
-                val_loss=avg_val_loss,
-                val_intent_acc=val_intent_acc,
-                val_slot_f1=float(val_slot_f1),
-                best=bool(is_best),
-                elapsed=time.time() - start_time,
-                val_seconds=time.time() - val_started,
-                epochs_no_improve=0 if is_best else epochs_no_improve + 1,
-                patience=patience,
-                per_intent=per_intent_accuracy(intent_true, intent_pred, intent_map),
-                per_slot=per_slot_f1(slot_true, slot_pred, slot_map),
-            )
-
-            if is_best:
-                best_val_loss = avg_val_loss
-                epochs_no_improve = 0
-                best_epoch = epoch + 1
-                logger.log(
-                    type="phase", phase="save", epoch=epoch + 1, elapsed=time.time() - start_time
-                )
-
-                print(f"Validation loss improved! Saving best model to {model_save_path}")
-                os.makedirs(model_save_path, exist_ok=True)
-                tokenizer.save_pretrained(model_save_path)
-                model.bert_for_slots.save_pretrained(model_save_path)
-                # .cpu() so the checkpoint is device-agnostic (e.g. saved from MPS).
-                torch.save(
-                    {k: v.detach().cpu() for k, v in model.intent_classifier.state_dict().items()},
-                    f"{model_save_path}/intent_classifier.bin",
-                )
-                with open(f"{model_save_path}/intent_map.json", "w") as f:
-                    json.dump(intent_map, f)
-                with open(f"{model_save_path}/slot_map.json", "w") as f:
-                    json.dump(slot_map, f)
-
-                # Held-out test set (never trained or early-stopped on) so the
-                # evaluator can measure true generalization — ML/evaluation/evaluator
-                # loads this in preference to re-slicing the training file.
-                with open(f"{model_save_path}/holdout_test.jsonl", "w", encoding="utf-8") as f:
-                    for row in test_data:
-                        f.write(json.dumps(row) + "\n")
-                if by_template:  # the dev set, for comparing ideas without the test
-                    with open(f"{model_save_path}/holdout_dev.jsonl", "w", encoding="utf-8") as f:
-                        for row in val_data:
-                            f.write(json.dumps(row) + "\n")
-
-                # Provenance sidecar (Phase 3 / B-015 manifest). Written every time
-                # the "best" model is overwritten so it always reflects the actually
-                # checkpointed weights.
-                manifest = build_manifest(
-                    dataset_path=dataset_path,
-                    dataset_rows=data,
-                    hyperparams={
-                        "max_length": max_length,
-                        "epochs": numOfEpochs,
-                        "lr": lr,
-                        "lr_schedule": schedule,
-                        "warmup_steps": warmup_steps,
-                        "batch_size": batch_size,
-                        "optimizer": "AdamW",
-                        "early_stopping_patience": patience,
-                        "train_val_split": None if by_template else 0.85,
-                        "validation": validation,
-                        "random_state": 42,
-                        "run_seed": run_seed,
-                        "base_model": base_model,
-                        "best_val_loss": float(best_val_loss),
-                        "best_epoch": epoch + 1,
-                    },
-                )
-                write_manifest(model_save_path, manifest)
-            else:
-                epochs_no_improve += 1
-                print(f"Validation loss did not improve. Count: {epochs_no_improve}/{patience}")
-                if epochs_no_improve >= patience:
-                    print(f"Early stopping triggered after {epoch + 1} epochs.")
-                    stopped_early = True
-                    break
+                if convergence is not None:
+                    convergence.step_done(global_step)
+                finished = convergence is not None and convergence.finished(global_step)
+                in_epoch = i + 1
+                if in_epoch % eval_steps == 0 or in_epoch == steps_per_epoch or finished:
+                    if _check(epoch, window_loss, window_steps):
+                        stopped_early = True
+                        return
+                    window_loss, window_steps = 0.0, 0
+                if finished:
+                    return
 
     # A crash or Ctrl-C is recorded in the stream, so the dashboard shows
     # "failed" / "stopped" instead of a run that looks like it hung.
     try:
         _epochs()
+        if save_last and last_eval is not None:
+            print(f"Saving the last weights to {last_save_path}")
+            save(last_save_path, *last_eval)
     except KeyboardInterrupt:
         logger.log(type="stopped", elapsed=time.time() - start_time)
         logger.close()
@@ -431,11 +553,20 @@ def train_model(
         best_val_loss=float(best_val_loss),
         best_epoch=best_epoch,
         stopped_early=stopped_early,
+        converged=convergence.reason if convergence is not None else None,
+        decay_start_epoch=(
+            round(convergence.decay_start / steps_per_epoch, 2)
+            if convergence is not None and convergence.decaying
+            else None
+        ),
         elapsed=time.time() - start_time,
         model_path=model_save_path,
     )
     logger.close()
-    print(f"\nTraining complete. Best val loss {best_val_loss:.4f} -> {model_save_path}")
+    print(
+        f"\nTraining complete. Best at epoch {best_epoch:g} (val loss {best_val_loss:.4f})"
+        f" -> {model_save_path}"
+    )
 
 
 if __name__ == "__main__":
@@ -454,18 +585,56 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--base-model", type=str, default="distilbert-base-uncased")
     parser.add_argument("--max-length", type=int, default=64)
-    parser.add_argument("--patience", type=int, default=2)
+    parser.add_argument(
+        "--patience",
+        type=int,
+        default=2,
+        help="Dev checks without improvement before stopping (wsd: before the "
+        "decay starts). A check comes every --eval-every of an epoch.",
+    )
     parser.add_argument(
         "--schedule",
         choices=SCHEDULES,
         default="constant",
-        help="Learning rate: constant, or linear warmup then decay to zero.",
+        help="Learning rate: constant; linear warmup then decay to zero; or wsd: "
+        "warmup, steady until dev stops improving for --patience checks, then "
+        "decay to zero over --decay-epochs and stop (--epochs is then a cap).",
     )
     parser.add_argument(
         "--warmup",
         type=float,
         default=0.06,
-        help="Share of all steps spent warming up (linear schedule only).",
+        help="Share of all steps (of --epochs) spent warming up (linear and wsd).",
+    )
+    parser.add_argument(
+        "--decay-epochs",
+        type=float,
+        default=1.0,
+        help="wsd: epochs over which the rate falls to zero once dev has converged.",
+    )
+    parser.add_argument(
+        "--eval-every",
+        type=float,
+        default=1.0,
+        help="Check dev every this share of an epoch (and at each epoch's end).",
+    )
+    parser.add_argument(
+        "--select",
+        choices=SELECT,
+        default="loss",
+        help="Keep the weights with the best dev loss, or the best dev score "
+        "counted the way the gate counts (actions).",
+    )
+    parser.add_argument(
+        "--clip-grad",
+        type=float,
+        default=0.0,
+        help="Clip the gradient norm to this (0: no clipping).",
+    )
+    parser.add_argument(
+        "--save-last",
+        action="store_true",
+        help="Also save the final weights, as <name>-last.",
     )
     parser.add_argument(
         "--model-save-dir",
@@ -525,4 +694,9 @@ if __name__ == "__main__":
         run_seed=args.run_seed,
         schedule=args.schedule,
         warmup=args.warmup,
+        clip_grad=args.clip_grad,
+        eval_every=args.eval_every,
+        select=args.select,
+        decay_epochs=args.decay_epochs,
+        save_last=args.save_last,
     )

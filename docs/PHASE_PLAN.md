@@ -22,7 +22,7 @@ Last updated 2026-11-11.
 | D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim (switch); stick pull still to check | #35 |
 | A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
 | T2 | Tier 2: radios & navigation → **v25** | 🟡 groundwork, runner scenarios, data and model done: v25 passes all six gates (2026-11-13); installed 2026-11-13; runner in the sim 95/95 on four aircraft; next: the owner's real-voice check | #43, #46 |
-| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | 🟡 T3.0a and T3.0b built (#50, #51); two v26 averages failed the gate (the second by one real-voice clip); data v16, v26-g/h/i training | #50, #51, #52, #54 |
+| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | 🟡 T3.0a and T3.0b built (#50, #51); three v26 averages failed the gate (the third through one weak run); new training recipe, v26-j/k/l/m training | #50, #51, #52, #54, #58 |
 | T4 | Tier 4: questions (read-only) → **v27** | ⬜ | |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
@@ -869,9 +869,39 @@ training run (v26).
   is added at an end for the rest. One of the command's own words may go
   ("ice director on") only when another stays and nothing else could be made
   of what is left. 5,053 stray rows.
-- [ ] **v26** = the average of `v26-g/h/i` (run seeds 1/2/3) on data v16;
-  then the gate against v25, install (owner's approval) and the Tier 3
-  checklist in the sim.
+- [x] **Third v26 failed the gate** (2026-11-14): the average of `v26-g/h/i`
+  on data v16, kept as `v26-soup3`. Gates 2–6 passed (real voice 91 / 27 / 0,
+  as v25). **Gate 1: `set_autopilot_altitude` slot F1 0.983 < 0.99.**
+  - Cause: one weak run, not the data. On the held-out "fly at … thousand"
+    (no "feet"), h and i are right on every row (180 of v25's, 193 of v16's);
+    g misses the altitude on 28 and 34, and the average loses 6–8. soup2's
+    v26-d and v25's v23 were the same kind of run.
+  - The dev curves flag it: g's best dev loss is the worst of the three
+    (0.0127 against 0.0091 and 0.0096), and g, like d, jumps ~20× later.
+    From epoch 3 the median gradient is ~0 while a few batches are 100–1,000×
+    larger, so late training is driven by a handful of examples. The trainer
+    had no gradient clipping.
+  - h and i were not averaged on their own: that would be picking runs after
+    seeing the gate.
+- [x] **New training recipe** (#58, approved by the owner 2026-11-14):
+  - `--schedule wsd`: warm up, hold the rate while dev improves, and after
+    `--patience` checks without a gain decay to zero over `--decay-epochs`
+    and stop; `--epochs` is a cap. Before, the best epoch was 1–5 of 10, so
+    the weights kept were a snapshot taken at 60–90% of the peak rate.
+  - Dev is checked every half epoch and scored the way the gate scores
+    (`--select actions`: right − 5 × wrong, negatives included), not by dev
+    loss, which a few confidently wrong rows decide.
+  - `--clip-grad 1.0`. `--save-last` keeps the final weights beside the best,
+    to show whether the run settled.
+  - The runs to average are chosen on dev (`average_models.py --greedy`):
+    best first, each kept only if the average does at least as well on dev.
+  - Faster, same model: batches cut to their longest example (the longest
+    averages 12 of 40 tokens) and fused AdamW. 15 → 26.6 steps/s on the GPU;
+    outputs equal to ~1e-6, and fused differs from plain AdamW by ~0.01% of a
+    step's change.
+- [ ] **v26** = the greedy average of `v26-j/k/l/m` (run seeds 1–4) on data
+  v16 with the new recipe; the gate once against v25, install (owner's
+  approval) and the Tier 3 checklist in the sim.
 - Found on the way, not part of v26:
   - **#54:** a held switch could be confirmed by another switch command
     (the token lacked the switch slots).
