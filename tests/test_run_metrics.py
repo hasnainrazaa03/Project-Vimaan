@@ -88,6 +88,26 @@ def test_new_lines_are_read_incrementally_with_the_smoothed_loss(runs):
     assert run_metrics.tail("v9", new_offset) == ([], new_offset)
 
 
+def test_lines_written_while_tailing_wait_for_their_smoothed_loss(runs, monkeypatch):
+    f = runs / "runs" / "v9" / "metrics.jsonl"
+    write(f, [META, *steps(1, 10, 1)])
+    offset = run_metrics.snapshot("v9")["summary"]["offset"]
+    write(f, steps(11, 12, 1))
+    load = run_metrics._load
+
+    def trainer_writes_meanwhile(name):
+        got = load(name)
+        write(f, steps(13, 14, 1))  # after the cache read, before tail reads on
+        return got
+
+    monkeypatch.setattr(run_metrics, "_load", trainer_writes_meanwhile)
+    records, offset = run_metrics.tail("v9", offset)
+    assert [(r["step"], "ema" in r) for r in records] == [(11, True), (12, True)]
+    monkeypatch.setattr(run_metrics, "_load", load)
+    records, _ = run_metrics.tail("v9", offset)
+    assert [(r["step"], "ema" in r) for r in records] == [(13, True), (14, True)]
+
+
 def test_a_rerun_that_truncates_the_file_asks_for_a_fresh_snapshot(runs):
     f = runs / "runs" / "v9" / "metrics.jsonl"
     write(f, [META, *steps(1, 50, 1)])

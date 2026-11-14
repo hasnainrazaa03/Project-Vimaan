@@ -155,8 +155,9 @@
     summary: null,
     meta: null,
     epochs: [],
-    raw: [], // {x, y} per step (x = epochs, fractional)
+    raw: [], // {x, y} per kept step (x = epochs, fractional)
     ema: [],
+    stride: 1, // live steps kept: every stride-th (see keepStep / thin)
     grads: [],
     base: null, // {steps, epochs, spe}
     serverLog: [],
@@ -291,11 +292,23 @@
     return best ? best.epoch : null;
   }
 
-  // Thin the oldest half when a live curve gets long, so the chart stays fast.
-  function cap(arr, limit = 4000) {
-    if (arr.length <= limit) return arr;
-    const half = Math.floor(arr.length / 2);
-    return arr.slice(0, half).filter((_, i) => i % 2 === 0).concat(arr.slice(half));
+  // A live curve stays under LIVE_POINTS, spaced evenly over the whole run:
+  // a new step is kept every `stride` steps, and when the curve fills up every
+  // other point goes and the stride doubles. (Thinning only the oldest half
+  // each time it filled halved the start again and again, until only its
+  // first point was left and the chart drew a straight line from it.)
+  const LIVE_POINTS = 4000;
+
+  function keepStep(step) {
+    return step % st.stride === 0;
+  }
+
+  function thin() {
+    while (st.raw.length > LIVE_POINTS || st.ema.length > LIVE_POINTS) {
+      st.stride *= 2;
+      st.raw = st.raw.filter((_, i) => i % 2 === 0);
+      st.ema = st.ema.filter((_, i) => i % 2 === 0);
+    }
   }
 
   // ------- data ---------------------------------------------------------------
@@ -306,6 +319,9 @@
     st.spe = snap.summary.steps_per_epoch || st.meta.steps_per_epoch || 1;
     st.epochs = snap.epochs || [];
     st.raw = (snap.steps || []).map((s) => ({ x: s.step / st.spe, y: s.loss }));
+    // The snapshot is downsampled evenly; keep new steps at the same spacing.
+    const shown = (snap.steps || []).length;
+    st.stride = Math.max(1, Math.ceil((snap.summary.step || 0) / Math.max(1, shown)));
     st.ema = (snap.steps || []).filter((s) => s.ema != null).map((s) => ({ x: s.step / st.spe, y: s.ema }));
     st.grads = (snap.grad_norms || []).map((s) => ({ x: s.step / st.spe, y: s.grad_norm }));
     st.serverLog = snap.log_tail || [];
@@ -318,8 +334,10 @@
     for (const r of records) {
       if (r.type === "step") {
         const x = r.step / st.spe;
-        st.raw.push({ x, y: r.loss });
-        if (r.ema != null) st.ema.push({ x, y: r.ema });
+        if (keepStep(r.step)) {
+          st.raw.push({ x, y: r.loss });
+          if (r.ema != null) st.ema.push({ x, y: r.ema });
+        }
         if (r.grad_norm != null) st.grads.push({ x, y: r.grad_norm });
       } else if (r.type === "epoch") {
         st.epochs.push(r);
@@ -328,8 +346,7 @@
         st.meta = r;
       }
     }
-    st.raw = cap(st.raw);
-    st.ema = cap(st.ema);
+    thin();
     if (epochChanged) {
       fillCharts();
       renderEpochDetail();
