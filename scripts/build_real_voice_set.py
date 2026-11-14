@@ -9,6 +9,12 @@ then judge each model on real speech without needing the audio.
 Re-run after labelling new flights or changing the grammar:
 
     python scripts/build_real_voice_set.py
+
+It also writes ``real_voice.meta.json``: the grammar's fingerprint and the Vosk
+model. A test and the gate refuse a set heard with another grammar (it went
+stale once: frozen at E1, then Tier 1 and 2 grew the grammar and 12 of 118
+clips came out differently, mostly worse, while the gate kept grading the old
+transcripts).
 """
 
 from __future__ import annotations
@@ -24,11 +30,12 @@ sys.path.insert(0, str(ROOT / "ML"))
 
 AUDIO = Path.home() / "Vimaan_Logs" / "audio"
 OUT = ROOT / "tests" / "fixtures" / "real_voice.jsonl"
+META = OUT.with_name("real_voice.meta.json")
 
 
 def main() -> int:
     from vimaan_nlu.stt import DEFAULT_VOSK_MODEL, UnknownValueError, VoskStream
-    from vimaan_nlu.stt_vocabulary import grammar
+    from vimaan_nlu.stt_vocabulary import grammar, grammar_sha256
 
     stream = VoskStream(DEFAULT_VOSK_MODEL, words=grammar())
     labels = [json.loads(line) for line in open(AUDIO / "labels.jsonl", encoding="utf-8")]
@@ -58,6 +65,12 @@ def main() -> int:
             {"clip": row["file"], "said": row["text"], "heard": heard, **expected[row["file"]]}
         )
     OUT.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    meta = {
+        "grammar_sha256": grammar_sha256(),
+        "vosk_model": os.path.basename(DEFAULT_VOSK_MODEL),
+        "clips": len(rows),
+    }
+    META.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {len(rows)} clips to {OUT}")
     return 0
 

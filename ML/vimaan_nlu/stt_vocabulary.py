@@ -17,6 +17,7 @@ the two drift apart; regenerate with ``python scripts/build_stt_vocabulary.py``.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from collections.abc import Iterable, Mapping
@@ -82,3 +83,9 @@ def load_vocabulary(path: str = VOCABULARY_FILE) -> list[str]:
 def grammar(words: Iterable[str] | None = None) -> list[str]:
     """The Vosk grammar: the command words plus ``[unk]``."""
     return [*(load_vocabulary() if words is None else words), UNKNOWN]
+
+
+def grammar_sha256(words: Iterable[str] | None = None) -> str:
+    """Fingerprint of the grammar. The real-voice set records the one it was
+    heard with, so a grammar change can't leave it grading old transcripts."""
+    return hashlib.sha256("\n".join(grammar(words)).encode()).hexdigest()

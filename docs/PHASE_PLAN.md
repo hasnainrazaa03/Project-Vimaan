@@ -31,8 +31,9 @@ Last updated 2026-11-11.
 Measured so far (in-sim, Vosk): speech end → action **p50 330 ms**;
 recognition 2–3 ms; model ~11 ms; 0 frame stalls. Real-voice benchmark
 (33 labelled clips): Vosk 30/33, Google 32/33. Real-voice gate set: 118
-hand-labelled clips from five flights; v17 and v11 both 91 right / 26
-rejected / 1 wrong.
+hand-labelled clips from five flights, as the shipped grammar hears them:
+v11, v17 and v19 88 right / 28 rejected / 2 wrong, v25 89 / 28 / 1
+(re-heard 2026-11-13; with the E1 grammar it was 91 / 26 / 1).
 
 Order from here (owner, 2026-11-11): D (#35) → A1 → A2, which runs the Tier 1
 flight checklist and so closes T1 → T2.0 groundwork → A3 → A4 → T2 build,
@@ -695,6 +696,15 @@ v25 against v19: new phrasings 0.9999 intent / 1.0000 slot F1 (every command
 56/56 and 8/8 fragments; real voice 92 / 26 / 0 (v19 91 / 26 / 1: "parking
 brake on", heard as "parking bring on engine", now sets the parking brake
 instead of starting an engine); negatives 100%; p95 6.6 ms.
+
+Real-voice set re-heard (2026-11-13). It had been transcribed with the E1
+grammar and never rebuilt, while Tier 1 and 2 grew the grammar, so every gate
+since graded old transcripts. With the shipped grammar 11 of 118 clips come
+out differently, mostly worse ("autopilot two on" as "autopilot new on", which
+acts on autopilot 1; "parking brake off" as "mach go"). Re-gated: all six
+still pass, real voice 89 / 28 / 1 against v19's 88 / 28 / 2. The set now
+records the grammar's fingerprint (`real_voice.meta.json`); a CI test and
+the gate refuse a set heard with another grammar.
 
 - [x] Installed v25 with #43's plugin at 9ab507c (2026-11-13), checked byte
   for byte; v19, v17 and v11 kept for rollback.

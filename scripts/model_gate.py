@@ -19,6 +19,8 @@ Gates
    never acted on.
 4. **Real voice** (tests/fixtures/real_voice.jsonl, what Vosk heard in
    flight): no more wrong actions than the baseline, and at least as many right.
+   Refused when the set was heard with another grammar than the shipped one
+   (rebuild it with scripts/build_real_voice_set.py).
 5. **Negatives** — fragments / word salad / chatter in the held-out split:
    >= 95% end up rejected (not acted on).
 6. **Latency** — p95 NLU < 25 ms on CPU (quantized, as in the plugin).
@@ -205,7 +207,20 @@ def judge(run, text: str, want_intent: str, want: dict[str, Any]) -> tuple[str, 
     return ("right" if ok else "wrong"), f"{p['intent']} {action}"
 
 
+def real_voice_is_current() -> bool:
+    """Was the real-voice set heard with the grammar that ships?"""
+    from vimaan_nlu.stt_vocabulary import grammar_sha256
+
+    meta = ROOT / "tests" / "fixtures" / "real_voice.meta.json"
+    return meta.exists() and json.loads(meta.read_text())["grammar_sha256"] == grammar_sha256()
+
+
 def real_voice(run) -> dict[str, Any]:
+    if not real_voice_is_current():
+        raise SystemExit(
+            "real-voice set was heard with another grammar: "
+            "rebuild it with python scripts/build_real_voice_set.py"
+        )
     rows = [json.loads(line) for line in open(ROOT / "tests" / "fixtures" / "real_voice.jsonl")]
     result: Counter[str] = Counter()
     sessions: dict[str, Counter[str]] = defaultdict(Counter)

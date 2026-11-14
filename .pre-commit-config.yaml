@@ -26,4 +26,5 @@ repos:
     hooks:
       - id: detect-secrets
         args: ["--baseline", ".secrets.baseline"]
-        exclude: '^(package\.lock\.json|planning/.*|scratch/.*|ML/models/.*|ML/datasets/.*)$'
+        # real_voice.meta.json holds the grammar's sha256 fingerprint, not a secret.
+        exclude: '^(package\.lock\.json|planning/.*|scratch/.*|ML/models/.*|ML/datasets/.*|tests/fixtures/real_voice\.meta\.json)$'
