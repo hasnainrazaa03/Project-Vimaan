@@ -227,3 +227,10 @@ def test_eval_detail_and_bad_versions(runs):
     assert evals.eval_detail("v9")["gate"]["baseline"] == "v8"
     for bad in ("v99", "../v9", "nine", ""):
         assert evals.eval_detail(bad) is None
+
+
+def test_a_run_named_for_averaging_counts_as_its_version(runs):
+    # v26-a, v26-b, v26-c are averaged into v26 (ML/average_models.py).
+    for v in ("v24", "v26-a", "scratch"):
+        write(runs / "runs" / v / "metrics.jsonl", [{**META, "version": v}])
+    assert [r["run"] for r in run_metrics.list_runs()] == ["v26-a", "v24", "scratch"]
