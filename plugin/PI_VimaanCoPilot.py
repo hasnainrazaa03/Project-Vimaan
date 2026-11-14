@@ -63,7 +63,7 @@ if _ML_PATH not in sys.path:
 
 # Only light, stdlib-backed modules load into X-Plane; the heavy ones live in
 # the worker process.
-from vimaan_nlu import probe, sim_bridge  # noqa: E402
+from vimaan_nlu import probe, sim_bridge, switches  # noqa: E402
 from vimaan_nlu.aircraft import (  # noqa: E402
     AircraftInfo,
     acf_flap_limits,
@@ -136,6 +136,42 @@ COMMAND_NOUN = {
     "set_vertical_speed": "vertical speed",
     "set_flaps": "flaps",
     "set_course": "course",
+}
+# Tier 3 read-backs.
+LIGHT_NAMES = {
+    "landing": "Landing lights",
+    "taxi": "Taxi lights",
+    "beacon": "Beacon",
+    "strobe": "Strobes",
+    "nav": "Nav lights",
+    "logo": "Logo lights",
+    "wing": "Wing lights",
+    "runway": "Runway turnoff lights",
+    "all": "All lights",
+}
+SIGN_NAMES = {"seat belt": "Seat belt sign", "no smoking": "No smoking sign"}
+SPEEDBRAKE_SPOKEN = {
+    "retract": "Speed brake retracted",
+    "armed": "Speed brake armed",
+    "half": "Speed brake half",
+    "extend": "Speed brake extended",
+}
+AUTOBRAKE_SPOKEN = {
+    "off": "off",
+    "rto": "R T O",
+    "1": "one",
+    "2": "two",
+    "3": "three",
+    "max": "max",
+}
+# The A330's buttons are LO / MED / MAX; on the ground MAX is its RTO.
+AUTOBRAKE_AIRBUS = {
+    "off": "off",
+    "rto": "max",
+    "1": "low",
+    "2": "medium",
+    "3": "three",
+    "max": "max",
 }
 # Delay before reading back a dataref a command or write should have changed.
 VERIFY_DELAY_SEC = 1.0
@@ -1697,7 +1733,7 @@ class PythonInterface:
             return xp.getDataf(ref)
         return xp.getDatas(ref) if kind == "data" else None
 
-    def _write_any(self, name, value):
+    def _write_any(self, name, value, origin="test"):
         base, index = sim_bridge.parse_dataref(name)
         ref = self._find(base)
         if not ref:
@@ -1717,8 +1753,10 @@ class PythonInterface:
             return {"ok": False, "error": f"can't write {name} ({kind})"}
         back = self._read_any(name)
         ok = back is not None and abs(float(back) - float(value)) < 1e-3
+        extra = {"origin": origin} if origin else {}
+        cmd = None if origin else self._current_cmd
         self.tel.event(
-            "sim_write", cmd=None, dataref=name, value=value, readback=back, ok=ok, origin="test"
+            "sim_write", cmd=cmd, dataref=name, value=value, readback=back, ok=ok, **extra
         )
         return {"ok": ok, "readback": back}
 
@@ -3057,22 +3095,13 @@ class PythonInterface:
         if all(self._knob_at(k) for k in steps):
             self._say(XPDR_ALREADY_SPOKEN[value])
             return "no_op"
-        if not all(self._has_command(n) for k in steps for n in (k.down, k.up)):
+        if not self._steps_available(steps):
             self._say("Cannot set the transponder on this aircraft")
             return "rejected"
-        self._knob_step = {
-            "cmd": self._current_cmd,
-            "label": "Transponder",
-            "knobs": tuple(steps),
-            "index": 0,
-            "presses": 0,
-            "waiting": None,  # position before the last click, until it moves
-            "stuck": 0,
-            "spoken": f"Transponder {XPDR_SPOKEN[value]}",
-            "deadline": time.perf_counter() + KNOB_STEP_MAX_SEC,
-        }
-        self.tel.event("knob_step_start", cmd=self._current_cmd, mode=value, knobs=len(steps))
-        return "pending"
+        return self._start_steps("Transponder", steps, f"Transponder {XPDR_SPOKEN[value]}", value)
+
+    # --- Switch steps (vimaan_nlu.switches): one action a frame, each
+    # waiting for the aircraft to show its result before the next ---
 
     def _knob_position(self, knob):
         value = self._read_float(knob.position)
@@ -3082,55 +3111,269 @@ class PythonInterface:
         position = self._knob_position(knob)
         return position is not None and knob.low <= position <= knob.high
 
+    def _step_value(self, step):
+        """What the step watches: a selector's position, a switch's state."""
+        if isinstance(step, switches.Knob):
+            return self._knob_position(step)
+        name = step.dataref if isinstance(step, switches.Write) else step.state
+        value = self._read_any(name)
+        return None if value is None else float(value)
+
+    def _step_done(self, step, value):
+        if value is None:
+            return False
+        if isinstance(step, switches.Knob):
+            return step.low <= value <= step.high
+        if isinstance(step, switches.Write):
+            return switches.reads(value, (step.value,))
+        return switches.reads(value, step.want)
+
+    def _steps_available(self, steps):
+        """Every command and dataref the steps use exists here."""
+        for step in steps:
+            for name in switches.names(step):
+                base, _ = sim_bridge.parse_dataref(name)
+                if not (self._has_command(name) or self._find(base)):
+                    return False
+        return True
+
+    def _start_steps(self, label, steps, spoken, mode):
+        self._knob_step = {
+            "cmd": self._current_cmd,
+            "label": label,
+            "steps": tuple(steps),
+            "index": 0,
+            "presses": 0,
+            "acted": False,  # this step's one press or write is done (Button, Write)
+            "waiting": None,  # the value before the last action, until it moves
+            "stuck": 0,
+            "spoken": spoken,
+            "deadline": time.perf_counter() + KNOB_STEP_MAX_SEC,
+        }
+        self.tel.event(
+            "knob_step_start", cmd=self._current_cmd, label=label, mode=mode, knobs=len(steps)
+        )
+        return "pending"
+
     def _service_knob_step(self):
-        """One click, then wait for the selector to move before the next, so
-        a click the aircraft handles a frame late can't overshoot."""
+        """One action, then wait for the switch to show it before the next,
+        so a click the aircraft handles a frame late can't overshoot. A
+        selector is clicked until it is in range; a button is pressed and a
+        dataref written once (a toggle pressed twice would undo itself)."""
         j = self._knob_step
         if j is None:
             return
-        knob = j["knobs"][j["index"]]
-        position = self._knob_position(knob)
-        if position is None:
-            return self._end_knob_steps(False, "cannot read the selector")
-        if j["waiting"] is not None and position == j["waiting"]:
+        step = j["steps"][j["index"]]
+        what = "selector" if isinstance(step, switches.Knob) else "switch"
+        value = self._step_value(step)
+        if value is None:
+            return self._end_knob_steps(False, f"cannot read the {what}")
+        if j["waiting"] is not None and value == j["waiting"]:
             j["stuck"] += 1
             if j["stuck"] >= KNOB_STUCK_FRAMES:
-                return self._end_knob_steps(False, "the selector did not move")
+                return self._end_knob_steps(False, f"the {what} did not move")
             return
         j.update(waiting=None, stuck=0)
-        if knob.low <= position <= knob.high:
-            j["index"] += 1
-            if j["index"] == len(j["knobs"]):
+        if self._step_done(step, value):
+            j.update(index=j["index"] + 1, acted=False)
+            if j["index"] == len(j["steps"]):
                 return self._end_knob_steps(True)
             return
         if j["presses"] >= KNOB_STEP_MAX_PRESSES or time.perf_counter() > j["deadline"]:
             return self._end_knob_steps(False, "it took too many clicks")
-        self._fire_command(knob.up if position < knob.low else knob.down)
-        j.update(presses=j["presses"] + 1, waiting=position)
+        if isinstance(step, switches.Knob):
+            self._fire_command(step.up if value < step.low else step.down)
+        elif j["acted"]:
+            return  # still moving (an A330 button reads 1.2 while pressed)
+        elif isinstance(step, switches.Button):
+            self._fire_command(step.command)
+        else:
+            self._write_any(step.dataref, step.value, origin=None)
+        j.update(presses=j["presses"] + 1, waiting=value, acted=True)
 
     def _end_knob_steps(self, ok, why=None):
         j, self._knob_step = self._knob_step, None
         assert j is not None  # only called while stepping
         previous, self._current_cmd = self._current_cmd, j["cmd"]
         try:
+            steps = j["steps"]
             self.tel.event(
                 "knob_step_end",
                 logging.INFO if ok else logging.WARNING,
                 cmd=j["cmd"],
+                label=j["label"],
                 ok=ok,
                 presses=j["presses"],
-                positions=[self._knob_position(k) for k in j["knobs"]],
-                sim_mode=self._read_int(DREF_XPDR_MODE),
+                positions=[self._step_value(s) for s in steps],
                 why=why,
             )
             if ok:
-                knobs = j["knobs"]
-                self._expect(j["label"], lambda: all(self._knob_at(k) for k in knobs), True)
+                self._expect(
+                    j["label"],
+                    lambda: all(self._step_done(s, self._step_value(s)) for s in steps),
+                    True,
+                )
                 self._say(j["spoken"])
             else:
                 self._say(f"{j['label']} not set: {why}.")
         finally:
             self._current_cmd = previous
+
+    def _plan_steps(self, key, setting):
+        """(found, steps still to do): found is "ok", "absent" (no such
+        switch) or "unavailable" (no such setting); a Check that already
+        reads its value leaves nothing to do."""
+        found, plan = self.profile.switch_plan(key, setting)
+        steps = list(plan)
+        check = steps[0] if steps else None
+        if isinstance(check, switches.Check):
+            steps.pop(0)
+            if switches.reads(self._step_value(check), (check.want,)):
+                return found, []
+        return found, [s for s in steps if not self._step_done(s, self._step_value(s))]
+
+    def _run_switch(self, steps, label, spoken, already, setting):
+        """Start ``steps`` (none left: already set)."""
+        if not steps:
+            self._say(already)
+            return "no_op"
+        if not self._steps_available(steps):
+            self._say(f"Cannot set the {label.lower()} on this aircraft")
+            return "rejected"
+        return self._start_steps(label, steps, spoken, setting)
+
+    # --- Tier 3: lights, signs, yaw damper, speed brake, autobrake ---
+
+    def _toggle_lights(self, slots, intent):
+        light, light_ok, _ = validate_slot("light", slots.get("light") or "")
+        if not light_ok:
+            self._say("Which lights?")
+            return "rejected"
+        name = LIGHT_NAMES[light]
+        setting, ok, _ = validate_slot("switch", slots.get("switch") or "")
+        if not ok:
+            self._say(f"{name} on or off?")
+            return "rejected"
+        if light == "all":
+            if setting == "auto":
+                self._say("All lights on or off?")
+                return "rejected"
+            steps = []
+            for each in switches.LIGHTS:
+                found, more = self._plan_steps(f"light:{each}", setting)
+                if found == "ok":
+                    steps += more
+        else:
+            found, steps = self._plan_steps(f"light:{light}", setting)
+            if found == "absent":
+                self._say(f"This aircraft has no {name.lower()}")
+                return "rejected"
+            if found == "unavailable":
+                self._say(f"{name} on or off?")
+                return "rejected"
+        return self._run_switch(
+            steps, name, f"{name} {setting}", f"{name} already {setting}", setting
+        )
+
+    def _toggle_signs(self, slots, intent):
+        sign, sign_ok, _ = validate_slot("sign", slots.get("sign") or "")
+        if not sign_ok:
+            self._say("Which sign?")
+            return "rejected"
+        name = SIGN_NAMES[sign]
+        setting, ok, _ = validate_slot("switch", slots.get("switch") or "")
+        if not ok:
+            self._say(f"{name} on or off?")
+            return "rejected"
+        found, steps = self._plan_steps(f"sign:{sign}", setting)
+        if found == "absent":
+            self._say(f"There is no {name.lower()} switch on this aircraft")
+            return "rejected"
+        if found == "unavailable":
+            self._say(f"{name} on or off?")
+            return "rejected"
+        return self._run_switch(
+            steps, name, f"{name} {setting}", f"{name} already {setting}", setting
+        )
+
+    def _toggle_yaw_damper(self, slots, intent):
+        state = slots.get("state")
+        if state not in ("on", "off"):
+            self._say("Yaw damper on or off?")
+            return "rejected"
+        found, steps = self._plan_steps("yaw_damper", state)
+        if found != "ok":
+            self._say("This aircraft has no yaw damper switch")
+            return "rejected"
+        return self._run_switch(
+            steps, "Yaw damper", f"Yaw damper {state}", f"Yaw damper already {state}", state
+        )
+
+    def _set_speed_brake(self, slots, intent):
+        value, ok, _ = validate_slot("speedbrake", slots.get("speedbrake") or "")
+        if not ok:
+            self._say("Speed brake retract, arm, half, or extend?")
+            return "rejected"
+        if self._read_int(switches.HAS_SPEEDBRAKE) == 0:
+            self._say("This aircraft has no speed brakes")
+            return "rejected"
+        setting = {"up": "extend", "down": "retract"}.get(value, value)
+        spoken = SPEEDBRAKE_SPOKEN[setting]
+        air_max = self.profile.settings.get("speed_brake_air_max")
+        on_ground = self._read_int("sim/flightmodel/failures/onground_any")
+        if setting == "extend" and air_max and on_ground == 0:
+            # The 737's lever stops at the flight detent in the air.
+            setting, spoken = air_max, "Speed brake flight detent"
+        found, steps = self._plan_steps("speed_brake", setting)
+        if found != "ok":
+            self._say("Cannot set the speed brake on this aircraft")
+            return "rejected"
+        return self._run_switch(
+            steps,
+            "Speed brake",
+            spoken,
+            spoken.replace("Speed brake", "Speed brake already"),
+            setting,
+        )
+
+    def _set_autobrake(self, slots, intent):
+        if slots.get("autobrake_level"):
+            value, ok, _ = validate_slot("autobrake_level", slots["autobrake_level"])
+            setting = str(int(float(value))) if ok else None
+        else:
+            value, ok, _ = validate_slot("autobrake", slots.get("autobrake") or "")
+            setting = {"low": "1", "medium": "2", "r t o": "rto"}.get(value, value) if ok else None
+        if setting is None:
+            self._say("Auto brake off, one, two, three, or max?")
+            return "rejected"
+        airbus = self.profile.settings.get("autobrake_off")
+        spoken = f"Auto brake {(AUTOBRAKE_AIRBUS if airbus else AUTOBRAKE_SPOKEN)[setting]}"
+        if setting == "off" and airbus:
+            # Its LO / MED / MAX buttons toggle: pressing the lit one turns it off.
+            level = self._read_int(switches.AUTOBRAKE)
+            if level == 1:
+                self._say("Auto brake already off")
+                return "no_op"
+            command = airbus.get(level)
+            if command is None:
+                self._say("Cannot set the auto brake on this aircraft")
+                return "rejected"
+            steps = [switches.Button(switches.AUTOBRAKE, command, 1)]
+            return self._run_switch(steps, "Auto brake", spoken, "", setting)
+        found, steps = self._plan_steps("autobrake", setting)
+        if found == "absent":
+            self._say("This aircraft has no auto brake")
+            return "rejected"
+        if found == "unavailable":
+            self._say(f"This aircraft has no {spoken.lower()}")
+            return "rejected"
+        return self._run_switch(
+            steps,
+            "Auto brake",
+            spoken,
+            spoken.replace("Auto brake", "Auto brake already"),
+            setting,
+        )
 
     def _toggle_landing_gear(self, slots, intent):
         state = slots.get("state")

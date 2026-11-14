@@ -22,7 +22,7 @@ Last updated 2026-11-11.
 | D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim (switch); stick pull still to check | #35 |
 | A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
 | T2 | Tier 2: radios & navigation → **v25** | 🟡 groundwork, runner scenarios, data and model done: v25 passes all six gates (2026-11-13); installed 2026-11-13; runner in the sim 95/95 on four aircraft; next: the owner's real-voice check | #43, #46 |
-| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | ⬜ | |
+| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | 🟡 research done; T3.0a (lights, signs, yaw damper, speed brake, autobrake) built, not trained; next T3.0b | #50 |
 | T4 | Tier 4: questions (read-only) → **v27** | ⬜ | |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
@@ -760,17 +760,49 @@ the gate refuse a set heard with another grammar.
 
 | Intent | Slots | Say | Binding | Verify | Safety |
 | --- | --- | --- | --- | --- | --- |
-| `toggle_lights` | `light` landing/taxi/beacon/strobe/nav/all; `state` | "landing lights on", "all lights off" | `sim/lights/{landing,taxi,beacon,strobe,nav}_lights_on/_off` | `switches/landing_lights_on`, `taxi_light_on`, `beacon_on`, `strobe_lights_on`, `navigation_lights_on` | — |
+| `toggle_lights` | `light` landing/taxi/beacon/strobe/nav/logo/wing/runway/all; `switch` on/off/auto | "landing lights on", "strobes auto", "all lights off" | per aircraft (`vimaan_nlu/switches.py`); X-Plane's `sim/lights/*_on/_off` elsewhere | the switch's own position or state | — |
 | `toggle_anti_ice` | `system` pitot/window/wing/engine; `instance`; `state` | "pitot heat on", "wing anti ice on" | `ice/ice_pitot_heat_on_pilot` (+copilot), `sim/ice/window_heat_on/off`, `sim/ice/wing_heat_on/off`, `ice/ice_inlet_heat_on_per_engine[i]` | the same datarefs | — |
 | `toggle_electrical` | `system` battery/avionics/generator; `instance`; `state` | "avionics master on", "generator two off" | `sim/electrical/battery_1_on/off`, `sim/systems/avionics_on/off`, `sim/electrical/generator_{N}_on/off` | `electrical/battery_on[i]`, `switches/avionics_power_on`, `electrical/generator_on[i]` | off while airborne → confirm |
 | `toggle_fuel_pump` | `engine`; `state` | "fuel pump one on" | `sim/fuel/fuel_pump_{N}_on/off` | `engine/actuators/fuel_pump_on[i]` | off while airborne → confirm |
 | `toggle_yaw_damper` | `state` | "yaw damper on" | `sim/systems/yaw_damper_on/_off` | `switches/yaw_damper_on` | — |
-| `toggle_signs` | `sign` seatbelt/no smoking; `state` | "seatbelt sign on" | `CheckedToggle(sim/systems/seatbelt_sign_toggle, switches/fasten_seat_belts)`, same for `no_smoking` | the state dataref | — |
-| `set_speed_brake` | `position` armed/extend/half/retract | "speed brakes armed", "speed brake extend" | write `controls/speedbrake_ratio` (armed −0.5, retract 0, half 0.5, extend 1) | read-back | extend below 1,000 ft AGL airborne → confirm |
-| `set_autobrake` | `level` off/1/2/3/max/RTO | "autobrake three" | write `switches/auto_brake_level` (enum mapping from step 1) | read-back | — |
+| `toggle_signs` | `sign` seat belt/no smoking; `switch` on/off/auto | "seat belt sign on", "seat belt sign auto" | per aircraft; `seatbelt_sign_toggle` / `no_smoking_toggle` pressed only when the state differs elsewhere | the switch's position or state | — |
+| `set_speed_brake` | `speedbrake` retract/armed/half/extend (up = extend, down = retract) | "speed brake armed", "stow the speed brakes" | write `controls/speedbrake_ratio` (armed −0.5, retract 0, half 0.5, extend 1); the 737 its lever | read-back | extend or half below 1,000 ft AGL airborne → confirm |
+| `set_autobrake` | `autobrake` off/r t o/max/low/medium, or `autobrake_level` 1-3 | "auto brake two", "auto brake max" | write `switches/auto_brake_level` (0 RTO, 1 off, 2-5); the A330 its LO / MED / MAX buttons | read-back | — |
 
 Vocabulary: "speed brake(s)", "auto brake", "r t o" (Vosk lacks the joined
-forms). Checklist: preflight battery/avionics/beacon/nav, taxi lights,
+forms and "detent"). Per-aircraft findings: `AIRCRAFT_PROFILES.md`, "Tier 3
+findings". Where an aircraft lacks a switch Vimaan says so ("This aircraft has
+no auto brake", "There is no no smoking sign switch on this aircraft"). The
+owner chose (2026-11-14): the core five lights plus logo, wing and runway
+turnoff; AUTO as a spoken setting; the groundwork in two PRs, then one
+training run (v26).
+
+### T3.0a Lights, signs, yaw damper, speed brake, autobrake (no training)
+- [x] **Research** on all four aircraft from their cockpit objects and scripts;
+  every name checked against the X-Plane 12.4.3 install (416/416 X-Plane
+  names, 70/70 aircraft controls).
+- [x] **Switch steps** (`vimaan_nlu/switches.py`): Knob, Button, Write, Check,
+  run one per frame by the plugin (the transponder selectors now use them).
+  Plans for any aircraft, overridden by `b58_switches`, `c90_switches`,
+  `b738_switches` and `a333_switches`.
+- [x] **Five commands** with handlers, read-backs and the speed brake safety
+  rule; `GOLD_TIER3` (17 phrases, skipped for older models), and "auto" and
+  "armed" alone never acted on.
+- [x] **Grammar:** 245 → 276 words. Re-heard, the real-voice set showed
+  "light" taking "flight" ("light level two forty", "light director on", six
+  clips) and "collision" and "lever" turning up unsaid, so the singular
+  "light", "anti collision", "speed brake lever" and "yaw dampers" phrasings
+  were dropped. After that 5 of 118 clips change, all already rejected; real
+  voice is unchanged (v25 89 / 28 / 1, v19 and v11 88 / 28 / 2). No bare
+  "{light} {switch}": "nav on" is the autopilot's NAV mode.
+- [ ] Not installed: the larger grammar helps nothing until v26.
+
+### T3.0b Anti-ice, electrical, fuel pumps (next)
+- [ ] Commands, handlers and per-aircraft plans from the part B findings
+  (the 737 battery guard; the A330's fuel pumps by its own buttons only).
+- [ ] Then data, training v26, the gate, and the runner's Tier 3 checklist.
+
+Checklist: preflight battery/avionics/beacon/nav, taxi lights,
 landing + strobes on takeoff, pitot heat, fuel pump, yaw damper, seatbelt
 sign, speed brakes armed for landing, autobrake 3, all lights off after
 shutdown.

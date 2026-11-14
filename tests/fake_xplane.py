@@ -105,7 +105,64 @@ DEFAULT_DATAREFS: dict[str, Any] = {
     "sim/cockpit2/autopilot/otto_fail_warn": 0,
     "sim/cockpit2/autopilot/autopilot_disconnect": 0,
     "sim/flightmodel/misc/machno": 0.0,
+    # Tier 3 switches.
+    "sim/cockpit2/switches/landing_lights_on": 0,
+    "sim/cockpit2/switches/taxi_light_on": 0,
+    "sim/cockpit2/switches/beacon_on": 0,
+    "sim/cockpit2/switches/strobe_lights_on": 0,
+    "sim/cockpit2/switches/navigation_lights_on": 0,
+    "sim/cockpit2/switches/landing_lights_switch": [0.0] * 16,
+    "sim/cockpit2/switches/generic_lights_switch": [0.0] * 128,
+    "sim/cockpit2/switches/fasten_seat_belts": 0,
+    "sim/cockpit2/switches/no_smoking": 0,
+    "sim/cockpit2/switches/yaw_damper_on": 0,
+    "sim/cockpit2/switches/auto_brake_level": 1,  # off
+    "sim/cockpit2/controls/speedbrake_ratio": 0.0,
+    "sim/aircraft/parts/acf_sbrkEQ": 1,
 }
+
+# What X-Plane's own Tier 3 commands do: (dataref, element or None, value);
+# value None toggles. Tests replace or drop these to model an aircraft.
+SWITCH_EFFECTS: dict[str, tuple[str, int | None, Any]] = {
+    **{
+        f"sim/lights/{name}_{state}": (f"sim/cockpit2/switches/{ref}", None, int(state == "on"))
+        for name, ref in (
+            ("landing_lights", "landing_lights_on"),
+            ("taxi_lights", "taxi_light_on"),
+            ("beacon_lights", "beacon_on"),
+            ("strobe_lights", "strobe_lights_on"),
+            ("nav_lights", "navigation_lights_on"),
+        )
+        for state in ("on", "off")
+    },
+    **{
+        f"sim/lights/landing_0{n}_light_{state}": (
+            "sim/cockpit2/switches/landing_lights_switch",
+            n - 1,
+            float(state == "on"),
+        )
+        for n in (1, 2)
+        for state in ("on", "off")
+    },
+    "sim/systems/seatbelt_sign_toggle": ("sim/cockpit2/switches/fasten_seat_belts", None, None),
+    "sim/systems/no_smoking_toggle": ("sim/cockpit2/switches/no_smoking", None, None),
+    "sim/systems/yaw_damper_on": ("sim/cockpit2/switches/yaw_damper_on", None, 1),
+    "sim/systems/yaw_damper_off": ("sim/cockpit2/switches/yaw_damper_on", None, 0),
+    "sim/flight_controls/brakes_1_auto": ("sim/cockpit2/switches/auto_brake_level", None, 2),
+    "sim/flight_controls/brakes_2_auto": ("sim/cockpit2/switches/auto_brake_level", None, 3),
+    "sim/flight_controls/brakes_rto_auto": ("sim/cockpit2/switches/auto_brake_level", None, 0),
+}
+
+
+def switch_effect(name: str, index: int | None, value: Any):
+    def apply(x):
+        if index is not None:
+            x.datarefs[name][index] = value
+        else:
+            x.datarefs[name] = (1 - x.datarefs[name]) if value is None else value
+
+    return apply
+
 
 # xp.getNthAircraftModel(0): (file name, full path).
 AIRCRAFT_MODEL = (
@@ -178,6 +235,8 @@ KNOWN_COMMANDS = {
     "sim/autopilot/CWSA",
     "sim/autopilot/CWSB",
     "sim/autopilot/take_off_go_around",
+    # Tier 3 switches.
+    *SWITCH_EFFECTS,
 }
 
 
@@ -196,7 +255,7 @@ def make_xp() -> types.ModuleType:
     xp.flight_loops = []
     # command name -> fn(xp): what the command does to the sim, for tests that
     # need an aircraft to respond (or to ignore a command, by leaving it out).
-    xp.effects = {}
+    xp.effects = {name: switch_effect(*how) for name, how in SWITCH_EFFECTS.items()}
 
     xp.VK_Z, xp.DownFlag, xp.UpFlag, xp.ControlFlag = 90, 1, 2, 4
     xp.CommandBegin, xp.CommandContinue, xp.CommandEnd = 0, 1, 2

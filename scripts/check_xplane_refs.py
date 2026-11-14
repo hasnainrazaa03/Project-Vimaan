@@ -31,6 +31,7 @@ DEFAULT_SOURCES = (
     "plugin/PI_VimaanCoPilot.py",
     "tests/fake_xplane.py",
     "ML/vimaan_nlu/aircraft.py",
+    "ML/vimaan_nlu/switches.py",
     "ML/vimaan_nlu/probe.py",
 )
 NAME_RE = re.compile(r"[\"'](sim/[A-Za-z0-9_/\[\]]+)[\"']")

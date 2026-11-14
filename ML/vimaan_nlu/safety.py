@@ -27,6 +27,8 @@ from vimaan_nlu.commands import command
 
 # Thresholds (documented + tested). Tune in one place.
 GEAR_UP_MIN_AGL_FT = 1000.0
+# Extending the speed brake below this height airborne asks to confirm.
+SPEED_BRAKE_MIN_AGL_FT = 1000.0
 # Climbing at least this fast counts as a positive rate: gear up after takeoff
 # is normal then (in flight it was held five times, at 447-779 ft, climbing).
 POSITIVE_RATE_FPM = 300.0
@@ -104,6 +106,16 @@ def _flaps_fast(ctx: SafetyContext) -> bool | None:
     return ctx.ias_kt > ctx.vfe_kt
 
 
+def _speed_brake_low(ctx: SafetyContext) -> bool | None:
+    """Spoilers out near the ground lose lift: risky airborne below 1,000 ft.
+    Fine on the ground (ground spoilers); unknown height is risky."""
+    if ctx.on_ground:
+        return False
+    if ctx.agl_ft is None:
+        return None
+    return AIRBORNE_AGL_FT < ctx.agl_ft < SPEED_BRAKE_MIN_AGL_FT
+
+
 def _parking_brake_fast(ctx: SafetyContext) -> bool | None:
     if ctx.ground_speed_kt is None:
         return None
@@ -141,6 +153,12 @@ _RULE_LIST: tuple[_Rule, ...] = (
         applies_to=lambda s: str(s.get("squawk", "")) in EMERGENCY_SQUAWKS,
         risky_when=lambda ctx: True,
         message="Confirm emergency squawk",
+    ),
+    _Rule(
+        name="speed_brake_low",
+        applies_to=lambda s: s.get("speedbrake") in ("extend", "up", "half"),
+        risky_when=_speed_brake_low,
+        message="Confirm speed brake, low altitude",
     ),
     _Rule(
         name="parking_brake_at_speed",
