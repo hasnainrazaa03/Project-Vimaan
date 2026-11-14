@@ -976,8 +976,9 @@ committed; not a gate).
 - **Licences:** Vimaan will be public, so a shipped model trains only on CC0,
   CC BY, Apache or ATCOSIM data. Non-commercial and academic sets are for
   measuring only.
-- Approved, to build: mic pre-roll (the mic stays open; the first sound is no
-  longer lost). The "pitot heat off" in-flight hold is #56.
+- Also approved and built: the mic pre-roll (#57; the mic stays open and each
+  command starts with the last 300 ms) and the "pitot heat off" in-flight
+  hold (#56).
 
 ---
 
