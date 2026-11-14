@@ -25,7 +25,7 @@
 {"clip": "20261030_002528_c0030.wav", "said": "altitude 7,500 ft", "heard": "altitude seven thousand five hundred feet", "intent": "set_autopilot_altitude", "slots": {"altitude": "7500"}}
 {"clip": "20261030_002528_c0031.wav", "said": "heading 180", "heard": "heading one eighty", "intent": "set_autopilot_heading", "slots": {"degrees": "180"}}
 {"clip": "20261030_002528_c0032.wav", "said": "autopilot on", "heard": "autopilot on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "1"}}
-{"clip": "20261030_002528_c0033.wav", "said": "autopilot 2 on", "heard": "autopilot new on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "2"}}
+{"clip": "20261030_002528_c0033.wav", "said": "autopilot 2 on", "heard": "autopilot two on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "2"}}
 {"clip": "20261030_002528_c0034.wav", "said": "autopilot 2 on", "heard": "autopilot two on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "2"}}
 {"clip": "20261030_002528_c0035.wav", "said": "ap2 on", "heard": "eighty two on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "2"}}
 {"clip": "20261030_002528_c0036.wav", "said": "ap2 on", "heard": "eighty two on", "intent": "toggle_autopilot", "slots": {"state": "on", "instance": "2"}}
@@ -59,7 +59,7 @@
 {"clip": "20261030_011221_c0031.wav", "said": "engine two on", "heard": "engine two on", "intent": "toggle_engine", "slots": {"state": "on", "instance": "2"}}
 {"clip": "20261030_011221_c0032.wav", "said": "parking brake on", "heard": "parking bring on engine", "intent": "toggle_parking_brake", "slots": {"state": "on"}}
 {"clip": "20261030_011221_c0033.wav", "said": "parking brake on", "heard": "parking brake on", "intent": "toggle_parking_brake", "slots": {"state": "on"}}
-{"clip": "20261030_145813_c0002.wav", "said": "parking brake off", "heard": "parking request", "intent": "toggle_parking_brake", "slots": {"state": "off"}}
+{"clip": "20261030_145813_c0002.wav", "said": "parking brake off", "heard": "parking brake request", "intent": "toggle_parking_brake", "slots": {"state": "off"}}
 {"clip": "20261030_145813_c0004.wav", "said": "engine start", "heard": "engine start", "intent": "toggle_engine", "slots": {"state": "on", "instance": "1"}}
 {"clip": "20261030_145813_c0005.wav", "said": "engine two start", "heard": "engine two start", "intent": "toggle_engine", "slots": {"state": "on", "instance": "2"}}
 {"clip": "20261030_145813_c0006.wav", "said": "flight director one on", "heard": "flight director one on", "intent": "toggle_flight_director", "slots": {"state": "on", "instance": "1"}}
@@ -81,7 +81,7 @@
 {"clip": "20261030_215104_c0003.wav", "said": "set com two to one two one decimal seven five", "heard": "set com two go one the one decimal seven five", "intent": "set_com_frequency", "slots": {"com_port": "2", "frequency": "121.75"}}
 {"clip": "20261030_215104_c0004.wav", "said": "tune com two to one two one decimal seven five", "heard": "fuel current auto one co one decimal seven five", "intent": "set_com_frequency", "slots": {"com_port": "2", "frequency": "121.75"}}
 {"clip": "20261030_215104_c0005.wav", "said": "tune com two to one two one decimal seven five", "heard": "the all com two both one two one seven five", "intent": "set_com_frequency", "slots": {"com_port": "2", "frequency": "121.75"}}
-{"clip": "20261030_215104_c0006.wav", "said": "tune com two to one two one decimal seven five", "heard": "fuel com to two one two one decimal seven five", "intent": "set_com_frequency", "slots": {"com_port": "2", "frequency": "121.75"}}
+{"clip": "20261030_215104_c0006.wav", "said": "tune com two to one two one decimal seven five", "heard": "fuel com two to one two one decimal seven five", "intent": "set_com_frequency", "slots": {"com_port": "2", "frequency": "121.75"}}
 {"clip": "20261030_215104_c0008.wav", "said": "set com one frequency to one two one decimal eight zero", "heard": "set on one frequency two one two one eight zero", "intent": "set_com_frequency", "slots": {"com_port": "1", "frequency": "121.80"}}
 {"clip": "20261030_215104_c0009.wav", "said": "com one frequency one two one decimal eight zero", "heard": "com one frequency one two one decimal eight zero", "intent": "set_com_frequency", "slots": {"com_port": "1", "frequency": "121.80"}}
 {"clip": "20261030_215104_c0010.wav", "said": "com one set to one two zero decimal seven five", "heard": "see o n one set tune one doing zero decimal seven five", "intent": "set_com_frequency", "slots": {"com_port": "1", "frequency": "120.75"}}
