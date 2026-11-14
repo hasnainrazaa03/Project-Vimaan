@@ -21,7 +21,7 @@ Last updated 2026-11-11.
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | ✅ closed 2026-11-12: Part C flown unattended (121/121 on four aircraft) and the owner's real-voice check passed | #30–#34, #38–#42 |
 | D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim (switch); stick pull still to check | #35 |
 | A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
-| T2 | Tier 2: radios & navigation → **v25** | 🟡 groundwork, runner scenarios, data and model done: v25 passes all six gates (2026-11-13); next: install (owner's approval), then the Tier 2 runner in the sim | #43 |
+| T2 | Tier 2: radios & navigation → **v25** | 🟡 groundwork, runner scenarios, data and model done: v25 passes all six gates (2026-11-13); installed 2026-11-13; next: the Tier 2 runner in the sim | #43 |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | ⬜ | |
 | T4 | Tier 4: questions (read-only) → **v27** | ⬜ | |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
@@ -691,10 +691,12 @@ trained phrasings.
 v25 against v19: new phrasings 0.9999 intent / 1.0000 slot F1 (every command
 1.000); old data 10,063 right / 225 rejected / 0 wrong, the same as v19; gold
 56/56 and 8/8 fragments; real voice 92 / 26 / 0 (v19 91 / 26 / 1: "parking
-bring on engine" is now rejected instead of starting an engine); negatives
-100%; p95 6.6 ms.
+brake on", heard as "parking bring on engine", now sets the parking brake
+instead of starting an engine); negatives 100%; p95 6.6 ms.
 
-- [ ] Install v25 with #43's plugin (owner's approval), keeping v19, v17, v11.
+- [x] Installed v25 with #43's plugin at 9ab507c (2026-11-13), checked byte
+  for byte; v19, v17 and v11 kept for rollback.
+
 - [ ] `simtest run tier2` on all four aircraft.
 
 ---
