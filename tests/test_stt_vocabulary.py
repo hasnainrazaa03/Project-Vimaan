@@ -55,3 +55,33 @@ def test_number_soundalikes_excluded():
     assert "do" not in build_vocabulary(schema)
     assert "do" not in load_vocabulary()
     assert "like" not in load_vocabulary()  # in-sim: "flight" heard as "like"
+
+
+# Words of training phrasings the recogniser may never output, and why.
+UNHEARD_OK = {
+    # A contraction: the grammar builder keeps letters-only words. Unheard,
+    # it decodes to [unk] and drops out ("let's get the flaps up" -> "get the
+    # flaps up"), which the model handles.
+    "let's",
+}
+
+
+def test_every_word_of_a_clean_command_can_be_heard():
+    # The model is trained on these phrasings, so a word missing from the
+    # grammar can never reach it: "oh" for zero was, and "course one oh nine"
+    # could only be heard as "one nine" (course 19).
+    import re
+
+    from data import generate_v2
+    from vimaan_nlu.commands import COMMANDS
+
+    rows, _ = generate_v2.generate(per_intent=200, seed=11)
+    actionable = {c.intent for c in COMMANDS if c.actionable}
+    words = set(load_vocabulary())
+    missing = {}
+    for r in rows:
+        if r["intent"] in actionable and r["noise"] == "none":
+            for w in re.findall(r"[a-z']+", r["text"].lower()):
+                if w not in words and w not in UNHEARD_OK:
+                    missing.setdefault(w, r["text"])
+    assert missing == {}
