@@ -13,6 +13,7 @@ import json
 import os
 import struct
 import sys
+import threading
 import time
 import types
 
@@ -92,6 +93,19 @@ class FakeWorkerClient:
         self.alive = False
 
 
+def finish_aircraft_scans():
+    """Wait for the plugin's background read of the aircraft's files.
+
+    Loading an aircraft starts it (``vimaan-acf-scan``); when it ends it sets
+    ``_athr_scan`` and ``_flap_limits``. A test that sets those itself must
+    not have them overwritten by a scan finishing late (seen on a slow CI
+    runner: the Baron's full-flap limit was replaced by none)."""
+    for t in threading.enumerate():
+        if t.name == "vimaan-acf-scan":
+            t.join(timeout=10)
+            assert not t.is_alive(), "aircraft file scan did not finish"
+
+
 def _load_plugin(monkeypatch, tmp_path, boot="ready"):
     monkeypatch.setenv("HOME", str(tmp_path))
     xp = make_xp()
@@ -113,6 +127,7 @@ def _load_plugin(monkeypatch, tmp_path, boot="ready"):
     plugin.XPluginStart()
     plugin.sd = sd
     plugin._flight_loop()  # receive the worker's ready / fatal
+    finish_aircraft_scans()
     return module, plugin, xp
 
 
@@ -647,6 +662,7 @@ def load_aircraft(plugin, xp, engine_type, commands=(), live=None):
     xp.aircraft_model = ("other.acf", f"/Aircraft/Other {engine_type}/other.acf")
     plugin._next_state_watch = 0.0
     plugin._flight_loop()
+    finish_aircraft_scans()
     return plugin.profile
 
 
