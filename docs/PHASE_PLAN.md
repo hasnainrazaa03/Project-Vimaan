@@ -723,7 +723,26 @@ the gate refuse a set heard with another grammar.
   so a stretch it can't place vanishes. "Tune" was lost in all six test
   voices; "transponder altitude" was heard right in all of them.
 - [ ] The owner's real-voice check of Tier 2 in flight.
-- [ ] Why Vosk drops words like "tune" (real-voice clips and test voices).
+- [x] Why Vosk drops words like "tune" (2026-11-13). Measured on the 118
+  real clips, the checklist phrases in six voices, six phrasings of every
+  intent in three voices, and 160 non-command sentences, end to end with v25:
+  - `[unk]` swallows stretches it can't place ("tune nav one to one one" as
+    one `[unk]`), and the British test voice's "tune" and "alt" aren't heard
+    even with Vosk's full vocabulary. Vosk's grammar is a bag of words:
+    phrase entries don't constrain word order.
+  - Dropping `[unk]`: real voice the same; 6 commands fixed and 6 new wrong
+    actions elsewhere (forced words make plausible wrong commands), so it stays.
+  - Dropping the 41 chit-chat-only words: chit-chat goes (0/54), commands
+    don't gain.
+  - Vosk's 10 best: falling back to an alternative when the best is rejected
+    gives real voice +6 right but +8 wrong (it slips past the "to"/"two"
+    check). Not used.
+  - The larger `vosk-model-en-us-0.22-lgraph`: real voice 79 / 32 / 7, worse
+    than the small model's 90 / 28 / 0 (same harness).
+  - The one gap: "oh" for zero, in 753 clean training phrasings, wasn't in
+    the grammar ("one oh nine" could only be heard as "one nine"). Added
+    (#48), with a test that every word of a clean command phrasing is in the
+    grammar. Real voice unchanged (v25 89 / 28 / 1).
 
 ---
 

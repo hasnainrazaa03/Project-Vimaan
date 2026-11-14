@@ -27,8 +27,10 @@ VOCABULARY_FILE = os.path.join(os.path.dirname(__file__), "command_words.txt")
 UNKNOWN = "[unk]"
 
 # Numbers as pilots say them; the normalizer turns these back into digits.
+# "oh" is a spoken zero ("course one oh nine"): the training data says it, so
+# without it here "one oh nine" could only be heard as "one nine" (course 19).
 NUMBER_WORDS = (
-    "zero one two three four five six seven eight nine niner ten eleven twelve "
+    "zero oh one two three four five six seven eight nine niner ten eleven twelve "
     "thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty thirty "
     "forty fifty sixty seventy eighty ninety hundred thousand decimal point"
 ).split()
