@@ -98,6 +98,7 @@ from vimaan_nlu.safety import (  # noqa: E402
 from vimaan_nlu.telemetry import Telemetry  # noqa: E402
 from vimaan_nlu.validators import (  # noqa: E402
     bare_command,
+    clipped_number,
     has_command_word,
     heading_too_short,
     validate_slot,
@@ -1087,6 +1088,12 @@ class PythonInterface:
                 outcome = "rejected"
                 self.tel.event("implausible", cmd=cmd, reason="no_command_word", intent=intent_pred)
                 self._say("Please repeat that")
+                return
+            # "altitude thousand": the number's start went unheard.
+            if clipped_number(text):
+                outcome = "rejected"
+                self.tel.event("implausible", cmd=cmd, reason="clipped_number", intent=intent_pred)
+                self._say("Say the whole number")
                 return
             if intent_pred == "set_autopilot_heading" and heading_too_short(slots.get("degrees")):
                 outcome = "rejected"

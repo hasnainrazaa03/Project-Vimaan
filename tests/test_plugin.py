@@ -1245,6 +1245,29 @@ def test_one_digit_heading_asks_again(sim):
     assert xp.writes[-1] == ("sim/cockpit2/autopilot/heading_dial_deg_mag_pilot", 90.0)
 
 
+def test_a_number_without_its_start_asks_again(sim):
+    _, plugin, xp = sim
+    # Tier 2 tests: "altitude eight thousand" heard as "altitude thousand"
+    # would set 1,000 ft; the start of the number went unheard.
+    spoken = say(plugin, "altitude thousand", "set_autopilot_altitude", {"altitude": "1000"})
+    assert spoken == ["Say the whole number"]
+    assert xp.writes == []
+    assert events(plugin, "implausible")[-1]["reason"] == "clipped_number"
+    say(plugin, "altitude eight thousand", "set_autopilot_altitude", {"altitude": "8000"})
+    assert xp.writes[-1] == ("sim/cockpit2/autopilot/altitude_dial_ft", 8000.0)
+
+
+def test_a_vertical_speed_off_the_dial_steps_is_refused(sim):
+    _, plugin, xp = sim
+    xp.datarefs["sim/cockpit2/autopilot/altitude_dial_ft"] = 9000.0
+    xp.datarefs["sim/cockpit2/gauges/indicators/altitude_ft_pilot"] = 5000.0
+    # "we should be there in twenty minutes" heard as "twenty minute".
+    assert say(plugin, "twenty minute", "set_vertical_speed", {"vs": "20"}) == [
+        "Vertical speed out of range"
+    ]
+    assert xp.writes == []
+
+
 def test_self_test_checks_intent_and_slots(sim):
     module, plugin, xp = sim
     for text, intent in module.PythonInterface.SELF_TEST_PROBES:

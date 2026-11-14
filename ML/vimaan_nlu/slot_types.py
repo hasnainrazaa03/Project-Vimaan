@@ -22,6 +22,8 @@ class Range:
     hi: float
     integer: bool = True
     exact: bool = False
+    # When set, the value must also be a multiple of it.
+    step: float = 0
 
     def _num(self, value: Any) -> float | None:
         try:
@@ -34,7 +36,10 @@ class Range:
         return str(int(v)) if self.integer else str(v)
 
     def _within(self, value: Any, v: float) -> bool:
-        return self.lo <= (float(value) if self.exact else v) <= self.hi
+        x = float(value) if self.exact else v
+        if not self.lo <= x <= self.hi:
+            return False
+        return not self.step or abs(x / self.step - round(x / self.step)) < 1e-9
 
     def contains(self, value: Any) -> bool:
         v = self._num(value)
@@ -47,7 +52,8 @@ class Range:
             return None, False, "not a number"
         if self._within(value, v):
             return self._fmt(v), True, "in range"
-        return None, False, f"out of range [{self._fmt(self.lo)}, {self._fmt(self.hi)}]"
+        steps = f" in steps of {self._fmt(self.step)}" if self.step else ""
+        return None, False, f"out of range [{self._fmt(self.lo)}, {self._fmt(self.hi)}]{steps}"
 
 
 @dataclass(frozen=True)

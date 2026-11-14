@@ -620,6 +620,16 @@ is (2026-11-12).
 Behaviour:
 - **"On" means replying.** A transponder already on alt, TA or TA/RA says
   "Transponder already on": it is never turned down to mode A.
+- **A number without its start is asked again** (all commands): "thousand"
+  or "hundred" with no number before it ("altitude thousand", from "altitude
+  eight thousand") answers "Say the whole number". **V/S goes in steps of 50**
+  ("twenty minute", from "we should be there in twenty minutes", was a V/S of
+  20). Measured with v25 on the same transcripts (2026-11-13): wrong actions
+  13 → 8 on the checklist voices and 13 → 8 on six phrasings of every command
+  in three voices, non-commands acted on 10 → 6 of 160, nothing right lost
+  (real voice 90 / 28 / 0 either way); all six gates pass unchanged. The six
+  left: "maintain five thousand" four times (a real altitude instruction),
+  "the engine off" (confirmed in flight) and "turn left ident".
 - **Read-backs name the radio**, said or not: "course zero niner zero" answers
   "NAV 1 course zero niner zero", so a lost "nav two" can't pass unnoticed.
 - **Ident** only when the transponder is on ("Transponder is in standby. Say
