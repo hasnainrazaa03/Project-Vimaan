@@ -101,6 +101,7 @@ from vimaan_nlu.validators import (  # noqa: E402
     clipped_number,
     has_command_word,
     heading_too_short,
+    lost_digits,
     validate_slot,
 )
 from vimaan_nlu.worker_client import WorkerClient  # noqa: E402
@@ -1145,6 +1146,12 @@ class PythonInterface:
                     "implausible", cmd=cmd, reason="one_digit_heading", value=slots.get("degrees")
                 )
                 self._say("Say the heading as three digits")
+                return
+            # "want seven zero": a digit was heard as another word (heading 70).
+            if lost_digits(intent_pred, slots, text):
+                outcome = "rejected"
+                self.tel.event("implausible", cmd=cmd, reason="lost_digits", intent=intent_pred)
+                self._say("Say the whole number")
                 return
             # "to" and "two" sound the same, so don't guess between two targets.
             either = two_or_to(intent_pred, text)

@@ -23,6 +23,7 @@ Last updated 2026-11-11.
 | A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
 | T2 | Tier 2: radios & navigation → **v25** | 🟡 groundwork, runner scenarios, data and model done: v25 passes all six gates (2026-11-13); installed 2026-11-13; runner in the sim 95/95 on four aircraft; next: the owner's real-voice check | #43, #46 |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | 🟡 T3.0a and T3.0b built (#50, #51); two v26 averages failed the gate (the second by one real-voice clip); data v16, v26-g/h/i training | #50, #51, #52, #54 |
+| G | Generalization: beyond the owner's voice (measured recognizer noise, other voices, calibration) | 🟡 measured on real voices (2026-11-14); lost-digit refusal built | this PR |
 | T4 | Tier 4: questions (read-only) → **v27** | ⬜ | |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
@@ -886,6 +887,70 @@ Checklist: preflight battery/avionics/beacon/nav, taxi lights,
 landing + strobes on takeoff, pitot heat, fuel pump, yaw damper, seatbelt
 sign, speed brakes armed for landing, autobrake 3, all lights off after
 shutdown.
+
+---
+
+## Phase G: generalization beyond one voice
+
+The owner's goal (2026-11-14): avoid overfitting and generalize. Every step is
+approved by the owner before it is built. The six gates stay as they are.
+
+**Why.**
+- Training data is all generated. The recognition noise is rules written by
+  hand, and the only real speech is the owner's: 118 clips that are the gate's
+  real-voice set and have now steered two data rounds.
+- Confidence is near 1.0 when wrong. On the heard dev set, 95–99% of wrong
+  actions were at ≥ 0.9 and every right one at ≥ 0.99, so the 0.55 floor
+  catches almost nothing.
+- Dev loss climbs with epochs in some runs (v26-d: best at epoch 1, 0.0077 →
+  0.33 at epoch 10).
+- The model reads only text, so what matters is what Vosk *hears*. On the
+  owner's 118 clips v25 is right on 111 of the texts as said (the other 7 are
+  deliberate refusals) and on 91 of the texts as heard. Only 75 were heard
+  exactly.
+
+**Measured on real voices** (2026-11-14; data in `ML/datasets/external/`, not
+committed; not a gate).
+- **ATCOSIM** (10 real controllers, R&D use allowed): the instruction is cut
+  out of each clip by a forced alignment and decoded with the shipped grammar,
+  giving 2,074 commands (flight level, heading, squawk).
+  - v25: 650 right / 1,231 refused / **193 wrong (9.3%)**; on the owner's voice
+    it is 0–1%. v26-soup2 is the same.
+  - Every clean text as said is right.
+  - Speakers range from 2% to 28% wrong.
+- **137 of the 193** were a number that lost a digit: "one seven zero" heard
+  as "want seven zero" → heading 70, "two nine zero" as "tune nine zero" →
+  FL 90.
+- **Google Speech Commands** (CC BY 4.0, 200 speakers a word):
+  - Our words are heard exactly 71–92% of the time. The risky mix-ups are off →
+    half, up → ap, eight → "a", one → want, seven → set.
+  - Words we don't use rarely come out as nothing: cat → cut 79/200, bed →
+    belt 78, tree → three 176.
+
+- [x] **G.1 Lost-digit refusal** (approved 2026-11-14). A heading or flight
+  level of one or two digits is refused ("Say the whole number") when the word
+  before its number is one that none of the command's phrasings puts there.
+  - v25 on ATCOSIM: wrong 193 → **99**, right unchanged (650).
+  - Heard dev: right unchanged, wrong −2.
+  - Owner's real voice: 91 / 27 / 0 → **90 / 28 / 0**. "set heading go ninety
+    degrees" (said "to ninety") is now refused.
+  - Left open for the owner: a narrower version, digit-by-digit numbers only,
+    lets that clip through and catches 123 instead of 127 on ATCOSIM. It was
+    found through a gate clip.
+- [ ] **G.2 Measured recognizer noise:** confusions from (said, heard) pairs
+  replace the hand-written noise rules in the generator. Sources: public real
+  speech, many-speaker TTS, room echo and noise (RIRS_NOISES), X-Plane's own
+  sound, clipped starts.
+- [ ] **G.3 Recipe:** fewer epochs and calibrated confidence, compared on
+  dev and on the real-voice measuring sets; gate only the final candidate.
+- [ ] **G.4 More voices:** the owner's new flights (one session held out as a
+  fresh test, the 118 clips never trained on), and other people reading the
+  checklist.
+- **Licences:** Vimaan will be public, so a shipped model trains only on CC0,
+  CC BY, Apache or ATCOSIM data. Non-commercial and academic sets are for
+  measuring only.
+- Approved, to build: mic pre-roll (the mic stays open; the first sound is no
+  longer lost) and a "pitot heat off" in-flight hold.
 
 ---
 

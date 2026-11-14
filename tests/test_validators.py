@@ -165,6 +165,57 @@ class TestPlausibility:
         assert clipped_number(text) is clipped
 
     @pytest.mark.parametrize(
+        ("intent", "value", "text", "lost"),
+        [
+            # Real controllers through the grammar (ATCOSIM): a digit heard
+            # as another word, the rest a shorter valid number.
+            ("set_autopilot_heading", "70", "turn left heading want seven zero", True),
+            (
+                "set_autopilot_heading",
+                "10",
+                "turn right setting to one zero",
+                False,
+            ),  # "to" is a phrasing word
+            ("set_flight_level", "90", "descend flight level tune nine zero", True),
+            ("set_flight_level", "90", "descend two flight level tune niner zero", True),
+            # Two digits said as a phrasing says them.
+            ("set_autopilot_heading", "70", "heading seven zero", False),
+            ("set_autopilot_heading", "70", "turn left heading seventy", False),
+            ("set_autopilot_heading", "10", "set the heading to one zero", False),
+            ("set_autopilot_heading", "90", "please nine zero degrees", False),
+            ("set_flight_level", "90", "flight level niner zero", False),
+            ("set_flight_level", "90", "nine zero", False),  # nothing in front
+            # Three digits are never in doubt here.
+            ("set_autopilot_heading", "170", "heading want one seven zero", False),
+            # Other commands are not checked.
+            ("set_autopilot_speed", "75", "mach seven five", False),
+        ],
+    )
+    def test_lost_digits(self, intent, value, text, lost):
+        from vimaan_nlu.validators import lost_digits
+
+        slot = {"set_flight_level": "flight_level", "set_autopilot_speed": "speed"}.get(
+            intent, "degrees"
+        )
+        assert lost_digits(intent, {slot: value}, text) is lost
+
+    def test_lost_digits_allows_every_phrasings_word_before_the_number(self):
+        # Every template, filled with a two-digit value, passes.
+        import re
+
+        from vimaan_nlu.commands import PREFIXES, command
+        from vimaan_nlu.validators import lost_digits
+
+        for intent, slot in (
+            ("set_autopilot_heading", "degrees"),
+            ("set_flight_level", "flight_level"),
+        ):
+            for template in command(intent).templates:
+                for prefix in PREFIXES:
+                    text = f"{prefix} " + re.sub(r"\{[^}]*\}", "seven zero", template)
+                    assert not lost_digits(intent, {slot: "70"}, text.strip()), text
+
+    @pytest.mark.parametrize(
         ("value", "ok"),
         [
             ("0", True),
