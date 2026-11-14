@@ -2982,8 +2982,9 @@ class PythonInterface:
             self._say("Cannot set course")
             return "failed"
         self._hold_check(f"Course {port}", DREF_OBS[port], v, modulo=360)
-        named = f"NAV {port} course" if slots.get("nav_port") else "Course"
-        self._say(f"{named} {spell_digits(f'{int(v):03d}')}")
+        # Always name the radio, like the frequency read-backs: speech that
+        # loses "nav two" still sets NAV 1, and the pilot must hear that.
+        self._say(f"NAV {port} course {spell_digits(f'{int(v):03d}')}")
         return "executed"
 
     def _set_transponder_code(self, slots, intent):
