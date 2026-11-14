@@ -425,3 +425,181 @@ def test_tier2_needs_a_tier2_model():
     assert cli._model_lacks("tier2", {"model_intents": ["set_transponder_code"]}) is None
     assert cli._model_lacks("tier2", {}) is None  # an older plugin doesn't say
     assert cli._model_lacks("tier1", {"model_intents": ["None"]}) is None
+
+
+# --- Tier 3 on the fake sim ---------------------------------------------------
+
+from simtest import tier3  # noqa: E402
+
+SW3, ICE3 = "sim/cockpit2/switches/", "sim/cockpit2/ice/"
+
+
+def _light(light, switch):
+    return ("toggle_lights", {"light": light, "switch": switch})
+
+
+TIER3_NLU = {
+    "beacon on": _light("beacon", "on"),
+    "landing lights on": _light("landing", "on"),
+    "strobes on": _light("strobe", "on"),
+    "nav lights on": _light("nav", "on"),
+    "taxi lights off": _light("taxi", "off"),
+    "strobes auto": _light("strobe", "auto"),
+    "logo lights on": _light("logo", "on"),
+    "seat belt sign on": ("toggle_signs", {"sign": "seat belt", "switch": "on"}),
+    "seat belt sign auto": ("toggle_signs", {"sign": "seat belt", "switch": "auto"}),
+    "no smoking sign on": ("toggle_signs", {"sign": "no smoking", "switch": "on"}),
+    "no smoking sign auto": ("toggle_signs", {"sign": "no smoking", "switch": "auto"}),
+    "yaw damper on": ("toggle_yaw_damper", {"state": "on"}),
+    **{
+        f"{word} {setting}": ("toggle_anti_ice", {"ice": ice, "switch": setting})
+        for word, ice in (
+            ("pitot heat", "pitot"),
+            ("probe heat", "pitot"),
+            ("window heat", "window"),
+            ("wing anti ice", "wing"),
+            ("boots", "wing"),
+            ("engine anti ice", "engine"),
+            ("prop heat", "prop"),
+            ("propeller heat", "prop"),
+        )
+        for setting in ("on", "off", "auto")
+    },
+    "avionics on": ("toggle_electrical", {"power": "avionics", "switch": "on"}),
+    "generator two off": (
+        "toggle_electrical",
+        {"power": "generator", "instance": "2", "switch": "off"},
+    ),
+    "fuel pumps on": ("toggle_fuel_pump", {"switch": "on"}),
+    "fuel pumps off": ("toggle_fuel_pump", {"switch": "off"}),
+    "speed brake armed": ("set_speed_brake", {"speedbrake": "armed"}),
+    "stow the speed brakes": ("set_speed_brake", {"speedbrake": "retract"}),
+    "auto brake two": ("set_autobrake", {"autobrake_level": "2"}),
+    "auto brake medium": ("set_autobrake", {"autobrake": "medium"}),
+    "auto brake off": ("set_autobrake", {"autobrake": "off"}),
+}
+
+
+def _baron3(plugin, xp):
+    import test_plugin
+
+    test_plugin.aircraft(plugin, xp, engine_type=1, commands=test_plugin.B58_COMMANDS)
+    xp.datarefs["sim/aircraft/parts/acf_sbrkEQ"] = 0  # its .acf: no speed brakes
+    # Its replaced wing_boot commands: "on" is 2 (single, auto-deflating).
+    xp.effects["sim/ice/wing_boot_on"] = lambda x: x.datarefs.update(
+        {ICE3 + "ice_surface_boot_on": 2}
+    )
+
+
+def _b738_3(plugin, xp):
+    import test_plugin
+    from vimaan_nlu import switches
+
+    test_plugin.aircraft(plugin, xp, engine_type=7, commands=test_plugin.B738_SWITCHES)
+    for knob, low, high in (
+        (switches.B738_POSITION, -1, 1),
+        (switches.B738_SEATBELT, 0, 2),
+        (switches.B738_TAXI, 0, 2),
+    ):
+        xp.datarefs[knob.position] = 0
+        _clicks(xp, knob.position, knob.down, knob.up, low, high)
+    xp.datarefs[switches.B738_SPEEDBRAKE] = 0.0
+    xp.datarefs[SW3 + "taxi_light_on"] = 0
+    pos = switches.B738_POSITION.position
+
+    def script(x):  # B738.lighting: the position switch fires X-Plane's lights
+        x.datarefs[SW3 + "strobe_lights_on"] = int(round(x.datarefs[pos]) == 1)
+        x.datarefs[SW3 + "navigation_lights_on"] = int(round(x.datarefs[pos]) != 0)
+
+    return script
+
+
+def _a333_3(plugin, xp):
+    import test_plugin
+    from vimaan_nlu import switches
+
+    test_plugin.aircraft(plugin, xp, engine_type=7, commands=test_plugin.A333_SWITCHES)
+    for knob in (switches.A333_NAV, switches.A333_SEATBELT, switches.A333_NO_SMOKING):
+        xp.datarefs[knob.position] = 0
+        _clicks(xp, knob.position, knob.down, knob.up, 0, 2)
+    for setting, value in (("on", 2), ("auto", 1), ("off", 0)):
+        xp.effects[f"laminar/A333/toggle_switch/strobe_pos_{setting}"] = lambda x, v=value: (
+            x.datarefs.update({switches.A333_STROBE: v})
+        )
+    xp.effects["laminar/A333/switch/lighting/taxi_light_off"] = lambda x: x.datarefs[
+        SW3 + "landing_lights_switch"
+    ].__setitem__(1, 0.0)
+    toggles = {
+        "laminar/A333/monitors/probe_window_heat": "laminar/A333/buttons/probe_window_heat_toggle",
+        "laminar/A333/buttons/wing_anti_ice": "sim/ice/wing_heat_tog",
+        "laminar/A333/buttons/engine_anti_ice1": "sim/ice/inlet_heat0_tog",
+        "laminar/A333/buttons/engine_anti_ice2": "sim/ice/inlet_heat1_tog",
+    }
+    for state, command in toggles.items():
+        xp.datarefs[state] = 0
+        xp.custom_commands.setdefault(command, None)
+        xp.effects[command] = lambda x, s=state: x.datarefs.update({s: 1 - x.datarefs[s]})
+
+    def autobrake(level):  # LO / MED / MAX toggle: the lit one turns it off
+        def press(x):
+            now = x.datarefs[SW3 + "auto_brake_level"]
+            x.datarefs[SW3 + "auto_brake_level"] = 1 if now == level else level
+
+        return press
+
+    xp.effects["sim/flight_controls/brakes_1_auto"] = autobrake(3)
+    xp.effects["sim/flight_controls/brakes_2_auto"] = autobrake(4)
+
+
+def _run_tier3(monkeypatch, tmp_path, aircraft, steps):
+    import test_plugin
+
+    test_plugin.NLU.clear()
+    for text, (intent, slots) in {**TIER2_NLU, **TIER3_NLU}.items():
+        test_plugin.NLU[text] = (intent, slots, 0.99)
+    module, plugin, xp = test_plugin._load_plugin(monkeypatch, tmp_path)
+    results: list = []
+    try:
+        monkeypatch.setattr(module, "BRIDGE_POLL_SEC", 0.0)
+        monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+        _generic_sim(xp)
+        xp.datarefs["sim/flightmodel/position/y_agl"] = 5000 * 0.3048
+        script = {"baron": _baron3, "737": _b738_3, "a330": _a333_3}[aircraft](plugin, xp)
+        br = Bridge(tmp_path / "Vimaan_Logs", poll_sec=0.002)
+        br.enable()
+        plugin._bridge_next = 0.0
+        runner = scenario.Runner(br, voice=None, poll_sec=0.005, log=lambda _line: None)
+        t = threading.Thread(target=lambda: results.extend(runner.run(steps)), daemon=True)
+        t.start()
+        while t.is_alive():  # X-Plane's flight loop
+            if script is not None:
+                script(xp)
+            plugin._flight_loop()
+            t.join(0.001)
+    finally:
+        plugin.XPluginStop()
+    return results
+
+
+def test_the_tier3_checklist_passes_on_the_fake_baron(monkeypatch, tmp_path):
+    results = _run_tier3(monkeypatch, tmp_path, "baron", tier3.steps("baron"))
+    failed = {r["step"]: r["problems"] for r in results if not r["ok"]}
+    assert failed == {}
+    assert not any(r.get("skipped") for r in results)
+    names = [r["step"] for r in results]
+    assert {"no seat belt sign", "no speed brakes", "generator off is held in flight"} <= set(names)
+
+
+@pytest.mark.parametrize("aircraft", ["737", "a330"])
+def test_the_tier3_switches_that_differ_pass_on_the_fake_jets(monkeypatch, tmp_path, aircraft):
+    steps = tier3._lights(aircraft) + tier3._signs(aircraft) + tier3._jets(aircraft)
+    if aircraft == "a330":
+        steps += [s for s in tier3._anti_ice("a330") if "prop" not in s.name]
+    results = _run_tier3(monkeypatch, tmp_path, aircraft, steps)
+    failed = {r["step"]: r["problems"] for r in results if not r["ok"]}
+    assert failed == {}
+
+
+def test_tier3_needs_a_tier3_model():
+    assert cli._model_lacks("tier3", {"model_intents": ["set_transponder_code"]})
+    assert cli._model_lacks("tier3", {"model_intents": ["set_autobrake"]}) is None
