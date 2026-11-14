@@ -63,12 +63,15 @@ def run_path(name: str) -> Path | None:
     return d
 
 
-def read_records(path: Path, offset: int = 0) -> tuple[list[dict[str, Any]], int]:
-    """Complete JSON lines from ``offset`` on, and the offset after the last
-    complete line (a half-written trailing line is left for next time)."""
+def read_records(
+    path: Path, offset: int = 0, end: int | None = None
+) -> tuple[list[dict[str, Any]], int]:
+    """Complete JSON lines from ``offset`` on (up to byte ``end``, if given),
+    and the offset after the last complete line (a half-written trailing line
+    is left for next time)."""
     with open(path, "rb") as fh:
         fh.seek(offset)
-        chunk = fh.read()
+        chunk = fh.read() if end is None else fh.read(max(0, end - offset))
     end = chunk.rfind(b"\n")
     if end < 0:
         return [], offset
@@ -287,9 +290,14 @@ def tail(name: str, offset: int) -> tuple[list[dict[str, Any]], int] | None:
     if loaded is None:
         return None
     run, d = loaded
-    if offset > run.size:
+    with _lock:
+        size, cached = run.size, run.offset
+    if offset > size:
         return [], -1
-    records, new_offset = read_records(d / "metrics.jsonl", offset)
+    # Only as far as the cache has read: the trainer appends every ~75 ms, and
+    # lines written after the cache read had no EMA, so the live smoothed curve
+    # skipped them.
+    records, new_offset = read_records(d / "metrics.jsonl", offset, cached)
     # The cache applied these already; take their EMA from it.
     with _lock:
         by_step = {s["step"]: s.get("ema") for s in run.steps[-(len(records) + 5) :]}
