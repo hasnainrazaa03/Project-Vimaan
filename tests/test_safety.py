@@ -54,6 +54,41 @@ class TestEngineShutdownInterlock:
         assert v.requires_confirmation and not v.fail_safe
 
 
+class TestPitotHeatOffInterlock:
+    PITOT_OFF = {"ice": "pitot", "switch": "off"}
+
+    def test_pitot_heat_off_airborne_requires_confirmation(self):
+        v = evaluate_safety("toggle_anti_ice", self.PITOT_OFF, SafetyContext(agl_ft=3000))
+        assert v.requires_confirmation and v.rule == "pitot_heat_off_in_flight"
+
+    def test_pitot_heat_off_on_the_ground_is_fine(self):
+        ctx = SafetyContext(on_ground=True, agl_ft=0, ias_kt=0)
+        assert not evaluate_safety("toggle_anti_ice", self.PITOT_OFF, ctx).requires_confirmation
+
+    def test_unknown_state_fails_safe(self):
+        v = evaluate_safety("toggle_anti_ice", self.PITOT_OFF, SafetyContext())
+        assert v.requires_confirmation and v.fail_safe
+
+    @pytest.mark.parametrize(
+        "slots",
+        [
+            {"ice": "pitot", "switch": "on"},
+            {"ice": "pitot", "switch": "auto"},
+            {"ice": "prop", "switch": "off"},
+            {"ice": "wing", "switch": "off"},
+            {"ice": "engine", "switch": "off"},
+        ],
+    )
+    def test_only_pitot_heat_off_is_held(self, slots):
+        v = evaluate_safety("toggle_anti_ice", slots, SafetyContext(agl_ft=3000))
+        assert not v.requires_confirmation
+
+    def test_prop_heat_off_does_not_confirm_a_held_pitot_heat_off(self):
+        assert command_token("toggle_anti_ice", self.PITOT_OFF) != command_token(
+            "toggle_anti_ice", {"ice": "prop", "switch": "off"}
+        )
+
+
 class TestParkingBrakeInterlock:
     def test_parking_brake_at_speed_requires_confirmation(self):
         v = evaluate_safety(
