@@ -3,7 +3,13 @@
 import os
 import sys
 
-from vimaan_nlu.stt_vocabulary import UNKNOWN, build_vocabulary, grammar, load_vocabulary
+from vimaan_nlu.stt_vocabulary import (
+    UNKNOWN,
+    build_vocabulary,
+    entry_words,
+    grammar,
+    load_vocabulary,
+)
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
@@ -57,6 +63,35 @@ def test_number_soundalikes_excluded():
     assert "like" not in load_vocabulary()  # in-sim: "flight" heard as "like"
 
 
+def test_a_word_said_only_inside_a_term_is_entered_as_the_term():
+    schema = {
+        "toggle_ice": {
+            "templates": ["{ice} anti ice {switch}", "turn on the anti ice"],
+            "slots": {},
+        },
+        "toggle_pump": {"templates": ["fuel pump {switch}", "boost pump {switch}"], "slots": {}},
+    }
+    words = build_vocabulary(schema, joined=("anti ice", "fuel pump"))
+    assert "anti ice" in words and "anti" not in words and "ice" not in words
+    assert "fuel pump" in words and "fuel" not in words
+    assert "pump" in words  # also said without "fuel"
+    loose = build_vocabulary(
+        {"x": {"templates": ["ice {switch}", "anti ice {switch}"], "slots": {}}},
+        joined=("anti ice",),
+    )
+    assert "ice" in loose and "anti ice" in loose and "anti" not in loose
+    assert build_vocabulary(schema, joined=("never said",)) == build_vocabulary(schema, joined=())
+
+
+def test_ice_and_fuel_only_inside_their_terms():
+    # Vosk weighs a grammar line as a sentence: "ice" and "fuel" on lines of
+    # their own were as likely as any word, and garbled first words in the
+    # owner's recordings came back as them.
+    g = load_vocabulary()
+    assert {"ice", "anti", "fuel"}.isdisjoint(g)
+    assert {"anti ice", "fuel pump", "fuel pumps"} <= set(g)
+
+
 # Words of training phrasings the recogniser may never output, and why.
 UNHEARD_OK = {
     # A contraction: the grammar builder keeps letters-only words. Unheard,
@@ -77,7 +112,7 @@ def test_every_word_of_a_clean_command_can_be_heard():
 
     rows, _ = generate_v2.generate(per_intent=200, seed=11)
     actionable = {c.intent for c in COMMANDS if c.actionable}
-    words = set(load_vocabulary())
+    words = entry_words(load_vocabulary())
     missing = {}
     for r in rows:
         if r["intent"] in actionable and r["noise"] == "none":
