@@ -36,8 +36,15 @@ _ML = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ML not in sys.path:
     sys.path.insert(0, _ML)
 
-from vimaan_nlu.commands import COMMANDS, PREFIXES, SUFFIXES, Command  # noqa: E402
+from vimaan_nlu.commands import (  # noqa: E402
+    COMMANDS,
+    INSTANCE_WORDS,
+    PREFIXES,
+    SUFFIXES,
+    Command,
+)
 from vimaan_nlu.normalization import normalize_aviation_input  # noqa: E402
+from vimaan_nlu.stt_vocabulary import NUMBER_WORDS, entry_words, load_vocabulary  # noqa: E402
 
 from data import spoken  # noqa: E402
 
@@ -99,6 +106,15 @@ CHATTER = (
 # off", "eighty engine two off") and fillers pilots say.
 LEADING_NOISE = ("the", "feet", "eighty", "a", "uh", "so", "okay", "and", "now")
 DROPPABLE = frozenset({"the", "to", "set", "please", "a", "and", "now"})
+# A stray word next to a whole command: the first sound lost at key-down
+# ("ice director on" for "flight director on"; the mic opens ~85 ms after the
+# press) or noise at key-up ("parking bring on engine"). Since Tier 3 many of
+# the words the recogniser lands on belong to other commands, and v26 took the
+# stray word for the command: "speed autopilot on" -> "which speed brake?",
+# "fuel com two to ..." -> "on or off?". The stray word is one that can't
+# make its own command with the rest of the sentence ("fuel" never goes
+# before "... on"), so the label stays right.
+STRAY_SHARE = 0.3  # of the noisy rows
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +247,76 @@ def add_noise(text: str, protected: set[str], rng: random.Random) -> tuple[str, 
     return f"{rng.choice(LEADING_NOISE)} {text}", "lead"
 
 
+def _could_make(b: Command, words: set[str]) -> bool:
+    """Whether ``words`` hold something for every slot ``b`` requires."""
+    for name in b.required:
+        slot = b.slots[name]
+        if slot.kind == "number":
+            found = bool(words & set(NUMBER_WORDS))
+        elif slot.kind == "instance":
+            found = bool(words & set(INSTANCE_WORDS))
+        else:
+            surfaces = {
+                w for v, syns in slot.synonyms.items() for s in (v, *syns) for w in str(s).split()
+            }
+            found = bool(words & surfaces)
+        if not found:
+            return False
+    return True
+
+
+def _stray_pool() -> dict[str, list[Command]]:
+    """Command words that may turn up stray, each with the commands it is a
+    word of. Not: whole commands ("ident"), numbers, single letters (they
+    join neighbours: "v s"), or words the recogniser can't output."""
+    heard = entry_words(load_vocabulary())
+    owners: dict[str, list[Command]] = {}
+    for c in COMMANDS:
+        if c.actionable:
+            for w in c.command_words:
+                owners.setdefault(w, []).append(c)
+    skip = whole_commands() | set(NUMBER_WORDS)
+    return {w: owners[w] for w in sorted(owners) if w in heard and w not in skip and len(w) > 1}
+
+
+_STRAY_POOL: dict[str, list[Command]] | None = None
+
+
+def stray_words(c: Command, text: str) -> list[str]:
+    """Words that could stand stray beside ``text`` (a command ``c``): none of
+    the commands they belong to could be made with the sentence's words."""
+    global _STRAY_POOL
+    if _STRAY_POOL is None:
+        _STRAY_POOL = _stray_pool()
+    words = set(text.split())
+    # Nor a value of this command's own: "auto strobes on" is no stray word.
+    own = set(c.command_words) | {
+        w
+        for slot in c.slots.values()
+        for v, syns in slot.synonyms.items()
+        for s in (v, *syns)
+        for w in str(s).split()
+    }
+    return [
+        w
+        for w, owners in _STRAY_POOL.items()
+        if w not in words
+        and w not in own
+        and not any(b.intent != c.intent and _could_make(b, words | {w}) for b in owners)
+    ]
+
+
+def add_stray(text: str, word: str, protected: set[str], rng: random.Random) -> str:
+    """Before the command, in place of an unprotected first word, or after it."""
+    words = text.split()
+    r = rng.random()
+    if r < 0.55:
+        return f"{word} {text}"
+    if r < 0.8 and words[0] not in protected:
+        return " ".join([word, *words[1:]])
+    return f"{text} {word}"
+
+
 def label(text: str, surfaces: dict[str, str]) -> dict[str, str] | None:
     """Slot values as they appear in the normalized text, or None if any
     slot doesn't survive normalization as a whole word."""
@@ -291,7 +377,11 @@ def command_rows(
         noise = "none"
         if rng.random() < NOISE_SHARE:
             protected = {w for s in surfaces.values() for w in s.split()} | set(c.command_words)
-            text, noise = add_noise(text, protected, rng)
+            strays = stray_words(c, text) if rng.random() < STRAY_SHARE else []
+            if strays:
+                text, noise = add_stray(text, rng.choice(strays), protected, rng), "stray"
+            else:
+                text, noise = add_noise(text, protected, rng)
         slots = label(text, surfaces)
         if slots is None:
             stats[f"dropped:{c.intent}"] += 1

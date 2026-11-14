@@ -215,6 +215,24 @@ X-Plane's mode on the Baron and King Air, the selector position on the 737,
 TA or TA/RA on the A330. It needs a model that knows Tier 2 (v20 or later; v25 passed the gate)
 and refuses to start on an older one.
 
+**The Tier 3 checklist (switches):**
+
+```bash
+python -m simtest run tier3 baron        # or kingair, 737, a330, all
+```
+
+The same start, then lights (beacon, landing, strobes, nav, taxi off, and
+logo and strobes auto where the aircraft has them), cabin signs, yaw damper,
+anti-ice (pitot / probe and window heat, wing and engine anti-ice, prop heat),
+avionics, fuel pumps on, and on the 737 and A330 speed brake armed and stowed
+and the autobrake set and off. Every switch is checked the way its aircraft
+shows it: the 737's own switch positions, the A330's buttons, the King Air's
+selectors, X-Plane's values on the Baron. A switch the aircraft lacks must be
+refused ("This aircraft has no auto brake"), and generator or fuel pumps off
+in the air must be held for confirmation, then cancelled: nothing is switched
+off for real. 26 steps on the Baron, 29 on the King Air, 31 on the 737, 34 on
+the A330. It needs a model that knows Tier 3 (v26 or later).
+
 Two clicks remain until they're switched off once: Steam's launch-option
 question (set a default for X-Plane 12 in Steam), and X-Plane's "Quit the
 simulator?" (tick "Don't ask again").

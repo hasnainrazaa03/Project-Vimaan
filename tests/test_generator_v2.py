@@ -107,6 +107,20 @@ def test_dev_templates_are_held_out_and_apart_from_the_test_ones(data):
     assert 0.02 < share < 0.09
 
 
+def test_every_pinned_value_of_a_held_out_template_is_also_trained():
+    # "{ice=boots} {switch}" was the only template saying "boots", and the
+    # hash held it out: v26 never saw the word and sent "boots on" to the
+    # flaps. A held-out template must test a new phrasing of known words,
+    # so each "{slot=word}" in it needs a training template pinning it too.
+    pin = re.compile(r"\{(\w+)=([^}]+)\}")
+    lacking = []
+    for c in COMMANDS:
+        held = generate_v2.holdout_templates(c) | generate_v2.dev_templates(c)
+        trained = {p for t in c.templates if t not in held for p in pin.findall(t)}
+        lacking += [(c.intent, t, p) for t in held for p in pin.findall(t) if p not in trained]
+    assert lacking == []
+
+
 def test_dev_leaves_the_test_rows_as_they_were(monkeypatch):
     with_dev, _ = generate_v2.generate(per_intent=60, seed=5)
     monkeypatch.setattr(generate_v2, "DEV_TEMPLATES", 0)
@@ -141,6 +155,31 @@ def test_noise_is_applied_and_real(data):
     assert 0.1 < len(noisy) / len(actionable) < 0.3
     leads = [r for r in noisy if r["noise"] == "lead"]
     assert all(r["text"].split()[0] in generate_v2.LEADING_NOISE for r in leads)
+
+
+def _cmd(intent):
+    return next(c for c in COMMANDS if c.intent == intent)
+
+
+def test_a_stray_word_cannot_make_its_own_command():
+    fd = generate_v2.stray_words(_cmd("toggle_flight_director"), "flight director on")
+    assert "ice" in fd  # anti-ice needs which one: "ice director on" is the director
+    assert "fuel" not in fd  # "fuel ... on" could be the fuel pumps
+    gear = generate_v2.stray_words(_cmd("toggle_landing_gear"), "gear down")
+    assert "flaps" not in gear  # "flaps ... down" is a flap command
+    lights = generate_v2.stray_words(_cmd("toggle_lights"), "strobes on")
+    assert "auto" not in lights  # one of the lights' own values
+    assert "ident" not in fd and "v" not in fd  # a whole command; a letter
+
+
+def test_stray_rows_keep_their_command(data):
+    rows, _ = data
+    stray = [r for r in rows if r["noise"] == "stray"]
+    actionable = [r for r in rows if r["intent"] in {c.intent for c in COMMANDS if c.actionable}]
+    assert 0.02 < len(stray) / len(actionable) < 0.1
+    for r in stray:
+        extra = [w for w in r["text"].split() if w in generate_v2._stray_pool()]
+        assert extra and r["slots"], r
 
 
 def test_holdout_stable_when_phrasings_are_added():

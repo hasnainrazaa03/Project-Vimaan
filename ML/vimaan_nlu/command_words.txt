@@ -14,7 +14,7 @@ altimeter
 altimeters
 altitude
 and
-anti
+anti ice
 ap
 approach
 are
@@ -108,7 +108,9 @@ four
 fourteen
 frequencies
 frequency
-fuel
+fuel boost
+fuel pump
+fuel pumps
 full
 gear
 generator
@@ -132,7 +134,6 @@ how
 hundred
 hungry
 i
-ice
 ident
 identify
 if
@@ -202,6 +203,7 @@ point
 position
 probe
 prop
+propeller
 pump
 pumps
 put

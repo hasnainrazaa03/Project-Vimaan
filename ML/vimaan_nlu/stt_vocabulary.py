@@ -41,6 +41,14 @@ EXTRA_WORDS = "to the and a first second left right both com radio feet".split()
 # "flight" as "like" ("like director one on"). Both only appear in
 # conversational templates ("do you have the time", "what's the weather like").
 EXCLUDED_WORDS = {"do", "like"}
+# Terms the grammar holds whole, as the pilot says them. Vosk turns the
+# grammar's lines into a small bigram model, so a line "anti ice" makes that
+# pair likely, while a word on a line of its own is as likely anywhere. The
+# words of a term can still be heard alone (by backoff), but as loose words
+# "ice" and "fuel" turned up unsaid: a garbled first word in the owner's
+# recordings came back "ice director on" and "fuel com ...". A word that is
+# also said on its own somewhere keeps its own line too.
+JOINED_TERMS = ("anti ice", "fuel pump", "fuel pumps", "fuel boost")
 _DIGIT_WORDS = dict(enumerate("zero one two three four five six seven eight nine".split()))
 
 
@@ -55,26 +63,52 @@ def _words(text: str) -> list[str]:
     return out
 
 
-def build_vocabulary(schema: Mapping[str, Any], phrases: Iterable[str] = ()) -> list[str]:
+def _loose_and_joined(
+    texts: Iterable[list[str]], terms: Iterable[str]
+) -> tuple[set[str], set[str]]:
+    """Words said outside every term, and the terms that occur at all."""
+    term_words = [t.split() for t in terms]
+    loose: set[str] = set()
+    found: set[str] = set()
+    for words in texts:
+        covered = [False] * len(words)
+        for term in term_words:
+            n = len(term)
+            for i in range(len(words) - n + 1):
+                if words[i : i + n] == term:
+                    covered[i : i + n] = [True] * n
+                    found.add(" ".join(term))
+        loose.update(w for w, c in zip(words, covered, strict=True) if not c)
+    return loose, found
+
+
+def build_vocabulary(
+    schema: Mapping[str, Any],
+    phrases: Iterable[str] = (),
+    joined: Iterable[str] = JOINED_TERMS,
+) -> list[str]:
     """Every word in the schema's templates, categorical slot values and
     synonyms, plus ``phrases`` (generator prefixes/suffixes), number words and
-    connective words. Sorted, de-duplicated, lowercase."""
+    connective words; a word said only inside a ``joined`` term is entered as
+    that term instead. Sorted, de-duplicated, lowercase."""
     from vimaan_nlu.pilot_replies import REPLY_WORDS
 
-    words: set[str] = set(NUMBER_WORDS) | set(EXTRA_WORDS) | REPLY_WORDS
+    texts: list[list[str]] = [[w] for w in (*NUMBER_WORDS, *EXTRA_WORDS, *REPLY_WORDS)]
     for intent in schema.values():
-        for template in intent.get("templates", []):
-            words.update(_words(template))
+        texts += [_words(t) for t in intent.get("templates", [])]
         for slot in intent.get("slots", {}).values():
             if slot.get("type") == "categorical":
-                for value in slot.get("values", []):
-                    words.update(_words(value))
+                texts += [_words(v) for v in slot.get("values", [])]
             for synonyms in slot.get("synonyms", {}).values():
-                for synonym in synonyms:
-                    words.update(_words(synonym))
-    for phrase in phrases:
-        words.update(_words(phrase))
-    return sorted(words - EXCLUDED_WORDS)
+                texts += [_words(s) for s in synonyms]
+    texts += [_words(p) for p in phrases]
+    loose, terms = _loose_and_joined(texts, joined)
+    return sorted((loose | terms) - EXCLUDED_WORDS)
+
+
+def entry_words(entries: Iterable[str]) -> set[str]:
+    """The single words of grammar entries ("anti ice" -> anti, ice)."""
+    return {w for e in entries for w in e.split()}
 
 
 def load_vocabulary(path: str = VOCABULARY_FILE) -> list[str]:
