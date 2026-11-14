@@ -131,6 +131,24 @@ GOLD_TIER3 = [
     ("auto brake two", "set_autobrake", {"autobrake_level": "2"}),
     ("auto brake max", "set_autobrake", {"autobrake": "max"}),
     ("auto brake r t o", "set_autobrake", {"autobrake": "r t o"}),
+    ("pitot heat on", "toggle_anti_ice", {"ice": "pitot", "switch": "on"}),
+    ("probe heat on", "toggle_anti_ice", {"ice": "pitot", "switch": "on"}),
+    ("engine anti ice on", "toggle_anti_ice", {"ice": "engine", "switch": "on"}),
+    ("wing anti ice off", "toggle_anti_ice", {"ice": "wing", "switch": "off"}),
+    ("boots on", "toggle_anti_ice", {"ice": "wing", "switch": "on"}),
+    ("window heat on", "toggle_anti_ice", {"ice": "window", "switch": "on"}),
+    ("prop heat off", "toggle_anti_ice", {"ice": "prop", "switch": "off"}),
+    ("avionics master on", "toggle_electrical", {"power": "avionics", "switch": "on"}),
+    ("battery on", "toggle_electrical", {"power": "battery", "switch": "on"}),
+    (
+        "generator two off",
+        "toggle_electrical",
+        {"power": "generator", "instance": "2", "switch": "off"},
+    ),
+    ("alternators on", "toggle_electrical", {"power": "generator", "switch": "on"}),
+    ("fuel pumps on", "toggle_fuel_pump", {"switch": "on"}),
+    ("fuel pump one off", "toggle_fuel_pump", {"instance": "1", "switch": "off"}),
+    ("boost pumps on", "toggle_fuel_pump", {"switch": "on"}),
 ]
 GOLD = GOLD + GOLD_TIER1 + GOLD_TIER2 + GOLD_TIER3
 

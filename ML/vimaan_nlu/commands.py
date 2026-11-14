@@ -114,6 +114,8 @@ SLOT_VALIDATORS: Mapping[str, Range | Enum | AnyOf | Digits] = MappingProxyType(
         # "r t o" as said: Vosk has no "rto".
         "autobrake": Enum(("off", "r t o", "max", "low", "medium")),
         "autobrake_level": Range(1, 3),
+        "ice": Enum(("pitot", "window", "wing", "engine", "prop")),
+        "power": Enum(("battery", "avionics", "generator")),
     }
 )
 
@@ -144,6 +146,8 @@ SLOT_DISPLAY: Mapping[str, str] = MappingProxyType(
         "speedbrake": "spd brk",
         "autobrake": "auto brk",
         "autobrake_level": "auto brk",
+        "ice": "ice",
+        "power": "elec",
     }
 )
 
@@ -1499,6 +1503,163 @@ COMMANDS: tuple[Command, ...] = (
             "sim/flight_controls/brakes_1_auto",
             "sim/flight_controls/brakes_2_auto",
             "sim/flight_controls/brakes_rto_auto",
+        ),
+    ),
+    Command(
+        intent="toggle_anti_ice",
+        display="Anti-ice",
+        templates=(
+            "{ice} heat {switch}",
+            "{ice} anti ice {switch}",
+            "turn {switch} the {ice} heat",
+            "turn the {ice} heat {switch}",
+            "{ice} heat {switch} please",
+            "{ice} anti ice to {switch}",
+            "set the {ice} heat {switch}",
+            "switch {switch} the {ice} heat",
+            "turn {switch} the {ice} anti ice",
+            "{ice} anti ice {switch} now",
+            "{ice=probe} heat {switch}",
+            "{ice=windshield} heat {switch}",
+            "{ice=boots} {switch}",
+            "{ice} heat {switch=auto}",
+            "{ice=probe} heat {switch=auto}",
+        ),
+        slots=_frozen(
+            {
+                "ice": _choice(
+                    {
+                        "pitot": ("probe",),
+                        "window": ("windshield",),
+                        "wing": ("boots",),
+                        "engine": (),
+                        "prop": (),
+                    }
+                ),
+                "switch": _choice({"on": (), "off": ()}),
+            }
+        ),
+        required=("ice", "switch"),
+        command_words=frozenset({"heat", "ice", "pitot", "probe", "windshield", "boots"}),
+        # No "de ice": a short word the recogniser put in unsaid ("de engine two off").
+        handler="_toggle_anti_ice",
+        self_test="pitot heat on",
+        bindings=(
+            "sim/cockpit2/ice/ice_pitot_heat_on_pilot",
+            "sim/cockpit2/ice/ice_window_heat_on",
+            "sim/cockpit2/ice/ice_surfce_heat_on",
+            "sim/cockpit2/ice/ice_inlet_heat_on_per_engine",
+            "sim/cockpit2/ice/ice_prop_heat_on",
+            "sim/ice/pitot_heat0_on",
+            "sim/ice/pitot_heat0_off",
+            "sim/ice/window_heat_on",
+            "sim/ice/window_heat_off",
+            "sim/ice/wing_heat_on",
+            "sim/ice/wing_heat_off",
+            "sim/ice/inlet_heat0_on",
+            "sim/ice/inlet_heat0_off",
+            "sim/ice/inlet_heat1_on",
+            "sim/ice/inlet_heat1_off",
+            "sim/ice/prop_heat_on",
+            "sim/ice/prop_heat_off",
+        ),
+    ),
+    Command(
+        intent="toggle_electrical",
+        display="Electrical",
+        templates=(
+            "{power} {switch}",
+            "{power} master {switch}",
+            "{power_verb} {switch}",
+            "turn {switch} the {power}",
+            "turn the {power} {switch}",
+            "{power} {switch} please",
+            "switch {switch} the {power}",
+            "{power} {instance} {switch}",
+            "{power_verb} {instance} {switch}",
+            "turn {switch} {power} {instance}",
+            "turn the {power} {instance} {switch}",
+            "{power} number {instance} {switch}",
+            "set the {power} {switch}",
+            "{power} {switch} now",
+            "{power_verb} {switch} please",
+            "the {power} {switch}",
+        ),
+        slots=_frozen(
+            {
+                "power": _choice(
+                    {
+                        "battery": ("batteries",),
+                        "avionics": (),
+                        "generator": ("generators", "alternator", "alternators"),
+                    }
+                ),
+                "instance": INSTANCE,
+                "switch": _choice({"on": (), "off": ()}),
+            }
+        ),
+        required=("power", "switch"),
+        command_words=frozenset(
+            {
+                "battery",
+                "batteries",
+                "avionics",
+                "generator",
+                "generators",
+                "alternator",
+                "alternators",
+            }
+        ),
+        handler="_toggle_electrical",
+        safety=("power_off_in_flight",),
+        self_test="avionics on",
+        bindings=(
+            "sim/cockpit2/electrical/battery_on",
+            "sim/cockpit2/electrical/generator_on",
+            "sim/cockpit2/switches/avionics_power_on",
+            "sim/electrical/battery_1_on",
+            "sim/electrical/battery_1_off",
+            "sim/systems/avionics_on",
+            "sim/systems/avionics_off",
+            "sim/electrical/generator_1_on",
+            "sim/electrical/generator_1_off",
+            "sim/electrical/generator_2_on",
+            "sim/electrical/generator_2_off",
+        ),
+    ),
+    Command(
+        intent="toggle_fuel_pump",
+        display="Fuel pump",
+        templates=(
+            "fuel pumps {switch}",
+            "fuel pump {switch}",
+            "fuel pump {instance} {switch}",
+            "boost pumps {switch}",
+            "boost pump {instance} {switch}",
+            "fuel boost pumps {switch}",
+            "turn {switch} the fuel pumps",
+            "turn the fuel pumps {switch}",
+            "turn {switch} fuel pump {instance}",
+            "fuel pumps {switch} please",
+            "fuel pump number {instance} {switch}",
+            "switch {switch} the fuel pumps",
+            "set fuel pumps {switch}",
+            "fuel pumps {switch} now",
+            "the fuel pumps {switch}",
+            "turn the fuel pump {instance} {switch}",
+        ),
+        slots=_frozen({"instance": INSTANCE, "switch": _choice({"on": (), "off": ()})}),
+        required=("switch",),
+        command_words=frozenset({"fuel", "pump", "pumps", "boost"}),
+        handler="_toggle_fuel_pump",
+        safety=("fuel_pump_off_in_flight",),
+        self_test="fuel pumps on",
+        bindings=(
+            "sim/cockpit2/engine/actuators/fuel_pump_on",
+            "sim/fuel/fuel_pump_1_on",
+            "sim/fuel/fuel_pump_1_off",
+            "sim/fuel/fuel_pump_2_on",
+            "sim/fuel/fuel_pump_2_off",
         ),
     ),
     # --- Out-of-scope intent ---

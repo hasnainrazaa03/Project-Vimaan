@@ -38,6 +38,9 @@ NAME_RE = re.compile(r"[\"'](sim/[A-Za-z0-9_/\[\]]+)[\"']")
 # create_command("laminar/A333/autopilot/a_thr_toggle", ...) in an xlua
 # script, or create_dataref(...) for the datarefs overrides need live.
 CREATED_RE = re.compile(r"create_(?:command|dataref)\(\s*[\"']([^\"']+)[\"']")
+# create_command("laminar/B738/guard_cover" .. string.format("%02d", i)): a
+# name built in a loop, recorded as "laminar/B738/guard_cover#" (digits follow).
+NUMBERED_RE = re.compile(r"create_(?:command|dataref)\(\s*[\"']([^\"']+)[\"']\s*\.\.")
 
 
 def load_names(xplane_root: str) -> tuple[set[str], set[str]]:
@@ -80,7 +83,15 @@ def aircraft_commands(xplane_root: str) -> set[str]:
                     # is "--create_command(...)", and doesn't exist in the sim.
                     live = "\n".join(ln for ln in fh if not ln.lstrip().startswith("--"))
                     created.update(CREATED_RE.findall(live))
+                    created.update(f"{p}#" for p in NUMBERED_RE.findall(live))
     return created
+
+
+def is_created(name: str, created: set[str]) -> bool:
+    if name in created:
+        return True
+    stem = name.rstrip("0123456789")
+    return stem != name and f"{stem}#" in created
 
 
 def table_names() -> set[str]:
@@ -127,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
 
     created = aircraft_commands(args.xplane)
     own = override_names()
-    absent = [n for n in own if n not in created]
+    absent = [n for n in own if not is_created(n, created)]
     for name in absent:
         print(f"MISSING  {name}  (no installed aircraft creates it)")
     print(

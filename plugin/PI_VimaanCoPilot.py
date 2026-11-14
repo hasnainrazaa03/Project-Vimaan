@@ -150,6 +150,14 @@ LIGHT_NAMES = {
     "all": "All lights",
 }
 SIGN_NAMES = {"seat belt": "Seat belt sign", "no smoking": "No smoking sign"}
+ICE_NAMES = {
+    "pitot": "Pitot heat",
+    "window": "Window heat",
+    "wing": "Wing anti ice",
+    "engine": "Engine anti ice",
+    "prop": "Prop heat",
+}
+POWER_NAMES = {"battery": "Battery", "avionics": "Avionics"}
 SPEEDBRAKE_SPOKEN = {
     "retract": "Speed brake retracted",
     "armed": "Speed brake armed",
@@ -3242,6 +3250,30 @@ class PythonInterface:
             return "rejected"
         return self._start_steps(label, steps, spoken, setting)
 
+    def _ask_setting(self, name, key):
+        """ "Pitot heat on or auto?": the settings this aircraft's switch has."""
+        options = self.profile.switch_settings(key) or ("on", "off")
+        if len(options) == 1:
+            self._say(f"{name}: say {options[0]}")
+        else:
+            self._say(f"{name} {', '.join(options[:-1])} or {options[-1]}?")
+        return "rejected"
+
+    def _run_keys(self, keys, setting, name, absent):
+        """Every switch in ``keys`` this aircraft has, in turn."""
+        steps, found_any = [], False
+        for key in keys:
+            found, more = self._plan_steps(key, setting)
+            if found == "ok":
+                found_any = True
+                steps += more
+        if not found_any:
+            self._say(absent)
+            return "rejected"
+        return self._run_switch(
+            steps, name, f"{name} {setting}", f"{name} already {setting}", setting
+        )
+
     # --- Tier 3: lights, signs, yaw damper, speed brake, autobrake ---
 
     def _toggle_lights(self, slots, intent):
@@ -3269,8 +3301,7 @@ class PythonInterface:
                 self._say(f"This aircraft has no {name.lower()}")
                 return "rejected"
             if found == "unavailable":
-                self._say(f"{name} on or off?")
-                return "rejected"
+                return self._ask_setting(name, f"light:{light}")
         return self._run_switch(
             steps, name, f"{name} {setting}", f"{name} already {setting}", setting
         )
@@ -3290,8 +3321,7 @@ class PythonInterface:
             self._say(f"There is no {name.lower()} switch on this aircraft")
             return "rejected"
         if found == "unavailable":
-            self._say(f"{name} on or off?")
-            return "rejected"
+            return self._ask_setting(name, f"sign:{sign}")
         return self._run_switch(
             steps, name, f"{name} {setting}", f"{name} already {setting}", setting
         )
@@ -3308,6 +3338,61 @@ class PythonInterface:
         return self._run_switch(
             steps, "Yaw damper", f"Yaw damper {state}", f"Yaw damper already {state}", state
         )
+
+    # --- Tier 3, part B: anti-ice, electrical, fuel pumps ---
+
+    def _toggle_anti_ice(self, slots, intent):
+        ice, ice_ok, _ = validate_slot("ice", slots.get("ice") or "")
+        if not ice_ok:
+            self._say("Which anti ice?")
+            return "rejected"
+        name, key = ICE_NAMES[ice], f"ice:{ice}"
+        setting, ok, _ = validate_slot("switch", slots.get("switch") or "")
+        if not ok:
+            return self._ask_setting(name, key)
+        found, steps = self._plan_steps(key, setting)
+        if found == "absent":
+            self._say(f"This aircraft has no {name.lower()}")
+            return "rejected"
+        if found == "unavailable":
+            if ice == "wing" and self.profile.settings.get("boots_cycle"):
+                self._say("The boots cycle once each time. Say boots on.")
+                return "rejected"
+            return self._ask_setting(name, key)
+        spoken, already = f"{name} {setting}", f"{name} already {setting}"
+        if ice == "wing" and self.profile.settings.get("boots_cycle"):
+            spoken, already = (
+                "Boots cycling",
+                "Boots already cycling",
+            )  # King Air: one cycle a press
+        return self._run_switch(steps, name, spoken, already, setting)
+
+    def _toggle_electrical(self, slots, intent):
+        power, power_ok, _ = validate_slot("power", slots.get("power") or "")
+        if not power_ok:
+            self._say("Battery, avionics, or generator?")
+            return "rejected"
+        instance = str(slots.get("instance") or "")
+        if power == "generator":
+            keys = switches.GENERATORS.get(instance, switches.ALL_GENERATORS)
+            name = f"Generator {instance}" if instance in switches.GENERATORS else "Generators"
+        else:
+            keys, name = (f"power:{power}",), POWER_NAMES[power]
+        setting, ok, _ = validate_slot("switch", slots.get("switch") or "")
+        if not ok or setting == "auto":
+            self._say(f"{name} on or off?")
+            return "rejected"
+        return self._run_keys(keys, setting, name, f"This aircraft has no {name.lower()} switch")
+
+    def _toggle_fuel_pump(self, slots, intent):
+        instance = str(slots.get("instance") or "")
+        keys = switches.FUEL_PUMPS.get(instance, switches.ALL_FUEL_PUMPS)
+        name = f"Fuel pump {instance}" if instance in switches.FUEL_PUMPS else "Fuel pumps"
+        setting, ok, _ = validate_slot("switch", slots.get("switch") or "")
+        if not ok or setting == "auto":
+            self._say(f"{name} on or off?")
+            return "rejected"
+        return self._run_keys(keys, setting, name, "This aircraft has no fuel pump switch")
 
     def _set_speed_brake(self, slots, intent):
         value, ok, _ = validate_slot("speedbrake", slots.get("speedbrake") or "")

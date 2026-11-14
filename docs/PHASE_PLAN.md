@@ -22,7 +22,7 @@ Last updated 2026-11-11.
 | D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim (switch); stick pull still to check | #35 |
 | A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
 | T2 | Tier 2: radios & navigation → **v25** | 🟡 groundwork, runner scenarios, data and model done: v25 passes all six gates (2026-11-13); installed 2026-11-13; runner in the sim 95/95 on four aircraft; next: the owner's real-voice check | #43, #46 |
-| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | 🟡 research done; T3.0a (lights, signs, yaw damper, speed brake, autobrake) built, not trained; next T3.0b | #50 |
+| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | 🟡 research done; T3.0a (lights, signs, yaw damper, speed brake, autobrake) and T3.0b (anti-ice, electrical, fuel pumps) built, not trained; next data, v26, gate | #50, #51 |
 | T4 | Tier 4: questions (read-only) → **v27** | ⬜ | |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
@@ -761,9 +761,9 @@ the gate refuse a set heard with another grammar.
 | Intent | Slots | Say | Binding | Verify | Safety |
 | --- | --- | --- | --- | --- | --- |
 | `toggle_lights` | `light` landing/taxi/beacon/strobe/nav/logo/wing/runway/all; `switch` on/off/auto | "landing lights on", "strobes auto", "all lights off" | per aircraft (`vimaan_nlu/switches.py`); X-Plane's `sim/lights/*_on/_off` elsewhere | the switch's own position or state | — |
-| `toggle_anti_ice` | `system` pitot/window/wing/engine; `instance`; `state` | "pitot heat on", "wing anti ice on" | `ice/ice_pitot_heat_on_pilot` (+copilot), `sim/ice/window_heat_on/off`, `sim/ice/wing_heat_on/off`, `ice/ice_inlet_heat_on_per_engine[i]` | the same datarefs | — |
-| `toggle_electrical` | `system` battery/avionics/generator; `instance`; `state` | "avionics master on", "generator two off" | `sim/electrical/battery_1_on/off`, `sim/systems/avionics_on/off`, `sim/electrical/generator_{N}_on/off` | `electrical/battery_on[i]`, `switches/avionics_power_on`, `electrical/generator_on[i]` | off while airborne → confirm |
-| `toggle_fuel_pump` | `engine`; `state` | "fuel pump one on" | `sim/fuel/fuel_pump_{N}_on/off` | `engine/actuators/fuel_pump_on[i]` | off while airborne → confirm |
+| `toggle_anti_ice` | `ice` pitot (probe) / window (windshield) / wing (boots) / engine / prop; `switch` on/off/auto | "pitot heat on", "wing anti ice on", "boots on" | per aircraft; X-Plane's `sim/ice/*_on/_off` elsewhere (prop heat on propeller aircraft only) | the switch's position or state | — |
+| `toggle_electrical` | `power` battery/avionics/generator (alternator); `instance` 1/2 for a generator; `switch` on/off | "avionics master on", "generator two off" | per aircraft; X-Plane's battery / avionics / generator commands elsewhere | the switch's state | off while airborne → confirm (`power_off_in_flight`) |
+| `toggle_fuel_pump` | `instance` 1/2 (none: all, center included); `switch` on/off | "fuel pumps on", "fuel pump one off" | per aircraft; X-Plane's `sim/fuel/fuel_pump_{N}_on/off` elsewhere (never on the A330) | the pump's state | off while airborne → confirm (`fuel_pump_off_in_flight`) |
 | `toggle_yaw_damper` | `state` | "yaw damper on" | `sim/systems/yaw_damper_on/_off` | `switches/yaw_damper_on` | — |
 | `toggle_signs` | `sign` seat belt/no smoking; `switch` on/off/auto | "seat belt sign on", "seat belt sign auto" | per aircraft; `seatbelt_sign_toggle` / `no_smoking_toggle` pressed only when the state differs elsewhere | the switch's position or state | — |
 | `set_speed_brake` | `speedbrake` retract/armed/half/extend (up = extend, down = retract) | "speed brake armed", "stow the speed brakes" | write `controls/speedbrake_ratio` (armed −0.5, retract 0, half 0.5, extend 1); the 737 its lever | read-back | extend or half below 1,000 ft AGL airborne → confirm |
@@ -797,10 +797,24 @@ training run (v26).
   "{light} {switch}": "nav on" is the autopilot's NAV mode.
 - [ ] Not installed: the larger grammar helps nothing until v26.
 
-### T3.0b Anti-ice, electrical, fuel pumps (next)
-- [ ] Commands, handlers and per-aircraft plans from the part B findings
-  (the 737 battery guard; the A330's fuel pumps by its own buttons only).
-- [ ] Then data, training v26, the gate, and the runner's Tier 3 checklist.
+### T3.0b Anti-ice, electrical, fuel pumps (no training)
+- [x] **Three commands** with handlers and per-aircraft plans from the part B
+  findings: the 737's battery opens its guard first, its tank pumps are
+  written; the A330's fuel pumps, batteries and generators are its own
+  buttons (never `sim/fuel/fuel_pump_N_*`, its engine feed), its probe and
+  window heat ON or AUTO; the King Air's windshield and generators are
+  stepped, its boots run one cycle a press, its engine anti-ice is the ice
+  vanes. Every name checked: 500/500 X-Plane names, 119/119 aircraft
+  controls (its guard command is made in a loop: the checker now reads those).
+- [x] **Safety:** power and fuel pumps off in flight ask to confirm.
+- [x] **Grammar:** 276 → 297 words, real voice unchanged (v25 89 / 28 / 1);
+  no "de ice" (the recogniser put "de" in unsaid).
+- [x] `GOLD_TIER3` grows to 31 phrases.
+
+### T3.1 Data, training, gate, runner (next)
+- [ ] Runner scenarios (`simtest/tier3.py`), then data v14, training v26 (eight
+  new intents), the gate, install (owner's approval) and the Tier 3 checklist
+  in the sim.
 
 Checklist: preflight battery/avionics/beacon/nav, taxi lights,
 landing + strobes on takeoff, pitot heat, fuel pump, yaw damper, seatbelt

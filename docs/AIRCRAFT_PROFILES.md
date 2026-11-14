@@ -204,7 +204,12 @@ jets only.
 | 737-800 | landing: four switches, `landing_lights_switch[0..3]` written (belly [1] [2], wing root [0] [3]); taxi: `taxi_light_brightness_pos` 0-2, whose `_pos_up` turns it down; strobes and nav share the position switch `position_light_pos` (-1 STEADY, 0 OFF, 1 STROBE & STEADY), so strobes off goes to STEADY; logo / wing / runway turnoff `generic_lights_switch[1]` / `[0]` / `[2]` `[3]`. Nothing reads `taxi_light_on` | seat belt `seatbelt_sign_pos` 0 OFF / 1 AUTO / 2 ON, whose `_up` turns it toward OFF; no smoking not modelled | X-Plane's | the lever `laminar/B738/flt_ctrls/speedbrake_lever` (writable): DOWN 0, ARMED 0.0889, FLIGHT DETENT 0.667, UP 1.0. Disarming through X-Plane's ratio leaves the lever at ARMED. In the air it stops at the flight detent | X-Plane's, the knob follows (RTO / OFF / 1 / 2 / 3 / MAX) | `b738_switches` |
 | A330-300 | one LAND switch (`landing_01`); no taxi light, "taxi" is the nose light (`landing_lights_switch[1]` 0 / 0.5 TAXI / 1 T.O., `laminar/A333/switch/lighting/taxi_light_off/_taxi`); strobe `laminar/a333/switches/strobe_pos` 0 OFF / 1 AUTO / 2 ON (`strobe_pos_off/_auto/_on`) and nav & logo `nav_pos` 0-2 (`nav_light_pos_up/_dn`), both rewritten every frame; runway turnoff `rwy_turn_off_on/_off`; wing `generic_lights_switch[1]` | seat belt and no smoking each 0 OFF / 1 AUTO / 2 ON (`seatbelt_signs_up/_dn`, `smoking_signs_up/_dn`), the generic sign datarefs rewritten every frame | none (fly-by-wire) | X-Plane's ratio | LO / MED / MAX buttons: X-Plane's `brakes_1_auto` (level 3), `brakes_2_auto` (4), `brakes_rto_auto` (0 on the ground, 5 in the air), replaced by the A330; each toggles, so pressing the lit one turns it off. Needs nosewheel steering on. No "3" | `a333_switches` |
 
-**Part B (anti-ice, electrical, fuel pumps), for the next PR:**
+**Part B (anti-ice, electrical, fuel pumps)**, as built (T3.0b). Vimaan
+answers with what a switch has: "Pitot heat on or auto?" on the A330, "The
+boots cycle once each time. Say boots on." on the King Air. The 737's
+"battery off" opens the guard, then switches off, and leaves it open (closing
+it would put the battery back on). Generator and fuel pump steps for engines
+an aircraft doesn't have are left out.
 
 - **Baron:** pitot L/R, window heat and avionics are X-Plane's. Prop heat is one switch for both props, so use `sim/ice/prop_heat_on/off`: `prop_heat0` heats the left only. The boots are AUTO / OFF / MAN; the aircraft replaces `wing_boot*`, so `wing_boot_on` sets 2 and `_off` sets 0. There's no inlet heat. The two boost pumps are on/off only.
 - **King Air:** pitot, battery, avionics and boost pumps are X-Plane's. Its own commands are needed for:

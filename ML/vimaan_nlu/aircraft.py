@@ -342,7 +342,8 @@ OVERRIDES: tuple[Override, ...] = (
         name="c90_switches",
         requires=(switches.C90_SIGNS.down, switches.C90_SIGNS.up),
         commands=MappingProxyType({}),
-        settings=MappingProxyType({"switches": switches.C90}),
+        # Its boots run one cycle per press: "boots on" says "Boots cycling".
+        settings=MappingProxyType({"switches": switches.C90, "boots_cycle": True}),
         source="Laminar King Air C90B cockpit .obj manipulators and xlua C90_sys, X-Plane 12.4.3",
         live=(switches.C90_SIGNS.position,),
     ),
@@ -511,9 +512,20 @@ class Profile:
         """How to reach ``setting`` of switch ``key`` here (switches.lookup).
         Without an aircraft's own autobrake entry, only jets get X-Plane's."""
         own = self.settings.get("switches") or {}
-        if key == "autobrake" and key not in own and self.info.engine_kind != "jet":
+        kind = self.info.engine_kind
+        if key == "autobrake" and key not in own and kind != "jet":
             return "absent", ()
-        return switches.lookup(own, key, setting)
+        if key == "ice:prop" and key not in own and kind not in ("piston", "turboprop"):
+            return "absent", ()
+        found, plan = switches.lookup(own, key, setting)
+        if found == "ok":
+            plan = switches.for_engines(plan, self.info.num_engines)
+            if not plan:
+                return "absent", ()
+        return found, plan
+
+    def switch_settings(self, key: str) -> tuple[str, ...]:
+        return switches.settings_of(self.settings.get("switches") or {}, key)
 
     def status_dataref(self, role: str, default: str) -> str:
         """Where this aircraft reports a mode's state (A330 VNAV: fms_vnav)."""

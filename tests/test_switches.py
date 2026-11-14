@@ -32,7 +32,8 @@ def run(plugin, xp, *applies, loops=40):
 
 def test_every_plan_reaches_a_listed_setting():
     keys = {f"light:{n}" for n in switches.LIGHTS} | {f"sign:{n}" for n in switches.SIGNS}
-    keys |= {"yaw_damper", "speed_brake", "autobrake"}
+    keys |= {"yaw_damper", "speed_brake", "autobrake"} | {f"ice:{n}" for n in switches.ICES}
+    keys |= {"power:battery", "power:avionics", *switches.ALL_GENERATORS, *switches.ALL_FUEL_PUMPS}
     for plans in (switches.GENERIC, switches.B58, switches.C90, switches.B738, switches.A333):
         assert set(plans) <= keys
         for table in plans.values():
@@ -435,3 +436,262 @@ def test_a330_seat_belt_and_no_smoking_signs(sim):
     assert run(plugin, xp, *turns) == ["No smoking sign auto"]
     assert (xp.datarefs[belt.position], xp.datarefs[smoke.position]) == (2, 1)
     assert events(plugin, "knob_step_end")[-1]["label"] == "No smoking sign"
+
+
+# --- Tier 3, part B: anti-ice, electrical, fuel pumps --------------------------
+
+ICE, EL = "sim/cockpit2/ice/", "sim/cockpit2/electrical/"
+PUMPS = "sim/cockpit2/engine/actuators/fuel_pump_on"
+
+
+def airborne(xp, feet=5000):
+    xp.datarefs["sim/flightmodel/failures/onground_any"] = 0
+    xp.datarefs["sim/flightmodel/position/y_agl"] = feet * 0.3048
+
+
+def test_pitot_and_engine_anti_ice_any_aircraft(sim):
+    _, plugin, xp = sim
+    say(plugin, "pitot heat on", "toggle_anti_ice", {"ice": "pitot", "switch": "on"})
+    assert run(plugin, xp) == ["Pitot heat on"]
+    assert xp.datarefs[ICE + "ice_pitot_heat_on_pilot"] == 1
+    say(plugin, "engine anti ice on", "toggle_anti_ice", {"ice": "engine", "switch": "on"})
+    assert run(plugin, xp) == ["Engine anti ice on"]
+    assert xp.datarefs[ICE + "ice_inlet_heat_on_per_engine"][:2] == [1, 1]
+
+
+def test_prop_heat_only_with_propellers(sim):
+    _, plugin, xp = sim
+    say(plugin, "prop heat on", "toggle_anti_ice", {"ice": "prop", "switch": "on"})
+    assert run(plugin, xp) == ["Prop heat on"]
+    aircraft(plugin, xp, engine_type=JET)
+    assert say(plugin, "prop heat on", "toggle_anti_ice", {"ice": "prop", "switch": "on"}) == [
+        "This aircraft has no prop heat"
+    ]
+
+
+def test_power_off_in_flight_asks_to_confirm(sim):
+    _, plugin, xp = sim
+    say(plugin, "avionics off", "toggle_electrical", {"power": "avionics", "switch": "off"})
+    assert run(plugin, xp) == ["Avionics off"]  # on the ground
+    airborne(xp)
+    assert say(
+        plugin,
+        "generator two off",
+        "toggle_electrical",
+        {"power": "generator", "instance": "2", "switch": "off"},
+    ) == ["Confirm power off in flight. Say override, or repeat to confirm."]
+    assert xp.datarefs[EL + "generator_on"][1] == 1
+
+
+def test_one_generator_by_number(sim):
+    _, plugin, xp = sim
+    say(
+        plugin,
+        "generator two off",
+        "toggle_electrical",
+        {"power": "generator", "instance": "2", "switch": "off"},
+    )
+    assert run(plugin, xp) == ["Generator 2 off"]
+    assert xp.datarefs[EL + "generator_on"][:2] == [1, 0]
+
+
+def test_fuel_pumps(sim):
+    _, plugin, xp = sim
+    say(plugin, "fuel pump one on", "toggle_fuel_pump", {"instance": "1", "switch": "on"})
+    assert run(plugin, xp) == ["Fuel pump 1 on"]
+    say(plugin, "fuel pumps on", "toggle_fuel_pump", {"switch": "on"})
+    assert run(plugin, xp) == ["Fuel pumps on"]
+    assert xp.datarefs[PUMPS][:2] == [1, 1]
+    airborne(xp)
+    assert say(plugin, "fuel pumps off", "toggle_fuel_pump", {"switch": "off"}) == [
+        "Confirm fuel pump off in flight. Say override, or repeat to confirm."
+    ]
+
+
+def test_baron_boots_and_no_engine_anti_ice(sim):
+    _, plugin, xp = sim
+    aircraft(plugin, xp, engine_type=PISTON, commands=B58)
+    # The Baron's replacement sets 2 (single, auto-deflating) for "on".
+    xp.effects["sim/ice/wing_boot_on"] = lambda x: x.datarefs.update(
+        {ICE + "ice_surface_boot_on": 2}
+    )
+    say(plugin, "boots on", "toggle_anti_ice", {"ice": "wing", "switch": "on"})
+    assert run(plugin, xp) == ["Wing anti ice on"]
+    assert say(
+        plugin, "engine anti ice on", "toggle_anti_ice", {"ice": "engine", "switch": "on"}
+    ) == ["This aircraft has no engine anti ice"]
+    say(plugin, "pitot heat on", "toggle_anti_ice", {"ice": "pitot", "switch": "on"})
+    assert run(plugin, xp) == ["Pitot heat on"]
+    assert xp.datarefs[ICE + "ice_pitot_heat_on_copilot"] == 1  # both sides
+
+
+def test_king_air_windshield_boots_and_generators(sim):
+    _, plugin, xp = sim
+    aircraft(plugin, xp, engine_type=9, commands=C90)
+    knobs = (
+        switches.C90_WINDSHIELD_L,
+        switches.C90_WINDSHIELD_R,
+        switches.C90_GEN1,
+        switches.C90_GEN2,
+    )
+    for knob in knobs:
+        xp.datarefs[knob.position] = 0
+        xp.custom_commands[knob.up] = xp.custom_commands[knob.down] = None
+    xp.custom_commands["laminar/c90/iceRain/switch/surface_deice_up"] = None
+    turns = [selector(xp, k.position, k.up, k.down, -1, 1) for k in knobs]
+    say(plugin, "window heat on", "toggle_anti_ice", {"ice": "window", "switch": "on"})
+    assert run(plugin, xp, *turns) == ["Window heat on"]
+    assert (xp.datarefs[knobs[0].position], xp.datarefs[knobs[1].position]) == (1, 1)  # NORMAL
+    say(
+        plugin,
+        "generator one off",
+        "toggle_electrical",
+        {"power": "generator", "instance": "1", "switch": "off"},
+    )
+    assert run(plugin, xp, *turns) == ["Generator 1 off"]
+    assert xp.datarefs[switches.C90_GEN1.position] == -1
+    xp.effects["laminar/c90/iceRain/switch/surface_deice_up"] = lambda x: x.datarefs.update(
+        {ICE + "ice_surface_boot_on": 3}
+    )
+    say(plugin, "boots on", "toggle_anti_ice", {"ice": "wing", "switch": "on"})
+    assert run(plugin, xp) == ["Boots cycling"]
+    assert say(plugin, "boots off", "toggle_anti_ice", {"ice": "wing", "switch": "off"}) == [
+        "The boots cycle once each time. Say boots on."
+    ]
+    say(plugin, "engine anti ice on", "toggle_anti_ice", {"ice": "engine", "switch": "on"})
+    assert run(plugin, xp) == ["Engine anti ice on"]
+    assert xp.datarefs[ICE + "anti_ice_engine_air"][:2] == [1, 1]  # the ice vanes
+
+
+GUARD = "laminar/B738/button_switch/guard_cover_pos"
+
+
+def guarded_battery(xp):
+    """The 737's battery guard animates open over frames; while it reads
+    closed the 737 holds the battery on; its battery-off acts only when open."""
+    xp.datarefs[GUARD] = [0.0] * 8
+    xp.custom_commands["laminar/B738/guard_cover00"] = None
+    target = [0.0]
+    xp.effects["laminar/B738/guard_cover00"] = lambda x: target.__setitem__(0, 1.0 - target[0])
+
+    def off(x):
+        if x.datarefs[GUARD][0] >= 0.5:
+            x.datarefs[EL + "battery_on"][0] = 0
+
+    xp.effects["sim/electrical/battery_1_off"] = off
+
+    def apply():
+        pos = xp.datarefs[GUARD][0]
+        xp.datarefs[GUARD][0] = (
+            min(target[0], pos + 0.4) if target[0] > pos else max(target[0], pos - 0.4)
+        )
+        if xp.datarefs[GUARD][0] < 0.5:
+            xp.datarefs[EL + "battery_on"][0] = 1
+
+    return apply
+
+
+def test_737_battery_off_opens_its_guard_first(sim):
+    _, plugin, xp = sim
+    load_737(plugin, xp)
+    battery = guarded_battery(xp)
+    say(plugin, "battery off", "toggle_electrical", {"power": "battery", "switch": "off"})
+    assert run(plugin, xp, battery) == ["Battery off"]
+    assert xp.datarefs[GUARD][0] == 1.0 and xp.datarefs[EL + "battery_on"][0] == 0
+    assert xp.commands_fired == ["laminar/B738/guard_cover00", "sim/electrical/battery_1_off"]
+    assert say(
+        plugin, "avionics on", "toggle_electrical", {"power": "avionics", "switch": "on"}
+    ) == ["This aircraft has no avionics switch"]
+
+
+def test_737_tank_pumps_and_window_heat(sim):
+    _, plugin, xp = sim
+    load_737(plugin, xp)
+    say(plugin, "fuel pumps on", "toggle_fuel_pump", {"switch": "on"})
+    assert run(plugin, xp) == ["Fuel pumps on"]
+    assert xp.datarefs["sim/cockpit2/fuel/fuel_tank_pump_on"][:3] == [
+        1,
+        1,
+        1,
+    ]  # left, center, right
+    assert PUMPS not in {w[0].split("[")[0] for w in xp.writes}
+    xp.effects["sim/ice/window_heat_on"] = lambda x: x.datarefs[
+        ICE + "ice_window_heat_on_window"
+    ].__setitem__(0, 1)
+    say(plugin, "window heat on", "toggle_anti_ice", {"ice": "window", "switch": "on"})
+    assert run(plugin, xp) == ["Window heat on"]
+    assert xp.datarefs[ICE + "ice_window_heat_on_window"] == [1, 1, 1, 1]
+
+
+A333_PUMPS = ("left1", "left2", "center_left", "center_right", "right1", "right2")
+
+
+def a330_buttons(xp, names):
+    """A330 pushbuttons: each command toggles its 0 / 1 state."""
+    for state, command in names:
+        xp.datarefs[state] = 0
+        xp.custom_commands.setdefault(command, None)
+        xp.effects[command] = lambda x, s=state: x.datarefs.update({s: 1 - x.datarefs[s]})
+
+
+def test_a330_fuel_pumps_by_its_own_buttons_only(sim):
+    _, plugin, xp = sim
+    load_a330(plugin, xp)
+    a330_buttons(
+        xp,
+        [
+            (f"laminar/A333/fuel/buttons/{n}_pump_pos", f"laminar/A333/switches/{n}_pump_toggle")
+            for n in A333_PUMPS
+        ],
+    )
+    say(plugin, "fuel pumps on", "toggle_fuel_pump", {"switch": "on"})
+    assert run(plugin, xp) == ["Fuel pumps on"]
+    assert all(c.startswith("laminar/A333/switches/") for c in xp.commands_fired)
+    assert len(xp.commands_fired) == 6
+    assert not any(c.startswith("sim/fuel/") for c in xp.commands_fired)
+
+
+def test_a330_probe_heat_has_no_off(sim):
+    _, plugin, xp = sim
+    load_a330(plugin, xp)
+    a330_buttons(
+        xp,
+        [
+            (
+                "laminar/A333/monitors/probe_window_heat",
+                "laminar/A333/buttons/probe_window_heat_toggle",
+            )
+        ],
+    )
+    assert say(plugin, "pitot heat off", "toggle_anti_ice", {"ice": "pitot", "switch": "off"}) == [
+        "Pitot heat on or auto?"
+    ]
+    say(plugin, "pitot heat on", "toggle_anti_ice", {"ice": "pitot", "switch": "on"})
+    assert run(plugin, xp) == ["Pitot heat on"]
+    say(plugin, "probe heat auto", "toggle_anti_ice", {"ice": "pitot", "switch": "auto"})
+    assert run(plugin, xp) == ["Pitot heat auto"]
+    assert xp.datarefs["laminar/A333/monitors/probe_window_heat"] == 0
+
+
+def test_a330_batteries_and_generators_are_its_buttons(sim):
+    _, plugin, xp = sim
+    load_a330(plugin, xp)
+    a330_buttons(
+        xp,
+        [
+            ("laminar/A333/buttons/battery1_pos", "sim/electrical/battery_1_toggle"),
+            ("laminar/A333/buttons/battery2_pos", "sim/electrical/battery_2_toggle"),
+            ("laminar/A333/buttons/gen1_pos", "sim/electrical/generator_1_toggle"),
+            ("laminar/A333/buttons/gen2_pos", "sim/electrical/generator_2_toggle"),
+        ],
+    )
+    say(plugin, "batteries on", "toggle_electrical", {"power": "battery", "switch": "on"})
+    assert run(plugin, xp) == ["Battery on"]
+    say(plugin, "generators on", "toggle_electrical", {"power": "generator", "switch": "on"})
+    assert run(plugin, xp) == ["Generators on"]
+    assert xp.commands_fired == [
+        "sim/electrical/battery_1_toggle",
+        "sim/electrical/battery_2_toggle",
+        "sim/electrical/generator_1_toggle",
+        "sim/electrical/generator_2_toggle",
+    ]
