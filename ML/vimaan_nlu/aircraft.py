@@ -107,8 +107,28 @@ DEFAULT_COMMANDS: Mapping[str, str | None] = MappingProxyType(
         "heading_select": None,
         "altitude_select": None,
         "vertical_select": None,
+        # Transponder ident. None: X-Plane's sim/transponder/transponder_ident.
+        "xpdr_ident": None,
     }
 )
+
+
+@dataclass(frozen=True)
+class Knob:
+    """A cockpit selector turned one click at a time, on aircraft whose
+    scripts own a setting and put a written value back (the 737's and
+    A330's transponder mode). ``position`` is the aircraft's dataref for
+    where it sits; ``down`` / ``up`` turn it one click toward a lower /
+    higher position. Done when the position is in ``low``..``high``."""
+
+    position: str
+    down: str
+    up: str
+    low: int
+    high: int
+
+    def at(self, low: int, high: int | None = None) -> Knob:
+        return Knob(self.position, self.down, self.up, low, low if high is None else high)
 
 
 @dataclass(frozen=True)
@@ -134,6 +154,36 @@ class Override:
 # present only while it's loaded.
 B738_LIVE = "laminar/B738/autopilot/cmd_a_status"
 A333_LIVE = "laminar/A333/autopilot/ap1_pos"
+
+# Transponder selectors (positions set by Override.settings["xpdr_knobs"]).
+B738_XPDR = Knob(
+    "laminar/B738/knob/transponder_pos",
+    "laminar/B738/knob/transponder_mode_dn",
+    "laminar/B738/knob/transponder_mode_up",
+    0,
+    5,
+)
+A333_AUTO_ON = Knob(  # -1 STBY, 0 AUTO, 1 ON
+    "laminar/A333/transponder/auto_on_knob_pos",
+    "laminar/A333/transponder/auto_on_off_left",
+    "laminar/A333/transponder/auto_on_off_right",
+    -1,
+    1,
+)
+A333_ALT_RPT = Knob(  # 0 off, 1 on
+    "laminar/A333/transponder/alt_rpt_knob_pos",
+    "laminar/A333/transponder/alt_rpt_off",
+    "laminar/A333/transponder/alt_rpt_on",
+    0,
+    1,
+)
+A333_TA_RA = Knob(  # TCAS: 0 STBY, 1 TA, 2 TA/RA
+    "laminar/A333/transponder/ta_ra_knob_pos",
+    "laminar/A333/transponder/ta_ra_left",
+    "laminar/A333/transponder/ta_ra_right",
+    0,
+    2,
+)
 
 OVERRIDES: tuple[Override, ...] = (
     Override(
@@ -239,6 +289,60 @@ OVERRIDES: tuple[Override, ...] = (
         ),
         source="Laminar 737-800 xlua B738.glareshield: create_command(...), X-Plane 12.4.3",
         live=(B738_LIVE,),
+    ),
+    Override(
+        # The selector is set only by its own knob commands: a written mode
+        # holds but leaves the knob where it was. 0 TEST, 1 STBY, 2 ALT RPTG
+        # OFF, 3 XPNDR, 4 TA ONLY, 5 TA/RA. X-Plane's mode reads 2 for all of
+        # 2-5, so the knob is what Vimaan checks. There is no off.
+        name="b738_transponder",
+        requires=(
+            "laminar/B738/knob/transponder_mode_up",
+            "laminar/B738/knob/transponder_mode_dn",
+            "laminar/B738/push_button/transponder_ident_dn",
+        ),
+        commands=MappingProxyType({"xpdr_ident": "laminar/B738/push_button/transponder_ident_dn"}),
+        settings=MappingProxyType(
+            {
+                "xpdr_knobs": {
+                    "standby": (B738_XPDR.at(1),),
+                    "on": (B738_XPDR.at(2, 5),),  # replying, any of these
+                    "alt": (B738_XPDR.at(3, 5),),  # replying with altitude
+                }
+            }
+        ),
+        source="Laminar 737-800 xlua B738.systems: create_command(...) and its "
+        "transponder knob handlers, X-Plane 12.4.3",
+        live=(B738_XPDR.position,),
+    ),
+    Override(
+        # A333.transponder recomputes X-Plane's mode every frame from three
+        # selectors (and power, gear, airspeed), so a written mode is
+        # overwritten: turn the selectors. AUTO (0) is the normal position
+        # and replies once airborne or rolling; STBY (-1) is standby; there
+        # is no off. TCAS STBY (0) also leaves the transponder in standby.
+        name="a333_transponder",
+        requires=(
+            A333_AUTO_ON.down,
+            A333_AUTO_ON.up,
+            A333_ALT_RPT.down,
+            A333_ALT_RPT.up,
+            A333_TA_RA.down,
+            A333_TA_RA.up,
+        ),
+        commands=MappingProxyType({}),
+        settings=MappingProxyType(
+            {
+                "xpdr_knobs": {
+                    "standby": (A333_AUTO_ON.at(-1),),
+                    "on": (A333_AUTO_ON.at(0, 1), A333_TA_RA.at(1, 2)),
+                    "alt": (A333_AUTO_ON.at(0, 1), A333_ALT_RPT.at(1), A333_TA_RA.at(1, 2)),
+                }
+            }
+        ),
+        source="Laminar A330-300 xlua A333.transponder: create_command(...) and "
+        "A333_transponder_mode_switching, X-Plane 12.4.3",
+        live=(A333_AUTO_ON.position,),
     ),
 )
 
@@ -514,4 +618,7 @@ def override_names() -> tuple[str, ...]:
     (reference checker)."""
     names = {n for o in OVERRIDES for n in (*o.requires, *o.live)}
     names |= {v for o in OVERRIDES for v in o.commands.values() if v}
+    for o in OVERRIDES:
+        for knobs in (o.settings.get("xpdr_knobs") or {}).values():
+            names |= {n for k in knobs for n in (k.position, k.down, k.up)}
     return tuple(sorted(names))

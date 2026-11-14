@@ -110,6 +110,9 @@ def _parking_brake_fast(ctx: SafetyContext) -> bool | None:
     return ctx.ground_speed_kt > PARKING_BRAKE_MAX_GROUND_SPEED_KT
 
 
+# Codes that alert ATC: hijack, radio failure, emergency.
+EMERGENCY_SQUAWKS = frozenset({"7500", "7600", "7700"})
+
 _RULE_LIST: tuple[_Rule, ...] = (
     _Rule(
         name="gear_up_low_altitude",
@@ -131,6 +134,13 @@ _RULE_LIST: tuple[_Rule, ...] = (
         applies_to=lambda s: s.get("position") == "full" or bool(s.get("flap_setting")),
         risky_when=_flaps_fast,
         message="Confirm flaps, above flap speed",
+    ),
+    _Rule(
+        # Never set one on a misheard digit without the pilot confirming.
+        name="emergency_squawk",
+        applies_to=lambda s: str(s.get("squawk", "")) in EMERGENCY_SQUAWKS,
+        risky_when=lambda ctx: True,
+        message="Confirm emergency squawk",
     ),
     _Rule(
         name="parking_brake_at_speed",
@@ -168,7 +178,13 @@ def command_token(intent: str, slots: dict) -> str:
     it. Keyed on intent + which unit + the action (robust to minor STT
     variation): "engine two off" must not confirm a pending "engine one off"."""
     slots = slots or {}
-    action = slots.get("state") or slots.get("position") or slots.get("flap_setting", "")
+    action = (
+        slots.get("state")
+        or slots.get("position")
+        or slots.get("flap_setting")
+        # A repeat of 7700 confirms 7700, never 7600.
+        or slots.get("squawk", "")
+    )
     return f"{intent}:{slots.get('instance', '')}:{action}"
 
 

@@ -269,3 +269,43 @@ def test_api(client, logs):
 def test_unknown_flights_and_recordings_are_404(client, logs, path):
     write(logs, session_rows())
     assert client.get(path).status_code == 404
+
+
+def test_transponder_selector_steps_are_noted(logs):
+    rows = [
+        ev(0.1, "session_start", backend="torch", stt_backend="vosk"),
+        *command(
+            10,
+            "c0001",
+            "transponder alt",
+            "set_transponder_mode",
+            {"xpdr_mode": "alt"},
+            "pending",
+            "Transponder altitude",
+            middle=[
+                ev(11.3, "knob_step_start", cmd="c0001", mode="alt", knobs=1),
+                ev(11.4, "knob_step_end", cmd="c0001", ok=True, presses=2, why=None),
+            ],
+        ),
+        *command(
+            20,
+            "c0002",
+            "transponder standby",
+            "set_transponder_mode",
+            {"xpdr_mode": "standby"},
+            "pending",
+            "Transponder not set: the selector did not move.",
+            middle=[
+                ev(21.4, "knob_step_end", cmd="c0002", ok=False, presses=1, why="it is stuck"),
+            ],
+        ),
+        ev(30.0, "session_end"),
+    ]
+    write(logs, rows)
+    cmds = [i for i in flights.load(SESSION)["items"] if i["type"] == "command"]
+    notes = [[(n["text"], n["tone"]) for n in c["notes"]] for c in cmds]
+    assert notes[0] == [
+        ("Turning the transponder selector to alt", "info"),
+        ("Selector set after 2 clicks", "info"),
+    ]
+    assert notes[1] == [("Selector not set: it is stuck", "warn")]

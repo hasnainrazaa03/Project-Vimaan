@@ -134,6 +134,7 @@ COMMAND_NOUN = {
     "set_autopilot_speed": "speed",
     "set_vertical_speed": "vertical speed",
     "set_flaps": "flaps",
+    "set_course": "course",
 }
 # Delay before reading back a dataref a command or write should have changed.
 VERIFY_DELAY_SEC = 1.0
@@ -241,6 +242,34 @@ DREF_HEADING = "sim/cockpit2/autopilot/heading_dial_deg_mag_pilot"
 DREF_ALTITUDE = "sim/cockpit2/autopilot/altitude_dial_ft"
 # kHz, supports 8.33 kHz spacing: 118.750 MHz -> 118750.
 DREF_COM_KHZ: dict[str, str] = dict(BY_INTENT["set_com_frequency"].params["datarefs"])
+# Tier 2 radios. NAV frequencies are in 10 kHz units: 110.50 MHz -> 11050.
+DREF_COM_STANDBY_KHZ: dict[str, str] = dict(BY_INTENT["set_com_standby"].params["datarefs"])
+CMD_COM_FLIP: dict[str, str] = dict(BY_INTENT["swap_com_frequency"].params["commands"])
+DREF_NAV_10KHZ: dict[str, str] = dict(BY_INTENT["set_nav_frequency"].params["datarefs"])
+DREF_NAV_STANDBY_10KHZ: dict[str, str] = dict(BY_INTENT["set_nav_standby"].params["datarefs"])
+CMD_NAV_FLIP: dict[str, str] = dict(BY_INTENT["swap_nav_frequency"].params["commands"])
+DREF_OBS: dict[str, str] = dict(BY_INTENT["set_course"].params["datarefs"])
+DREF_XPDR_CODE: str = BY_INTENT["set_transponder_code"].params["dataref"]
+CMD_XPDR: dict[str, str] = dict(BY_INTENT["set_transponder_mode"].params["commands"])
+DREF_XPDR_MODE: str = BY_INTENT["set_transponder_mode"].params["mode_dataref"]
+DREF_XPDR_IDENT = "sim/cockpit2/radios/indicators/transponder_id"
+# X-Plane's transponder_mode: off 0, standby 1, on (mode A) 2, alt (mode C) 3,
+# test 4, ground (mode S) 5, TA only 6, TA/RA 7. What each spoken mode sets,
+# and the modes that already are it. "On" means replying: it never turns
+# altitude reporting (3, 6, 7) down to mode A.
+XPDR_SETS = {"off": 0, "standby": 1, "on": 2, "alt": 3}
+XPDR_ALREADY = {"off": {0}, "standby": {1}, "on": {2, 3, 5, 6, 7}, "alt": {3, 6, 7}}
+XPDR_SPOKEN = {"off": "off", "standby": "standby", "on": "on", "alt": "altitude"}
+XPDR_ALREADY_SPOKEN = {
+    "off": "Transponder already off",
+    "standby": "Transponder already in standby",
+    "on": "Transponder already on",
+    "alt": "Transponder already reporting altitude",
+}
+# Transponder selectors turned by clicks (737, A330).
+KNOB_STEP_MAX_PRESSES = 12
+KNOB_STEP_MAX_SEC = 10.0
+KNOB_STUCK_FRAMES = 30  # a click that moves nothing for this many frames
 DREF_GEAR_HANDLE = "sim/cockpit2/controls/gear_handle_down"
 DREF_GEAR_RETRACTABLE = "sim/aircraft/gear/acf_gear_retract"
 DREF_FLAP_HANDLE = "sim/cockpit2/controls/flap_handle_request_ratio"
@@ -310,6 +339,14 @@ REQUIRED_SLOTS: dict[str, tuple[str, ...]] = required_slots()
 
 def _round(value, digits):
     return None if value is None else round(value, digits)
+
+
+def mhz_text(units, per_mhz):
+    """A radio dataref's units as MHz text: 121500 kHz -> "121.5",
+    11050 (10 kHz) -> "110.5", 118025 -> "118.025"."""
+    digits = 3 if per_mhz == 1000 else 2
+    text = f"{units / per_mhz:.{digits}f}".rstrip("0")
+    return text + "0" if text.endswith(".") else text
 
 
 class PythonInterface:
@@ -399,6 +436,9 @@ class PythonInterface:
         self._active: dict[str, Any] | None = None
         self._self_test_pending = False
         self._self_test_started = 0.0
+        # Intents the loaded model knows (from the worker's ready message);
+        # None until then, or from a worker that doesn't say.
+        self._model_intents: set[str] | None = None
         self._flight_loop_id = None
         self.hotkeyPress = None
         self.hotkeyRelease = None
@@ -420,6 +460,7 @@ class PythonInterface:
         self._probe: dict[str, Any] | None = None  # a running aircraft probe
         self._deferred: list[dict[str, Any]] = []  # main-thread actions due later
         self._baro_step: dict[str, Any] | None = None  # altimeter set by knob steps
+        self._knob_step: dict[str, Any] | None = None  # selectors turned by clicks
         self._capture: dict[str, Any] | None = None  # Vimaan's own altitude capture
         # Option (b): Vimaan captures altitude where the aircraft can't. Off
         # unless VIMAAN_CAPTURE=1, or switched on with its key.
@@ -855,6 +896,7 @@ class PythonInterface:
             self._service_cranks()
             self._service_deferred()
             self._service_baro_step()
+            self._service_knob_step()
             self._service_capture()
             self._service_verifications()
             self._service_follow_ups()
@@ -874,7 +916,12 @@ class PythonInterface:
             if self.overlay is None
             else round(self.overlay.draw_ms_max, 3),
         )
-        if self._active is not None or self._self_test_pending or self._baro_step is not None:
+        if (
+            self._active is not None
+            or self._self_test_pending
+            or self._baro_step is not None
+            or self._knob_step is not None
+        ):
             return -1.0  # every frame while a reply is due or a knob is stepping
         return QUEUE_POLL_INTERVAL_SEC
 
@@ -885,6 +932,8 @@ class PythonInterface:
         mine = active is not None and cmd == active["cmd"]
         if kind == "ready":
             self.ready = True
+            intents = msg.get("intents")
+            self._model_intents = set(intents) if intents else None
             self.tel.event(
                 "stage",
                 stage="model_load",
@@ -1243,9 +1292,15 @@ class PythonInterface:
         self._self_test_pending = True
         self._self_test_started = time.perf_counter()
         self._say("Running self test")
-        self.worker.send({"op": "selftest", "probes": [list(p) for p in self.SELF_TEST_PROBES]})
+        self.worker.send({"op": "selftest", "probes": [list(p) for p in self._self_test_probes()]})
         if self._flight_loop_id:
             xp.scheduleFlightLoop(self._flight_loop_id, -1.0, 1)
+
+    def _self_test_probes(self):
+        """The probes for commands the loaded model was trained on: v19 knows
+        nothing of Tier 2, and "15 of 23 passed" would hide a real failure."""
+        known = self._model_intents
+        return tuple(p for p in self.SELF_TEST_PROBES if known is None or p[1] in known)
 
     def _finish_self_test(self, results):
         self._self_test_pending = False
@@ -1274,13 +1329,14 @@ class PythonInterface:
                 error=r.get("error"),
                 ok=ok,
             )
-        total = len(self.SELF_TEST_PROBES)
+        total = len(self._self_test_probes())
         self.tel.event(
             "stage",
             stage="self_test",
             ms=elapsed_ms,
             passed=passed,
             total=total,
+            not_in_model=len(self.SELF_TEST_PROBES) - total,
         )
         self._say(f"Self test complete. {passed} of {total} passed.")
 
@@ -1334,8 +1390,13 @@ class PythonInterface:
 
     @staticmethod
     def _which_value(intent, as_two, as_to):
-        if intent in ("set_autopilot_heading", "set_flight_level"):
-            name = "Heading" if intent == "set_autopilot_heading" else "Flight level"
+        three_digits = {
+            "set_autopilot_heading": "Heading",
+            "set_flight_level": "Flight level",
+            "set_course": "Course",
+        }
+        if intent in three_digits:
+            name = three_digits[intent]
             a, b = (spell_digits(f"{int(v):03d}") for v in (as_to, as_two))
             return f"{name} {a} or {b}? Say all three digits."
         unit = {"set_autopilot_altitude": " feet", "set_vertical_speed": " feet per minute"}
@@ -1485,6 +1546,7 @@ class PythonInterface:
         # A command still has work due: read-backs, or a deferred step (the
         # 737's autothrottle engages after its arm switch).
         checking = {v["cmd"] for v in self._verifications} | {d["cmd"] for d in self._deferred}
+        checking |= {j["cmd"] for j in (self._baro_step, self._knob_step) if j is not None}
         for result in self._say_results.finished(now, checking):
             sim_bridge.write_json(outbox / f"{result['id']}.json", result)
         for req in sim_bridge.take_requests(inbox):
@@ -1574,6 +1636,9 @@ class PythonInterface:
             "ready": self.ready,
             "busy": self._active is not None or self._say_results.busy,
             "probe": self._probe is not None,
+            # What the loaded model knows (a runner refuses a checklist the
+            # model wasn't trained for); None from a worker that doesn't say.
+            "model_intents": None if self._model_intents is None else sorted(self._model_intents),
             "aircraft": {
                 "icao": info.icao,
                 "key": info.key,
@@ -1723,6 +1788,7 @@ class PythonInterface:
         self.tel.event("joystick", **self._joystick_setup())
         self._capture = None
         self._baro_step = None
+        self._knob_step = None
         self._athr_scan = (acf_path, None)
         threading.Thread(
             target=self._scan_aircraft_files, args=(acf_path,), daemon=True, name="vimaan-acf-scan"
@@ -2784,36 +2850,279 @@ class PythonInterface:
             presses=j["presses"],
             why=why,
         )
-        if ok:
-            self._write(DREF_BARO[1], reading)  # copilot side, where the aircraft keeps it
-            self._say(j["spoken"])
-        else:
-            shown = "" if reading is None else f" It reads {spell_digits(f'{reading:.2f}')}."
-            self._say(f"Altimeter not set: {why}.{shown}".replace(" decimal ", " "))
+        # The reply belongs to the command that started the steps (the test
+        # bridge and the Flights tab group by it).
+        previous, self._current_cmd = self._current_cmd, j["cmd"]
+        try:
+            if ok:
+                self._write(DREF_BARO[1], reading)  # copilot side, where the aircraft keeps it
+                self._say(j["spoken"])
+            else:
+                shown = "" if reading is None else f" It reads {spell_digits(f'{reading:.2f}')}."
+                self._say(f"Altimeter not set: {why}.{shown}".replace(" decimal ", " "))
+        finally:
+            self._current_cmd = previous
 
-    def _set_com_frequency(self, slots, intent):
-        frequency = slots.get("frequency")
+    def _frequency(self, slots, slot):
+        """The validated frequency in a slot, or None after saying why."""
+        frequency = slots.get(slot)
         if not frequency:
             self._say("Frequency missing")
-            return "rejected"
-        fval, ok, reason = validate_slot("frequency", frequency)
+            return None
+        fval, ok, reason = validate_slot(slot, frequency)
         if not ok:
             self.tel.event(
-                "slot_rejected", logging.WARNING, slot="frequency", value=frequency, reason=reason
+                "slot_rejected", logging.WARNING, slot=slot, value=frequency, reason=reason
             )
             self._say("Frequency out of range")
-            return "rejected"
-        port = str(slots.get("com_port", "1"))
-        if port not in DREF_COM_KHZ:
-            self._say(f"COM {port} is not supported. Use COM 1 or 2.")
-            return "rejected"
-        khz = int(round(float(fval) * 1000))
-        if not self._write(DREF_COM_KHZ[port], khz, is_float=False):
-            self._say(f"Cannot tune COM {port}")
+            return None
+        return fval
+
+    def _radio(self, slots, slot, table, kind):
+        """The radio a slot names ("1" when unsaid), or None after saying
+        which ones there are."""
+        port = str(slots.get(slot) or "1")
+        if port not in table:
+            self._say(f"{kind} {port} is not supported. Use {kind} 1 or 2.")
+            return None
+        return port
+
+    def _tune(self, label, name, fval, per_mhz, spoken):
+        units = int(round(float(fval) * per_mhz))
+        if not self._write(name, units, is_float=False):
+            self._say(f"Cannot tune {label}")
             return "failed"
-        self._hold_check(f"COM {port}", DREF_COM_KHZ[port], khz, is_float=False)
-        self._say(f"COM {port} set to {spell_digits(fval)}")
+        self._hold_check(label, name, units, is_float=False)
+        self._say(f"{spoken} {spell_digits(fval)}")
         return "executed"
+
+    def _set_com_frequency(self, slots, intent):
+        fval = self._frequency(slots, "frequency")
+        port = None if fval is None else self._radio(slots, "com_port", DREF_COM_KHZ, "COM")
+        if port is None:
+            return "rejected"
+        return self._tune(f"COM {port}", DREF_COM_KHZ[port], fval, 1000, f"COM {port} set to")
+
+    def _set_com_standby(self, slots, intent):
+        fval = self._frequency(slots, "frequency")
+        port = None if fval is None else self._radio(slots, "com_port", DREF_COM_STANDBY_KHZ, "COM")
+        if port is None:
+            return "rejected"
+        label = f"COM {port} standby"
+        return self._tune(label, DREF_COM_STANDBY_KHZ[port], fval, 1000, label)
+
+    def _set_nav_frequency(self, slots, intent):
+        fval = self._frequency(slots, "nav_frequency")
+        port = None if fval is None else self._radio(slots, "nav_port", DREF_NAV_10KHZ, "NAV")
+        if port is None:
+            return "rejected"
+        return self._tune(f"NAV {port}", DREF_NAV_10KHZ[port], fval, 100, f"NAV {port} set to")
+
+    def _set_nav_standby(self, slots, intent):
+        fval = self._frequency(slots, "nav_frequency")
+        port = (
+            None if fval is None else self._radio(slots, "nav_port", DREF_NAV_STANDBY_10KHZ, "NAV")
+        )
+        if port is None:
+            return "rejected"
+        label = f"NAV {port} standby"
+        return self._tune(label, DREF_NAV_STANDBY_10KHZ[port], fval, 100, label)
+
+    def _swap_com_frequency(self, slots, intent):
+        port = self._radio(slots, "com_port", CMD_COM_FLIP, "COM")
+        if port is None:
+            return "rejected"
+        return self._flip(
+            f"COM {port}", CMD_COM_FLIP[port], DREF_COM_KHZ[port], DREF_COM_STANDBY_KHZ[port], 1000
+        )
+
+    def _swap_nav_frequency(self, slots, intent):
+        port = self._radio(slots, "nav_port", CMD_NAV_FLIP, "NAV")
+        if port is None:
+            return "rejected"
+        return self._flip(
+            f"NAV {port}",
+            CMD_NAV_FLIP[port],
+            DREF_NAV_10KHZ[port],
+            DREF_NAV_STANDBY_10KHZ[port],
+            100,
+        )
+
+    def _flip(self, label, command, active, standby, per_mhz):
+        """Press the transfer button; the active frequency should become what
+        standby was (the read-back says the new active one)."""
+        was_standby = self._read_int(standby)
+        if not self._fire_command(command):
+            self._say(f"Cannot flip {label}")
+            return "failed"
+        if was_standby is None:
+            self._say(f"{label} flipped")
+            return "executed"
+        self._expect(f"{label} active", lambda: self._read_int(active), was_standby)
+        self._say(f"{label} active {spell_digits(mhz_text(was_standby, per_mhz))}")
+        return "executed"
+
+    def _set_course(self, slots, intent):
+        degrees = slots.get("degrees")
+        if not degrees:
+            self._say("Course value missing")
+            return "rejected"
+        value, ok, reason = validate_slot("degrees", degrees)
+        if not ok:
+            self.tel.event(
+                "slot_rejected", logging.WARNING, slot="degrees", value=degrees, reason=reason
+            )
+            self._say("Invalid course value")
+            return "rejected"
+        port = self._radio(slots, "nav_port", DREF_OBS, "NAV")
+        if port is None:
+            return "rejected"
+        v = float(value)
+        if not self._write(DREF_OBS[port], v):
+            self._say("Cannot set course")
+            return "failed"
+        self._hold_check(f"Course {port}", DREF_OBS[port], v, modulo=360)
+        named = f"NAV {port} course" if slots.get("nav_port") else "Course"
+        self._say(f"{named} {spell_digits(f'{int(v):03d}')}")
+        return "executed"
+
+    def _set_transponder_code(self, slots, intent):
+        code = slots.get("squawk")
+        if not code:
+            self._say("Squawk code missing")
+            return "rejected"
+        value, ok, reason = validate_slot("squawk", code)
+        if not ok:
+            self.tel.event(
+                "slot_rejected", logging.WARNING, slot="squawk", value=code, reason=reason
+            )
+            self._say("Invalid squawk. Four digits, zero to seven.")
+            return "rejected"
+        number = int(value)  # "0120" -> 120: X-Plane keeps the digits as a number
+        if not self._write(DREF_XPDR_CODE, number, is_float=False):
+            self._say("Cannot set the transponder")
+            return "failed"
+        self._hold_check("Squawk", DREF_XPDR_CODE, number, is_float=False)
+        self._say(f"Squawk {spell_digits(value)}")
+        return "executed"
+
+    def _set_transponder_mode(self, slots, intent):
+        value, ok, _ = validate_slot("xpdr_mode", slots.get("xpdr_mode") or "")
+        if not ok:
+            self._say("Transponder off, standby, on, or altitude?")
+            return "rejected"
+        if value == "ident":
+            return self._transponder_ident()
+        knobs = self.profile.settings.get("xpdr_knobs")
+        if knobs:
+            return self._transponder_knobs(value, knobs)
+        if self._read_int(DREF_XPDR_MODE) in XPDR_ALREADY[value]:
+            self._say(XPDR_ALREADY_SPOKEN[value])
+            return "no_op"
+        if not self._fire_command(CMD_XPDR[value]):
+            self._say("Cannot set the transponder")
+            return "failed"
+        self._expect("Transponder", lambda: self._read_int(DREF_XPDR_MODE), XPDR_SETS[value])
+        self._say(f"Transponder {XPDR_SPOKEN[value]}")
+        return "executed"
+
+    def _transponder_ident(self):
+        if self._read_int(DREF_XPDR_MODE) in (0, 1):
+            self._say("Transponder is in standby. Say transponder on first.")
+            return "rejected"
+        command = self.profile.command("xpdr_ident") or CMD_XPDR["ident"]
+        if not self._fire_command(command):
+            self._say("Cannot ident")
+            return "failed"
+        self._expect(
+            "Ident", lambda: self._read_int(DREF_XPDR_IDENT), 1, fail="Ident did not respond"
+        )
+        self._say("Ident")
+        return "executed"
+
+    def _transponder_knobs(self, value, knobs):
+        """Turn the aircraft's own selectors (737, A330), one click a frame."""
+        steps = knobs.get(value)
+        if not steps:
+            self._say("This transponder has no off. Say standby.")
+            return "rejected"
+        if all(self._knob_at(k) for k in steps):
+            self._say(XPDR_ALREADY_SPOKEN[value])
+            return "no_op"
+        if not all(self._has_command(n) for k in steps for n in (k.down, k.up)):
+            self._say("Cannot set the transponder on this aircraft")
+            return "rejected"
+        self._knob_step = {
+            "cmd": self._current_cmd,
+            "label": "Transponder",
+            "knobs": tuple(steps),
+            "index": 0,
+            "presses": 0,
+            "waiting": None,  # position before the last click, until it moves
+            "stuck": 0,
+            "spoken": f"Transponder {XPDR_SPOKEN[value]}",
+            "deadline": time.perf_counter() + KNOB_STEP_MAX_SEC,
+        }
+        self.tel.event("knob_step_start", cmd=self._current_cmd, mode=value, knobs=len(steps))
+        return "pending"
+
+    def _knob_position(self, knob):
+        value = self._read_float(knob.position)
+        return None if value is None else int(round(value))
+
+    def _knob_at(self, knob):
+        position = self._knob_position(knob)
+        return position is not None and knob.low <= position <= knob.high
+
+    def _service_knob_step(self):
+        """One click, then wait for the selector to move before the next, so
+        a click the aircraft handles a frame late can't overshoot."""
+        j = self._knob_step
+        if j is None:
+            return
+        knob = j["knobs"][j["index"]]
+        position = self._knob_position(knob)
+        if position is None:
+            return self._end_knob_steps(False, "cannot read the selector")
+        if j["waiting"] is not None and position == j["waiting"]:
+            j["stuck"] += 1
+            if j["stuck"] >= KNOB_STUCK_FRAMES:
+                return self._end_knob_steps(False, "the selector did not move")
+            return
+        j.update(waiting=None, stuck=0)
+        if knob.low <= position <= knob.high:
+            j["index"] += 1
+            if j["index"] == len(j["knobs"]):
+                return self._end_knob_steps(True)
+            return
+        if j["presses"] >= KNOB_STEP_MAX_PRESSES or time.perf_counter() > j["deadline"]:
+            return self._end_knob_steps(False, "it took too many clicks")
+        self._fire_command(knob.up if position < knob.low else knob.down)
+        j.update(presses=j["presses"] + 1, waiting=position)
+
+    def _end_knob_steps(self, ok, why=None):
+        j, self._knob_step = self._knob_step, None
+        assert j is not None  # only called while stepping
+        previous, self._current_cmd = self._current_cmd, j["cmd"]
+        try:
+            self.tel.event(
+                "knob_step_end",
+                logging.INFO if ok else logging.WARNING,
+                cmd=j["cmd"],
+                ok=ok,
+                presses=j["presses"],
+                positions=[self._knob_position(k) for k in j["knobs"]],
+                sim_mode=self._read_int(DREF_XPDR_MODE),
+                why=why,
+            )
+            if ok:
+                knobs = j["knobs"]
+                self._expect(j["label"], lambda: all(self._knob_at(k) for k in knobs), True)
+                self._say(j["spoken"])
+            else:
+                self._say(f"{j['label']} not set: {why}.")
+        finally:
+            self._current_cmd = previous
 
     def _toggle_landing_gear(self, slots, intent):
         state = slots.get("state")

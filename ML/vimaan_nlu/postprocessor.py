@@ -44,6 +44,39 @@ def port_from_text(slots: dict[str, Any], text: str, intent: str | None) -> dict
     return slots
 
 
+# Tier 2: "nav 2", "on nav 2", "obs 2 090".
+_NAV_PORT_IN_TEXT = re.compile(r"\b(?:nav|obs)\s+([12])\b")
+# A squawk code: four digits 0-7, leading zeros kept.
+_SQUAWK_IN_TEXT = re.compile(r"\b([0-7]{4})\b")
+
+
+def nav_port_from_text(slots: dict[str, Any], text: str, intent: str | None) -> dict[str, Any]:
+    """Fill an untagged NAV port from the text when exactly one is named,
+    as for COM; a tagged port is never overridden."""
+    cmd = command(intent or "")
+    if cmd is None or "nav_port" not in cmd.slots or slots.get("nav_port"):
+        return slots
+    ports = set(_NAV_PORT_IN_TEXT.findall(text.lower()))
+    if len(ports) == 1:
+        slots["nav_port"] = ports.pop()
+    return slots
+
+
+def squawk_from_text(slots: dict[str, Any], text: str, intent: str | None) -> dict[str, Any]:
+    """The four-digit code when the model tagged a part of it, or none: the
+    only four octal digits said."""
+    cmd = command(intent or "")
+    if cmd is None or "squawk" not in cmd.slots:
+        return slots
+    tagged = str(slots.get("squawk", "")).replace(" ", "")
+    if len(tagged) == 4 and tagged.isdigit():
+        return slots
+    codes = set(_SQUAWK_IN_TEXT.findall(text.lower()))
+    if len(codes) == 1:
+        slots["squawk"] = codes.pop()
+    return slots
+
+
 def extract_numbers_from_text(text: str) -> list[str]:
     numbers = re.findall(r"\d+(?:\.\d+)?", text)
     return numbers
@@ -195,7 +228,18 @@ def postprocess_slots(
                     slots[slot_name] = num
                     break
 
-        if slot_name in ["altitude", "degrees", "flight_level", "com_port"]:
+        if slot_name == "nav_frequency":
+            # NAV frequencies are said with a decimal (110.5): take the one
+            # in range, not a port digit or a course.
+            if slot_str in numbers and in_range("nav_frequency", slot_str):
+                continue
+            for num in re.findall(r"\d+\.\d+", original_text):
+                if in_range("nav_frequency", num):
+                    slots[slot_name] = num
+                    break
+            continue
+
+        if slot_name in ["altitude", "degrees", "flight_level", "com_port", "nav_port"]:
             # The model tagged a valid number that was really said: keep it.
             # Searching for "the first number in range" instead let a stray
             # word win: "eighty fly heading one eight four" -> heading 80
@@ -221,9 +265,9 @@ def postprocess_slots(
                             slots[slot_name] = num
                             break
 
-                elif slot_name == "com_port":
+                elif slot_name in ("com_port", "nav_port"):
                     for num in numbers:
-                        if in_range("com_port", num) and len(num) == 1:
+                        if in_range(slot_name, num) and len(num) == 1:
                             slots[slot_name] = num
                             break
 
@@ -231,5 +275,7 @@ def postprocess_slots(
         slots = canonicalize_choices(slots, original_text, intent)
         slots = resolve_instance(slots, original_text, intent)
         slots = port_from_text(slots, original_text, intent)
+        slots = nav_port_from_text(slots, original_text, intent)
+        slots = squawk_from_text(slots, original_text, intent)
 
     return slots
