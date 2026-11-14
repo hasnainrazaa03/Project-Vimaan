@@ -154,9 +154,9 @@ def _baro(words: str, inhg: float, within: float = 35.0) -> Step:
     )
 
 
-def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:
-    """``vfe_full``: the full-flap limit from the aircraft file
-    (simtest.aircraft_file.flap_limits), if known."""
+def hands_off(aircraft: str) -> list[Step]:
+    """The aircraft flies itself: autopilot on, thrust managed (jets),
+    heading mode and altitude hold. Every checklist starts with these."""
     s = SETUPS[aircraft]
     out = [
         Step(
@@ -177,6 +177,17 @@ def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:
             outcomes=DONE_OR_SET,
             sim=(equals("altitude hold on", AP + "altitude_hold_status", 2, within_sec=3),),
         ),
+    ]
+    if s.jet:
+        out[1:1] = _manage_thrust(s)  # straight after "autopilot on"
+    return out
+
+
+def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:
+    """``vfe_full``: the full-flap limit from the aircraft file
+    (simtest.aircraft_file.flap_limits), if known."""
+    s = SETUPS[aircraft]
+    out = hands_off(aircraft) + [
         Step(
             "heading 270",
             say="heading two seven zero",
@@ -194,8 +205,6 @@ def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:
             + ((_ias_near(s.speed, 20, 120),) if s.jet else ()),
         ),
     ]
-    if s.jet:
-        out[1:1] = _manage_thrust(s)  # straight after "autopilot on"
     if s.jet:
         out += [
             Step(

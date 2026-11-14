@@ -119,6 +119,19 @@ def frequency(mhz: str) -> list[str]:
     return list(dict.fromkeys(out))
 
 
+def squawk(code: str) -> list[str]:
+    """Transponder codes are four digits, leading zeros said: "0120" -> "zero
+    one two zero"; round hundreds and thousands also as pilots say them
+    ("twelve hundred", "seven thousand")."""
+    out = [digits(code)]
+    n = int(code)
+    if code[0] != "0" and n % 1000 == 0:
+        out.append(cardinal(n))  # "seven thousand"
+    elif code[0] != "0" and n % 100 == 0 and 1000 < n < 10000:
+        out.append(f"{two_digit(n // 100)} hundred")  # "twelve hundred"
+    return list(dict.fromkeys(out))
+
+
 def instance(n: str) -> list[str]:
     """Which engine / autopilot: "1" -> "one", also "left"/"first"."""
     return {

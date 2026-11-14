@@ -139,3 +139,37 @@ def test_every_flap_setting(setting):
 def test_fraction_rule_leaves_frequencies_alone():
     assert normalize_aviation_input("tune one two one point five") == "tune 121.5"
     assert normalize_aviation_input("set mach point seven eight") == "set mach 0.78"
+
+
+# ---------------------------------------------------------------------------
+# Tier 2 values
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("port", ["one", "two", ""])
+def test_every_nav_frequency(port):
+    # Every 50 kHz channel, also after a NAV port the recogniser may run in.
+    bad = []
+    for units in range(10800, 11796, 5):
+        mhz = f"{units / 100:.2f}".rstrip("0")
+        mhz = mhz + "0" if mhz.endswith(".") else mhz
+        context = f"tune nav {port} to {{}}".replace("  ", " ")
+        bad += [t for t in spoken.frequency(mhz) if not reads_as(t, context, mhz)]
+    assert bad == []
+
+
+def test_squawk_renderer():
+    assert spoken.squawk("0120") == ["zero one two zero"]
+    assert spoken.squawk("1200") == ["one two zero zero", "twelve hundred"]
+    assert spoken.squawk("7000") == ["seven zero zero zero", "seven thousand"]
+    assert spoken.squawk("4217") == ["four two one seven"]
+
+
+def test_every_squawk():
+    # All 4096 codes: leading zeros survive ("squawk 0120" is not 120).
+    bad = [
+        t
+        for n in range(8**4)
+        for code in [f"{int(oct(n)[2:]):04d}"]
+        for t in spoken.squawk(code)
+        if not reads_as(t, "squawk {}", code)
+    ]
+    assert bad == []

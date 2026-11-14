@@ -32,6 +32,49 @@ def test_no_text_has_two_labels(data):
     assert [t for t, i in labels.items() if len(i) > 1] == []
 
 
+def test_no_text_holds_a_placeholder(data):
+    # Templates are filled, and the negatives' word salad is built from
+    # template words with every placeholder removed, "{slot=word}" included.
+    rows, _ = data
+    assert [r["text"] for r in rows if "{" in r["text"] or "}" in r["text"]] == []
+    filler, _, _ = generate_v2._vocab()
+    assert [w for w in filler if "{" in w or "}" in w or "=" in w] == []
+
+
+def test_no_negative_holds_a_whole_command(data):
+    # "ident" alone is a command; word salad around it must not be labelled None.
+    rows, _ = data
+    whole = generate_v2.whole_commands()
+    assert "ident" in whole
+    salad = [r["text"] for r in rows if r["template"] == "None#neg1"]
+    assert salad
+    assert [t for t in salad if whole & set(t.split())] == []
+
+
+def test_same_seed_same_data_in_any_process():
+    # Python orders sets differently in every process (hash seed); the data
+    # must not depend on that (data v11 differed in 774 bare-number negatives).
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    ml = Path(generate_v2.__file__).resolve().parents[1]
+    code = (
+        "import hashlib, json; from data import generate_v2; "
+        "rows, _ = generate_v2.generate(per_intent=40, seed=3); "
+        "print(hashlib.sha256(json.dumps(rows).encode()).hexdigest())"
+    )
+    digests = set()
+    for hash_seed in ("1", "2"):
+        env = {**os.environ, "PYTHONHASHSEED": hash_seed, "PYTHONPATH": str(ml)}
+        out = subprocess.run(
+            [sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True
+        )
+        digests.add(out.stdout.strip())
+    assert len(digests) == 1, "generate_v2 depends on set order"
+
+
 def test_held_out_templates_never_trained_on(data):
     rows, _ = data
     split_of = defaultdict(set)
@@ -43,6 +86,37 @@ def test_held_out_templates_never_trained_on(data):
     for intent in actionable:
         held = {t for t, s in split_of.items() if t.startswith(intent + "#") and s == {"test"}}
         assert len(held) >= 2, intent
+
+
+def test_dev_templates_are_held_out_and_apart_from_the_test_ones(data):
+    rows, _ = data
+    split_of = defaultdict(set)
+    for r in rows:
+        split_of[r["template"]].add(r["split"])
+    for c in COMMANDS:
+        if not c.actionable:
+            continue
+        test = generate_v2.holdout_templates(c)
+        dev = generate_v2.dev_templates(c)
+        assert len(dev) == generate_v2.DEV_TEMPLATES and not dev & test, c.intent
+        for t in dev:
+            key = f"{c.intent}#{c.templates.index(t)}"
+            assert split_of[key] <= {"dev"}, (key, split_of[key])
+    negatives = [r for r in rows if r["template"].startswith("None#neg")]
+    share = sum(r["split"] == "dev" for r in negatives) / len(negatives)
+    assert 0.02 < share < 0.09
+
+
+def test_dev_leaves_the_test_rows_as_they_were(monkeypatch):
+    with_dev, _ = generate_v2.generate(per_intent=60, seed=5)
+    monkeypatch.setattr(generate_v2, "DEV_TEMPLATES", 0)
+    monkeypatch.setattr(generate_v2, "DEV_ROW_SHARE", 0.0)
+    without, _ = generate_v2.generate(per_intent=60, seed=5)
+    assert [r for r in with_dev if r["split"] == "test"] == [
+        r for r in without if r["split"] == "test"
+    ]
+    assert any(r["split"] == "dev" for r in with_dev)
+    assert not any(r["split"] == "dev" for r in without)
 
 
 def test_every_command_and_negatives_present(data):

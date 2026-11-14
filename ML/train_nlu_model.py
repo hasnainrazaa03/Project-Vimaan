@@ -9,14 +9,17 @@ import torch
 from sklearn.metrics import f1_score
 from sklearn.model_selection import train_test_split
 from torch.optim import AdamW
+from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from transformers import DistilBertTokenizerFast
 from utils import find_latest_version_path, get_model_versions_dir
 from utils.device import resolve_device
 from utils.eval_metrics import per_intent_accuracy, per_slot_f1
+from utils.lr_schedule import SCHEDULES, lr_factor
 from utils.run_logger import RunLogger
 from utils.slot_alignment import align_offsets_to_labels, find_slot_char_spans
+from utils.splits import template_split
 from vimaan_nlu import (
     JointIntentAndSlotModel,
     build_manifest,
@@ -94,6 +97,8 @@ def train_model(
     model_save_dir=None,
     device=None,
     runs_dir=None,
+    schedule="constant",
+    warmup=0.06,
 ):
     # Reproducibility (T1.10): the pipeline was fully unseeded except the split.
     random.seed(42)
@@ -123,15 +128,26 @@ def train_model(
         except ValueError:  # a class too small to stratify
             return train_test_split(rows, test_size=frac, random_state=seed)
 
-    if v2:
+    by_template = template_split(data) if v2 else None
+    if by_template:
+        # Test = held-out templates (the gate's new phrasings); validation =
+        # the dev templates, also never trained on (utils/splits.py).
+        train_data, val_data, test_data = by_template
+        validation = "dev templates"
+    elif v2:
         # Test = rows from held-out templates (new phrasings); validation is a
         # random 15% of the rest.
         test_data = [r for r in data if r.get("split") == "test"]
         train_data, val_data = _split([r for r in data if r.get("split") != "test"], 0.15)
+        validation = "random 15% of the training templates"
     else:
         train_data, temp_data = _split(data, 0.30)
         val_data, test_data = _split(temp_data, 0.50)
-    print(f"Split: train {len(train_data)}, val {len(val_data)}, held-out test {len(test_data)}")
+        validation = "random 15% of the rows"
+    print(
+        f"Split: train {len(train_data)}, val {len(val_data)} ({validation}), "
+        f"held-out test {len(test_data)}"
+    )
 
     intents = sorted(list(set(item["intent"] for item in data)))
     intent_map = {name: i for i, name in enumerate(intents)}
@@ -157,6 +173,18 @@ def train_model(
     print(f"Using device: {device}")
     model = JointIntentAndSlotModel(num_intents=len(intent_map), num_slots=len(slot_map)).to(device)
     optimizer = AdamW(model.parameters(), lr=lr)
+    # "linear": warm up over the first `warmup` share of steps, then fall to
+    # zero at the last step (utils/lr_schedule.py). Early stopping cuts the
+    # decay short, so pair it with patience >= epochs.
+    if schedule not in SCHEDULES:
+        raise ValueError(f"schedule must be one of {SCHEDULES}, not {schedule!r}")
+    total_steps = len(train_loader) * num_epochs
+    warmup_steps = int(total_steps * warmup) if schedule == "linear" else 0
+    scheduler = (
+        LambdaLR(optimizer, lambda step: lr_factor(step, total_steps, warmup_steps))
+        if schedule == "linear"
+        else None
+    )
 
     best_val_loss = float("inf")
     epochs_no_improve = 0
@@ -188,11 +216,14 @@ def train_model(
         batch_size=batch_size,
         epochs=num_epochs,
         lr=lr,
+        lr_schedule=schedule,
+        warmup_steps=warmup_steps,
         patience=patience,
         num_intents=len(intent_map),
         num_slots=len(slot_map),
         steps_per_epoch=len(train_loader),
         split={"train": len(train_data), "val": len(val_data), "test": len(test_data)},
+        validation=validation,
         intent_dist=dict(Counter(r["intent"] for r in train_data).most_common()),
     )
     print(f"Live metrics -> {run_dir}/metrics.jsonl  (watch: python ML/training_monitor.py)")
@@ -236,6 +267,8 @@ def train_model(
                     elapsed=time.time() - start_time,
                     **extra,
                 )
+                if scheduler is not None:
+                    scheduler.step()  # after logging: the rate logged is the one used
 
             avg_train_loss = total_train_loss / len(train_loader)
             print(f"Epoch {epoch + 1} - Average Training Loss: {avg_train_loss:.4f}")
@@ -330,6 +363,10 @@ def train_model(
                 with open(f"{model_save_path}/holdout_test.jsonl", "w", encoding="utf-8") as f:
                     for row in test_data:
                         f.write(json.dumps(row) + "\n")
+                if by_template:  # the dev set, for comparing ideas without the test
+                    with open(f"{model_save_path}/holdout_dev.jsonl", "w", encoding="utf-8") as f:
+                        for row in val_data:
+                            f.write(json.dumps(row) + "\n")
 
                 # Provenance sidecar (Phase 3 / B-015 manifest). Written every time
                 # the "best" model is overwritten so it always reflects the actually
@@ -341,10 +378,13 @@ def train_model(
                         "max_length": max_length,
                         "epochs": numOfEpochs,
                         "lr": lr,
+                        "lr_schedule": schedule,
+                        "warmup_steps": warmup_steps,
                         "batch_size": batch_size,
                         "optimizer": "AdamW",
                         "early_stopping_patience": patience,
-                        "train_val_split": 0.85,
+                        "train_val_split": None if by_template else 0.85,
+                        "validation": validation,
                         "random_state": 42,
                         "base_model": base_model,
                         "best_val_loss": float(best_val_loss),
@@ -405,6 +445,18 @@ if __name__ == "__main__":
     parser.add_argument("--max-length", type=int, default=64)
     parser.add_argument("--patience", type=int, default=2)
     parser.add_argument(
+        "--schedule",
+        choices=SCHEDULES,
+        default="constant",
+        help="Learning rate: constant, or linear warmup then decay to zero.",
+    )
+    parser.add_argument(
+        "--warmup",
+        type=float,
+        default=0.06,
+        help="Share of all steps spent warming up (linear schedule only).",
+    )
+    parser.add_argument(
         "--model-save-dir",
         type=str,
         default=None,
@@ -446,4 +498,6 @@ if __name__ == "__main__":
         patience=args.patience,
         model_save_dir=args.model_save_dir,
         device=args.device,
+        schedule=args.schedule,
+        warmup=args.warmup,
     )

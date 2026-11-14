@@ -232,3 +232,196 @@ def test_flap_limits_come_from_the_aircraft_file(tmp_path):
     )
     assert flap_limits(acf) == {"first": 250.0, "full": 162.0}
     assert flap_limits(tmp_path / "missing.acf") == {}
+
+
+# ---- Tier 2 checklist, end to end on the fake sim ---------------------------
+from simtest import scenario, tier2  # noqa: E402
+
+RADIO = "sim/cockpit2/radios/actuators/"
+XPDR_MODE = RADIO + "transponder_mode"
+XPDR_IDENT = "sim/cockpit2/radios/indicators/transponder_id"
+
+# What a Tier 2 model makes of each checklist phrase (the gold set's shapes).
+TIER2_NLU = {
+    "autopilot on": ("toggle_autopilot", {"state": "on"}),
+    "heading mode": ("set_autopilot_mode", {"mode": "heading"}),
+    "altitude hold": ("set_autopilot_mode", {"mode": "altitude hold"}),
+    "com one standby one two one decimal niner": (
+        "set_com_standby",
+        {"com_port": "1", "frequency": "121.9"},
+    ),
+    "flip com one": ("swap_com_frequency", {"com_port": "1"}),
+    "com two standby one three two decimal four five": (
+        "set_com_standby",
+        {"com_port": "2", "frequency": "132.45"},
+    ),
+    "tune nav one to one one zero decimal five": (
+        "set_nav_frequency",
+        {"nav_port": "1", "nav_frequency": "110.5"},
+    ),
+    "course zero niner zero": ("set_course", {"degrees": "090"}),
+    "nav two standby one one three decimal niner": (
+        "set_nav_standby",
+        {"nav_port": "2", "nav_frequency": "113.9"},
+    ),
+    "swap nav two": ("swap_nav_frequency", {"nav_port": "2"}),
+    "nav two course one eight zero": ("set_course", {"degrees": "180", "nav_port": "2"}),
+    "squawk four two one seven": ("set_transponder_code", {"squawk": "4217"}),
+    "squawk zero one two zero": ("set_transponder_code", {"squawk": "0120"}),
+    "squawk one two zero zero": ("set_transponder_code", {"squawk": "1200"}),
+    "squawk seven seven zero zero": ("set_transponder_code", {"squawk": "7700"}),
+    "transponder alt": ("set_transponder_mode", {"xpdr_mode": "alt"}),
+    "squawk standby": ("set_transponder_mode", {"xpdr_mode": "standby"}),
+    "ident": ("set_transponder_mode", {"xpdr_mode": "ident"}),
+    "transponder on": ("set_transponder_mode", {"xpdr_mode": "on"}),
+    "transponder off": ("set_transponder_mode", {"xpdr_mode": "off"}),
+    "transponder altitude": ("set_transponder_mode", {"xpdr_mode": "alt"}),
+}
+
+
+def _generic_sim(xp):
+    """The Baron: X-Plane's own autopilot, radios and transponder."""
+    ap = "sim/cockpit2/autopilot/"
+    xp.datarefs["sim/flightmodel/failures/onground_any"] = 0
+    xp.effects.update(
+        {
+            "sim/autopilot/servos_toggle": lambda x: x.datarefs.update({ap + "servos_on": 1}),
+            "sim/autopilot/heading": lambda x: x.datarefs.update({ap + "heading_status": 2}),
+            "sim/autopilot/altitude_hold": lambda x: x.datarefs.update(
+                {ap + "altitude_hold_status": 2}
+            ),
+            "sim/transponder/transponder_ident": lambda x: x.datarefs.update({XPDR_IDENT: 1}),
+        }
+    )
+    for mode, n in (("off", 0), ("standby", 1), ("on", 2), ("alt", 3)):
+        xp.effects[f"sim/transponder/transponder_{mode}"] = lambda x, n=n: x.datarefs.update(
+            {XPDR_MODE: n}
+        )
+    for radio, ports in (("com", "12"), ("nav", "12")):
+        for port in ports:
+            if radio == "com":
+                active = f"{RADIO}com{port}_frequency_hz_833"
+                standby = f"{RADIO}com{port}_standby_frequency_hz_833"
+            else:
+                active = f"{RADIO}nav{port}_frequency_hz"
+                standby = f"{RADIO}nav{port}_standby_frequency_hz"
+            xp.effects[f"sim/radios/{radio}{port}_standy_flip"] = lambda x, a=active, s=standby: (
+                x.datarefs.update({a: x.datarefs[s], s: x.datarefs[a]})
+            )
+
+
+def _clicks(xp, position, down, up, low, high):
+    def turn(sign):
+        def press(x):
+            x.datarefs[position] = max(low, min(high, x.datarefs[position] + sign))
+
+        return press
+
+    xp.effects[down], xp.effects[up] = turn(-1), turn(1)
+
+
+def _b738(plugin, xp):
+    import test_plugin
+
+    test_plugin.aircraft(plugin, xp, commands=test_plugin.B738_XPDR)
+    pos = "laminar/B738/knob/transponder_pos"
+    xp.datarefs[pos], xp.datarefs[XPDR_MODE] = 1, 1  # STBY
+    _clicks(
+        xp,
+        pos,
+        "laminar/B738/knob/transponder_mode_dn",
+        "laminar/B738/knob/transponder_mode_up",
+        0,
+        5,
+    )
+    xp.effects["laminar/B738/push_button/transponder_ident_dn"] = lambda x: x.datarefs.update(
+        {XPDR_IDENT: 1}
+    )
+
+    def script(x):  # B738.systems: the knob handlers set X-Plane's mode
+        p = round(x.datarefs[pos])
+        x.datarefs[XPDR_MODE] = {0: 3, 1: 1}.get(p, 2)
+
+    return script
+
+
+def _a333(plugin, xp):
+    import test_plugin
+
+    k = "laminar/A333/transponder/"
+    test_plugin.aircraft(
+        plugin,
+        xp,
+        commands=test_plugin.A333_XPDR_COMMANDS,
+        **{k + "alt_rpt_knob_pos": 0, k + "ta_ra_knob_pos": 0},
+    )
+    xp.datarefs[k + "auto_on_knob_pos"] = 0  # AUTO
+    _clicks(xp, k + "auto_on_knob_pos", k + "auto_on_off_left", k + "auto_on_off_right", -1, 1)
+    _clicks(xp, k + "alt_rpt_knob_pos", k + "alt_rpt_off", k + "alt_rpt_on", 0, 1)
+    _clicks(xp, k + "ta_ra_knob_pos", k + "ta_ra_left", k + "ta_ra_right", 0, 2)
+    xp.effects["sim/transponder/transponder_ident"] = lambda x: x.datarefs.update({XPDR_IDENT: 1})
+
+    def script(x):  # A333.transponder, airborne, AC power on: every frame
+        auto, alt, tcas = (
+            round(x.datarefs[k + n])
+            for n in ("auto_on_knob_pos", "alt_rpt_knob_pos", "ta_ra_knob_pos")
+        )
+        if auto == -1 or tcas == 0:
+            x.datarefs[XPDR_MODE] = 1
+        elif alt == 0:
+            x.datarefs[XPDR_MODE] = 2
+        else:
+            x.datarefs[XPDR_MODE] = 6 if tcas == 1 else 7
+
+    return script
+
+
+def _run_checklist(monkeypatch, tmp_path, aircraft):
+    import test_plugin
+
+    test_plugin.NLU.clear()
+    for text, (intent, slots) in TIER2_NLU.items():
+        test_plugin.NLU[text] = (intent, slots, 0.99)
+    module, plugin, xp = test_plugin._load_plugin(monkeypatch, tmp_path)
+    results: list = []
+    try:
+        monkeypatch.setattr(module, "BRIDGE_POLL_SEC", 0.0)
+        monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+        _generic_sim(xp)
+        script = {"737": _b738, "a330": _a333}.get(aircraft, lambda p, x: None)(plugin, xp)
+        if aircraft == "baron":
+            steps = tier2.steps("baron")
+        else:  # the transponder part: the selectors are what differs
+            steps = tier2._transponder(aircraft)
+        br = Bridge(tmp_path / "Vimaan_Logs", poll_sec=0.002)
+        br.enable()
+        plugin._bridge_next = 0.0
+        runner = scenario.Runner(br, voice=None, poll_sec=0.005, log=lambda _line: None)
+        t = threading.Thread(target=lambda: results.extend(runner.run(steps)), daemon=True)
+        t.start()
+        while t.is_alive():  # X-Plane's flight loop
+            if script is not None:
+                script(xp)
+            plugin._flight_loop()
+            t.join(0.001)
+    finally:
+        plugin.XPluginStop()
+    return results
+
+
+@pytest.mark.parametrize("aircraft", ["baron", "737", "a330"])
+def test_the_tier2_checklist_passes_on_the_fake_sim(monkeypatch, tmp_path, aircraft):
+    results = _run_checklist(monkeypatch, tmp_path, aircraft)
+    failed = {r["step"]: r["problems"] for r in results if not r["ok"]}
+    assert failed == {}
+    assert not any(r.get("skipped") for r in results)
+    names = [r["step"] for r in results]
+    off = "transponder off" if aircraft == "baron" else "transponder off refused (no off)"
+    assert off in names
+
+
+def test_tier2_needs_a_tier2_model():
+    assert cli._model_lacks("tier2", {"model_intents": ["None", "set_com_frequency"]})
+    assert cli._model_lacks("tier2", {"model_intents": ["set_transponder_code"]}) is None
+    assert cli._model_lacks("tier2", {}) is None  # an older plugin doesn't say
+    assert cli._model_lacks("tier1", {"model_intents": ["None"]}) is None

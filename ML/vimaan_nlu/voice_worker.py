@@ -593,6 +593,10 @@ def main(argv: list[str] | None = None) -> int:
             "import_ms": import_ms,
             "load_ms": round((time.perf_counter() - t0) * 1000, 1),
             "model_path": loaded["model"]["model_path"],
+            # What this model can say: the plugin self-tests only these, so a
+            # model older than the command table isn't failed for commands
+            # it was never trained on.
+            "intents": sorted(loader.intent_map),
             "quantized": loaded.get("quantized"),
             "torch_version": torch.__version__,
             "transformers_version": transformers.__version__,

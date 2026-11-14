@@ -312,6 +312,13 @@ def _command_event(c: dict[str, Any], ev: dict[str, Any], names: dict[str, str])
         _note(c, kind, _capture_text(ev))
     elif kind in ("baro_step_start", "baro_step_end"):
         _note(c, kind, "Altimeter knob " + ("stepping" if kind.endswith("start") else "done"))
+    elif kind == "knob_step_start":
+        _note(c, kind, f"Turning the transponder selector to {ev.get('mode')}")
+    elif kind == "knob_step_end":
+        if ev.get("ok"):
+            _note(c, kind, f"Selector set after {ev.get('presses')} clicks")
+        else:
+            _note(c, kind, f"Selector not set: {ev.get('why')}", "warn")
     elif kind == "crank_end":
         tone = "info" if ev.get("result") == "running" else "warn"
         _note(

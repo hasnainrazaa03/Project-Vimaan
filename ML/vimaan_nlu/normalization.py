@@ -322,6 +322,18 @@ def _split_absorbed_com_port(match: re.Match[str]) -> str:
     return match.group(0)
 
 
+# The same for NAV radios (Tier 2): "nav 1110.5" -> "nav 1 110.5", NAV
+# frequencies being 108.00-117.95 MHz. A portless "nav 110.5" is untouched.
+_ABSORBED_NAV_PORT_RE = re.compile(r"\b(nav)\s+([12])(1[01]\d)(\.\d+)?\b")
+
+
+def _split_absorbed_nav_port(match: re.Match[str]) -> str:
+    word, port, mhz, frac = match.groups()
+    if 108 <= int(mhz) <= 117:
+        return f"{word} {port} {mhz}{frac or ''}"
+    return match.group(0)
+
+
 def normalize_aviation_input(text: str) -> str:
     text_lower = _clean_asr_formatting(text.lower())
     # 0. Split a word fused to its number ("heading109" -> "heading 109",
@@ -353,6 +365,7 @@ def normalize_aviation_input(text: str) -> str:
     text_lower = re.sub(r"(?<!\d)(?<!\d )\b(?:point|decimal) (\d+)\b", r"0.\1", text_lower)
     # 7. Port digit absorbed into a frequency: "com 1118.75" -> "com 1 118.75".
     text_lower = _ABSORBED_PORT_RE.sub(_split_absorbed_com_port, text_lower)
+    text_lower = _ABSORBED_NAV_PORT_RE.sub(_split_absorbed_nav_port, text_lower)
     return text_lower
 
 

@@ -43,10 +43,20 @@ from data import spoken  # noqa: E402
 
 SCHEMA_VERSION = 2
 HOLDOUT_TEMPLATE_SHARE = 0.15
+# Development: one more template per command, the next in the same hash order,
+# also never trained on. The trainer keeps the checkpoint that does best on
+# them, and training ideas are compared on them, so the test templates (the
+# gate's new phrasings) are only read for a final candidate.
+DEV_TEMPLATES = 1
+DEV_ROW_SHARE = 0.05  # of the negatives and conversation rows
 NOISE_SHARE = 0.2
 NEGATIVE_SHARE = 0.1  # of the actionable rows
 CONVERSATION_ROWS = 400  # per conversational intent
 TWO_DIGIT_HEADING_SHARE = 0.15  # "change heading to eighty", beside three-digit forms
+# "speed eighty" (60-95 kt), beside three-digit speeds. Without it v20 (data
+# v9) left "eighty" untagged after "speed": the stray leading "eighty" of
+# LEADING_NOISE grows with the number of commands, the speed rows don't.
+TWO_DIGIT_SPEED_SHARE = 0.15
 
 INSTANCE_SAY = {"1": "one", "2": "two"}
 INSTANCE_ORD = {"1": ("first", "left"), "2": ("second", "right")}
@@ -102,6 +112,18 @@ def _frequency(rng: random.Random) -> str:
     return mhz + "0" if mhz.endswith(".") else mhz
 
 
+def _nav_frequency(rng: random.Random) -> str:
+    """108.00-117.95 MHz on 50 kHz channels."""
+    mhz = f"{rng.randrange(10800, 11796, 5) / 100:.2f}".rstrip("0")
+    return mhz + "0" if mhz.endswith(".") else mhz
+
+
+def _squawk(rng: random.Random) -> str:
+    if rng.random() < 0.2:  # the codes pilots hear most
+        return rng.choice(("1200", "7000", "2000", "0120", "4000"))
+    return "".join(rng.choice("01234567") for _ in range(4))
+
+
 def _altitude(rng: random.Random) -> int:
     if rng.random() < 0.5:
         return rng.randrange(1000, 45001, 1000)
@@ -122,8 +144,15 @@ def render_number(kind: str, rng: random.Random) -> str:
         return rng.choice(spoken.frequency(_frequency(rng)))
     if kind == "port":
         return rng.choice(("one", "two"))
+    # Tier 2
+    if kind == "nav_frequency":
+        return rng.choice(spoken.frequency(_nav_frequency(rng)))
+    if kind == "squawk":
+        return rng.choice(spoken.squawk(_squawk(rng)))
     # Tier 1
     if kind == "speed":
+        if rng.random() < TWO_DIGIT_SPEED_SHARE:
+            return rng.choice(spoken.speed(rng.randrange(60, 100, 5)))
         return rng.choice(spoken.speed(rng.randrange(60, 401, 5)))
     if kind == "mach":
         return rng.choice(spoken.mach(f"0.{rng.randrange(40, 96):02d}"))
@@ -141,12 +170,19 @@ def render_number(kind: str, rng: random.Random) -> str:
 # ---------------------------------------------------------------------------
 # Rows
 # ---------------------------------------------------------------------------
+# {slot}, {slot_verb}, {instance_ord} or {slot=word}.
+PLACEHOLDER = re.compile(r"\{(\w+)(?:=([^}]+))?\}")
+
+
 def fill(c: Command, template: str, rng: random.Random) -> tuple[str, dict[str, str]]:
     """Fill ``template``; returns (text, slot -> spoken surface)."""
     surfaces: dict[str, str] = {}
 
     def sub(match: re.Match[str]) -> str:
-        name = match.group(1)
+        name, fixed = match.group(1), match.group(2)
+        if fixed is not None:  # {slot=word}: that word, tagged as the slot
+            surfaces[name] = fixed
+            return fixed
         if name.endswith("_verb"):
             slot = c.slots[name[: -len("_verb")]]
             value = rng.choice([v for v in slot.synonyms if slot.synonyms[v]])
@@ -167,7 +203,7 @@ def fill(c: Command, template: str, rng: random.Random) -> tuple[str, dict[str, 
         surfaces[name] = word
         return word
 
-    text = re.sub(r"\{(\w+)\}", sub, template)
+    text = re.sub(PLACEHOLDER, sub, template)
     return text, surfaces
 
 
@@ -206,21 +242,43 @@ def label(text: str, surfaces: dict[str, str]) -> dict[str, str] | None:
     return slots
 
 
+def _ranked(c: Command) -> list[str]:
+    return sorted(c.templates, key=lambda t: hashlib.sha256(f"{c.intent}|{t}".encode()).hexdigest())
+
+
+def _holdout_count(c: Command) -> int:
+    return max(2, math.ceil(len(c.templates) * HOLDOUT_TEMPLATE_SHARE))
+
+
 def holdout_templates(c: Command) -> set[str]:
     """Held-out templates, picked by a stable hash of the template: adding a
     phrasing elsewhere must not reshuffle them, or scores from different
     dataset versions can't be compared."""
-    n = max(2, math.ceil(len(c.templates) * HOLDOUT_TEMPLATE_SHARE))
-    ranked = sorted(
-        c.templates, key=lambda t: hashlib.sha256(f"{c.intent}|{t}".encode()).hexdigest()
-    )
-    return set(ranked[:n])
+    return set(_ranked(c)[: _holdout_count(c)])
+
+
+def dev_templates(c: Command) -> set[str]:
+    """Development templates: the next DEV_TEMPLATES in the same order, so
+    the test templates are exactly what they would be without them."""
+    n = _holdout_count(c)
+    return set(_ranked(c)[n : n + DEV_TEMPLATES])
+
+
+def _row_split(rng: random.Random) -> str:
+    """test / dev / train for a row with no template of its own (negatives,
+    conversation). One draw, as before dev existed, so the test rows are the
+    same."""
+    r = rng.random()
+    if r < HOLDOUT_TEMPLATE_SHARE:
+        return "test"
+    return "dev" if r < HOLDOUT_TEMPLATE_SHARE + DEV_ROW_SHARE else "train"
 
 
 def command_rows(
     c: Command, per_intent: int, rng: random.Random, stats: Counter[str]
 ) -> list[dict[str, Any]]:
     held = holdout_templates(c)
+    dev = dev_templates(c)
     rows = []
     attempts = 0
     while len(rows) < per_intent and attempts < per_intent * 5:
@@ -243,7 +301,7 @@ def command_rows(
                 "intent": c.intent,
                 "slots": slots,
                 "template": f"{c.intent}#{c.templates.index(template)}",
-                "split": "test" if template in held else "train",
+                "split": "test" if template in held else "dev" if template in dev else "train",
                 "noise": noise,
             }
         )
@@ -279,14 +337,35 @@ def _vocab() -> tuple[list[str], set[str], set[str]]:
         if not c.actionable:
             continue  # "hello vimaan" is a greeting, not salad
         for t in c.templates:
-            words.update(re.sub(r"\{\w+\}", " ", t).split())
+            # Every placeholder, "{xpdr_mode=ident}" too: left in, it reached
+            # the negatives verbatim and taught "ident" as noise (data v9/v10).
+            words.update(re.sub(r"\{[^}]*\}", " ", t).split())
     filler = sorted(words - command_words - value_words - {"_"})
     return filler, command_words, value_words
 
 
+def whole_commands() -> set[str]:
+    """Words that are a complete command on their own: a template that is just
+    a fixed value ("{xpdr_mode=ident}": "ident" presses IDENT)."""
+    return {
+        m.group(1)
+        for c in COMMANDS
+        for t in c.templates
+        if (m := re.fullmatch(r"\{\w+=([^}]+)\}", t))
+    }
+
+
 def negative_rows(n: int, rng: random.Random) -> list[dict[str, Any]]:
     filler, command_words, value_words = _vocab()
-    numbers = [w for w in value_words if w in spoken.ONES or w in spoken.TENS or w in spoken.TEENS]
+    # Salad may hold one command word, but not one that is a whole command:
+    # "put ident both switch" as None contradicts bare "ident", and v22 then
+    # called "put the transponder in ident" not a command.
+    salad_commands = sorted(command_words - whole_commands())
+    # Sorted: a set's order changes with every process, and the dataset must
+    # come out the same for the same seed.
+    numbers = sorted(
+        w for w in value_words if w in spoken.ONES or w in spoken.TENS or w in spoken.TEENS
+    )
     states = ["on", "off", "up", "down"]
     rows = []
     for i in range(n):
@@ -296,7 +375,7 @@ def negative_rows(n: int, rng: random.Random) -> list[dict[str, Any]]:
         elif kind == 1:  # word salad: at most one command word, no values
             words = rng.sample(filler, rng.randint(2, 4))
             if rng.random() < 0.6:
-                words.insert(rng.randrange(len(words) + 1), rng.choice(sorted(command_words)))
+                words.insert(rng.randrange(len(words) + 1), rng.choice(salad_commands))
             text = " ".join(words)
         elif kind == 2:  # bare numbers ("seventy", "two forty")
             text = rng.choice(
@@ -317,7 +396,7 @@ def negative_rows(n: int, rng: random.Random) -> list[dict[str, Any]]:
                 "intent": "None",
                 "slots": {},
                 "template": f"None#neg{kind}",
-                "split": "test" if rng.random() < HOLDOUT_TEMPLATE_SHARE else "train",
+                "split": _row_split(rng),
                 "noise": "none",
             }
         )
@@ -335,7 +414,7 @@ def conversation_rows(c: Command, n: int, rng: random.Random) -> list[dict[str, 
                 "intent": c.intent,
                 "slots": {},
                 "template": f"{c.intent}#{c.templates.index(template)}",
-                "split": "test" if rng.random() < HOLDOUT_TEMPLATE_SHARE else "train",
+                "split": _row_split(rng),
                 "noise": "none",
             }
         )

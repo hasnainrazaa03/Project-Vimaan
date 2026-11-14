@@ -7,7 +7,7 @@ import json
 import sys
 from typing import Any
 
-from . import scenario, tier1, voice, xplane
+from . import scenario, tier1, tier2, voice, xplane
 from .bridge import Bridge, NoAnswer
 
 
@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("quit", help="switch the bridge off and quit X-Plane")
     sub.add_parser("screenshot", help="X-Plane's own screenshot of its window, to see a message")
     rn = sub.add_parser("run", help="run a checklist scenario, unattended, and write a report")
-    rn.add_argument("checklist", choices=("tier1",))
+    rn.add_argument("checklist", choices=("tier1", "tier2"))
     rn.add_argument("aircraft", choices=(*tier1.SETUPS, "all"))
     rn.add_argument("--text", action="store_true", help="no generated voice: text to the model")
     rn.add_argument("--voice", default=voice.DEFAULT_VOICE)
@@ -188,6 +188,17 @@ def _wait_ready(br: Bridge, icao: str, wait_sec: float = 240.0) -> dict[str, Any
     raise NoAnswer(f"Vimaan not ready on {icao}: last state {last.get('aircraft')}")
 
 
+def _model_lacks(checklist: str, state: dict) -> str | None:
+    """Why the loaded model can't run this checklist, or None. A model from
+    before Tier 2 would fail every step for not knowing the commands."""
+    known = state.get("model_intents")
+    if checklist != "tier2" or known is None:
+        return None
+    if tier2.NEEDS_INTENT in known:
+        return None
+    return "the loaded model predates Tier 2 (install v20 or later first)"
+
+
 def _run(args: argparse.Namespace) -> int:
     from datetime import datetime
 
@@ -196,7 +207,7 @@ def _run(args: argparse.Namespace) -> int:
     failed = 0
     for name in names:
         setup = tier1.SETUPS[name]
-        print(f"\n=== Tier 1 on {name} ({setup.icao}) ===")
+        print(f"\n=== {args.checklist} on {name} ({setup.icao}) ===")
         try:
             if not args.no_fly:
                 if not xplane.running():
@@ -209,6 +220,9 @@ def _run(args: argparse.Namespace) -> int:
         except (xplane.XPlaneError, NoAnswer) as exc:
             print(f"✕ {exc}", file=sys.stderr)
             return 2
+        if (why := _model_lacks(args.checklist, state)) is not None:
+            print(f"✕ {why}", file=sys.stderr)
+            return 2
         started = datetime.now().isoformat(timespec="seconds")
         if args.text:
             runner = scenario.Runner(br, voice=None)
@@ -219,12 +233,15 @@ def _run(args: argparse.Namespace) -> int:
         from .aircraft_file import flap_limits
 
         limits = flap_limits(state.get("aircraft", {}).get("acf") or "")
-        results = runner.run(tier1.steps(name, vfe_full=limits.get("full")))
+        if args.checklist == "tier2":
+            results = runner.run(tier2.steps(name))
+        else:
+            results = runner.run(tier1.steps(name, vfe_full=limits.get("full")))
         total = scenario.summary(results)
         path = scenario.write_report(
             br.log_dir / "test" / "reports",
             {
-                "checklist": "tier1",
+                "checklist": args.checklist,
                 "aircraft": name,
                 "icao": setup.icao,
                 "started": started,
