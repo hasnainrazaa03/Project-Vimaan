@@ -43,6 +43,12 @@ from data import spoken  # noqa: E402
 
 SCHEMA_VERSION = 2
 HOLDOUT_TEMPLATE_SHARE = 0.15
+# Development: one more template per command, the next in the same hash order,
+# also never trained on. The trainer keeps the checkpoint that does best on
+# them, and training ideas are compared on them, so the test templates (the
+# gate's new phrasings) are only read for a final candidate.
+DEV_TEMPLATES = 1
+DEV_ROW_SHARE = 0.05  # of the negatives and conversation rows
 NOISE_SHARE = 0.2
 NEGATIVE_SHARE = 0.1  # of the actionable rows
 CONVERSATION_ROWS = 400  # per conversational intent
@@ -236,21 +242,43 @@ def label(text: str, surfaces: dict[str, str]) -> dict[str, str] | None:
     return slots
 
 
+def _ranked(c: Command) -> list[str]:
+    return sorted(c.templates, key=lambda t: hashlib.sha256(f"{c.intent}|{t}".encode()).hexdigest())
+
+
+def _holdout_count(c: Command) -> int:
+    return max(2, math.ceil(len(c.templates) * HOLDOUT_TEMPLATE_SHARE))
+
+
 def holdout_templates(c: Command) -> set[str]:
     """Held-out templates, picked by a stable hash of the template: adding a
     phrasing elsewhere must not reshuffle them, or scores from different
     dataset versions can't be compared."""
-    n = max(2, math.ceil(len(c.templates) * HOLDOUT_TEMPLATE_SHARE))
-    ranked = sorted(
-        c.templates, key=lambda t: hashlib.sha256(f"{c.intent}|{t}".encode()).hexdigest()
-    )
-    return set(ranked[:n])
+    return set(_ranked(c)[: _holdout_count(c)])
+
+
+def dev_templates(c: Command) -> set[str]:
+    """Development templates: the next DEV_TEMPLATES in the same order, so
+    the test templates are exactly what they would be without them."""
+    n = _holdout_count(c)
+    return set(_ranked(c)[n : n + DEV_TEMPLATES])
+
+
+def _row_split(rng: random.Random) -> str:
+    """test / dev / train for a row with no template of its own (negatives,
+    conversation). One draw, as before dev existed, so the test rows are the
+    same."""
+    r = rng.random()
+    if r < HOLDOUT_TEMPLATE_SHARE:
+        return "test"
+    return "dev" if r < HOLDOUT_TEMPLATE_SHARE + DEV_ROW_SHARE else "train"
 
 
 def command_rows(
     c: Command, per_intent: int, rng: random.Random, stats: Counter[str]
 ) -> list[dict[str, Any]]:
     held = holdout_templates(c)
+    dev = dev_templates(c)
     rows = []
     attempts = 0
     while len(rows) < per_intent and attempts < per_intent * 5:
@@ -273,7 +301,7 @@ def command_rows(
                 "intent": c.intent,
                 "slots": slots,
                 "template": f"{c.intent}#{c.templates.index(template)}",
-                "split": "test" if template in held else "train",
+                "split": "test" if template in held else "dev" if template in dev else "train",
                 "noise": noise,
             }
         )
@@ -368,7 +396,7 @@ def negative_rows(n: int, rng: random.Random) -> list[dict[str, Any]]:
                 "intent": "None",
                 "slots": {},
                 "template": f"None#neg{kind}",
-                "split": "test" if rng.random() < HOLDOUT_TEMPLATE_SHARE else "train",
+                "split": _row_split(rng),
                 "noise": "none",
             }
         )
@@ -386,7 +414,7 @@ def conversation_rows(c: Command, n: int, rng: random.Random) -> list[dict[str, 
                 "intent": c.intent,
                 "slots": {},
                 "template": f"{c.intent}#{c.templates.index(template)}",
-                "split": "test" if rng.random() < HOLDOUT_TEMPLATE_SHARE else "train",
+                "split": _row_split(rng),
                 "noise": "none",
             }
         )

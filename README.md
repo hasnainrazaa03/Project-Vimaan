@@ -327,6 +327,11 @@ as `holdout_test.jsonl` **inside the checkpoint**, so evaluation measures true g
 rather than re-slicing the training file. Every metrics file records which set it used in an
 `eval_set_kind` field.
 
+Datasets from generator v2 split **by phrasing** instead:
+
+- **Test set:** template phrasings the model never trains on (`holdout_test.jsonl`, the gate's "new phrasings").
+- **Development set (from data v13):** one more held-out phrasing per command (`holdout_dev.jsonl`). The trainer keeps the checkpoint that does best on it, and training ideas are compared on it. The test phrasings are read only when a final candidate goes through the gate.
+
 | Metric | v11 |
 | --- | --- |
 | Eval set | held-out test set, **10,488 unseen rows** |
