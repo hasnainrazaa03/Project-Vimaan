@@ -216,6 +216,9 @@
           line("slot F1", k.s2, { points: 4 }),
           line(`intent accuracy${baseName}`, k.base, { width: 1.5, points: 3 }),
           line(`slot F1${baseName}`, k.base, { width: 1.5, points: 3, dash: [4, 3] }),
+          // Dev commands acted on right, as the gate counts them (runs that
+          // choose their best check on dev log it; others don't).
+          line("dev commands right", k.s3, { points: 4 }),
         ],
       },
       options: chartOptions(k, axes(k, { xTitle: "epoch", percent: true, xInt: true }), {
@@ -248,6 +251,10 @@
     charts.epoch.data.datasets[1].pointRadius = ep.map((e) => (e.epoch === best ? 7 : 4));
     charts.val.data.datasets[0].data = ep.map((e) => ({ x: e.epoch, y: e.val_intent_acc }));
     charts.val.data.datasets[1].data = ep.map((e) => ({ x: e.epoch, y: e.val_slot_f1 }));
+    const dev = ep.filter((e) => e.dev && e.dev.n).map((e) => ({ x: e.epoch, y: e.dev.right / e.dev.n }));
+    charts.val.data.datasets[4].data = dev;
+    charts.val.data.datasets[4]._absent = !dev.length;
+    charts.val.data.datasets[4].hidden = !dev.length;
 
     const b = st.base;
     charts.step.data.datasets[2].data = b ? b.steps.map((s) => ({ x: s.step / b.spe, y: s.ema ?? s.loss })) : [];
@@ -262,6 +269,7 @@
     // Validation chart: zoom the y axis to the data (it lives near 100%).
     const vals = [...ep, ...(b ? b.epochs : [])]
       .flatMap((e) => [e.val_intent_acc, e.val_slot_f1])
+      .concat(dev.map((d) => d.y))
       .filter((v) => v != null && isFinite(v));
     if (vals.length) {
       const lo = Math.min(...vals), hi = Math.max(...vals);
@@ -269,10 +277,19 @@
       charts.val.options.scales.y.min = Math.max(0, lo - pad);
       charts.val.options.scales.y.max = Math.min(1, hi + pad);
     }
-    const planned = st.summary?.planned_epochs || 0;
+    // Checks come once per epoch (1, 2, ...) or every half epoch (0.5, 1,
+    // ...); the per-check charts start at 1 only when no check is earlier.
+    const checks = [...ep, ...(b ? b.epochs : [])];
+    const x0 = checks.some((e) => e.epoch < 1) ? 0 : 1;
+    // A run that stops when dev converges ("wsd") rarely reaches its cap:
+    // size the axis to its soonest end; later points widen it.
+    const s = st.summary || {};
+    const planned = s.planned_epochs || 0;
+    const end = s.lr_schedule === "wsd" && s.end_epoch ? s.end_epoch.soonest : planned;
+    const baseEnd = b && b.epochs.length ? b.epochs[b.epochs.length - 1].epoch : 0;
     for (const c of [charts.step, charts.epoch, charts.val, charts.grad]) {
-      c.options.scales.x.min = c === charts.epoch || c === charts.val ? 1 : 0;
-      c.options.scales.x.suggestedMax = Math.max(planned, b ? b.epochs.length : 0, 1);
+      c.options.scales.x.min = c === charts.epoch || c === charts.val ? x0 : 0;
+      c.options.scales.x.suggestedMax = Math.max(end, baseEnd, 1);
     }
     queueDraw();
   }
@@ -286,11 +303,18 @@
     });
   }
 
+  // The check whose weights were saved: the trainer marks it (lowest val
+  // loss, or best dev score); older streams: the lowest val loss.
   function bestEpoch(epochs) {
     let best = null;
+    for (const e of epochs) if (e.best) best = e;
+    if (best) return best.epoch;
     for (const e of epochs) if (best == null || e.val_loss < best.val_loss) best = e;
     return best ? best.epoch : null;
   }
+
+  const fmtEpoch = (v) => (v == null ? "—" : String(+(+v).toFixed(2)));
+  const checkWord = (s) => ((s?.eval_every ?? 1) < 1 ? "checks" : "epochs");
 
   // A live curve stays under LIVE_POINTS, spaced evenly over the whole run:
   // a new step is kept every `stride` steps, and when the curve fills up every
@@ -386,12 +410,15 @@
     const elapsed = running ? s.elapsed + sinceUpdate : s.elapsed;
     const spe = s.steps_per_epoch || 0;
     const planned = s.planned_epochs || 0;
-    const epochShown = running ? s.epoch : s.epochs_done;
-    const partial = running && spe && s.epochs_done < s.epoch ? Math.min(s.step_in_epoch, spe) / spe : 0;
-    const frac = planned ? Math.min(1, (s.epochs_done + partial) / planned) : 0;
+    const epochShown = running ? s.epoch : fmtEpoch(s.epochs_done);
+    const wsd = s.lr_schedule === "wsd";
+    const progress = running && spe ? s.step / spe : s.epochs_done || 0;
+    const frac = planned ? Math.min(1, progress / planned) : 0;
 
     el("rp-total").style.width = `${(frac * 100).toFixed(1)}%`;
-    el("rp-total-text").textContent = planned ? `${s.epochs_done} of ${planned} epochs` : "—";
+    el("rp-total-text").textContent = planned
+      ? `${fmtEpoch(Math.floor(progress * 100) / 100)} of ${planned} epochs${wsd ? " at most" : ""}`
+      : "—";
     const inEpoch = running && spe ? Math.min(1, s.step_in_epoch / spe) : s.status === "finished" ? 1 : 0;
     el("rp-epoch").style.width = `${(inEpoch * 100).toFixed(1)}%`;
     el("rp-epoch-label").textContent = running ? `Epoch ${s.epoch}` : "Last epoch";
@@ -402,12 +429,15 @@
     const tiles = [
       ["Epoch", planned ? `${epochShown} / ${planned}` : String(epochShown), s.phase || (running ? "training" : STATUS_LABEL[s.status])],
       ["Elapsed", fmtDur(elapsed), running ? "since the run started" : "total"],
-      ["Time left", running && s.eta != null ? `~${fmtDur(Math.max(0, s.eta - sinceUpdate))}` : "—", running ? "if every epoch runs" : "not running"],
+      ["Time left", timeLeft(s, running, sinceUpdate), !running ? "not running" : !wsd ? "if every epoch runs"
+        : s.decaying ? "settling: the rate is falling to 0" : "fewer if dev stops improving"],
       ["Speed", s.rate ? `${s.rate.toFixed(1)}` : "—", s.rate ? `steps/s · ${fmtInt(Math.round(s.rate * (s.batch_size || 16)))} examples/s` : "steps per second"],
-      ["Best val loss", fmtLoss(s.best_val_loss), s.best_epoch ? `epoch ${s.best_epoch}` : "no epoch yet"],
-      ["Since best", s.best_epoch ? `${s.epochs_since_best}` : "—", s.patience != null ? `of ${s.patience} epochs patience` : "epochs without improvement"],
-      ["Intent accuracy", pct(s.val_intent_acc), "validation, latest epoch"],
-      ["Slot F1", pct(s.val_slot_f1), "validation, latest epoch"],
+      bestTile(s),
+      // What the trainer counts against patience: checks that didn't beat the
+      // best by its minimum gain (a new best by less still counts here).
+      ["Without a gain", s.best_epoch != null ? `${s.epochs_since_best}` : "—", s.patience != null ? `of ${s.patience} ${checkWord(s)} patience` : `${checkWord(s)} since the best`],
+      ["Intent accuracy", pct(s.val_intent_acc), "validation, latest check"],
+      ["Slot F1", pct(s.val_slot_f1), "validation, latest check"],
     ];
     el("kpis").innerHTML = tiles
       .map(([k, v, sub]) => `<div class="kpi"><small>${k}</small><strong>${v}</strong><span>${sub}</span></div>`)
@@ -421,7 +451,7 @@
     } else if (s.status === "stopped") {
       note = "Stopped by hand. The best checkpoint so far is kept.";
     } else if (s.status === "finished") {
-      note = `Finished in ${fmtDur(s.elapsed)}: best epoch ${s.best_epoch ?? "—"} of ${s.epochs_done}${s.stopped_early ? ", stopped early (no improvement within patience)" : ""}.`;
+      note = `Finished in ${fmtDur(s.elapsed)}: best check at epoch ${fmtEpoch(s.best_epoch)} of ${fmtEpoch(s.epochs_done)}${s.stopped_early ? ", stopped early (no improvement within patience)" : ""}.`;
     } else if (running) {
       note = `Training on ${s.device || "?"} · ${s.dataset || ""}. Updates arrive as the trainer writes them.`;
     }
@@ -432,6 +462,25 @@
       pill.dataset.status = running ? "running" : s.status === "finished" ? "finished" : s.status === "failed" ? "failed" : "idle";
       pill.querySelector(".label").textContent = running ? `${s.run} training` : "idle";
     }
+  }
+
+  function timeLeft(s, running, sinceUpdate) {
+    if (!running || s.eta == null) return "—";
+    const late = fmtDur(Math.max(0, s.eta - sinceUpdate));
+    if (s.eta_soonest == null) return `~${late}`;
+    return `~${fmtDur(Math.max(0, s.eta_soonest - sinceUpdate))}–${late}`;
+  }
+
+  // The saved check: its dev score when the run chooses on dev, else its
+  // validation loss.
+  function bestTile(s) {
+    const at = s.best_epoch != null ? `epoch ${fmtEpoch(s.best_epoch)}` : "no check yet";
+    const d = s.best_dev;
+    if (s.select === "actions" && d) {
+      const wrong = (d.wrong || 0) + (d.negatives_acted || 0);
+      return ["Best dev score", fmtInt(Math.round(d.score)), `${at} · ${fmtInt(d.right)} right, ${fmtInt(wrong)} wrong`];
+    }
+    return ["Best val loss", fmtLoss(s.best_val_loss), at];
   }
 
   // Near 100% every accuracy bar is full, so the bar shows the error rate
@@ -463,41 +512,52 @@
     const prev = ep[ep.length - 2];
     const best = bestEpoch(ep);
 
-    el("epoch-badge").textContent = last ? `epoch ${last.epoch}: train ${fmtLoss(last.train_loss)} · val ${fmtLoss(last.val_loss)}` : "—";
-    el("val-badge").textContent = last ? `intent ${pct(last.val_intent_acc)} · slot F1 ${pct(last.val_slot_f1)}` : "—";
+    el("epoch-badge").textContent = last ? `epoch ${fmtEpoch(last.epoch)}: train ${fmtLoss(last.train_loss)} · val ${fmtLoss(last.val_loss)}` : "—";
+    el("val-badge").textContent = last
+      ? `intent ${pct(last.val_intent_acc)} · slot F1 ${pct(last.val_slot_f1)}${last.dev && last.dev.n ? ` · dev ${pct(last.dev.right / last.dev.n)}` : ""}`
+      : "—";
 
     const intents = last && last.per_intent
       ? Object.entries(last.per_intent)
           .map(([name, r]) => ({ name, value: r.acc, n: r.n, prev: prev?.per_intent?.[name]?.acc }))
           .sort((a, b) => a.value - b.value || a.name.localeCompare(b.name))
       : [];
-    bars(el("intent-bars"), intents, { emptyText: last ? "This run's trainer didn't log per-intent scores." : "Appears after the first epoch." });
-    el("intent-badge").textContent = last ? `epoch ${last.epoch} · bar = error rate, worst first` : "latest epoch";
+    bars(el("intent-bars"), intents, { emptyText: last ? "This run's trainer didn't log per-intent scores." : "Appears after the first check." });
+    el("intent-badge").textContent = last ? `epoch ${fmtEpoch(last.epoch)} · bar = error rate, worst first` : "latest check";
 
     const slots = last && last.per_slot
       ? Object.entries(last.per_slot)
           .map(([name, r]) => ({ name, value: r.f1, n: r.n, prev: prev?.per_slot?.[name]?.f1 }))
           .sort((a, b) => a.value - b.value || a.name.localeCompare(b.name))
       : [];
-    bars(el("slot-bars"), slots, { emptyText: last ? "This run's trainer didn't log per-slot scores." : "Appears after the first epoch.", missed: "error" });
-    el("slot-badge").textContent = last ? `epoch ${last.epoch} · bar = error rate, worst first` : "latest epoch";
+    bars(el("slot-bars"), slots, { emptyText: last ? "This run's trainer didn't log per-slot scores." : "Appears after the first check.", missed: "error" });
+    el("slot-badge").textContent = last ? `epoch ${fmtEpoch(last.epoch)} · bar = error rate, worst first` : "latest check";
 
-    // Table view of every epoch (the charts' readable twin).
-    el("epochs-badge").textContent = ep.length ? `${ep.length} epochs · best ${best}` : "—";
+    // Table view of every check (the charts' readable twin).
+    const word = checkWord(st.meta);
+    el("epochs-badge").textContent = ep.length ? `${ep.length} ${word} · best at epoch ${fmtEpoch(best)}` : "—";
+    const hasDev = ep.some((e) => e.dev);
+    const devCells = (d) =>
+      d ? `<td>${fmtInt(d.right)}</td><td>${fmtInt(d.rejected)}</td><td>${fmtInt((d.wrong || 0) + (d.negatives_acted || 0))}</td><td>${fmtInt(Math.round(d.score))}</td>`
+        : "<td>—</td><td>—</td><td>—</td><td>—</td>";
     let prevT = 0;
     const rows = ep.map((e) => {
       const took = e.elapsed != null ? e.elapsed - prevT : null;
       prevT = e.elapsed ?? prevT;
       return `<tr class="${e.epoch === best ? "is-best" : ""}">
-        <td>${e.epoch}${e.epoch === best ? ' <span class="best-tag">best</span>' : ""}</td>
+        <td>${fmtEpoch(e.epoch)}${e.epoch === best ? ' <span class="best-tag">best</span>' : ""}</td>
         <td>${fmtLoss(e.train_loss)}</td><td>${fmtLoss(e.val_loss)}</td>
         <td>${pct(e.val_intent_acc, 3)}</td><td>${pct(e.val_slot_f1, 3)}</td>
+        ${hasDev ? devCells(e.dev) : ""}
         <td>${fmtDur(took)}</td><td>${e.val_seconds != null ? fmtDur(e.val_seconds) : "—"}</td>
       </tr>`;
     });
+    const devHead = hasDev
+      ? '<th title="dev commands acted on right">Dev right</th><th title="refused (the pilot repeats)">Refused</th><th title="wrong actions, and negatives acted on">Wrong</th><th title="right − 5 × wrong">Dev score</th>'
+      : "";
     el("epoch-table").innerHTML = ep.length
-      ? `<thead><tr><th>Epoch</th><th>Train loss</th><th>Val loss</th><th>Intent acc</th><th>Slot F1</th><th>Took</th><th>Validation</th></tr></thead><tbody>${rows.join("")}</tbody>`
-      : `<tbody><tr><td class="muted">No epochs yet.</td></tr></tbody>`;
+      ? `<thead><tr><th>Epoch</th><th>Train loss</th><th>Val loss</th><th>Intent acc</th><th>Slot F1</th>${devHead}<th>Took</th><th>Validation</th></tr></thead><tbody>${rows.join("")}</tbody>`
+      : `<tbody><tr><td class="muted">No checks yet.</td></tr></tbody>`;
   }
 
   const SPLIT_COLORS = () => { const k = tokens(); return [k.s1, k.s2, k.s3]; };
