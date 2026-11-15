@@ -174,6 +174,15 @@ _RULE_LIST: tuple[_Rule, ...] = (
         message="Confirm fuel pump off in flight",
     ),
     _Rule(
+        # Without pitot heat, ice blocks the pitot tube and the airspeed goes
+        # wrong. "prop heat off" is also heard as "probe heat off" (two of
+        # four generated voices), which is this switch.
+        name="pitot_heat_off_in_flight",
+        applies_to=lambda s: s.get("ice") == "pitot" and s.get("switch") == "off",
+        risky_when=_airborne,
+        message="Confirm pitot heat off in flight",
+    ),
+    _Rule(
         name="parking_brake_at_speed",
         applies_to=lambda s: s.get("state") == "on",
         risky_when=_parking_brake_fast,
