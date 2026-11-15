@@ -30,6 +30,7 @@ __all__ = [
     "has_command_word",
     "heading_too_short",
     "in_range",
+    "lost_digits",
     "slot_validator",
     "validate_slot",
 ]
@@ -122,6 +123,54 @@ def heading_too_short(value: Any) -> bool:
     digits ("zero zero five"). Ask again instead of turning to 001."""
     s = str(value).strip()
     return s.isdigit() and len(s) == 1
+
+
+# Headings and flight levels are said digit by digit, three digits. When the
+# recogniser loses one, it hears another word in its place and the rest is a
+# shorter number that is still valid: "one seven zero" -> "want seven zero"
+# (heading 70), "two nine zero" -> "tune nine zero" (flight level 90). Real
+# controllers' speech through the grammar (ATCOSIM, 10 speakers): 137 of v25's
+# 193 wrong actions were such numbers.
+_LOST_DIGIT_SLOTS = {"set_autopilot_heading": "degrees", "set_flight_level": "flight_level"}
+_SPOKEN_NUMBER = _COUNT_WORDS | {"oh", "hundred", "thousand"}
+
+
+def _words_before_number(intent: str, slot: str) -> frozenset[str]:
+    """The words the command's phrasings put just before the number ("heading",
+    "to", "level"), and the end of a lead-in ("please") where a phrasing
+    starts with it ("{degrees} degrees")."""
+    import re
+
+    cmd = _commands.command(intent)
+    out: set[str] = set()
+    for template in cmd.templates if cmd else ():
+        m = re.search(r"(\S+)\s+\{" + slot + r"[}=]", template)
+        if m:
+            out.add(m.group(1).lower())
+        elif template.startswith("{" + slot):
+            out.update(p.split()[-1] for p in _commands.PREFIXES if p)
+    return frozenset(out)
+
+
+_BEFORE_NUMBER = {i: _words_before_number(i, s) for i, s in _LOST_DIGIT_SLOTS.items()}
+
+
+def lost_digits(intent: str, slots: Mapping[str, Any], text: str) -> bool:
+    """A heading or flight level of one or two digits, with a word in front of
+    its number that none of the command's phrasings puts there: a digit was
+    probably heard as that word. Ask again instead of acting."""
+    slot = _LOST_DIGIT_SLOTS.get(intent)
+    value = str(slots.get(slot) or "").strip() if slot else ""
+    if not value.isdigit() or len(value) > 2:
+        return False
+    words = text.lower().split()
+    end = max((i for i, w in enumerate(words) if w in _SPOKEN_NUMBER or w.isdigit()), default=None)
+    if end is None:
+        return False
+    start = end
+    while start > 0 and (words[start - 1] in _SPOKEN_NUMBER or words[start - 1].isdigit()):
+        start -= 1
+    return start > 0 and words[start - 1] not in _BEFORE_NUMBER[intent]
 
 
 # Words that can come with a bare command noun: "the landing gear".
