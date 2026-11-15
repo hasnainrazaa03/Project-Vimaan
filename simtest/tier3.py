@@ -9,11 +9,14 @@ Each switch is checked the way its aircraft shows it
 (docs/AIRCRAFT_PROFILES.md, "Tier 3 findings"): the 737's own switch
 positions, the A330's buttons, the King Air's selectors, X-Plane's values
 on the Baron. Where an aircraft has no such switch, the step expects
-Vimaan to say so. Turning power or fuel pumps off in the air is held for
-confirmation, then cancelled; nothing is switched off for real.
+Vimaan to say so. Turning power, fuel pumps or pitot heat off in the air is
+held for confirmation, then cancelled; nothing is switched off for real
+(the A330's probe heat has no off: confirmed, it asks "on or auto?").
 """
 
 from __future__ import annotations
+
+import dataclasses
 
 from .scenario import SimCheck, Step, equals
 from .tier1 import DONE_OR_SET, SETUPS, hands_off
@@ -24,6 +27,7 @@ ICE = "sim/cockpit2/ice/"
 # on", "feet heat on", "zero heat on", whatever the spelling). "probe" is
 # the same slot value; "pitot" itself is left to the owner's voice check.
 PITOT_SAY = "probe heat on"
+PITOT_OFF_SAY = "probe heat off"
 # Two of four generated voices hear "prop heat" as "probe heat" (the pitot
 # heat), "propeller" never. "prop" is left to the owner's voice check too.
 PROP_SAY = {"on": "propeller heat on", "off": "propeller heat off"}
@@ -62,6 +66,31 @@ def _set(name: str, say: str, *checks: SimCheck, note: str = "") -> Step:
 
 def _refused(name: str, say: str, reply: str, *checks: SimCheck) -> Step:
     return Step(name, say=say, outcomes=("rejected",), reply=reply, vimaan_checks=False, sim=checks)
+
+
+def _pitot_off_held(*still_on: SimCheck, no_off: bool = False) -> list[Step]:
+    """Pitot heat off in the air is held, then cancelled. Where the aircraft
+    has no off (the A330), the repeat confirms it and Vimaan asks "on or
+    auto?", so nothing changes either way."""
+    held = Step(
+        "probe heat off is held in flight",
+        say=PITOT_OFF_SAY,
+        outcomes=("safety_hold",),
+        reply="Confirm pitot heat off",
+        vimaan_checks=False,
+        sim=still_on,
+    )
+    if no_off:
+        then = _refused("confirmed, probe heat has no off", PITOT_OFF_SAY, "auto", *still_on)
+    else:
+        then = Step(
+            "cancel the probe heat off",
+            say="cancel",
+            outcomes=("cancelled",),
+            vimaan_checks=False,
+            sim=still_on,
+        )
+    return [held, dataclasses.replace(then, after=held.name)]
 
 
 def _lights(aircraft: str) -> list[Step]:
@@ -163,7 +192,7 @@ def _anti_ice(aircraft: str) -> list[Step]:
         heat = A333 + "monitors/probe_window_heat"
         return [
             _set("probe heat on", "probe heat on", _is("probe / window heat ON", heat, 1)),
-            _refused("probe heat has no off", "probe heat off", "auto", _is("still ON", heat, 1)),
+            *_pitot_off_held(_is("still ON", heat, 1), no_off=True),
             _set("probe heat auto", "probe heat auto", _is("probe / window heat AUTO", heat, 0)),
             _set(
                 "wing anti ice on",
@@ -200,6 +229,9 @@ def _anti_ice(aircraft: str) -> list[Step]:
                 "probe heat on",
                 "probe heat on",
                 *(_is(f"probe heat {ab}", d, 1) for ab, d in zip("AB", probes)),
+            ),
+            *_pitot_off_held(
+                *(_is(f"probe heat {ab} still on", d, 1) for ab, d in zip("AB", probes))
             ),
             _set(
                 "window heat on",
@@ -250,6 +282,7 @@ def _anti_ice(aircraft: str) -> list[Step]:
         )
         return [
             _set("pitot heat on", PITOT_SAY, *pitot),
+            *_pitot_off_held(*pitot),
             _set(
                 "window heat on",
                 "window heat on",
@@ -288,6 +321,7 @@ def _anti_ice(aircraft: str) -> list[Step]:
         ]
     return [  # Baron
         _set("pitot heat on", PITOT_SAY, *pitot),
+        *_pitot_off_held(*pitot),
         _set("window heat on", "window heat on", _is("window heat", ICE + "ice_window_heat_on", 1)),
         _set("boots on", "boots on", _is("boots AUTO", ICE + "ice_surface_boot_on", 2)),
         _set("boots off", "boots off", _is("boots off", ICE + "ice_surface_boot_on", 0)),
