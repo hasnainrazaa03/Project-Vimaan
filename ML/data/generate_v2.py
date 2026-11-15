@@ -42,6 +42,7 @@ from vimaan_nlu.commands import (  # noqa: E402
     PREFIXES,
     SUFFIXES,
     Command,
+    Slot,
 )
 from vimaan_nlu.normalization import normalize_aviation_input  # noqa: E402
 from vimaan_nlu.stt_vocabulary import NUMBER_WORDS, entry_words, load_vocabulary  # noqa: E402
@@ -314,17 +315,90 @@ def stray_words(c: Command, text: str) -> list[str]:
     ]
 
 
-def _replaceable(c: Command, words: list[str], i: int, slot_words: set[str]) -> bool:
-    """May ``words[i]`` be lost to a stray word? Never a slot word. One of the
-    command's own words only when another stays and nothing else could be
-    made of what is left: "ice director on" is still the director, while
-    "... speed one thousand" without "vertical" is a speed of its own."""
+_TEMPLATE_WORDS: dict[str, tuple[frozenset[str], ...]] = {}
+
+
+def _phrasings(c: Command) -> tuple[frozenset[str], ...]:
+    """Each of ``c``'s templates as the words it is made of, besides values."""
+    if c.intent not in _TEMPLATE_WORDS:
+        _TEMPLATE_WORDS[c.intent] = tuple(
+            frozenset(PLACEHOLDER.sub(lambda m: f" {m.group(2) or ''} ", t).split())
+            for t in c.templates
+        )
+    return _TEMPLATE_WORDS[c.intent]
+
+
+def _template_words(c: Command) -> frozenset[str]:
+    """The words ``c``'s phrasings are made of, besides its values."""
+    return frozenset().union(*_phrasings(c))
+
+
+def _takes(d: Command, slot: Slot, surface: str) -> bool:
+    """Could ``d`` take this value: a number of the same sort (a port, a
+    frequency, an altitude ...), an instance, or a choice it says the same way."""
+    for other in d.slots.values():
+        if other.kind != slot.kind:
+            continue
+        if slot.kind == "number":
+            if other.render == slot.render:
+                return True
+            continue
+        if slot.kind == "instance":
+            return True
+        if any(surface == str(s) for v, syns in other.synonyms.items() for s in (v, *syns)):
+            return True
+    return False
+
+
+def _alternatives(c: Command, rest: set[str], surfaces: dict[str, str]) -> list[str]:
+    """Other commands the words ``rest`` could be, while they no longer say
+    ``c``: ``d`` could be made of them, could take every value in them and
+    shares a word with them, and every phrasing of ``c`` has a word that
+    tells it from ``d`` and is not among them. "two transfer" is the NAV
+    swap's or the COM swap's alike (every NAV swap says "nav"); "com one
+    one one nine decimal seven" is still the active frequency (it is said
+    without a word of its own, and the standby always says "standby"); "nav
+    two standby one one six decimal nine" is no swap (a swap takes no
+    frequency)."""
+    mine = _template_words(c)
+    out = []
+    for d in COMMANDS:
+        if not d.actionable or d.intent == c.intent or not _could_make(d, rest):
+            continue
+        if not all(_takes(d, c.slots[name], surface) for name, surface in surfaces.items()):
+            continue
+        theirs = _template_words(d) | set(d.command_words)
+        markers = mine - theirs  # words that say c rather than d
+        if not rest & theirs or rest & markers:
+            continue
+        if not markers or all(p & markers for p in _phrasings(c)):
+            out.append(d.intent)
+    return out
+
+
+def _replaceable(
+    c: Command,
+    words: list[str],
+    i: int,
+    slot_words: set[str],
+    surfaces: dict[str, str] | None = None,
+) -> bool:
+    """May ``words[i]`` be lost to a stray word? Never a slot word, and never
+    a word without which what is left is another command's as much:
+    "nav two transfer" without "nav" is the COM swap's too (data v16: 28 train
+    and 12 dev rows nobody could answer, 12 of the 16 dev rows any v26 run
+    acted on wrongly). One of the command's own words only when another stays
+    and nothing else could be made of what is left: "ice director on" is
+    still the director, while "... speed one thousand" without "vertical" is a
+    speed of its own."""
     w = words[i]
     if w in slot_words:
         return False
+    rest = set(words[:i] + words[i + 1 :])
+    if _alternatives(c, rest, surfaces or {}):
+        return False
     if w not in c.command_words:
         return True
-    rest = set(words[:i] + words[i + 1 :])
     if not rest & set(c.command_words):
         return False
     return not any(
@@ -337,7 +411,12 @@ def _replaceable(c: Command, words: list[str], i: int, slot_words: set[str]) -> 
 
 
 def add_stray(
-    c: Command, text: str, word: str, slot_words: set[str], rng: random.Random
+    c: Command,
+    text: str,
+    word: str,
+    slot_words: set[str],
+    rng: random.Random,
+    surfaces: dict[str, str] | None = None,
 ) -> str | None:
     """``word`` in place of the first or the last word, or rarely added at an
     end; None when the place drawn can't take it (the row gets other noise)."""
@@ -345,7 +424,7 @@ def add_stray(
     r = rng.random()
     if r < STRAY_REPLACE_FIRST + STRAY_REPLACE_LAST:
         i = 0 if r < STRAY_REPLACE_FIRST else len(words) - 1
-        if len(words) < 2 or not _replaceable(c, words, i, slot_words):
+        if len(words) < 2 or not _replaceable(c, words, i, slot_words, surfaces):
             return None
         return " ".join([*words[:i], word, *words[i + 1 :]])
     return f"{word} {text}" if rng.random() < 0.5 else f"{text} {word}"
@@ -413,7 +492,7 @@ def command_rows(
             slot_words = {w for s in surfaces.values() for w in s.split()}
             protected = slot_words | set(c.command_words)
             strays = stray_words(c, text) if rng.random() < STRAY_SHARE else []
-            strayed = strays and add_stray(c, text, rng.choice(strays), slot_words, rng)
+            strayed = strays and add_stray(c, text, rng.choice(strays), slot_words, rng, surfaces)
             if strayed:
                 text, noise = strayed, "stray"
             else:
