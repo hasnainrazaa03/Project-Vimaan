@@ -23,6 +23,7 @@ Last updated 2026-11-11.
 | A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
 | T2 | Tier 2: radios & navigation → **v25** | 🟡 groundwork, runner scenarios, data and model done: v25 passes all six gates (2026-11-13); installed 2026-11-13; runner in the sim 95/95 on four aircraft; next: the owner's real-voice check | #43, #46 |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | 🟡 T3.0a and T3.0b built (#50, #51); two v26 averages failed the gate (the second by one real-voice clip); data v16, v26-g/h/i training | #50, #51, #52, #54 |
+| G | Generalization: beyond the owner's voice (measured recognizer noise, other voices, calibration, other recognizers) | 🟡 measured on real voices (2026-11-14); lost-digit refusal built | #55 |
 | T4 | Tier 4: questions (read-only) → **v27** | ⬜ | |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
@@ -897,6 +898,98 @@ still says this command: every phrasing of the command needs a word that tells
 it from the other one and that word is gone, so the stray goes elsewhere. 277
 placements moved (radio swaps, standby without "standby", "coming down" gear or
 flaps, "brake off" parking brake or autobrake).
+
+---
+
+## Phase G: generalization beyond one voice
+
+The owner's goal (2026-11-14): avoid overfitting and generalize. Every step is
+approved by the owner before it is built. The six gates stay as they are.
+
+**Why.**
+- Training data is all generated. The recognition noise is rules written by
+  hand, and the only real speech is the owner's: 118 clips that are the gate's
+  real-voice set and have now steered two data rounds.
+- Confidence is near 1.0 when wrong. On the heard dev set, 95–99% of wrong
+  actions were at ≥ 0.9 and every right one at ≥ 0.99, so the 0.55 floor
+  catches almost nothing.
+- Dev loss climbs with epochs in some runs (v26-d: best at epoch 1, 0.0077 →
+  0.33 at epoch 10).
+- The model reads only text, so what matters is what Vosk *hears*. On the
+  owner's 118 clips v25 is right on 111 of the texts as said (the other 7 are
+  deliberate refusals) and on 91 of the texts as heard. Only 75 were heard
+  exactly.
+
+**Measured on real voices** (2026-11-14; data in `ML/datasets/external/`, not
+committed; not a gate).
+- **ATCOSIM** (10 real controllers, R&D use allowed): the instruction is cut
+  out of each clip by a forced alignment and decoded with the shipped grammar,
+  giving 2,074 commands (flight level, heading, squawk).
+  - v25: 650 right / 1,231 refused / **193 wrong (9.3%)**; on the owner's voice
+    it is 0–1%. v26-soup2 is the same.
+  - Every clean text as said is right.
+  - Speakers range from 2% to 28% wrong.
+- **137 of the 193** were a number that lost a digit: "one seven zero" heard
+  as "want seven zero" → heading 70, "two nine zero" as "tune nine zero" →
+  FL 90.
+- **Google Speech Commands** (CC BY 4.0, 200 speakers a word):
+  - Our words are heard exactly 71–92% of the time. The risky mix-ups are off →
+    half, up → ap, eight → "a", one → want, seven → set.
+  - Words we don't use rarely come out as nothing: cat → cut 79/200, bed →
+    belt 78, tree → three 176.
+
+- [x] **G.1 Lost-digit refusal** (approved 2026-11-14). A heading or flight
+  level of one or two digits is refused ("Say the whole number") when the word
+  before its number is one that none of the command's phrasings puts there.
+  - v25 on ATCOSIM: wrong 193 → **99**, right unchanged (650).
+  - Heard dev: right unchanged, wrong −2.
+  - Owner's real voice: 91 / 27 / 0 → **90 / 28 / 0**. "set heading go ninety
+    degrees" (said "to ninety") is now refused.
+  - Left open for the owner: a narrower version, digit-by-digit numbers only,
+    lets that clip through and catches 123 instead of 127 on ATCOSIM. It was
+    found through a gate clip.
+- [ ] **G.2 Measured recognizer noise:** confusions from (said, heard) pairs
+  replace the hand-written noise rules in the generator. Sources: public real
+  speech, many-speaker TTS, room echo and noise (RIRS_NOISES), X-Plane's own
+  sound, clipped starts.
+- [ ] **G.3 Recipe:** fewer epochs and calibrated confidence, compared on
+  dev and on the real-voice measuring sets; gate only the final candidate.
+- [ ] **G.4 More voices:** the owner's new flights (one session held out as a
+  fresh test, the 118 clips never trained on), and other people reading the
+  checklist.
+- [ ] **G.5 Recognizer comparison** (approved 2026-11-14; measuring only,
+  nothing installed).
+  - Each recognizer runs through the same harness as Vosk: the owner's 118
+    clips, the ATCOSIM set and the one-word set. Counted: right / refused /
+    wrong with the current model, and the delay after key-up with X-Plane
+    running.
+  - Candidates (offline, on a Mac; each licence checked before anything
+    ships): Whisper (MIT, already a backend in `stt.py`), NVIDIA Parakeet
+    (CC BY 4.0), Moonshine (MIT), sherpa-onnx streaming models with word
+    biasing (Apache).
+  - Also measured: refusing a command when Vosk's confidence in a number or
+    switch word is low. Vosk gives a confidence for each word, unused so far.
+  - Judged by actions, not by exact words. A recognizer that can hear any word
+    gives the model words it never trained on, so its own output goes into
+    the training text before it is compared fairly.
+  - Vosk stays the default unless a candidate is better on all three sets
+    with no more wrong actions on the owner's voice.
+- [ ] **G.6 Two recognizers agree** (approved 2026-11-14; measuring first).
+  - Vosk plus the best G.5 candidate: act when both give the same command;
+    when they differ, ask "Say again".
+  - Measured: wrong actions saved against right ones lost, and the extra delay.
+- **Not doing: fine-tuning the recognizer** (owner, 2026-11-14).
+  - Vosk is Kaldi, with a training toolchain of its own.
+  - There is no licence-clean, many-voice recording of our commands to
+    train it on.
+  - Its settings are already measured (Tier 2): the larger model, 10-best
+    fallback, and no `[unk]` were each no better.
+- **Licences:** Vimaan will be public, so a shipped model trains only on CC0,
+  CC BY, Apache or ATCOSIM data. Non-commercial and academic sets are for
+  measuring only.
+- Also approved and built: the mic pre-roll (#57; the mic stays open and each
+  command starts with the last 300 ms) and the "pitot heat off" in-flight
+  hold (#56).
 
 ---
 

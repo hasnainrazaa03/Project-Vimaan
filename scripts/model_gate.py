@@ -99,6 +99,7 @@ def decision(p: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         clipped_number,
         has_command_word,
         heading_too_short,
+        lost_digits,
         validate_slot,
     )
 
@@ -114,6 +115,8 @@ def decision(p: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         return "clipped_number", {}
     if intent == "set_autopilot_heading" and heading_too_short(slots.get("degrees")):
         return "one_digit_heading", {}
+    if lost_digits(intent, slots, p.get("original_text") or ""):
+        return "lost_digits", {}
     if two_or_to(intent, p.get("original_text") or ""):
         return "ambiguous_two", {}
     for name in required_slots().get(intent, ()):
