@@ -887,6 +887,17 @@ landing + strobes on takeoff, pitot heat, fuel pump, yaw damper, seatbelt
 sign, speed brakes armed for landing, autobrake 3, all lights off after
 shutdown.
 
+**Data v17** (#59, 2026-11-14; 137,720 rows: train 105,705, dev 7,707, test
+24,308; 5,012 stray rows). The v16 stray rule could replace the one word that
+told two commands apart: "nav two transfer" became "boost two transfer",
+which is the COM swap's as much (28 train and 12 dev rows nobody could answer).
+They were 12 of the 16 dev rows any v26 run acted on wrongly; the test split
+had none, so the gate never saw them. A word may now go only if what is left
+still says this command: every phrasing of the command needs a word that tells
+it from the other one and that word is gone, so the stray goes elsewhere. 277
+placements moved (radio swaps, standby without "standby", "coming down" gear or
+flaps, "brake off" parking brake or autobrake).
+
 ---
 
 ## Tier 4: questions (read-only) → v27

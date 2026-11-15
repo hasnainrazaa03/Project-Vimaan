@@ -189,6 +189,58 @@ def test_a_stray_word_takes_the_place_of_a_word_that_can_go():
     )
 
 
+def test_a_stray_word_never_takes_the_word_that_tells_two_commands_apart():
+    # "boost two transfer": without "nav" it is the COM swap's as much.
+    for intent, text, port in (
+        ("swap_nav_frequency", "nav two transfer", {"nav_port": "two"}),
+        ("swap_com_frequency", "com one transfer", {"com_port": "one"}),
+        ("swap_com_frequency", "com two swap", {"com_port": "two"}),
+    ):
+        assert not generate_v2._replaceable(
+            _cmd(intent), text.split(), 0, set(port.values()), port
+        ), text
+    # Without "nav", "... two standby" no longer says NAV: every NAV standby
+    # says "nav". The COM standby is also said without "com" ("set standby").
+    port = {"nav_port": "two"}
+    assert generate_v2._alternatives(_cmd("set_nav_standby"), {"two", "standby"}, {}) != []
+    assert generate_v2._alternatives(_cmd("set_com_standby"), {"two", "standby"}, {}) == []
+    # But a NAV frequency still says which radio: 116.9 is no COM frequency.
+    standby = {**port, "nav_frequency": "one one six decimal nine"}
+    text = "nav two standby one one six decimal nine".split()
+    slot_words = {w for v in standby.values() for w in v.split()}
+    assert generate_v2._replaceable(_cmd("set_nav_standby"), text, 0, slot_words, standby)
+
+
+def test_a_word_can_go_when_what_is_left_is_still_this_command():
+    # A swap takes no frequency: "... nav two standby to 109.4" is no swap.
+    standby = {"nav_port": "two", "nav_frequency": "one oh nine point four"}
+    text = "set nav two standby to one oh nine point four".split()
+    slot_words = {w for v in standby.values() for w in v.split()}
+    assert generate_v2._replaceable(_cmd("set_nav_standby"), text, 0, slot_words, standby)
+    # The active frequency is said without a word of its own; standby isn't.
+    active = {"com_port": "one", "frequency": "one one nine decimal seven"}
+    text = "set com one to one one nine decimal seven".split()
+    slot_words = {w for v in active.values() for w in v.split()}
+    assert generate_v2._replaceable(_cmd("set_com_frequency"), text, 0, slot_words, active)
+    text = "com one standby one one nine decimal seven".split()
+    assert not generate_v2._replaceable(_cmd("set_com_standby"), text, 2, slot_words, active)
+    # A mode needs a mode: "... autopilot on" is still the autopilot.
+    state = {"state": "on"}
+    ap = _cmd("toggle_autopilot")
+    assert generate_v2._replaceable(ap, "turn autopilot on".split(), 0, {"on"}, state)
+    fd = _cmd("toggle_flight_director")  # "ice director on" is the director
+    assert generate_v2._replaceable(fd, "flight director on".split(), 0, {"on"}, state)
+
+
+def test_no_stray_row_loses_the_radio_it_swaps(data):
+    rows, _ = data
+    radio = {"swap_nav_frequency": {"nav", "navigation"}, "swap_com_frequency": {"com", "comm"}}
+    for r in rows:
+        if r["intent"] in radio and r["noise"] == "stray":
+            words = set(r["text"].split())
+            assert words & (radio["swap_nav_frequency"] | radio["swap_com_frequency"]), r
+
+
 def test_a_stray_word_is_mostly_in_place_of_an_end_word():
     # The recogniser replaced end words and never added one (synthetic voices):
     # a leading extra word taught "parking start engine one" as the engine.
