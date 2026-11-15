@@ -103,10 +103,34 @@ def _optimizer(model, lr, device):
     return AdamW(model.parameters(), lr=lr), "AdamW"
 
 
+def _grads(model):
+    return [p.grad for p in model.parameters() if p.grad is not None]
+
+
+def _total_norm(grads):
+    """L2 norm over all the gradients, as a tensor (no device sync). A sum of
+    dot products: on the M5 GPU torch's norm takes 31 ms for the embedding's
+    23M values and a dot product 0.4 ms, with the same result."""
+    if not grads:
+        return torch.zeros(())
+    return torch.stack([torch.dot(g.reshape(-1), g.reshape(-1)) for g in grads]).sum().sqrt()
+
+
 def _grad_norm(model):
     """L2 norm over every parameter's gradient. Only reads the gradients."""
-    norms = [p.grad.detach().norm(2) for p in model.parameters() if p.grad is not None]
-    return torch.norm(torch.stack(norms), 2).item() if norms else 0.0
+    return float(_total_norm(_grads(model)))
+
+
+def clip_grads_(model, max_norm):
+    """Scale the gradients so their total norm is at most ``max_norm``: what
+    torch.nn.utils.clip_grad_norm_ does (coefficient max_norm / (norm + 1e-6),
+    at most 1), with the fast norm. torch's took a step from 25 to 7 per second
+    on the M5 GPU. Returns the norm before clipping, as a tensor."""
+    grads = _grads(model)
+    total = _total_norm(grads)
+    if grads:
+        torch._foreach_mul_(grads, torch.clamp(max_norm / (total + 1e-6), max=1.0))
+    return total
 
 
 def train_model(
@@ -501,10 +525,9 @@ def train_model(
                 loss.backward()
                 global_step += 1
                 extra = {}
-                if global_step % GRAD_NORM_EVERY == 1:
-                    extra["grad_norm"] = _grad_norm(model)  # before clipping
-                if clip_grad > 0:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), clip_grad)
+                norm = clip_grads_(model, clip_grad) if clip_grad > 0 else None
+                if global_step % GRAD_NORM_EVERY == 1:  # before clipping
+                    extra["grad_norm"] = float(norm) if norm is not None else _grad_norm(model)
                 optimizer.step()
 
                 logger.log(

@@ -76,3 +76,24 @@ def test_dev_is_still_checked_while_decaying():
     assert c.decaying
     assert c.check(350, 6.0)  # settling helped: these are the weights to keep
     assert c.decay_start == 300  # the decay isn't restarted
+
+
+@pytest.mark.requires_torch
+@pytest.mark.parametrize("scale", [0.01, 1.0, 50.0])
+def test_gradient_clipping_matches_torch(scale):
+    import torch
+    from train_nlu_model import clip_grads_
+
+    def model_with_grads(seed):
+        torch.manual_seed(seed)
+        m = torch.nn.Sequential(torch.nn.Embedding(50, 8), torch.nn.Linear(8, 3))
+        out = m[1](m[0](torch.tensor([1, 4, 7]))).sum() * scale
+        out.backward()
+        return m
+
+    ours, theirs = model_with_grads(0), model_with_grads(0)
+    norm = clip_grads_(ours, 1.0)
+    want = torch.nn.utils.clip_grad_norm_(theirs.parameters(), 1.0)
+    assert float(norm) == pytest.approx(float(want), rel=1e-5)
+    for a, b in zip(ours.parameters(), theirs.parameters()):
+        assert torch.allclose(a.grad, b.grad, rtol=1e-5, atol=1e-8)
