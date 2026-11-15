@@ -206,6 +206,25 @@ def test_worker_defaults_to_offline_stt_and_saves_audio(sim):
     assert argv[argv.index("--audio-prefix") + 1] == f"{plugin.tel.session_id}_"
 
 
+def test_the_mic_stays_open_by_default(sim, monkeypatch):
+    _, plugin, _ = sim
+    argv = plugin.worker.argv
+    assert argv[argv.index("--preroll-ms") + 1] == "300"
+    monkeypatch.setattr(plugin, "MIC_PREROLL_MS", 0)
+    argv = plugin._worker_argv()
+    assert argv[argv.index("--preroll-ms") + 1] == "0"
+
+
+def test_a_bad_number_setting_falls_back_to_the_default(sim, monkeypatch):
+    module, _, _ = sim
+    monkeypatch.setenv("VIMAAN_MIC_PREROLL_MS", "250")
+    assert module._env_int("VIMAAN_MIC_PREROLL_MS", 300) == 250
+    monkeypatch.setenv("VIMAAN_MIC_PREROLL_MS", "lots")
+    assert module._env_int("VIMAAN_MIC_PREROLL_MS", 300) == 300
+    monkeypatch.delenv("VIMAAN_MIC_PREROLL_MS")
+    assert module._env_int("VIMAAN_MIC_PREROLL_MS", 300) == 300
+
+
 def test_audio_saving_can_be_turned_off(sim, monkeypatch):
     _, plugin, _ = sim
     monkeypatch.setattr(plugin, "SAVE_AUDIO", False)
