@@ -2,7 +2,8 @@
 
 ``ML/train_nlu_model.py`` appends one JSON object per line to
 ``ML/training_runs/<version>/metrics.jsonl``: ``meta`` once, then ``step``
-records, ``phase`` markers (validate / save), one ``epoch`` record per epoch,
+records, ``phase`` markers (validate / save), one ``epoch`` record per dev
+check (once per epoch, or every ``eval_every`` of an epoch: 0.5, 1, 1.5, ...),
 and finally ``done`` (or ``error`` / ``stopped``). A run is watched the same
 way however it was started (from the dashboard or from a terminal), since
 everything comes from that file.
@@ -149,6 +150,41 @@ def _val_seconds(run: _Run) -> list[float]:
     return out
 
 
+def _best(epochs: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The check whose weights were saved. The trainer marks it ``best``: the
+    lowest validation loss, or with ``--select actions`` the best dev score.
+    Streams without the mark: the lowest validation loss."""
+    marked = [e for e in epochs if e.get("best")]
+    if marked:
+        return marked[-1]
+    return min(epochs, key=lambda e: e.get("val_loss", float("inf")), default=None)
+
+
+def _end_epochs(
+    meta: dict[str, Any], epochs: list[dict[str, Any]], planned: int, every: float
+) -> tuple[float, float]:
+    """When the run will stop, in epochs: (soonest, latest). Most runs go to
+    ``planned`` (patience can stop them sooner). A "wsd" run stops
+    ``decay_epochs`` after its decay starts, and the decay starts once dev
+    has gone ``patience`` checks without a gain, or at the cap."""
+    if meta.get("lr_schedule") != "wsd":
+        return float(planned), float(planned)
+    decay = float(meta.get("decay_epochs") or 1.0)
+    cap_start = max(0.0, planned - decay)
+    started = next((float(e["epoch"]) for e in epochs if e.get("decaying")), None)
+    if started is not None:
+        end = min(started, cap_start) + decay
+        return end, end
+    patience = int(meta.get("patience") or 0)
+    latest = epochs[-1] if epochs else None
+    if latest is None:  # the first check is always the best so far
+        start = (patience + 1) * every
+    else:
+        left = max(0, patience - int(latest.get("epochs_no_improve") or 0))
+        start = float(latest["epoch"]) + left * every
+    return min(start, cap_start) + decay, float(planned)
+
+
 def summarize(name: str) -> dict[str, Any] | None:
     loaded = _load(name)
     if loaded is None:
@@ -163,32 +199,50 @@ def summarize(name: str) -> dict[str, Any] | None:
     epoch = int(last["epoch"]) if last else 0
     elapsed = (run.end or {}).get("elapsed") or (last or {}).get("elapsed") or 0.0
 
+    every = float(meta.get("eval_every") or 1.0)
+    per_epoch = max(1, round(1 / every))  # dev checks per epoch
+    latest = run.epochs[-1] if run.epochs else None
+
     rate = None
     if len(run.steps) >= 2:
-        # Training speed within one epoch: a window across an epoch boundary
+        # Training speed since the latest check: a window across a check
         # would count the validation pause as slow steps.
         tail_steps = run.steps[-(RATE_WINDOW + 50) :]
-        window = [s for s in tail_steps if s.get("epoch") == epoch][-RATE_WINDOW:]
-        if len(window) < 10:
-            window = [s for s in tail_steps if s.get("epoch") == epoch - 1][-RATE_WINDOW:] or window
+        window = tail_steps[-RATE_WINDOW:]
+        if latest is not None and "elapsed" in latest:
+            after = [s for s in tail_steps if s.get("elapsed", 0) > latest["elapsed"]]
+            before = [s for s in tail_steps if s.get("elapsed", 0) <= latest["elapsed"]]
+            window = after[-RATE_WINDOW:] if len(after) >= 10 else before[-RATE_WINDOW:] or after
         if len(window) >= 2:
             dt = window[-1].get("elapsed", 0) - window[0].get("elapsed", 0)
             if dt > 0:
                 rate = (window[-1]["step"] - window[0]["step"]) / dt
 
-    eta = None
+    soonest, last_end = _end_epochs(meta, run.epochs, planned, every)
+    if status != "running" and latest is not None:
+        soonest = last_end = float(latest["epoch"])
+    eta = eta_soonest = None
     if status == "running" and rate and spe and planned:
-        remaining_steps = max(0, planned * spe - step)
         val = _val_seconds(run)
         per_val = sum(val) / len(val) if val else 0.0
-        remaining_vals = max(0, planned - len(run.epochs))
-        eta = remaining_steps / rate + remaining_vals * per_val
 
-    best = min(run.epochs, key=lambda e: e.get("val_loss", float("inf")), default=None)
-    latest = run.epochs[-1] if run.epochs else None
+        def time_to(end_epoch: float) -> float:
+            steps_left = max(0, round(end_epoch * spe) - step)
+            checks_left = max(0, round(end_epoch * per_epoch) - len(run.epochs))
+            return steps_left / rate + checks_left * per_val
+
+        eta = time_to(last_end)
+        if soonest < last_end:
+            eta_soonest = time_to(soonest)
+
+    best = _best(run.epochs)
     since_best = 0
     if best is not None and latest is not None:
-        since_best = int(latest["epoch"]) - int(best["epoch"])
+        if latest.get("epochs_no_improve") is not None:
+            # What the trainer counts against patience.
+            since_best = int(latest["epochs_no_improve"])
+        else:
+            since_best = len(run.epochs) - 1 - run.epochs.index(best)
     phase = "validating" if run.phase and run.phase.get("phase") == "validate" else None
     if run.phase and run.phase.get("phase") == "save":
         phase = "saving"
@@ -204,18 +258,28 @@ def summarize(name: str) -> dict[str, Any] | None:
         "planned_epochs": planned,
         "steps_per_epoch": spe,
         "patience": meta.get("patience"),
+        "eval_every": every,
+        "select": meta.get("select") or "loss",
+        "lr_schedule": meta.get("lr_schedule"),
         "batch_size": meta.get("batch_size"),
         "lr": meta.get("lr"),
         "max_length": meta.get("max_length"),
         "epoch": epoch,
-        "epochs_done": len(run.epochs),
+        # Epochs of training behind the latest check (0.5 after a half-epoch
+        # check); checks_done counts the checks.
+        "epochs_done": latest["epoch"] if latest is not None else 0,
+        "checks_done": len(run.epochs),
         "step": step,
         "step_in_epoch": step - (epoch - 1) * spe if spe and epoch else step,
         "elapsed": elapsed,
         "rate": rate,
-        "eta": eta,
+        "eta": eta,  # to the latest end
+        "eta_soonest": eta_soonest,  # to the soonest end, when that is earlier
+        "end_epoch": {"soonest": soonest, "latest": last_end},
+        "decaying": bool(latest and latest.get("decaying")),
         "best_epoch": best and best.get("epoch"),
         "best_val_loss": best and best.get("val_loss"),
+        "best_dev": best and best.get("dev"),
         "val_intent_acc": latest and latest.get("val_intent_acc"),
         "val_slot_f1": latest and latest.get("val_slot_f1"),
         "epochs_since_best": since_best,

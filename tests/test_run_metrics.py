@@ -75,6 +75,116 @@ def test_a_live_run_reports_progress_speed_and_time_left(runs):
     assert s["best_epoch"] == 1 and s["epochs_since_best"] == 0
 
 
+# A run that checks dev every half epoch, keeps the check with the best dev
+# score, and stops when dev converges (train_nlu_model.py --eval-every 0.5
+# --select actions --schedule wsd).
+META_WSD = {
+    **META,
+    "epochs": 10,
+    "patience": 3,
+    "eval_every": 0.5,
+    "lr_schedule": "wsd",
+    "decay_epochs": 1.0,
+    "select": "actions",
+}
+
+
+def check(at, val_loss, elapsed, *, best, no_improve, score, decaying=False):
+    return {
+        **epoch(at, val_loss, elapsed),
+        "val_seconds": 2.0,
+        "best": best,
+        "epochs_no_improve": no_improve,
+        "decaying": decaying,
+        "dev": {
+            "n": 100,
+            "right": 95,
+            "rejected": 4,
+            "wrong": 1,
+            "negatives_acted": 0,
+            "score": score,
+        },
+    }
+
+
+def test_half_epoch_checks_count_as_halves_and_the_marked_check_is_best(runs):
+    f = runs / "runs" / "v9" / "metrics.jsonl"
+    write(
+        f,
+        [
+            META_WSD,
+            *steps(1, 50, 1),
+            check(0.5, 0.4, 7.0, best=True, no_improve=0, score=90),
+            *steps(51, 100, 1, t0=2.0),
+            # Lower val loss, worse dev score: not the saved check.
+            check(1, 0.3, 14.0, best=False, no_improve=1, score=80),
+            *steps(101, 150, 2, t0=4.0),
+        ],
+    )
+    s = run_metrics.summarize("v9")
+    assert (s["epochs_done"], s["checks_done"], s["epoch"]) == (1, 2, 2)
+    assert s["best_epoch"] == 0.5 and s["best_dev"]["score"] == 90
+    assert s["epochs_since_best"] == 1  # what the trainer counts against patience
+    assert s["rate"] == pytest.approx(10.0)
+    # Soonest end: two more checks without a gain (epoch 2), then the decay
+    # epoch: 3.0. Latest: the cap, 10.
+    assert s["end_epoch"] == {"soonest": 3.0, "latest": 10.0}
+    assert s["eta_soonest"] == pytest.approx(150 / 10 + 4 * 2.0, rel=0.05)
+    assert s["eta"] == pytest.approx(850 / 10 + 18 * 2.0, rel=0.05)
+    assert (s["select"], s["eval_every"]) == ("actions", 0.5)
+
+
+def test_a_decaying_run_knows_when_it_ends(runs):
+    write(
+        runs / "runs" / "v9" / "metrics.jsonl",
+        [
+            META_WSD,
+            *steps(1, 50, 1),
+            check(0.5, 0.4, 7.0, best=True, no_improve=0, score=90),
+            *steps(51, 100, 1, t0=2.0),
+            check(1, 0.4, 14.0, best=False, no_improve=1, score=80),
+            *steps(101, 150, 2, t0=4.0),
+            # Third check without a gain: the decay starts here, for one epoch.
+            check(1.5, 0.4, 21.0, best=False, no_improve=3, score=80, decaying=True),
+            *steps(151, 200, 2, t0=6.0),
+        ],
+    )
+    s = run_metrics.summarize("v9")
+    assert s["decaying"] and s["end_epoch"] == {"soonest": 2.5, "latest": 2.5}
+    assert s["eta_soonest"] is None
+    # 50 steps to 2.5, and the checks at 2 and 2.5.
+    assert s["eta"] == pytest.approx(50 / 10 + 2 * 2.0, rel=0.05)
+
+
+def test_the_speed_leaves_out_the_pause_for_a_check_inside_an_epoch(runs):
+    # Steps 1-100 are all epoch 1, with a 2 s check at 0.5 between them.
+    write(
+        runs / "runs" / "v9" / "metrics.jsonl",
+        [
+            META_WSD,
+            *steps(1, 50, 1),
+            check(0.5, 0.4, 7.0, best=True, no_improve=0, score=90),
+            *steps(51, 100, 1, t0=2.0),
+        ],
+    )
+    assert run_metrics.summarize("v9")["rate"] == pytest.approx(10.0)
+
+
+def test_a_finished_run_ends_at_its_last_check(runs):
+    write(
+        runs / "runs" / "v9" / "metrics.jsonl",
+        [
+            META_WSD,
+            *steps(1, 50, 1),
+            check(0.5, 0.4, 7.0, best=True, no_improve=0, score=90),
+            {"type": "done", "best_val_loss": 0.4, "elapsed": 8.0},
+        ],
+    )
+    s = run_metrics.summarize("v9")
+    assert s["status"] == "finished" and s["end_epoch"] == {"soonest": 0.5, "latest": 0.5}
+    assert s["epochs_done"] == 0.5 and s["eta"] is None
+
+
 def test_new_lines_are_read_incrementally_with_the_smoothed_loss(runs):
     f = runs / "runs" / "v9" / "metrics.jsonl"
     write(f, [META, *steps(1, 10, 1)])
