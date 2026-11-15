@@ -184,3 +184,154 @@ def test_take_new_streams_without_affecting_stop():
     rec.start()  # a new press starts the stream cursor over
     rec.wait_idle()
     assert rec.take_new() == b""
+
+
+# ---------------------------------------------------------------------------
+# Pre-roll: the mic stays open between presses
+# ---------------------------------------------------------------------------
+def _tone(value, sec):
+    return struct.pack("<h", value) * int(16000 * sec)
+
+
+def _listening(preroll_sec=0.3):
+    sd = make_sounddevice()
+    rec = PushToTalkRecorder(sd=sd, preroll_sec=preroll_sec)
+    rec.listen()
+    rec.wait_idle()
+    return rec, sd
+
+
+def test_a_press_starts_with_the_sound_just_before_it():
+    rec, sd = _listening()
+    assert rec.is_listening
+    sd.streams[-1].feed(_tone(1, 1.0))
+    rec.poll()
+    sd.streams[-1].feed(_tone(2, 0.5))  # not polled yet: start() takes it too
+    rec.start()
+    assert rec.is_open  # nothing to wait for
+    sd.streams[-1].feed(_tone(3, 0.5))
+    raw = rec.stop()
+    assert raw == _tone(2, 0.3) + _tone(3, 0.5)
+    assert rec.preroll_frames == 4800
+
+
+def test_only_the_newest_sound_is_kept_between_presses():
+    rec, sd = _listening()
+    for _ in range(50):  # 5 s of waiting, drained every 0.1 s
+        sd.streams[-1].feed(_tone(1, 0.1))
+        rec.poll()
+    assert rec._ring_frames <= 4800 + 1600
+    rec.start()
+    assert rec.seconds(rec.stop()) == 0.3
+
+
+def test_a_press_soon_after_opening_has_what_there_is():
+    rec, sd = _listening()
+    sd.streams[-1].feed(_tone(1, 0.1))
+    rec.start()
+    assert rec.preroll_frames == 1600
+    assert rec.seconds(rec.stop()) == 0.1
+
+
+def test_stale_sound_after_a_late_drain_is_not_kept():
+    rec, sd = _listening()
+    sd.streams[-1].feed(_tone(1, 0.2))
+    rec.poll()
+    sd.streams[-1].feed(_tone(2, 0.2))
+    sd.streams[-1].overflow_next = True  # PortAudio lost what came after it
+    rec.poll()
+    sd.streams[-1].feed(_tone(3, 0.1))
+    rec.start()
+    assert rec.stop() == _tone(3, 0.1)
+    assert rec.overflows == 0  # between presses: not the recording's overflow
+
+
+def test_the_mic_stays_open_between_presses():
+    rec, sd = _listening()
+    for _ in range(2):
+        rec.start()
+        sd.streams[-1].feed(ONE_SEC)
+        assert rec.seconds(rec.stop()) == 1.0
+        assert rec.is_listening and not sd.streams[-1].closed
+    assert len(sd.streams) == 1
+
+
+def test_sound_between_presses_is_not_part_of_the_next_recording_beyond_the_preroll():
+    rec, sd = _listening()
+    rec.start()
+    sd.streams[-1].feed(_tone(1, 1.0))
+    rec.stop()
+    sd.streams[-1].feed(_tone(2, 2.0))  # talking with the key up
+    rec.poll()
+    rec.start()
+    assert rec.stop() == _tone(2, 0.3)
+
+
+def test_without_preroll_the_mic_opens_on_each_press():
+    sd = make_sounddevice()
+    rec = PushToTalkRecorder(sd=sd)
+    rec.listen()
+    rec.wait_idle()
+    assert sd.streams == [] and not rec.is_listening
+    rec.start()
+    rec.wait_idle()
+    assert rec.preroll_frames == 0
+    rec.stop()
+    rec.wait_idle()
+    assert sd.streams[-1].closed
+
+
+def test_a_mic_lost_between_presses_is_reported_and_opened_again():
+    rec, sd = _listening()
+    lost = sd.streams[-1]
+
+    def unplugged(frames):
+        raise OSError("device unavailable")
+
+    lost.feed(_tone(1, 0.1))
+    lost.read = unplugged
+    assert rec.poll() == 0
+    assert isinstance(rec.listen_error, OSError) and not rec.is_listening
+    rec.wait_idle()
+    assert lost.closed
+    rec.start()  # the next press opens it again, with no pre-roll this time
+    rec.wait_idle()
+    assert len(sd.streams) == 2 and rec.preroll_frames == 0
+    sd.streams[-1].feed(ONE_SEC)
+    assert rec.seconds(rec.stop()) == 1.0
+    assert rec.is_listening  # and it stays open from then on
+
+
+def test_a_mic_lost_during_a_press_is_an_error():
+    rec, sd = _listening()
+    rec.start()
+
+    def unplugged(frames):
+        raise OSError("device unavailable")
+
+    sd.streams[-1].feed(_tone(1, 0.1))
+    sd.streams[-1].read = unplugged
+    rec.poll()
+    assert isinstance(rec.error, OSError) and rec.listen_error is None
+    rec.wait_idle()
+
+
+def test_a_failed_open_between_presses_is_not_a_press_error():
+    rec = PushToTalkRecorder(sd=_SlowSD(delay=0.0, fail=True), preroll_sec=0.3)
+    rec.listen()
+    rec.wait_idle()
+    assert isinstance(rec.listen_error, OSError) and rec.error is None
+
+
+def test_close_releases_the_mic():
+    rec, sd = _listening()
+    rec.close()
+    assert sd.streams[-1].closed and not rec.is_listening and not rec.is_open
+    rec.listen()
+    rec.wait_idle()
+    assert len(sd.streams) == 1  # closed for good
+
+
+def test_preroll_is_in_the_startup_description():
+    rec, _ = _listening(0.25)
+    assert rec.describe()["preroll_ms"] == 250

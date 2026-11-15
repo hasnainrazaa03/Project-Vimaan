@@ -885,8 +885,9 @@ training run (v26).
     150 ms cut from the generated clips, wrong actions went 29 → 76: "vertical
     speed thirty two hundred" → "speed …" (320 kt), "nav two transfer" →
     COM swap, "deactivate autopilot" → "activate". No model fixes a heard
-    text that is another valid command. Pre-roll audio would; it needs the
-    owner's decision (the mic stays open).
+    text that is another valid command. Pre-roll audio would. Approved by the
+    owner (2026-11-14) and built: the mic stays open and each recording
+    starts with the last 300 ms (`VIMAAN_MIC_PREROLL_MS`).
 
 Checklist: preflight battery/avionics/beacon/nav, taxi lights,
 landing + strobes on takeoff, pitot heat, fuel pump, yaw damper, seatbelt

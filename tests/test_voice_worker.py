@@ -56,6 +56,15 @@ def make_worker(transcript="gear up", tail=0.3):
     return w, out, sd, clock
 
 
+def make_listening_worker(tail=0.0):
+    """A worker whose mic stays open between presses (300 ms pre-roll)."""
+    w, out, sd, clock = make_worker(tail=tail)
+    w.recorder = PushToTalkRecorder(sd=sd, preroll_sec=0.3)
+    w.recorder.listen()
+    w.recorder.wait_idle()
+    return w, out, sd, clock
+
+
 def press_and_feed(w, sd, audio=LOUD, cmd="c1"):
     w.handle({"op": "start", "cmd": cmd})
     w.recorder.wait_idle()
@@ -136,6 +145,45 @@ def test_short_and_silent_audio():
     press_and_feed(w, sd, b"\x00\x00" * 16000, cmd="c2")
     w.handle({"op": "stop", "cmd": "c2"})
     assert out[-1]["outcome"] == "silent_mic"
+
+
+def test_the_open_mic_is_drained_between_presses():
+    w, out, sd, _ = make_listening_worker()
+    assert w.listening
+    sd.streams[-1].feed(LOUD)
+    w.tick()
+    assert sd.streams[-1].read_available == 0 and out == []
+
+
+def test_the_preroll_is_in_the_recording_but_not_in_the_tap_check():
+    w, out, sd, _ = make_listening_worker()
+    sd.streams[-1].feed(LOUD)  # a second of sound before the press
+    w.tick()
+    press_and_feed(w, sd, LOUD[:3200])  # a 0.1 s tap
+    w.handle({"op": "stop", "cmd": "c1"})
+    captured = [m for m in out if m["type"] == "captured"][-1]
+    assert captured["audio_sec"] == 0.4 and captured["preroll_sec"] == 0.3
+    assert out[-1]["outcome"] == "too_short"
+    press_and_feed(w, sd, LOUD[:16000], cmd="c2")  # 0.5 s: a command
+    w.handle({"op": "stop", "cmd": "c2"})
+    assert out[-1]["type"] == "result"
+    assert out[0]["type"] == "recording" and out[0]["open_ms"] == 0  # already open
+
+
+def test_a_mic_lost_between_presses_is_logged_once():
+    w, out, sd, _ = make_listening_worker()
+
+    def unplugged(frames):
+        raise OSError("device unavailable")
+
+    sd.streams[-1].feed(LOUD[:3200])
+    sd.streams[-1].read = unplugged
+    w.tick()
+    w.tick()
+    w.recorder.wait_idle()
+    logs = [m for m in out if m["type"] == "log"]
+    assert len(logs) == 1 and "device unavailable" in logs[0]["msg"]
+    assert not w.listening
 
 
 def test_mic_open_failure_reported():
@@ -332,7 +380,8 @@ def test_real_worker_process(tmp_path):
         pytest.skip("no trained model checkout")
     env = dict(os.environ, PYTHONPATH=os.path.abspath(ml), HF_HUB_OFFLINE="1")
     client = WorkerClient(
-        [sys.executable, "-u", "-m", "vimaan_nlu.voice_worker"],
+        # No pre-roll: the test mustn't open the real microphone.
+        [sys.executable, "-u", "-m", "vimaan_nlu.voice_worker", "--preroll-ms", "0"],
         tmp_path / "worker.log",
         env=env,
         cwd=os.path.abspath(ml),
