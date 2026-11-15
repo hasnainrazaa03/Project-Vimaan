@@ -70,6 +70,11 @@ that session's `events.jsonl`, which holds the transcript and outcome. These
 recordings are how recognisers are compared on real voices (Track S3 in
 [PHASE_PLAN.md](PHASE_PLAN.md)). Turn off with `VIMAAN_SAVE_AUDIO=0`.
 
+Each recording starts with 300 ms from before the key went down (the mic stays
+open; `VIMAAN_MIC_PREROLL_MS`, 0 = open on each press). The saved WAV includes
+it, and the `capture` stage event says how much (`preroll_sec`). The
+accidental-tap check (0.3 s) counts only the time the key was held.
+
 ```bash
 python scripts/stt_benchmark.py --seed-labels   # Google's guess for new clips -> labels.jsonl
 # review ~/Vimaan_Logs/audio/labels.jsonl: fix what was actually said
