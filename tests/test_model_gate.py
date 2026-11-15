@@ -72,3 +72,17 @@ def test_gate_counts_a_clipped_number_as_not_acted_on():
     assert model_gate.decision(p) == ("clipped_number", {})
     p["original_text"] = "altitude one thousand"
     assert model_gate.decision(p)[0] == "act"
+
+
+def test_gate_counts_a_lost_digit_as_not_acted_on():
+    # As the plugin: "one seven zero" heard as "want seven zero".
+    p = {
+        "intent": "set_autopilot_heading",
+        "slots": {"degrees": "70"},
+        "confidence": 0.99,
+        "normalized_text": "turn left heading want 70",
+        "original_text": "turn left heading want seven zero",
+    }
+    assert model_gate.decision(p) == ("lost_digits", {})
+    p["original_text"] = "turn left heading seven zero"
+    assert model_gate.decision(p)[0] == "act"
