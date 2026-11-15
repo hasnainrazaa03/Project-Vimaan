@@ -36,15 +36,21 @@ run by default and switches when a new one starts.
 | Panel | Shows |
 | --- | --- |
 | Run header | status (live / finished / failed / stopped / interrupted), phase (training, validating, saving), progress through all epochs and the current one |
-| Tiles | epoch, elapsed, time left (if every epoch runs), speed in steps/s and examples/s, best validation loss and its epoch, epochs since the best (against patience), latest intent accuracy and slot F1 |
+| Tiles | epoch, elapsed, time left, speed in steps/s and examples/s, the saved check (its dev score for runs that choose on dev, else its validation loss), checks without a gain (what the trainer counts against patience), latest intent accuracy and slot F1 |
 | Training loss | every step (faint), smoothed (EMA over ~100 steps), and the comparison run's smoothed curve, on a shared epoch axis |
-| Loss per epoch | train and validation loss, with the best epoch marked, plus the comparison run's validation loss |
-| Validation accuracy | intent accuracy and slot F1 per epoch, against the comparison run |
+| Loss per epoch | train and validation loss at each check, with the saved check marked, plus the comparison run's validation loss |
+| Validation accuracy | intent accuracy and slot F1 at each check, and dev commands acted on right (runs that choose on dev), against the comparison run |
 | Gradient norm | sampled every 25 steps |
 | By intent / by slot | the latest epoch's accuracy per intent and F1 per slot. The bar is the error rate (worst first), with the change since the previous epoch |
-| Epochs | every epoch as a table: losses, scores, time, validation time |
+| Epochs | every check as a table: losses, scores, dev right / refused / wrong / score, time, validation time |
 | Run data | split, hyperparameters, intent distribution |
 | Training log | the dashboard job's output, or the run's `train.log` |
+
+Runs check dev once per epoch, or every half epoch (`--eval-every 0.5`:
+checks at 0.5, 1, 1.5, ...). Time left assumes every epoch runs, except for
+runs that stop when dev converges (`--schedule wsd`): those show a range, from
+"dev doesn't improve again" to the epoch cap, and an exact time once the rate
+is decaying.
 
 "Interrupted" means no new line for 3 minutes and no end record: the process
 was killed or the machine slept. A crash is recorded as "failed" with its
@@ -92,7 +98,7 @@ Model selector, live prediction (intent, confidence, slots), and the model's pro
 | `meta` | start | version, device, dataset, split, hyperparameters, steps per epoch, intent distribution |
 | `step` | every step | step, epoch, loss, learning rate, elapsed; `grad_norm` every 25th step |
 | `phase` | validation / saving starts | phase, epoch |
-| `epoch` | every epoch | train and validation loss, intent accuracy, slot F1, `per_intent` {acc, n}, `per_slot` {f1, n}, validation seconds, epochs without improvement, patience |
+| `epoch` | every dev check | epoch (0.5, 1, ... with `--eval-every 0.5`), train and validation loss, intent accuracy, slot F1, `per_intent` {acc, n}, `per_slot` {f1, n}, validation seconds, checks without improvement, patience, `best` (this check was saved); newer trainers add `dev` {right, rejected, wrong, negatives_acted, score}, `lr` and `decaying` |
 | `done` / `error` / `stopped` | the end | best validation loss and epoch, whether it stopped early; or the error |
 
 ## Endpoints
