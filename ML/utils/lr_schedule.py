@@ -12,7 +12,7 @@ Pure Python, so it can be tested without torch.
 
 from __future__ import annotations
 
-SCHEDULES = ("constant", "linear")
+SCHEDULES = ("constant", "linear", "wsd")  # wsd: utils/convergence.py
 
 
 def lr_factor(step: int, total_steps: int, warmup_steps: int) -> float:

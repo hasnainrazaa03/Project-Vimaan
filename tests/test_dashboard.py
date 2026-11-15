@@ -40,6 +40,8 @@ class TestLogParser:
     def test_checkpoint_saved(self):
         e = parse_line("Validation loss improved! Saving best model to /a/b/v10")
         assert e == {"type": "checkpoint_saved", "path": "/a/b/v10"}
+        e = parse_line("Dev score improved! Saving best model to /a/b/v26-j")
+        assert e == {"type": "checkpoint_saved", "path": "/a/b/v26-j"}
 
     def test_no_improve(self):
         e = parse_line("Validation loss did not improve. Count: 1/2")
