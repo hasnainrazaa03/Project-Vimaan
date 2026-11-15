@@ -1556,6 +1556,7 @@ COMMANDS: tuple[Command, ...] = (
         ),
         # No "de ice": a short word the recogniser put in unsaid ("de engine two off").
         handler="_toggle_anti_ice",
+        safety=("pitot_heat_off_in_flight",),
         self_test="pitot heat on",
         bindings=(
             "sim/cockpit2/ice/ice_pitot_heat_on_pilot",

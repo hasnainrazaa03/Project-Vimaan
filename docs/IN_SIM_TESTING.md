@@ -228,10 +228,11 @@ avionics, fuel pumps on, and on the 737 and A330 speed brake armed and stowed
 and the autobrake set and off. Every switch is checked the way its aircraft
 shows it: the 737's own switch positions, the A330's buttons, the King Air's
 selectors, X-Plane's values on the Baron. A switch the aircraft lacks must be
-refused ("This aircraft has no auto brake"), and generator or fuel pumps off
-in the air must be held for confirmation, then cancelled: nothing is switched
-off for real. 26 steps on the Baron, 29 on the King Air, 31 on the 737, 34 on
-the A330. It needs a model that knows Tier 3 (v26 or later).
+refused ("This aircraft has no auto brake"), and generator, fuel pumps or
+probe heat off in the air must be held for confirmation, then cancelled:
+nothing is switched off for real (the A330's probe heat has no off, so there
+the repeat confirms it and Vimaan asks "on or auto?"). 28 steps on the Baron,
+31 on the King Air, 33 on the 737, 35 on the A330. It needs a model that knows Tier 3 (v26 or later).
 
 Two clicks remain until they're switched off once: Steam's launch-option
 question (set a default for X-Plane 12 in Steam), and X-Plane's "Quit the
