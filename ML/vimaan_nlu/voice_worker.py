@@ -57,6 +57,13 @@ RELEASE_TAIL_SEC = 0.3
 MAX_AUDIO_DIR_BYTES = 500 * 1024 * 1024
 # Live transcript for the overlay: at most this often, only when it changed.
 PARTIAL_INTERVAL_SEC = 0.1
+# The mic stays open between presses and each recording starts with this much
+# sound from before the key went down: opening the mic takes ~85 ms, and
+# pilots start the first word as they press. 0 opens the mic on each press.
+DEFAULT_PREROLL_MS = 300
+# Between presses the open mic is drained this often (PortAudio's buffer holds
+# 0.2 s, audio_capture.RING_BUFFER_SEC).
+LISTEN_POLL_SEC = 0.05
 # A recording played from a file (the test bridge) when there's no microphone
 # to take the rate from: what every recogniser here wants.
 FILE_SAMPLE_RATE = 16_000
@@ -215,9 +222,11 @@ class VoiceWorker:
         return True
 
     def tick(self) -> None:
-        """Advance the recording in progress. Call often (every ~10 ms)."""
+        """Advance the recording in progress, or keep the open mic's pre-roll
+        fresh between presses. Call often (every ~10 ms while recording)."""
         rec = self.rec
         if rec is None:
+            self._listen()
             return
         if self.recorder.error is not None:
             err, self.recorder.error = self.recorder.error, None
@@ -257,11 +266,33 @@ class VoiceWorker:
     def idle(self) -> bool:
         return self.rec is None
 
+    @property
+    def listening(self) -> bool:
+        return self.recorder is not None and bool(getattr(self.recorder, "is_listening", False))
+
+    def _listen(self) -> None:
+        if self.recorder is None:
+            return
+        if self.listening:
+            self.recorder.poll()
+        err = getattr(self.recorder, "listen_error", None)
+        if err is not None:
+            self.recorder.listen_error = None
+            self.send(
+                {
+                    "type": "log",
+                    "level": "warning",
+                    "msg": f"mic closed between presses ({type(err).__name__}: {err}); "
+                    "the next press opens it again",
+                }
+            )
+
     # ------------------------------------------------------------------
     def _finish(self, auto_stop: bool = False) -> None:
         rec, self.rec = self.rec, None
         if rec is None:
             return
+        preroll_frames = getattr(self.recorder, "preroll_frames", 0)
         raw = self.recorder.stop()
         self._recognise(
             rec["cmd"],
@@ -271,6 +302,7 @@ class VoiceWorker:
             overflows=self.recorder.overflows,
             truncated=self.recorder.truncated,
             auto_stop=auto_stop,
+            preroll_sec=round(preroll_frames / self.recorder.sample_rate, 3),
         )
 
     def _play_file(self, cmd: Any, path: str) -> None:
@@ -318,7 +350,8 @@ class VoiceWorker:
                 "audio_file": self._save_audio(cmd, raw, rate),
             }
         )
-        if audio_sec < MIN_RECORD_SEC:
+        # The pre-roll is from before the key went down: not part of the press.
+        if audio_sec - captured.get("preroll_sec", 0.0) < MIN_RECORD_SEC:
             self.send({"type": "error", "cmd": cmd, "outcome": "too_short"})
             return
         if is_silent(rms):
@@ -422,8 +455,14 @@ class VoiceWorker:
         buf = b""
         while True:
             # Poll fast while recording (drain the mic, time the release tail);
-            # otherwise just wait for the next request.
-            timeout = 0.01 if self.rec is not None else 0.5
+            # often enough between presses to keep the pre-roll; otherwise just
+            # wait for the next request.
+            if self.rec is not None:
+                timeout = 0.01
+            elif self.listening:
+                timeout = LISTEN_POLL_SEC
+            else:
+                timeout = 0.5
             readable, _, _ = select.select([fd], [], [], timeout)
             if readable:
                 chunk = os.read(fd, 65536)
@@ -511,6 +550,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--audio-prefix", default="", help="file-name prefix for saved audio")
     parser.add_argument("--whisper-model", default="base.en")
+    parser.add_argument(
+        "--preroll-ms",
+        type=int,
+        default=DEFAULT_PREROLL_MS,
+        help="keep the mic open and start each recording with this much sound "
+        "from before the key went down (0: open the mic on each press)",
+    )
     parser.add_argument("--backend", default="torch", choices=("torch", "onnx"))
     parser.add_argument("--no-quantize", action="store_true")
     parser.add_argument("--model-path", default=None)
@@ -568,7 +614,9 @@ def main(argv: list[str] | None = None) -> int:
             if args.audio_file:
                 recorder: Any = WavRecorder(args.audio_file)
             else:
-                recorder = PushToTalkRecorder(max_sec=MAX_RECORD_SEC)
+                recorder = PushToTalkRecorder(
+                    max_sec=MAX_RECORD_SEC, preroll_sec=max(0, args.preroll_ms) / 1000
+                )
             mic: dict[str, Any] = recorder.describe()
         except Exception as exc:
             recorder, mic = None, {"error": f"{type(exc).__name__}: {exc}"}
@@ -606,15 +654,21 @@ def main(argv: list[str] | None = None) -> int:
             "audio_dir": args.save_audio_dir,
         }
     )
-    VoiceWorker(
-        send,
-        recorder,
-        transcribe_audio,
-        predict_text,
-        stream_stt=stream_stt,
-        audio_dir=args.save_audio_dir,
-        audio_prefix=args.audio_prefix,
-    ).run(sys.stdin)
+    if recorder is not None and hasattr(recorder, "listen"):
+        recorder.listen()  # pre-roll: the mic stays open from now on
+    try:
+        VoiceWorker(
+            send,
+            recorder,
+            transcribe_audio,
+            predict_text,
+            stream_stt=stream_stt,
+            audio_dir=args.save_audio_dir,
+            audio_prefix=args.audio_prefix,
+        ).run(sys.stdin)
+    finally:
+        if recorder is not None and hasattr(recorder, "close"):
+            recorder.close()
     return 0
 
 

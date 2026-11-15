@@ -309,3 +309,10 @@ Default is `vosk` (offline, streaming, restricted to the command words);
 `VIMAAN_STT_BACKEND` before launching X-Plane. Every command's audio is saved
 to `~/Vimaan_Logs/audio/` for comparing recognisers on real voices
 (`VIMAAN_SAVE_AUDIO=0` turns it off).
+
+The mic stays open while X-Plane runs, so macOS shows its mic indicator the
+whole time. Each command starts with the last 300 ms of sound from before the
+key went down, so the first word isn't cut off by the mic opening (~85 ms) or by
+speaking as you press. Between presses only the newest 300 ms is kept, in
+memory; nothing else is saved or recognised. `VIMAAN_MIC_PREROLL_MS=0` opens the
+mic on each press instead, as before; another number changes the length.
