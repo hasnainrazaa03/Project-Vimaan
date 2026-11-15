@@ -762,7 +762,7 @@ the gate refuse a set heard with another grammar.
 | Intent | Slots | Say | Binding | Verify | Safety |
 | --- | --- | --- | --- | --- | --- |
 | `toggle_lights` | `light` landing/taxi/beacon/strobe/nav/logo/wing/runway/all; `switch` on/off/auto | "landing lights on", "strobes auto", "all lights off" | per aircraft (`vimaan_nlu/switches.py`); X-Plane's `sim/lights/*_on/_off` elsewhere | the switch's own position or state | — |
-| `toggle_anti_ice` | `ice` pitot (probe) / window (windshield) / wing (boots) / engine / prop; `switch` on/off/auto | "pitot heat on", "wing anti ice on", "boots on" | per aircraft; X-Plane's `sim/ice/*_on/_off` elsewhere (prop heat on propeller aircraft only) | the switch's position or state | — |
+| `toggle_anti_ice` | `ice` pitot (probe) / window (windshield) / wing (boots) / engine / prop; `switch` on/off/auto | "pitot heat on", "wing anti ice on", "boots on" | per aircraft; X-Plane's `sim/ice/*_on/_off` elsewhere (prop heat on propeller aircraft only) | the switch's position or state | pitot heat off while airborne → confirm (`pitot_heat_off_in_flight`) |
 | `toggle_electrical` | `power` battery/avionics/generator (alternator); `instance` 1/2 for a generator; `switch` on/off | "avionics master on", "generator two off" | per aircraft; X-Plane's battery / avionics / generator commands elsewhere | the switch's state | off while airborne → confirm (`power_off_in_flight`) |
 | `toggle_fuel_pump` | `instance` 1/2 (none: all, center included); `switch` on/off | "fuel pumps on", "fuel pump one off" | per aircraft; X-Plane's `sim/fuel/fuel_pump_{N}_on/off` elsewhere (never on the A330) | the pump's state | off while airborne → confirm (`fuel_pump_off_in_flight`) |
 | `toggle_yaw_damper` | `state` | "yaw damper on" | `sim/systems/yaw_damper_on/_off` | `switches/yaw_damper_on` | — |
@@ -808,15 +808,20 @@ training run (v26).
   vanes. Every name checked: 500/500 X-Plane names, 119/119 aircraft
   controls (its guard command is made in a loop: the checker now reads those).
 - [x] **Safety:** power and fuel pumps off in flight ask to confirm.
+- [x] **Safety:** pitot heat off in flight asks to confirm
+  (`pitot_heat_off_in_flight`, approved 2026-11-14). Without it the pitot ices
+  and the airspeed goes wrong, and "prop heat off" is also heard as "probe heat
+  off".
 - [x] **Grammar:** 276 → 297 words, real voice unchanged (v25 89 / 28 / 1);
   no "de ice" (the recogniser put "de" in unsaid).
 - [x] `GOLD_TIER3` grows to 31 phrases.
 
 ### T3.1 Data, training, gate, runner
 - [x] **Runner scenarios** (`simtest/tier3.py`, `simtest run tier3 <aircraft>`):
-  26 / 29 / 31 / 34 steps on the Baron / King Air / 737 / A330, each switch
-  checked the way its aircraft shows it; power and fuel pumps off held and
-  cancelled. End to end on the fake sim in CI: the whole Baron checklist, and
+  28 / 31 / 33 / 35 steps on the Baron / King Air / 737 / A330, each switch
+  checked the way its aircraft shows it; power, fuel pumps and probe heat off
+  held and cancelled (the A330's probe heat has no off: confirmed, it asks "on
+  or auto?"). End to end on the fake sim in CI: the whole Baron checklist, and
   the lights, signs, anti-ice, speed brake and autobrake parts on the 737 and
   A330.
 - [x] **Data v14:** 137,720 rows, 35 intents (8 new, 4,000 each): train

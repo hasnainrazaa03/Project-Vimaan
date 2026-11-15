@@ -483,6 +483,29 @@ def test_power_off_in_flight_asks_to_confirm(sim):
     assert xp.datarefs[EL + "generator_on"][1] == 1
 
 
+def test_pitot_heat_off_in_flight_asks_to_confirm(sim):
+    _, plugin, xp = sim
+    pitot = ICE + "ice_pitot_heat_on_pilot"
+    say(plugin, "pitot heat on", "toggle_anti_ice", {"ice": "pitot", "switch": "on"})
+    assert run(plugin, xp) == ["Pitot heat on"]
+    say(plugin, "propeller heat on", "toggle_anti_ice", {"ice": "prop", "switch": "on"})
+    assert run(plugin, xp) == ["Prop heat on"]
+    airborne(xp)
+    held = ["Confirm pitot heat off in flight. Say override, or repeat to confirm."]
+    off = {"ice": "pitot", "switch": "off"}
+    assert say(plugin, "probe heat off", "toggle_anti_ice", off) == held
+    assert xp.datarefs[pitot] == 1
+    # "prop heat off" (heard right this time) is another switch: not held,
+    # and it does not confirm the held pitot heat.
+    say(plugin, "propeller heat off", "toggle_anti_ice", {"ice": "prop", "switch": "off"})
+    assert run(plugin, xp) == ["Prop heat off"]
+    assert xp.datarefs[pitot] == 1
+    say(plugin, "probe heat off", "toggle_anti_ice", off)  # held again
+    say(plugin, "probe heat off", "toggle_anti_ice", off)  # the repeat confirms it
+    assert run(plugin, xp) == ["Pitot heat off"]
+    assert xp.datarefs[pitot] == 0
+
+
 def test_a_held_power_switch_is_not_confirmed_by_another(sim):
     # On intent, unit and action alone, "avionics off" (unit 1, like the
     # held generator) confirmed the generator's hold and went straight off.
