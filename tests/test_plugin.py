@@ -1276,6 +1276,19 @@ def test_a_number_without_its_start_asks_again(sim):
     assert xp.writes[-1] == ("sim/cockpit2/autopilot/altitude_dial_ft", 8000.0)
 
 
+def test_a_heading_that_lost_a_digit_asks_again(sim):
+    _, plugin, xp = sim
+    # Real controllers' speech: "one seven zero" heard as "want seven zero"
+    # would turn to 070.
+    text = "turn left heading want seven zero"
+    spoken = say(plugin, text, "set_autopilot_heading", {"degrees": "70"})
+    assert spoken == ["Say the whole number"]
+    assert xp.writes == []
+    assert events(plugin, "implausible")[-1]["reason"] == "lost_digits"
+    say(plugin, "turn left heading seven zero", "set_autopilot_heading", {"degrees": "70"})
+    assert xp.writes[-1] == ("sim/cockpit2/autopilot/heading_dial_deg_mag_pilot", 70.0)
+
+
 def test_a_vertical_speed_off_the_dial_steps_is_refused(sim):
     _, plugin, xp = sim
     xp.datarefs["sim/cockpit2/autopilot/altitude_dial_ft"] = 9000.0
