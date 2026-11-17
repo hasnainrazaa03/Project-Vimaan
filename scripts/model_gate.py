@@ -100,6 +100,7 @@ def decision(p: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     Only the slots the command declares count: its handler ignores stray ones."""
     from vimaan_nlu.ambiguity import two_or_to
     from vimaan_nlu.commands import command, required_slots
+    from vimaan_nlu.questions import looks_like_question
     from vimaan_nlu.validators import (
         clipped_number,
         has_command_word,
@@ -110,6 +111,8 @@ def decision(p: dict[str, Any]) -> tuple[str, dict[str, Any]]:
 
     intent, slots = p["intent"], p["slots"]
     cmd = command(intent)
+    if looks_like_question(p.get("original_text") or ""):
+        return "question", {}  # checked before the model's answer, as in the plugin
     if p["confidence"] < CONFIDENCE_FLOOR:
         return "low_confidence", {}
     if cmd is None or not cmd.actionable:

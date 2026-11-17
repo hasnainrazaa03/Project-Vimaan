@@ -257,6 +257,18 @@ def test_a_to_reading_question_shows_what_it_asks_about():
     assert outcome.badge == "WHICH?" and 'a "two" taken as "to"' in outcome.text
 
 
+def test_question_reason_shown():
+    s = OverlayState(Clock())
+    run(
+        s,
+        {"kind": "ptt_press", "cmd": "c1"},
+        {"kind": "implausible", "cmd": "c1", "reason": "question"},
+        {"kind": "speak", "cmd": "c1", "text": "I can't answer questions yet"},
+        {"kind": "command_done", "cmd": "c1", "outcome": "non_actionable"},
+    )
+    assert s.lines()[-1].text.endswith("(questions aren't answered yet)")
+
+
 def test_bare_number_reason_shown():
     s = OverlayState(Clock())
     run(

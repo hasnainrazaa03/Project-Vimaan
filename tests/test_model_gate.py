@@ -86,3 +86,17 @@ def test_gate_counts_a_lost_digit_as_not_acted_on():
     assert model_gate.decision(p) == ("lost_digits", {})
     p["original_text"] = "turn left heading seven zero"
     assert model_gate.decision(p)[0] == "act"
+
+
+def test_gate_counts_a_question_as_not_acted_on():
+    # As the plugin: v26 read "is the autopilot off" as "autopilot off".
+    p = {
+        "intent": "toggle_autopilot",
+        "slots": {"state": "off", "instance": "1"},
+        "confidence": 0.99,
+        "normalized_text": "is the autopilot off",
+        "original_text": "is the autopilot off",
+    }
+    assert model_gate.decision(p) == ("question", {})
+    p["original_text"] = p["normalized_text"] = "autopilot off"
+    assert model_gate.decision(p)[0] == "act"

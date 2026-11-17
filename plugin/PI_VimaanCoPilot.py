@@ -94,6 +94,8 @@ from vimaan_nlu.disconnect import (  # noqa: E402
 from vimaan_nlu.overlay import Overlay  # noqa: E402
 from vimaan_nlu.overlay_state import OverlayState  # noqa: E402
 from vimaan_nlu.pilot_replies import override_prefix, pilot_reply  # noqa: E402
+from vimaan_nlu.questions import REPLY as QUESTION_REPLY  # noqa: E402
+from vimaan_nlu.questions import looks_like_question  # noqa: E402
 from vimaan_nlu.readback import spell_digits  # noqa: E402
 from vimaan_nlu.safety import (  # noqa: E402
     ConfirmationGate,
@@ -1109,6 +1111,18 @@ class PythonInterface:
             ):
                 self.tel.event("override_with_command", cmd=cmd, intent=intent_pred, text=text)
                 outcome = self._pilot_reply(cmd, "override")
+                return
+
+            # A question is never acted on: the model knows none yet, and
+            # "is the autopilot off" reads as "autopilot off" (in the owner's
+            # voice 9 of 10 such questions would have acted). See
+            # vimaan_nlu.questions; Tier 4 answers them.
+            if looks_like_question(text):
+                outcome = "non_actionable"
+                self.tel.event(
+                    "implausible", cmd=cmd, reason="question", intent=intent_pred, slots=slots
+                )
+                self._say(QUESTION_REPLY)
                 return
 
             # A number on its own ("one thousand") names no command: it can

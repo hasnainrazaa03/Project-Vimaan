@@ -1110,6 +1110,36 @@ committed; not a gate).
 No safety rules, no writes; the overlay shows the answer. Checklist: ask each
 in cruise and compare against the instruments.
 
+**Questions read as commands (found 2026-11-16).** v26 knows no questions,
+so it reads most of them as the command: "is the autopilot off" switches it
+off, "is the parking brake off" releases it, "is the gear up" commands gear
+up, and "what's the heading" sets heading mode.
+- Generated voices (about 35, 20 questions each) kept the question word only
+  19 times in about 700 ("the autopilot off"); 273 would have acted.
+- The owner's voice (40 recordings, X-Plane closed) kept it in 24 of 28
+  questions: "is" every time, "are" as the letter "r", "what" nearly always.
+  9 of 10 yes/no questions would have acted.
+- Missed in the owner's voice: "where are the flaps" (heard "vertical
+  flaps") and "do we have ..." ("degree have ..."). "where", "do" and "we"
+  are not in the grammar.
+
+- [x] **Backstop (owner's OK, 2026-11-16):** a transcript that starts like a
+  question (`vimaan_nlu.questions`: is, are, what, how, where, do, does, or
+  "r the") is never acted on: "I can't answer questions yet". It stops 13 of
+  the 15 of the owner's questions that would act, and blocks none of the
+  owner's commands or of 1,476 command clips (the 118 real-voice clips, 1,240
+  heard dev, 118 generated checklist clips). ATCOSIM: 5 of 3,334, all
+  fragments ("are five two") already refused. The gate's decision chain has
+  it too.
+- **Design (owner: option C, "for now"):** a question key, a second
+  push-to-talk binding whose words are only answered, never acted on; and
+  questions without on/off ("autopilot status", "what's the heading")
+  answered on the normal key, with a bare system name never acting.
+- **Scope (owner, 2026-11-16):** the table above plus squawk, altimeter
+  setting, flaps, gear, ground speed, wind, outside temperature, the state
+  of every switch Vimaan can set, radio altitude, Mach, fuel endurance, the
+  next waypoint, and engine readings.
+
 ---
 
 ## Phase F: flight context → after T4
