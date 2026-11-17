@@ -228,6 +228,35 @@ def test_answered_reply_shows_what_it_was_taken_as():
     assert outcome.badge == "DONE"
 
 
+def test_a_to_reading_question_shows_what_it_asks_about():
+    s = OverlayState(Clock())
+    run(
+        s,
+        {"kind": "ptt_press", "cmd": "c1"},
+        {"kind": "ptt_release", "cmd": "c1"},
+        {"kind": "stage", "stage": "stt", "cmd": "c1", "text": "squawk two one two zero zero"},
+        {
+            "kind": "stage",
+            "stage": "nlu",
+            "cmd": "c1",
+            "intent": "set_transponder_code",
+            "slots": {"squawk": "21200"},
+            "confidence": 1.0,
+        },
+        {
+            "kind": "to_reading",
+            "cmd": "c1",
+            "intent": "set_transponder_code",
+            "slots": {"squawk": "1200"},
+        },
+        {"kind": "speak", "cmd": "c1", "text": "Did you mean squawk one two zero zero?"},
+        {"kind": "command_done", "cmd": "c1", "outcome": "ambiguous"},
+    )
+    _, understood, outcome = s.lines()
+    assert "1200" in understood.text and "21200" not in understood.text
+    assert outcome.badge == "WHICH?" and 'a "two" taken as "to"' in outcome.text
+
+
 def test_bare_number_reason_shown():
     s = OverlayState(Clock())
     run(

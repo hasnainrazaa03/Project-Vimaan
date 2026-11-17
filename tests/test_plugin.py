@@ -140,8 +140,9 @@ def sim(monkeypatch, tmp_path):
     plugin.XPluginStop()
 
 
-def say(plugin, text, intent=None, slots=None, conf=0.99):
-    """Dispatch a prediction as if the worker had just returned it."""
+def say(plugin, text, intent=None, slots=None, conf=0.99, to_reading=None):
+    """Dispatch a prediction as if the worker had just returned it.
+    ``to_reading``: what the worker found with one "two" read as "to"."""
     if intent is not None:
         NLU[text] = (intent, slots or {}, conf)
     xp_spoken_before = len(sys.modules["XPPython3"].xp.spoken)
@@ -151,7 +152,7 @@ def say(plugin, text, intent=None, slots=None, conf=0.99):
         {
             "cmd": "c9999",
             "text": text,
-            "prediction": {**p, "nlu_ms": 5.0, "normalized": text},
+            "prediction": {**p, "nlu_ms": 5.0, "normalized": text, "to_reading": to_reading},
             "t_press": now,
             "t_release": now,
         }
@@ -949,6 +950,130 @@ def test_clear_answers_set_the_target(sim, heard, intent, slots, dataref, value)
     _, plugin, xp = sim
     say(plugin, heard, intent, slots)
     assert xp.writes[-1] == (dataref, value)
+
+
+# ---------------------------------------------------------------------------
+# Impossible as heard, valid with one "two" read as "to" (the owner's flight,
+# 2026-11-16: refused three times, with no way forward)
+# ---------------------------------------------------------------------------
+COM_HEARD = "set com one standby two one two two decimal eight"
+COM_AS_HEARD = ("set_com_standby", {"com_port": "1", "frequency": "2122.8"})
+
+
+def meant(text, intent, slots, conf=1.0):
+    return {"text": text, "intent": intent, "slots": slots, "confidence": conf, "normalized": text}
+
+
+COM_MEANT = meant(
+    "set com one standby to one two two decimal eight",
+    "set_com_standby",
+    {"com_port": "1", "frequency": "122.8"},
+)
+COM_ASKS = "Did you mean COM 1 standby one two two decimal eight? Say confirm, or cancel."
+
+
+def test_an_impossible_frequency_asks_about_the_to_reading(sim):
+    _, plugin, xp = sim
+    assert say(plugin, COM_HEARD, *COM_AS_HEARD, to_reading=COM_MEANT) == [COM_ASKS]
+    assert xp.writes == []
+    assert events(plugin, "command_done")[-1]["outcome"] == "ambiguous"
+    asked = events(plugin, "to_reading")[-1]
+    assert asked["slots"] == {"com_port": "1", "frequency": "122.8"} and not asked["repeat"]
+
+
+@pytest.mark.parametrize("reply", ["confirm", "affirmative", "override"])
+def test_confirm_tunes_the_to_reading(sim, reply):
+    _, plugin, xp = sim
+    say(plugin, COM_HEARD, *COM_AS_HEARD, to_reading=COM_MEANT)
+    # The read-back is the answer: no "Override" before it.
+    assert say(plugin, reply) == ["COM 1 standby one two two decimal eight"]
+    assert xp.datarefs[RADIO + "com1_standby_frequency_hz_833"] == 122800
+
+
+def test_said_again_and_heard_the_same_way_confirms_it(sim):
+    _, plugin, xp = sim
+    say(plugin, COM_HEARD, *COM_AS_HEARD, to_reading=COM_MEANT)
+    assert say(plugin, COM_HEARD, *COM_AS_HEARD, to_reading=COM_MEANT) == [
+        "COM 1 standby one two two decimal eight"
+    ]
+    assert xp.datarefs[RADIO + "com1_standby_frequency_hz_833"] == 122800
+    assert events(plugin, "to_reading")[-1]["repeat"]
+
+
+def test_cancel_drops_the_to_reading(sim):
+    _, plugin, xp = sim
+    say(plugin, COM_HEARD, *COM_AS_HEARD, to_reading=COM_MEANT)
+    assert say(plugin, "cancel") == ["Cancelled"]
+    assert say(plugin, "confirm") == ["Nothing to override"]
+    assert xp.writes == []
+
+
+def test_another_command_drops_the_question(sim):
+    _, plugin, xp = sim
+    say(plugin, COM_HEARD, *COM_AS_HEARD, to_reading=COM_MEANT)
+    say(plugin, "heading two seven zero", "set_autopilot_heading", {"degrees": "270"})
+    assert say(plugin, "confirm") == ["Nothing to override"]
+    assert RADIO + "com1_standby_frequency_hz_833" not in dict(xp.writes)
+
+
+def test_without_a_sure_to_reading_it_is_refused_as_before(sim):
+    _, plugin, xp = sim
+    assert say(plugin, COM_HEARD, *COM_AS_HEARD) == ["Frequency out of range"]
+    unsure = {**COM_MEANT, "confidence": 0.3}
+    assert say(plugin, COM_HEARD, *COM_AS_HEARD, to_reading=unsure) == ["Frequency out of range"]
+    assert xp.writes == []
+
+
+@pytest.mark.parametrize(
+    ("heard", "as_heard", "reading", "question"),
+    [
+        (
+            "doing nav one two one one zero decimal five",
+            ("set_nav_frequency", {"nav_port": "121"}),
+            meant(
+                "doing nav one to one one zero decimal five",
+                "set_nav_frequency",
+                {"nav_port": "1", "nav_frequency": "110.5"},
+            ),
+            "Did you mean NAV 1 one one zero decimal five? Say confirm, or cancel.",
+        ),
+        (
+            "com two standby two one three two decimal four five",
+            ("set_com_standby", {"com_port": "2", "frequency": "2132.45"}),
+            meant(
+                "com two standby to one three two decimal four five",
+                "set_com_standby",
+                {"com_port": "2", "frequency": "132.45"},
+            ),
+            "Did you mean COM 2 standby one three two decimal four five? Say confirm, or cancel.",
+        ),
+        (
+            "squawk two one two zero zero",
+            ("set_transponder_code", {"squawk": "21200"}),
+            meant("squawk to one two zero zero", "set_transponder_code", {"squawk": "1200"}),
+            "Did you mean squawk one two zero zero? Say confirm, or cancel.",
+        ),
+    ],
+)
+def test_the_question_reads_back_the_to_reading(sim, heard, as_heard, reading, question):
+    _, plugin, xp = sim
+    assert say(plugin, heard, *as_heard, to_reading=reading) == [question]
+    assert xp.writes == []
+
+
+def test_an_emergency_code_still_needs_its_own_confirmation(sim):
+    _, plugin, xp = sim
+    reading = meant("squawk to seven seven zero zero", "set_transponder_code", {"squawk": "7700"})
+    heard = ("squawk two seven seven zero zero", "set_transponder_code", {"squawk": "27700"})
+    assert say(plugin, *heard, to_reading=reading) == [
+        "Did you mean squawk seven seven zero zero? Say confirm, or cancel."
+    ]
+    assert say(plugin, "confirm") == [
+        "Confirm emergency squawk. Say override, or repeat to confirm."
+    ]
+    assert xp.writes == []
+    assert say(plugin, "override") == ["Override", "Squawk seven seven zero zero"]
+    assert xp.datarefs[RADIO + "transponder_code"] == 7700
 
 
 # ---------------------------------------------------------------------------
