@@ -82,3 +82,4 @@ VK_Z: int
 DownFlag: int
 UpFlag: int
 ControlFlag: int
+ShiftFlag: int

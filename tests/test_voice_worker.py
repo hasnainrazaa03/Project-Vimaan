@@ -267,6 +267,79 @@ def test_a_failing_second_look_still_sends_the_command():
     assert out[-1]["slots"] == {"squawk": "21200"}
 
 
+class Stream:
+    """A stand-in for stt.VoskStream with a fixed transcript (or error)."""
+
+    def __init__(self, text):
+        self.text, self.fed, self.fed_bytes = text, b"", 0
+
+    def begin(self):
+        self.fed, self.fed_bytes = b"", 0
+
+    def feed(self, pcm):
+        self.fed += pcm
+        self.fed_bytes += len(pcm)
+
+    def finish(self):
+        if isinstance(self.text, Exception):
+            raise self.text
+        return self.text
+
+    def partial(self):
+        return ""
+
+
+def question_worker(commands_hear, questions_hear):
+    out: list[dict] = []
+
+    def predict(text):
+        return {"intent": "None", "slots": {}, "confidence": 1.0, "normalized_text": text}
+
+    stream, question = Stream(commands_hear), Stream(questions_hear)
+    w = VoiceWorker(
+        out.append, None, lambda r, s: "", predict, stream_stt=stream, question_stt=question
+    )
+    return w, out, question
+
+
+def test_a_question_is_decoded_again_with_the_question_grammar():
+    w, out, question = question_worker("what the window", "what the wind")
+    w._recognise("c1", LOUD, 16000, live=False)
+    assert out[-1]["type"] == "result"
+    assert out[-1]["text"] == "what the wind" and out[-1]["heard"] == "what the window"
+    assert question.fed == LOUD
+
+
+def test_a_command_is_not_decoded_again():
+    w, out, question = question_worker("landing lights on", "landing light on")
+    w._recognise("c1", LOUD, 16000, live=False)
+    assert out[-1]["text"] == "landing lights on" and out[-1]["heard"] is None
+    assert question.fed == b""
+
+
+def test_the_question_key_always_uses_the_question_grammar():
+    w, out, _ = question_worker("vertical flaps", "where our the flaps")
+    w._recognise("c1", LOUD, 16000, live=False, ask=True)
+    assert out[-1]["text"] == "where our the flaps" and out[-1]["ask"] is True
+    # Nothing the command grammar knows: the question grammar may still hear it.
+    w, out, _ = question_worker(
+        UnknownValueError("no command words"), "how far two the next way point"
+    )
+    w._recognise("c1", LOUD, 16000, live=False, ask=True)
+    assert out[-1]["type"] == "result" and out[-1]["text"] == "how far two the next way point"
+    w, out, _ = question_worker(UnknownValueError("no command words"), "")
+    w._recognise("c1", LOUD, 16000, live=False, ask=True)
+    assert out[-1]["type"] == "error" and out[-1]["outcome"] == "not_understood"
+
+
+def test_the_ask_flag_reaches_the_result():
+    w, out, _, _ = make_worker()
+    w.handle({"op": "text", "cmd": "c1", "text": "gear up", "ask": True})
+    assert out[-1]["ask"] is True
+    w.handle({"op": "text", "cmd": "c2", "text": "gear up"})
+    assert out[-1]["ask"] is False
+
+
 def test_run_serves_a_pipe_and_exits_on_eof():
     w, out, _, _ = make_worker()
     r, wfd = os.pipe()

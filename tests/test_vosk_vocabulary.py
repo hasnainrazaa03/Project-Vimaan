@@ -15,10 +15,11 @@ vosk = pytest.importorskip("vosk")
 
 
 @pytest.mark.skipif(not os.path.isdir(MODEL), reason="Vosk model not downloaded")
-def test_every_grammar_word_is_in_the_vosk_model(capfd):
-    from vimaan_nlu.stt_vocabulary import load_vocabulary
+@pytest.mark.parametrize("which", ["commands", "questions"])
+def test_every_grammar_word_is_in_the_vosk_model(capfd, which):
+    from vimaan_nlu.stt_vocabulary import load_question_vocabulary, load_vocabulary
 
-    words = load_vocabulary()
+    words = load_vocabulary() if which == "commands" else load_question_vocabulary()
     vosk.KaldiRecognizer(vosk.Model(MODEL), 16000, json.dumps([*words, "[unk]"]))
     err = capfd.readouterr().err
     missing = {

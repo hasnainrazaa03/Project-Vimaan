@@ -41,6 +41,7 @@ PROBLEM_KINDS = {
     "stt_fallback",
     "implausible",
     "ambiguous",
+    "question_answered",
 }
 
 

@@ -140,7 +140,26 @@ before launch. Drawn with ImGui (bundled with XPPython3), falling back to
 X-Plane's own text if ImGui can't load; the log report shows which, and the
 worst draw time per frame.
 
-**Questions aren't answered yet (Tier 4).** Don't ask Vimaan anything in flight: v26 reads most questions as the command ("is the autopilot off" as "autopilot off"). A transcript that starts like a question (is, are, what, how, where, do, does, or "r the", which is how "are the" is heard) is never acted on: Vimaan says "I can't answer questions yet" (overlay: questions aren't answered yet). It can't catch a question whose first word went unheard, so this is a safety net, not a way to ask.
+**Questions (Tier 4).** Hold **Shift+Z** (or bind **Vimaan: ask a question (hold)** to a button) to ask: whatever is said on it is only answered, never acted on. A command said there gets "I can't answer that". Questions are decoded with their own word list (`question_words.txt`); the talk key keeps the command word list, which never changes for questions (their words in it made commands worse: "flight level" heard as "light level").
+
+- On the talk key a question works too, as long as Vosk hears how it starts (is, are, what, how, where, do, does, or "r the" / "our the" for "are the"): it is decoded again with the question words and answered, or refused with "I can't answer that". It is never acted on. A question whose first word went unheard can't be told from the command ("is the autopilot off" heard as "the autopilot off" switches it off), so for yes/no questions use Shift+Z, or ask without on/off: "autopilot status", "landing lights status".
+- A reading named on its own is answered, never acted on: "heading", "what the heading", "say altitude", "what are squawk". Switch names on their own ("flaps", "gear") still ask which way.
+- With v26 installed only those bare readings are answered; v27 learns the questions below.
+- What you can ask, and how it answers (each answer names what it answers):
+
+| Ask | Answer |
+| --- | --- |
+| what's our altitude / heading / airspeed / ground speed / vertical speed / mach | "Altitude 7400 feet", "Heading two seven zero", "Descending 1200 feet per minute", "Mach point seven eight" |
+| how high above the ground are we | "1250 feet above the ground" (every aircraft, the Baron too) |
+| what's the wind / outside temperature | "Wind two seven zero at 35 knots", "Outside air temperature minus 5 degrees Celsius" |
+| what's the altimeter | "Altimeter two niner niner two", "Q N H one zero one three" (737/A330 set to hPa), "Altimeter standard" |
+| how much fuel do we have / how long will our fuel last | "Fuel 23000 pounds" (Baron gallons, King Air and 737 pounds, A330 kg); "About 2 hours 10 minutes of fuel at this fuel flow" |
+| what's the N1 / RPM / torque / ITT / EGT / oil pressure / fuel flow, engine status, is engine two running | "N1 85 percent on both engines"; only the readings this kind of engine shows |
+| what's com one / nav two standby / the course on nav two / our squawk | "COM 1 one two one decimal niner, standby one three two decimal four five", "Squawk four two one seven, transponder altitude" |
+| is the autopilot on, autopilot status, what altitude is set | "Autopilot on, heading two seven zero, altitude hold, altitude set 8000 feet", "Altitude set 8000 feet" |
+| are the landing lights on, is the gear down, where are the flaps, is the parking brake set, what's the auto brake set to | "Landing lights on", "Gear down", "Flaps 15", "This aircraft has no auto brake" |
+| how far to the next waypoint | "Next waypoint 12 miles, 4 minutes", or "No waypoint set" |
+| what time is it / the local time, status report | "Time one four three five Zulu"; "Altitude 8400 feet, heading two seven zero, airspeed 250 knots, autopilot on" |
 
 **"To" and "two":** they sound the same, so avoid "to" before a value. Say "altitude one thousand" and "heading zero one zero". When both readings of a heading, altitude or flight level are valid and differ, Vimaan changes nothing and asks which you meant (overlay: WHICH?). You can answer with the number alone ("one thousand", "zero two zero"). It is used only if it is one of the two values offered and you reply within 12 seconds. Any other number on its own is answered with "Say the full command" or "Say it with the word heading", and nothing changes. Heading and flight level given as all three digits ("two seven zero") are taken as digits, which means "heading to seven zero" can still set 270.
 

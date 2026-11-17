@@ -1,5 +1,7 @@
-"""Regenerate ML/vimaan_nlu/command_words.txt (the offline recogniser's
-grammar) from the command table. Run after changing ML/vimaan_nlu/commands.py.
+"""Regenerate the offline recogniser's grammars from the command table:
+ML/vimaan_nlu/command_words.txt (commands) and question_words.txt (Tier 4
+questions: the question key, and a question heard on the talk key, are
+decoded again with it). Run after changing ML/vimaan_nlu/commands.py.
 
 Usage::
 
@@ -16,8 +18,16 @@ import sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "ML"))
 
-from vimaan_nlu.commands import PREFIXES, SUFFIXES, training_schema  # noqa: E402
+from vimaan_nlu.commands import (  # noqa: E402
+    PREFIXES,
+    QUESTION_PREFIXES,
+    QUESTION_SUFFIXES,
+    SUFFIXES,
+    training_schema,
+)
 from vimaan_nlu.stt_vocabulary import (  # noqa: E402
+    COMMAND_GRAMMAR_QUESTIONS,
+    QUESTION_VOCABULARY_FILE,
     VOCABULARY_FILE,
     build_vocabulary,
     load_vocabulary,
@@ -29,23 +39,33 @@ HEADER = (
 
 
 def expected() -> list[str]:
-    return build_vocabulary(training_schema(), PREFIXES + SUFFIXES)
+    """The command grammar: commands, plus the questions it always had."""
+    return build_vocabulary(
+        training_schema(questions=False), PREFIXES + SUFFIXES + COMMAND_GRAMMAR_QUESTIONS
+    )
+
+
+def expected_questions() -> list[str]:
+    return build_vocabulary(training_schema(questions=True), QUESTION_PREFIXES + QUESTION_SUFFIXES)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args(argv)
-    words = expected()
-    if args.check:
-        current = load_vocabulary() if os.path.exists(VOCABULARY_FILE) else []
-        if current != words:
-            print(f"{VOCABULARY_FILE} is out of date; run {__file__}", file=sys.stderr)
-            return 1
-        return 0
-    with open(VOCABULARY_FILE, "w", encoding="utf-8") as fh:
-        fh.write(HEADER + "\n".join(words) + "\n")
-    print(f"wrote {len(words)} words to {VOCABULARY_FILE}")
+    for path, words in (
+        (VOCABULARY_FILE, expected()),
+        (QUESTION_VOCABULARY_FILE, expected_questions()),
+    ):
+        if args.check:
+            current = load_vocabulary(path) if os.path.exists(path) else []
+            if current != words:
+                print(f"{path} is out of date; run {__file__}", file=sys.stderr)
+                return 1
+            continue
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(HEADER + "\n".join(words) + "\n")
+        print(f"wrote {len(words)} words to {path}")
     return 0
 
 

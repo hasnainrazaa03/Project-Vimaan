@@ -334,7 +334,10 @@ OVERRIDES: tuple[Override, ...] = (
         name="b58_switches",
         requires=("laminar/b58/surface_ice_switch_up", "laminar/b58/surface_ice_switch_dn"),
         commands=MappingProxyType({}),
-        settings=MappingProxyType({"switches": switches.B58}),
+        # Tier 4: its fuel-flow gauge reads GAL/HR (sim probe, 2026-11-16).
+        settings=MappingProxyType(
+            {"switches": switches.B58, "fuel_unit": "gal", "fuel_kind": "avgas"}
+        ),
         source="Laminar Baron 58 cockpit .obj manipulators and xlua B58_01_logic, X-Plane 12.4.3",
         live=("laminar/b58/inst_press_ind_pos",),
     ),
@@ -343,7 +346,10 @@ OVERRIDES: tuple[Override, ...] = (
         requires=(switches.C90_SIGNS.down, switches.C90_SIGNS.up),
         commands=MappingProxyType({}),
         # Its boots run one cycle per press: "boots on" says "Boots cycling".
-        settings=MappingProxyType({"switches": switches.C90, "boots_cycle": True}),
+        # Tier 4: fuel in pounds, as the real C90B's gauges.
+        settings=MappingProxyType(
+            {"switches": switches.C90, "boots_cycle": True, "fuel_unit": "lb"}
+        ),
         source="Laminar King Air C90B cockpit .obj manipulators and xlua C90_sys, X-Plane 12.4.3",
         live=(switches.C90_SIGNS.position,),
     ),
@@ -357,7 +363,16 @@ OVERRIDES: tuple[Override, ...] = (
         ),
         commands=MappingProxyType({}),
         # In the air its speed brake lever stops at the flight detent.
-        settings=MappingProxyType({"switches": switches.B738, "speed_brake_air_max": "half"}),
+        # Tier 4: fuel in pounds (its display's total 23.0 = X-Plane's 10,439 kg);
+        # the altimeter unit is its EFIS selector (0 IN seen; 1 hPa from its script).
+        settings=MappingProxyType(
+            {
+                "switches": switches.B738,
+                "speed_brake_air_max": "half",
+                "fuel_unit": "lb",
+                "baro_hpa": ("laminar/B738/EFIS_control/capt/baro_in_hpa", 1.0),
+            }
+        ),
         source="Laminar 737-800 b738_cockpit.obj manipulators and xlua B738.lighting / "
         "B738.systems, X-Plane 12.4.3",
         live=(switches.B738_POSITION.position,),
@@ -371,8 +386,15 @@ OVERRIDES: tuple[Override, ...] = (
             switches.A333_SEATBELT.up,
         ),
         commands=MappingProxyType({}),
+        # Tier 4: fuel in kg (ECAM FOB); the altimeter unit is its inHg/hPa
+        # knob (A333.switches: 0 steps 0.01 inHg, 1 steps one hPa).
         settings=MappingProxyType(
-            {"switches": switches.A333, "autobrake_off": switches.A333_AUTOBRAKE_OFF}
+            {
+                "switches": switches.A333,
+                "autobrake_off": switches.A333_AUTOBRAKE_OFF,
+                "fuel_unit": "kg",
+                "baro_hpa": ("laminar/A333/barometer/capt_inHg_hPa_pos", 1.0),
+            }
         ),
         source="Laminar A330-300 A330_cockpit.obj manipulators and xlua A333.lighting / "
         "A333.switches, X-Plane 12.4.3",

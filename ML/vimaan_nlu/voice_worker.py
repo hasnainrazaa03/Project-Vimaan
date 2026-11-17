@@ -13,10 +13,10 @@ we write replies to stdout (the real stdout is reserved for the protocol —
 stray prints are redirected to stderr, which the plugin sends to a log file).
 
 Requests (``op``):
-    start {cmd}          open the mic and record
+    start {cmd, ask}     open the mic and record (ask: the question key)
     stop {cmd}           key released: keep recording a short tail, then
                          transcribe + predict and reply ``result``
-    text {cmd, text}     NLU only (no audio)
+    text {cmd, text, ask}  NLU only (no audio)
     selftest {probes}    NLU on [text, expected] pairs; reply ``selftest``
     ping                 reply ``pong``
     quit                 exit
@@ -44,6 +44,7 @@ from typing import Any
 
 from vimaan_nlu.ambiguity import to_reading
 from vimaan_nlu.audio_health import is_silent, rms_from_pcm16
+from vimaan_nlu.questions import looks_like_question
 
 MAX_RECORD_SEC = 12.0  # recording is cut off after this even if still held
 MIN_RECORD_SEC = 0.3  # shorter than this is an accidental tap, not a command
@@ -126,6 +127,11 @@ class WavRecorder:
         return len(raw) / (2 * self.sample_rate)
 
 
+class UnknownValueError(Exception):
+    """Nothing heard that the question grammar knows (named as the
+    recognisers' own, so it is classified the same: "not_understood")."""
+
+
 def _error_outcome(exc: BaseException) -> str:
     # Matched by name so this module (and its tests) don't import
     # speech_recognition just to classify its exceptions.
@@ -151,6 +157,7 @@ class VoiceWorker:
         release_tail_sec: float = RELEASE_TAIL_SEC,
         clock: Callable[[], float] = time.perf_counter,
         stream_stt: Any = None,
+        question_stt: Any = None,
         audio_dir: str | None = None,
         audio_prefix: str = "",
     ) -> None:
@@ -163,6 +170,11 @@ class VoiceWorker:
         # Optional streaming recogniser (stt.VoskStream): fed while recording,
         # used instead of transcribe_audio.
         self.stream_stt = stream_stt
+        # Tier 4: the question grammar (stt.VoskStream). The question key's
+        # recording, and one that starts like a question on the talk key, are
+        # decoded again with it: question words in the command grammar made
+        # commands worse ("flight level" heard as "light level").
+        self.question_stt = question_stt
         self.audio_dir = audio_dir
         self.audio_prefix = audio_prefix
         self._audio_dir_bytes = _dir_bytes(audio_dir) if audio_dir else 0
@@ -186,6 +198,7 @@ class VoiceWorker:
                 self.stream_stt.begin()
             self.rec = {
                 "cmd": cmd,
+                "ask": bool(msg.get("ask")),
                 "partial": "",
                 "partial_at": 0.0,
                 "t_start": self.clock(),
@@ -198,9 +211,11 @@ class VoiceWorker:
                 if self.release_tail_sec <= 0:
                     self._finish()
         elif op == "text":
-            self._predict_and_reply(cmd, msg.get("text", ""), stt_ms=None, audio=None)
+            self._predict_and_reply(
+                cmd, msg.get("text", ""), stt_ms=None, audio=None, ask=bool(msg.get("ask"))
+            )
         elif op == "wav":
-            self._play_file(cmd, msg.get("path") or "")
+            self._play_file(cmd, msg.get("path") or "", ask=bool(msg.get("ask")))
         elif op == "selftest":
             results = []
             for text, expected in msg.get("probes", []):
@@ -302,13 +317,14 @@ class VoiceWorker:
             raw,
             self.recorder.sample_rate,
             live=True,
+            ask=rec.get("ask", False),
             overflows=self.recorder.overflows,
             truncated=self.recorder.truncated,
             auto_stop=auto_stop,
             preroll_sec=round(preroll_frames / self.recorder.sample_rate, 3),
         )
 
-    def _play_file(self, cmd: Any, path: str) -> None:
+    def _play_file(self, cmd: Any, path: str, ask: bool = False) -> None:
         """A recording from a file, recognised exactly like a push-to-talk one
         (the automated-test bridge, Phase A). 16-bit mono PCM at the
         recogniser's rate."""
@@ -336,9 +352,11 @@ class VoiceWorker:
                 }
             )
             return
-        self._recognise(cmd, raw, rate, live=False, source_file=path)
+        self._recognise(cmd, raw, rate, live=False, ask=ask, source_file=path)
 
-    def _recognise(self, cmd: Any, raw: bytes, rate: int, *, live: bool, **captured: Any) -> None:
+    def _recognise(
+        self, cmd: Any, raw: bytes, rate: int, *, live: bool, ask: bool = False, **captured: Any
+    ) -> None:
         """Recognise one recording, then predict and reply. ``live``: it came
         from the microphone, and a streaming recogniser has been fed already."""
         audio_sec = len(raw) / (2 * rate)
@@ -372,19 +390,48 @@ class VoiceWorker:
             else:
                 text = self.transcribe_audio(raw, rate)
         except Exception as exc:
-            self.send(
-                {
-                    "type": "error",
-                    "cmd": cmd,
-                    "outcome": _error_outcome(exc),
-                    "stage": "stt",
-                    "error": f"{type(exc).__name__}: {exc}",
-                    "stt_ms": round((self.clock() - t) * 1000, 1),
-                }
-            )
-            return
+            if ask and self.question_stt is not None:
+                text = ""  # the question grammar may still hear it
+            else:
+                self._stt_error(cmd, exc, t)
+                return
+        heard = None
+        if self.question_stt is not None and (ask or looks_like_question(text)):
+            asked = self._hear_question(raw)
+            if asked:
+                heard, text = text, asked
+            elif not text:
+                self._stt_error(cmd, UnknownValueError("no question words recognised"), t)
+                return
         self._predict_and_reply(
-            cmd, text, stt_ms=round((self.clock() - t) * 1000, 1), audio=audio_sec
+            cmd,
+            text,
+            stt_ms=round((self.clock() - t) * 1000, 1),
+            audio=audio_sec,
+            ask=ask,
+            heard=heard,
+        )
+
+    def _hear_question(self, raw: bytes) -> str:
+        """The recording decoded with the question grammar, or "" when it
+        heard nothing it knows."""
+        try:
+            self.question_stt.begin()
+            self.question_stt.feed(raw)
+            return str(self.question_stt.finish())
+        except Exception:
+            return ""
+
+    def _stt_error(self, cmd: Any, exc: BaseException, t: float) -> None:
+        self.send(
+            {
+                "type": "error",
+                "cmd": cmd,
+                "outcome": _error_outcome(exc),
+                "stage": "stt",
+                "error": f"{type(exc).__name__}: {exc}",
+                "stt_ms": round((self.clock() - t) * 1000, 1),
+            }
         )
 
     def _send_partial(self, rec: dict[str, Any]) -> None:
@@ -419,7 +466,13 @@ class VoiceWorker:
         return path
 
     def _predict_and_reply(
-        self, cmd: Any, text: str, stt_ms: float | None, audio: float | None
+        self,
+        cmd: Any,
+        text: str,
+        stt_ms: float | None,
+        audio: float | None,
+        ask: bool = False,
+        heard: str | None = None,
     ) -> None:
         t = self.clock()
         try:
@@ -456,6 +509,10 @@ class VoiceWorker:
                 "confidence": p["confidence"],
                 "slots": p["slots"],
                 "to_reading": meant,
+                "ask": ask,
+                # What the command grammar heard, when the question grammar's
+                # transcript replaced it.
+                "heard": heard,
             }
         )
 
@@ -520,28 +577,44 @@ def _protocol_writer() -> Callable[[dict[str, Any]], None]:
     return send
 
 
-def _make_stream_stt(args: argparse.Namespace) -> tuple[Any, str, dict[str, Any]]:
-    """(streaming recogniser or None, backend actually used, details to log).
+def _make_stream_stt(args: argparse.Namespace) -> tuple[Any, Any, str, dict[str, Any]]:
+    """(streaming recogniser or None, question recogniser or None, backend
+    actually used, details to log).
     Vosk that can't load (package or model missing) falls back to Google so
     the copilot still works; the reason is reported in ``ready``."""
     if args.stt_backend != "vosk":
-        return None, args.stt_backend, {}
+        return None, None, args.stt_backend, {}
     from vimaan_nlu.stt import DEFAULT_VOSK_MODEL, VoskStream
-    from vimaan_nlu.stt_vocabulary import grammar
+    from vimaan_nlu.stt_vocabulary import grammar, question_grammar
 
     model = args.vosk_model or DEFAULT_VOSK_MODEL
     t = time.perf_counter()
     try:
+        import vosk
+
+        vosk.SetLogLevel(-1)
+        loaded = vosk.Model(model)
         words = None if args.no_grammar else grammar()
-        stream = VoskStream(model, words=words)
+        stream = VoskStream(loaded, words=words)
     except Exception as exc:
-        return None, "google", {"fallback_from": "vosk", "error": f"{type(exc).__name__}: {exc}"}
+        return (
+            None,
+            None,
+            "google",
+            {"fallback_from": "vosk", "error": f"{type(exc).__name__}: {exc}"},
+        )
+    try:
+        question: Any = None if args.no_grammar else VoskStream(loaded, words=question_grammar())
+    except Exception:
+        question = None  # questions go without their own grammar; commands are unaffected
     return (
         stream,
+        question,
         "vosk",
         {
             "model": model,
             "grammar_words": None if words is None else len(words),
+            "question_grammar_words": None if question is None else len(question_grammar()),
             "load_ms": round((time.perf_counter() - t) * 1000, 1),
         },
     )
@@ -609,7 +682,7 @@ def main(argv: list[str] | None = None) -> int:
             )
 
         predict_text("set heading two seven zero")  # warm-up: first pass is slow
-        stream_stt, stt_backend, stt_info = _make_stream_stt(args)
+        stream_stt, question_stt, stt_backend, stt_info = _make_stream_stt(args)
         recognizer = sr.Recognizer()
         recognizer.operation_timeout = STT_TIMEOUT_SEC
 
@@ -674,6 +747,7 @@ def main(argv: list[str] | None = None) -> int:
             transcribe_audio,
             predict_text,
             stream_stt=stream_stt,
+            question_stt=question_stt,
             audio_dir=args.save_audio_dir,
             audio_prefix=args.audio_prefix,
         ).run(sys.stdin)

@@ -301,3 +301,50 @@ def test_verbs_are_tagged_where_spoken(data):
     rows, _ = data
     gear = [r for r in rows if r["intent"] == "toggle_landing_gear"]
     assert any(r["slots"].get("state") in ("raise", "lower", "retract", "extend") for r in gear)
+
+
+# --- Tier 4: questions --------------------------------------------------------
+QUESTION_INTENTS = {c.intent for c in COMMANDS if c.is_question}
+
+
+def test_every_question_is_generated_with_its_slots(data):
+    rows, _ = data
+    asked = [r for r in rows if r["intent"] in QUESTION_INTENTS]
+    assert {r["intent"] for r in asked} == QUESTION_INTENTS
+    assert any(
+        r["slots"].get("reading") == "vertical speed" or r["slots"].get("reading") for r in asked
+    )
+    assert all(r["noise"] != "stray" for r in asked), "stray words come from other commands"
+
+
+def test_a_yes_no_question_keeps_its_question_word(data):
+    # Without it "is the gear down" is the command "gear down": the label
+    # would teach the model to answer a command.
+    from vimaan_nlu.questions import looks_like_question
+
+    rows, _ = data
+    states = {"on", "off", "up", "down", "set", "armed", "running", "engaged"}
+    closers = {"please", "now", "right"}  # QUESTION_SUFFIXES
+    for r in rows:
+        if r["intent"] in QUESTION_INTENTS:
+            words = r["text"].split()
+            while len(words) > 1 and words[-1] in closers:
+                words.pop()
+            if words[-1] in states:  # "is the gear down (please)", not "... on fuel"
+                assert looks_like_question(r["text"]), r["text"]
+
+
+def test_no_question_has_a_commands_words(data):
+    rows, _ = data
+    commands = {r["text"] for r in rows if r["intent"] not in QUESTION_INTENTS | {"None"}}
+    asked = {r["text"] for r in rows if r["intent"] in QUESTION_INTENTS}
+    assert not commands & asked
+
+
+def test_questions_as_the_recogniser_hears_them(data):
+    # The question grammar has no "what's"; "our" comes back "are" or "r".
+    rows, _ = data
+    heard = [r["text"] for r in rows if r["noise"] == "heard"]
+    assert heard
+    assert all("what's" not in t.split() or "our" in t.split() for t in heard[:0])
+    assert any(t.startswith(("what are", "what r", "what the")) for t in heard)

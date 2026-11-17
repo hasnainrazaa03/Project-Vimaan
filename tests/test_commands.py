@@ -51,8 +51,39 @@ def test_actionable_command_is_complete(c):
 
 def test_non_actionable_commands_have_no_handler_bits():
     for c in COMMANDS:
-        if not c.actionable:
+        if not c.actionable and not c.is_question:
             assert not (c.slots or c.bindings or c.safety or c.self_test), c.intent
+
+
+QUESTIONS = [c for c in COMMANDS if c.is_question]
+
+
+@pytest.mark.parametrize("c", QUESTIONS, ids=lambda c: c.intent)
+def test_a_question_reads_and_never_acts(c):
+    # Tier 4: a question has an answer and no handler, so nothing that treats
+    # a command as acting (the gate, safety rules, stray words) sees it as one.
+    assert c.handler is None and not c.actionable
+    assert not c.safety and c.reply is None
+    for slot in c.slots:
+        assert slot in SLOT_VALIDATORS, f"{slot} has no validator"
+    assert len(c.templates) >= 15, "at least 15 phrasings per question"
+    for template in c.templates:
+        used = re.findall(r"\{(\w+)(?:=[^}]+)?\}", template)
+        bases = {re.sub(r"_(verb|ord)$", "", u) for u in used}
+        assert bases <= set(c.slots), f"unknown placeholder in {template!r}"
+
+
+def test_a_yes_no_question_names_its_question_word():
+    # "is the gear down" without "is" is the command "gear down": a question
+    # template that holds a state word must start like a question.
+    from vimaan_nlu.questions import looks_like_question
+
+    states = {"on", "off", "up", "down", "set", "armed", "running", "engaged"}
+    for c in QUESTIONS:
+        for template in c.templates:
+            words = re.sub(r"\{[^}]*\}", "X", template).split()
+            if words[-1] in states:  # "... gear down", not "time remaining on fuel"
+                assert looks_like_question(template), (c.intent, template)
 
 
 def test_every_binding_exists_in_the_fake_sim():
@@ -62,9 +93,12 @@ def test_every_binding_exists_in_the_fake_sim():
 
 
 def test_self_test_probes_cover_each_family():
+    # Questions too: Ctrl-Z skips the intents the loaded model doesn't know,
+    # so v26 isn't failed for questions it was never trained on.
     probed = {intent for _, intent in commands.self_test_probes()}
     families = {c.intent.rstrip("_12") for c in commands.actionable()}
-    assert {i.rstrip("_12") for i in probed} == families
+    questions = {c.intent for c in COMMANDS if c.is_question}
+    assert {i.rstrip("_12") for i in probed} == families | questions
 
 
 def test_generated_files_are_current():

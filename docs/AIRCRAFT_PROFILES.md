@@ -244,6 +244,32 @@ A button is pressed, and a dataref written, once per step: a toggle pressed
 twice would undo itself (an A330 button reads 1.2 while pressed). A switch
 that doesn't move in 30 frames answers "... not set: the switch did not move".
 
+## Tier 4 findings: what the questions read (X-Plane 12.4.3, 2026-11-16)
+
+Read-only probe of the four aircraft in cruise (every candidate dataref twice,
+5 s apart, plus a screenshot of the panel). X-Plane reports fuel in kilograms
+on every aircraft; the answer uses the unit the cockpit shows:
+
+| | Baron 58 | King Air C90B | 737-800 | A330-300 |
+| --- | --- | --- | --- | --- |
+| Fuel | US gallons (fuel-flow gauge GAL/HR; avgas 6.0 lb/gal) | pounds (as the real C90B) | **pounds**: the display's total 23.0 = X-Plane's 10,439 kg | kilograms (ECAM FOB 54,420 KG) |
+| Altimeter unit | inches | inches (shows hPa too) | `laminar/B738/EFIS_control/capt/baro_in_hpa`: 0 IN (seen); 1 hPa (from its script, to confirm) | `laminar/A333/barometer/capt_inHg_hPa_pos`: 0 inHg, 1 hPa |
+| Engine (`acf_en_type`) | 1 piston: RPM, MP, EGT, oil, fuel flow | 9 turboprop: torque, ITT, N1, prop RPM | 7 jet: N1, N2, EGT, fuel flow | 7 jet; its display calls X-Plane's N2 "N3" (Trent) |
+| `radio_altimeter_height_ft_pilot` | height above ground (no radio altimeter in the panel) | the same | the same, above 2,500 ft too | the same |
+
+- STD: `sim/cockpit2/gauges/actuators/barometer_setting_is_std_pilot`.
+- Outside air temperature: X-Plane's Celsius, answered in Celsius (the King
+  Air's gauge reads Fahrenheit).
+- The engine temperature datarefs read Celsius on these four (737 EGT 566 on
+  its display, 569 in X-Plane); X-Plane says their unit varies by aircraft.
+- No flight plan: `gps_dme_distance_nm` 0 and `destination_index` -1 on all
+  four ("No waypoint set"). With a plan: not yet checked.
+- The units live in each aircraft's override (`fuel_unit`, `fuel_kind`,
+  `baro_hpa`); an aircraft without one answers in gallons (piston), pounds
+  (turboprop) or kilograms (jet).
+- Switch states are read the way the Tier 3 commands check a switch before
+  acting: the setting whose plan has nothing left to do.
+
 ## Engine start by type
 
 | Type | Sequence | Limit | Failure message |
