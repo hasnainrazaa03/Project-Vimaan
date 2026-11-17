@@ -7,11 +7,20 @@ transcript can settle it, so when both readings are valid and different the
 plugin asks instead of picking one. A bare-number reply to that question
 ("one thousand") is accepted only when it is one of the two values offered.
 
+The other way round (``to_reading``): a frequency, auto brake setting or
+squawk that is impossible as heard ("standby two one two two decimal eight",
+212.28) but valid with one "two" read as "to" (122.8). The worker finds that
+reading with the model; the plugin asks the pilot to confirm it.
+
 Pure Python: it works on the transcript, before anything reaches the sim.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
+
+from vimaan_nlu.commands import command
 from vimaan_nlu.normalization import (
     _MAGNITUDE_WORDS,
     _TEEN_WORDS,
@@ -98,3 +107,84 @@ def chosen(offered: tuple[str, str], text: str) -> str | None:
         if int(option) == int(value):
             return option
     return None
+
+
+# ---------------------------------------------------------------------------
+# A number that is impossible as heard, but valid with one "two" read as "to"
+# ---------------------------------------------------------------------------
+# The owner's flight on 2026-11-16 (session 20261116_205022): "tune nav one to
+# one one zero decimal five" was heard as "... nav one two one one zero ...",
+# "set the auto brake to three" as "... auto brake two three" and "set com one
+# standby to one two two decimal eight" as "... standby two one two two ...".
+# Decoded again without the command-word grammar, the same clips came out as
+# "to" every time: the grammar tips Vosk to "two" before a number. All three
+# were refused as out of range or missing, so nothing wrong was set, but the
+# pilot was given no way forward. two_or_to doesn't cover them: these aren't
+# whole numbers, and its "two" after a number word ("nav one two ...") is
+# taken as part of the number.
+#
+# The commands covered, and the slots one of which must hold a valid value.
+TO_READING_SLOTS: dict[str, tuple[str, ...]] = {
+    "set_com_frequency": ("frequency",),
+    "set_com_standby": ("frequency",),
+    "set_nav_frequency": ("nav_frequency",),
+    "set_nav_standby": ("nav_frequency",),
+    "set_autobrake": ("autobrake_level", "autobrake"),
+    "set_transponder_code": ("squawk",),
+}
+# The rule name a "did you mean" question is held under (it is not a safety
+# rule: nothing about the command is risky, only how it was heard).
+TO_HEARD_AS_TWO = "to_heard_as_two"
+# A radio number that came out wrong ("nav 121") makes the reading invalid too.
+_PORT_SLOTS = ("com_port", "nav_port")
+# Each "two" tried costs one pass of the model (about 10 ms).
+MAX_TO_READINGS = 4
+
+
+def has_valid_target(intent: str, slots: dict[str, Any]) -> bool:
+    """Whether the command's number is there and in range, and any radio
+    number it names is a real one."""
+    names = TO_READING_SLOTS.get(intent, ())
+    if not any(slots.get(n) and validate_slot(n, slots[n])[1] for n in names):
+        return False
+    return all(validate_slot(p, slots[p])[1] for p in _PORT_SLOTS if slots.get(p))
+
+
+def to_reading(
+    intent: str,
+    slots: dict[str, Any],
+    text: str,
+    predict: Callable[[str], dict[str, Any]],
+) -> dict[str, Any] | None:
+    """The reading of ``text`` with one "two" taken as "to", when the command
+    as heard has no valid number and exactly one such reading gives the same
+    command with a valid one. ``predict`` runs the model on a transcript.
+
+    Never acted on directly: the plugin asks the pilot to confirm it. None
+    when the heard command is fine, when no "two" helps, when the readings
+    disagree, or when a reading is a different command ("q now one to one one
+    zero decimal five" was the altimeter as heard and NAV 1 as "to")."""
+    if intent not in TO_READING_SLOTS or has_valid_target(intent, slots):
+        return None
+    words = text.lower().split()
+    spots = [i for i, word in enumerate(words) if word == "two"][:MAX_TO_READINGS]
+    declared = command(intent).slots
+    found: dict[tuple[tuple[str, str], ...], dict[str, Any]] = {}
+    for i in spots:
+        variant = " ".join([*words[:i], "to", *words[i + 1 :]])
+        p = predict(variant)
+        if p["intent"] != intent or not has_valid_target(intent, p["slots"]):
+            continue
+        kept = {k: v for k, v in p["slots"].items() if k in declared and v not in (None, "")}
+        key = tuple(sorted((k, str(v)) for k, v in kept.items()))
+        found.setdefault(
+            key,
+            {
+                "text": variant,
+                "intent": intent,
+                "slots": kept,
+                "confidence": p["confidence"],
+                "normalized": p.get("normalized_text"),
+            },
+        )
+    return next(iter(found.values())) if len(found) == 1 else None
