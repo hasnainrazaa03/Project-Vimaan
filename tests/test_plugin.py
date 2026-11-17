@@ -953,6 +953,55 @@ def test_clear_answers_set_the_target(sim, heard, intent, slots, dataref, value)
 
 
 # ---------------------------------------------------------------------------
+# A question is never acted on (the owner's recordings, 2026-11-16: v26 read
+# 9 of 10 yes/no questions as the command)
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("heard", "intent", "slots"),
+    [
+        ("is the autopilot off", "toggle_autopilot", {"state": "off", "instance": "1"}),
+        ("is the parking brakes set", "toggle_parking_brake", {"state": "on"}),
+        ("r the strobes off", "toggle_lights", {"light": "strobe", "switch": "off"}),
+        ("what the heading", "set_autopilot_mode", {"mode": "heading"}),
+        ("is the gear up", "toggle_landing_gear", {"state": "up"}),
+    ],
+)
+def test_a_question_is_never_acted_on(sim, heard, intent, slots):
+    _, plugin, xp = sim
+    assert say(plugin, heard, intent, slots) == ["I can't answer questions yet"]
+    assert xp.writes == [] and xp.commands_fired == []
+    assert events(plugin, "command_done")[-1]["outcome"] == "non_actionable"
+    refused = events(plugin, "implausible")[-1]
+    assert refused["reason"] == "question" and refused["intent"] == intent
+
+
+def test_a_question_does_not_drop_a_held_command(sim):
+    _, plugin, xp = sim
+    say(plugin, "squawk 7700", "set_transponder_code", {"squawk": "7700"})  # held
+    say(plugin, "what are squawk", "set_transponder_code", {})
+    assert say(plugin, "override") == ["Override", "Squawk seven seven zero zero"]
+
+
+def test_a_question_with_a_to_reading_is_not_asked_about(sim):
+    _, plugin, xp = sim
+    reading = meant(
+        "is com one to one two two decimal eight", "set_com_frequency", {"frequency": "122.8"}
+    )
+    heard = (
+        "is com one two one two two decimal eight",
+        "set_com_frequency",
+        {"frequency": "2122.8"},
+    )
+    assert say(plugin, *heard, to_reading=reading) == ["I can't answer questions yet"]
+
+
+def test_commands_still_act(sim):
+    _, plugin, xp = sim
+    say(plugin, "autopilot off", "toggle_autopilot", {"state": "off", "instance": "1"})
+    assert events(plugin, "command_done")[-1]["outcome"] != "non_actionable"
+
+
+# ---------------------------------------------------------------------------
 # Impossible as heard, valid with one "two" read as "to" (the owner's flight,
 # 2026-11-16: refused three times, with no way forward)
 # ---------------------------------------------------------------------------

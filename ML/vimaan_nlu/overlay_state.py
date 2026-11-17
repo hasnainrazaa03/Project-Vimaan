@@ -50,6 +50,7 @@ REASONS: dict[str, str] = {
     "one_digit_heading": "heading needs three digits",
     "bare_number": "a number alone is not a command",
     "not_offered": "not one of the two values offered",
+    "question": "questions aren't answered yet",
 }
 
 
