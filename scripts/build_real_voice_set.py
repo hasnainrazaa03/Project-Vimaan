@@ -9,6 +9,12 @@ then judge each model on real speech without needing the audio.
 Re-run after labelling new flights or changing the grammar:
 
     python scripts/build_real_voice_set.py
+    python scripts/build_real_voice_set.py --set heldout
+
+``--set heldout``: the held-out set (``labels_heldout.jsonl`` ->
+``tests/fixtures/real_voice_heldout.jsonl``), the owner's 2026-11-16 voice
+check. The gate measures it and decides nothing with it, and nothing is
+trained or tuned on it: it stays a fresh test of the owner's voice.
 
 It also writes ``real_voice.meta.json``: the grammar's fingerprint and the Vosk
 model. A test and the gate refuse a set heard with another grammar (it went
@@ -19,6 +25,7 @@ transcripts).
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -29,19 +36,30 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "ML"))
 
 AUDIO = Path.home() / "Vimaan_Logs" / "audio"
-OUT = ROOT / "tests" / "fixtures" / "real_voice.jsonl"
-META = OUT.with_name("real_voice.meta.json")
+FIXTURES = ROOT / "tests" / "fixtures"
+# set -> (labels in AUDIO, fixture name)
+SETS = {
+    "gate": ("labels.jsonl", "real_voice"),
+    "heldout": ("labels_heldout.jsonl", "real_voice_heldout"),
+}
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     from vimaan_nlu.stt import DEFAULT_VOSK_MODEL, UnknownValueError, VoskStream
     from vimaan_nlu.stt_vocabulary import grammar, grammar_sha256
 
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--set", choices=sorted(SETS), default="gate")
+    args = parser.parse_args(argv)
+    labels_name, name = SETS[args.set]
+    out = FIXTURES / f"{name}.jsonl"
+    meta_path = FIXTURES / f"{name}.meta.json"
+
     stream = VoskStream(DEFAULT_VOSK_MODEL, words=grammar())
-    labels = [json.loads(line) for line in open(AUDIO / "labels.jsonl", encoding="utf-8")]
+    labels = [json.loads(line) for line in open(AUDIO / labels_name, encoding="utf-8")]
     expected = {}
-    if OUT.exists():
-        for line in OUT.read_text(encoding="utf-8").splitlines():
+    if out.exists():
+        for line in out.read_text(encoding="utf-8").splitlines():
             r = json.loads(line)
             expected[r["clip"]] = {"intent": r["intent"], "slots": r["slots"]}
     rows = []
@@ -64,14 +82,14 @@ def main() -> int:
         rows.append(
             {"clip": row["file"], "said": row["text"], "heard": heard, **expected[row["file"]]}
         )
-    OUT.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    out.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
     meta = {
         "grammar_sha256": grammar_sha256(),
         "vosk_model": os.path.basename(DEFAULT_VOSK_MODEL),
         "clips": len(rows),
     }
-    META.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
-    print(f"wrote {len(rows)} clips to {OUT}")
+    meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote {len(rows)} clips to {out}")
     return 0
 
 

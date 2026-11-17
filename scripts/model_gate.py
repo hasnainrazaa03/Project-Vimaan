@@ -25,6 +25,11 @@ Gates
    >= 95% end up rejected (not acted on).
 6. **Latency** — p95 NLU < 25 ms on CPU (quantized, as in the plugin).
 
+Measured, deciding nothing: the **held-out real-voice set**
+(tests/fixtures/real_voice_heldout.jsonl, the owner's 2026-11-16 voice check).
+Only its counts are reported, never its examples: nothing is trained or tuned
+on it, so it stays a fresh test of the owner's voice.
+
 Usage::
 
     python scripts/model_gate.py v17 --baseline v11
@@ -217,21 +222,25 @@ def judge(run, text: str, want_intent: str, want: dict[str, Any]) -> tuple[str, 
     return ("right" if ok else "wrong"), f"{p['intent']} {action}"
 
 
-def real_voice_is_current() -> bool:
+FIXTURES = ROOT / "tests" / "fixtures"
+HELDOUT = "real_voice_heldout"
+
+
+def real_voice_is_current(name: str = "real_voice") -> bool:
     """Was the real-voice set heard with the grammar that ships?"""
     from vimaan_nlu.stt_vocabulary import grammar_sha256
 
-    meta = ROOT / "tests" / "fixtures" / "real_voice.meta.json"
+    meta = FIXTURES / f"{name}.meta.json"
     return meta.exists() and json.loads(meta.read_text())["grammar_sha256"] == grammar_sha256()
 
 
-def real_voice(run) -> dict[str, Any]:
-    if not real_voice_is_current():
+def real_voice(run, name: str = "real_voice") -> dict[str, Any]:
+    if not real_voice_is_current(name):
         raise SystemExit(
-            "real-voice set was heard with another grammar: "
+            f"{name} was heard with another grammar: "
             "rebuild it with python scripts/build_real_voice_set.py"
         )
-    rows = [json.loads(line) for line in open(ROOT / "tests" / "fixtures" / "real_voice.jsonl")]
+    rows = [json.loads(line) for line in open(FIXTURES / f"{name}.jsonl")]
     result: Counter[str] = Counter()
     sessions: dict[str, Counter[str]] = defaultdict(Counter)
     examples: dict[str, list[str]] = {"rejected": [], "wrong": []}
@@ -254,6 +263,18 @@ def real_voice(run) -> dict[str, Any]:
         "wrong": result["wrong"],
         "examples": examples,
     }
+
+
+def heldout(run) -> dict[str, Any] | None:
+    """The held-out real-voice set, counts only (it decides nothing). None
+    when there is no set; ``{"stale": True}`` when it was heard with another
+    grammar (rebuild with ``build_real_voice_set.py --set heldout``)."""
+    if not (FIXTURES / f"{HELDOUT}.jsonl").exists():
+        return None
+    if not real_voice_is_current(HELDOUT):
+        return {"stale": True}
+    r = real_voice(run, HELDOUT)
+    return {k: r[k] for k in ("n", "right", "rejected", "wrong")}
 
 
 def actions(run, rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -318,6 +339,18 @@ def latency(run, texts: list[str]) -> float:
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in open(path, encoding="utf-8") if line.strip()]
+
+
+def held_line(cand: dict[str, Any] | None, base: dict[str, Any] | None) -> str:
+    if cand is None:
+        return "no set"
+    if cand.get("stale"):
+        return "heard with another grammar, not measured (build_real_voice_set.py --set heldout)"
+    assert base is not None
+    return (
+        f"n={cand['n']} right/rejected/wrong {cand['right']}/{cand['rejected']}/{cand['wrong']} "
+        f"(baseline {base['right']}/{base['rejected']}/{base['wrong']})"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -398,6 +431,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
 
+    held_c, held_b = heldout(cand), heldout(base)
+
     p95 = latency(cand, [r["text"] for r in new_rows[:300]])
     gates.append(("6 latency", p95 < P95_MS_MAX, f"p95 {p95:.1f} ms"))
 
@@ -433,6 +468,7 @@ def main(argv: list[str] | None = None) -> int:
         },
         "gold": g,
         "real_voice": {"candidate": rv_c, "baseline": rv_b},
+        "real_voice_heldout_information_only": {"candidate": held_c, "baseline": held_b},
         "negatives": {"candidate": neg_c, "baseline": neg_b},
         "latency_p95_ms": p95,
         "gates": {name: {"pass": ok, "detail": d} for name, ok, d in gates},
@@ -448,6 +484,7 @@ def main(argv: list[str] | None = None) -> int:
         f"slot F1 {label_c['_all']['slot_f1']:.4f} vs {label_b['_all']['slot_f1']:.4f}; "
         f"n={label_c['_all']['n']}"
     )
+    print(f"  held-out real voice (measured, decides nothing): {held_line(held_c, held_b)}")
     print("\n  per intent (new phrasings): intent acc / slot F1")
     for intent, v in new_c.items():
         if not intent.startswith("_"):
