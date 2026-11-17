@@ -163,6 +163,12 @@ class OverlayState:
             self.intent = ev.get("intent")
             self.slots = dict(ev.get("slots") or {})
             self.confidence = None
+        elif kind == "to_reading":
+            # Impossible as heard: show the "to" reading Vimaan asks about.
+            self.intent = ev.get("intent")
+            self.slots = dict(ev.get("slots") or {})
+            self.confidence = None
+            self.reason = 'a "two" taken as "to"'
         elif kind == "implausible":
             self.reason = REASONS.get(ev.get("reason", ""), ev.get("reason"))
         elif kind == "slot_rejected":

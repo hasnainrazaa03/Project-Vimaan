@@ -71,7 +71,13 @@ from vimaan_nlu.aircraft import (  # noqa: E402
     flap_limit_kt,
     resolve,
 )
-from vimaan_nlu.ambiguity import TARGET_SLOTS, bare_number, chosen, two_or_to  # noqa: E402
+from vimaan_nlu.ambiguity import (  # noqa: E402
+    TARGET_SLOTS,
+    TO_HEARD_AS_TWO,
+    bare_number,
+    chosen,
+    two_or_to,
+)
 from vimaan_nlu.commands import (  # noqa: E402
     BY_INTENT,
     COMMANDS,
@@ -1169,6 +1175,13 @@ class PythonInterface:
                 self.tel.event("implausible", cmd=cmd, reason="lost_digits", intent=intent_pred)
                 self._say("Say the whole number")
                 return
+            # A number impossible as heard that the worker found valid with one
+            # "two" read as "to" ("standby two one two two decimal eight" for
+            # 122.8, the owner's flight on 2026-11-16): ask, don't refuse.
+            meant = result.get("to_reading")
+            if meant and self._usable_to_reading(meant):
+                outcome = self._ask_meant(cmd, meant)
+                return
             # "to" and "two" sound the same, so don't guess between two targets.
             either = two_or_to(intent_pred, text)
             if either and self._implausible_reading(intent_pred, either[1]):
@@ -1200,6 +1213,70 @@ class PythonInterface:
             "expires": time.perf_counter() + self.QUESTION_WINDOW_SEC,
         }
         self._say(self._which_value(intent, as_two, as_to))
+
+    def _usable_to_reading(self, meant):
+        """The checks the heard command passed, run on the "to" reading too."""
+        intent, slots, text = meant["intent"], meant["slots"], meant["text"]
+        return (
+            intent in self.intent_to_command
+            and meant.get("confidence", 0.0) >= self.CONFIDENCE_FLOOR
+            and has_command_word(intent, meant.get("normalized") or text)
+            and not clipped_number(text)
+            and not lost_digits(intent, slots, text)
+        )
+
+    def _ask_meant(self, cmd, meant):
+        """Ask whether the "to" reading was meant, held like a safety hold:
+        "confirm" (or "override") sets it, "cancel" drops it, and the command
+        said again and heard the same way confirms it."""
+        intent, slots = meant["intent"], dict(meant["slots"])
+        not_applicable = self._not_applicable(intent, slots)
+        if (
+            intent == "set_autobrake"
+            and not self.profile.settings.get("autobrake_off")  # the A330's buttons
+            and self.profile.switch_plan("autobrake", self._autobrake_setting(slots))[0] == "absent"
+        ):
+            not_applicable = "This aircraft has no auto brake"  # as _set_autobrake says
+        if not_applicable:  # no auto brake on a Baron: nothing to ask about
+            self.tel.event("not_applicable", cmd=cmd, intent=intent, reason=not_applicable)
+            self._say(not_applicable)
+            return "rejected"
+        token = command_token(intent, slots)
+        held = self._held if self._confirm_gate.pending_token() == token else None
+        if held is not None and held["rule"] == TO_HEARD_AS_TWO:
+            self._confirm_gate.clear()
+            self._held = None
+            self.tel.event(
+                "to_reading", cmd=cmd, intent=intent, slots=slots, text=meant["text"], repeat=True
+            )
+            return self._dispatch(cmd, intent, slots)
+        self._confirm_gate.arm(token)
+        self._held = {
+            "cmd": cmd,
+            "intent": intent,
+            "slots": slots,
+            "rule": TO_HEARD_AS_TWO,
+            "skip": (),
+        }
+        self.tel.event(
+            "to_reading", cmd=cmd, intent=intent, slots=slots, text=meant["text"], repeat=False
+        )
+        self._say(f"Did you mean {self._describe_meant(intent, slots)}? Say confirm, or cancel.")
+        return "ambiguous"
+
+    def _describe_meant(self, intent, slots):
+        """The "to" reading as the question reads it back."""
+        if intent == "set_transponder_code":
+            return f"squawk {spell_digits(slots['squawk'])}"
+        if intent == "set_autobrake":
+            airbus = self.profile.settings.get("autobrake_off")
+            table = AUTOBRAKE_AIRBUS if airbus else AUTOBRAKE_SPOKEN
+            return f"auto brake {table[self._autobrake_setting(slots)]}"
+        radio = "COM" if intent.startswith("set_com") else "NAV"
+        slot = "frequency" if radio == "COM" else "nav_frequency"
+        port = slots.get(f"{radio.lower()}_port") or "1"
+        standby = " standby" if intent.endswith("_standby") else ""
+        return f"{radio} {port}{standby} {spell_digits(validate_slot(slot, slots[slot])[0])}"
 
     def _answer_question(self, cmd, text):
         """A bare number: act on it only when it is one of the two values just
@@ -1269,7 +1346,8 @@ class PythonInterface:
                 intent=held["intent"],
                 slots=held["slots"],
             )
-            self._say("Override")
+            if held["rule"] != TO_HEARD_AS_TWO:
+                self._say("Override")  # a "did you mean" needs only the read-back
             skip = (*held["skip"], held["rule"])
             return self._dispatch(cmd, held["intent"], held["slots"], skip=skip)
         dropped = []
@@ -3444,13 +3522,17 @@ class PythonInterface:
             setting,
         )
 
-    def _set_autobrake(self, slots, intent):
+    @staticmethod
+    def _autobrake_setting(slots):
+        """The setting a command names ("1".."3", "off", "rto", "max"), or None."""
         if slots.get("autobrake_level"):
             value, ok, _ = validate_slot("autobrake_level", slots["autobrake_level"])
-            setting = str(int(float(value))) if ok else None
-        else:
-            value, ok, _ = validate_slot("autobrake", slots.get("autobrake") or "")
-            setting = {"low": "1", "medium": "2", "r t o": "rto"}.get(value, value) if ok else None
+            return str(int(float(value))) if ok else None
+        value, ok, _ = validate_slot("autobrake", slots.get("autobrake") or "")
+        return {"low": "1", "medium": "2", "r t o": "rto"}.get(value, value) if ok else None
+
+    def _set_autobrake(self, slots, intent):
+        setting = self._autobrake_setting(slots)
         if setting is None:
             self._say("Auto brake off, one, two, three, or max?")
             return "rejected"

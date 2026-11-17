@@ -218,6 +218,55 @@ def test_text_selftest_ping_quit():
     assert w.handle({"op": "quit"}) is False
 
 
+def test_an_impossible_number_comes_with_its_to_reading():
+    heard = "set com one standby two one two two decimal eight"
+    table = {
+        heard: ("set_com_standby", {"com_port": "1", "frequency": "2122.8"}),
+        "set com one standby to one two two decimal eight": (
+            "set_com_standby",
+            {"com_port": "1", "frequency": "122.8"},
+        ),
+        "gear up": ("toggle_landing_gear", {"state": "up"}),
+    }
+    asked = []
+
+    def predict(text):
+        asked.append(text)
+        intent, slots = table.get(text, ("None", {}))
+        return {"intent": intent, "slots": slots, "confidence": 1.0, "normalized_text": text}
+
+    out: list[dict] = []
+    w = VoiceWorker(out.append, None, lambda r, s: "", predict)
+    w.handle({"op": "text", "cmd": "c1", "text": heard})
+    assert out[-1]["slots"]["frequency"] == "2122.8"  # what was heard, unchanged
+    assert out[-1]["to_reading"]["slots"] == {"com_port": "1", "frequency": "122.8"}
+    asked.clear()
+    w.handle({"op": "text", "cmd": "c2", "text": "gear up"})
+    assert out[-1]["to_reading"] is None and asked == ["gear up"]  # no extra passes
+
+
+def test_a_failing_second_look_still_sends_the_command():
+    calls = []
+
+    def predict(text):
+        calls.append(text)
+        if len(calls) > 1:
+            raise RuntimeError("model went away")
+        return {
+            "intent": "set_transponder_code",
+            "slots": {"squawk": "21200"},
+            "confidence": 1.0,
+            "normalized_text": text,
+        }
+
+    out: list[dict] = []
+    w = VoiceWorker(out.append, None, lambda r, s: "", predict)
+    w.handle({"op": "text", "cmd": "c1", "text": "squawk two one two zero zero"})
+    assert out[-2]["type"] == "log" and "to_reading failed" in out[-2]["msg"]
+    assert out[-1]["type"] == "result" and out[-1]["to_reading"] is None
+    assert out[-1]["slots"] == {"squawk": "21200"}
+
+
 def test_run_serves_a_pipe_and_exits_on_eof():
     w, out, _, _ = make_worker()
     r, wfd = os.pipe()
