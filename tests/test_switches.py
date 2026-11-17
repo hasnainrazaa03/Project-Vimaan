@@ -179,6 +179,30 @@ def test_autobrake_on_a_piston_twin_and_on_a_jet(sim):
     ]
 
 
+def test_auto_brake_to_three_heard_as_two_three_asks(sim):
+    """The owner's flight, 2026-11-16: "set the auto brake to three" was heard
+    as "... auto brake two three" (23) and refused with no way forward."""
+    _, plugin, xp = sim
+    heard = ("set the auto brake two three", "set_autobrake", {"autobrake_level": "23"})
+    reading = {
+        "text": "set the auto brake to three",
+        "intent": "set_autobrake",
+        "slots": {"autobrake_level": "3"},
+        "confidence": 1.0,
+        "normalized": "set the auto brake to 3",
+    }
+    # No auto brake on this aircraft: say so rather than ask.
+    assert say(plugin, *heard, to_reading=reading) == ["This aircraft has no auto brake"]
+    aircraft(plugin, xp, engine_type=JET)
+    assert say(plugin, *heard, to_reading=reading) == [
+        "Did you mean auto brake three? Say confirm, or cancel."
+    ]
+    assert xp.writes == []
+    say(plugin, "confirm")
+    assert run(plugin, xp) == ["Auto brake three"]
+    assert xp.datarefs[SW + "auto_brake_level"] == 4
+
+
 # --- Beechcraft Baron 58 -----------------------------------------------------
 
 B58 = ("laminar/b58/surface_ice_switch_up", "laminar/b58/surface_ice_switch_dn")

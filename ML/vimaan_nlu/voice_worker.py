@@ -22,7 +22,9 @@ Requests (``op``):
     quit                 exit
 Replies (``type``):
     ready, fatal, recording, partial, captured, result, error, selftest, pong, log
-    (``partial`` = live transcript while recording, streaming backends only)
+    (``partial`` = live transcript while recording, streaming backends only;
+    ``result.to_reading`` = the command with one "two" read as "to", when the
+    number is impossible as heard: see vimaan_nlu.ambiguity.to_reading)
 
 EOF on stdin (the plugin or X-Plane went away) makes the worker exit.
 """
@@ -40,6 +42,7 @@ import traceback
 from collections.abc import Callable
 from typing import Any
 
+from vimaan_nlu.ambiguity import to_reading
 from vimaan_nlu.audio_health import is_silent, rms_from_pcm16
 
 MAX_RECORD_SEC = 12.0  # recording is cut off after this even if still held
@@ -434,6 +437,13 @@ class VoiceWorker:
                 }
             )
             return
+        # A number impossible as heard: try "two" as "to" (vimaan_nlu.ambiguity).
+        # A second look only: if it fails, the command still goes as heard.
+        try:
+            meant = to_reading(p["intent"], p["slots"], text, self.predict_text)
+        except Exception as exc:
+            meant = None
+            self.send({"type": "log", "msg": f"to_reading failed: {type(exc).__name__}: {exc}"})
         self.send(
             {
                 "type": "result",
@@ -445,6 +455,7 @@ class VoiceWorker:
                 "intent": p["intent"],
                 "confidence": p["confidence"],
                 "slots": p["slots"],
+                "to_reading": meant,
             }
         )
 
