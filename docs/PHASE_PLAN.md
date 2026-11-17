@@ -1044,6 +1044,19 @@ committed; not a gate).
 - [ ] **G.4 More voices:** the owner's new flights (one session held out as a
   fresh test, the 118 clips never trained on), and other people reading the
   checklist.
+  - [x] **Held-out set** (owner's OK, 2026-11-16):
+    `tests/fixtures/real_voice_heldout.jsonl`, 57 clips from the owner's
+    Tier 3 voice check (737, EarPods, session 20261116_205022).
+    - Built with `build_real_voice_set.py --set heldout`. Heard with the
+      shipped grammar, it comes out exactly as in flight (57 of 57).
+    - The three "cancel" replies are left out: they never reach the model.
+    - The gate reports its counts and decides nothing with them. It never
+      prints the clips, and nothing is trained or tuned on them.
+    - First measurement: v26 50 right / 7 refused / 0 wrong; v25, which
+      predates the Tier 3 switches, 17 / 36 / 4.
+    - The rule in #61 was designed from three of these clips, so they are
+      not a fresh test of #61 itself. The gate's decision chain doesn't
+      model #61's question either: those clips stay "refused".
 - [ ] **G.5 Recognizer comparison** (approved 2026-11-14; measuring only,
   nothing installed).
   - Each recognizer runs through the same harness as Vosk: the owner's 118
