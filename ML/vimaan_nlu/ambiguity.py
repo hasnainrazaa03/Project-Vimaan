@@ -164,11 +164,12 @@ def to_reading(
     when the heard command is fine, when no "two" helps, when the readings
     disagree, or when a reading is a different command ("q now one to one one
     zero decimal five" was the altimeter as heard and NAV 1 as "to")."""
-    if intent not in TO_READING_SLOTS or has_valid_target(intent, slots):
+    cmd = command(intent)
+    if cmd is None or intent not in TO_READING_SLOTS or has_valid_target(intent, slots):
         return None
     words = text.lower().split()
     spots = [i for i, word in enumerate(words) if word == "two"][:MAX_TO_READINGS]
-    declared = command(intent).slots
+    declared = cmd.slots
     found: dict[tuple[tuple[str, str], ...], dict[str, Any]] = {}
     for i in spots:
         variant = " ".join([*words[:i], "to", *words[i + 1 :]])
