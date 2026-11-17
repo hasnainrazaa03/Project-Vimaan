@@ -5,7 +5,7 @@ steps, each with a concrete "done when". Work happens strictly in the order of
 the status board; a phase starts only when the previous one has passed its
 gate. After each step: tick it here, commit, and keep the board current.
 
-Last updated 2026-11-11.
+Last updated 2026-11-16.
 
 ---
 
@@ -19,10 +19,10 @@ Last updated 2026-11-11.
 | E0 | Command table: one source of truth (no behaviour change) | ✅ merged; smoke-flown on v11 | #28 |
 | E1 | Training data v2 + command families → **v17** | ✅ merged; flown twice | #29 |
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | ✅ closed 2026-11-12: Part C flown unattended (121/121 on four aircraft) and the owner's real-voice check passed | #30–#34, #38–#42 |
-| D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim (switch); stick pull still to check | #35 |
+| D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim for a switch and (2026-11-16) a stick pull | #35 |
 | A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
-| T2 | Tier 2: radios & navigation → **v25** | 🟡 groundwork, runner scenarios, data and model done: v25 passes all six gates (2026-11-13); installed 2026-11-13; runner in the sim 95/95 on four aircraft; next: the owner's real-voice check | #43, #46 |
-| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | 🟡 T3.0a and T3.0b built (#50, #51); three v26 averages failed the gate; with the new recipe (#58) and data v17 (#59), **v26 passed every gate**; not installed | #50, #51, #52, #54, #58, #59 |
+| T2 | Tier 2: radios & navigation → **v25** | ✅ closed 2026-11-16: runner in the sim 95/95 on four aircraft (v25) and the owner's real-voice check passed (v26: 16 of 17 radio lines right first time, the other refused) | #43, #46 |
+| T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | ✅ closed 2026-11-16: v26 passed every gate and was installed (2026-11-14); runner in the sim 127/127 on four aircraft; the owner's real-voice check passed (51 right, 4 refused, 0 wrong of 55) | #50, #51, #52, #54, #56–#60 |
 | G | Generalization: beyond the owner's voice (measured recognizer noise, other voices, calibration, other recognizers) | 🟡 measured on real voices (2026-11-14); lost-digit refusal built | #55 |
 | T4 | Tier 4: questions (read-only) → **v27** | ⬜ | |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
@@ -448,7 +448,7 @@ Then logs, fixes, merge.
 
 ---
 
-## Phase D: flight review 🟡
+## Phase D: flight review ✅
 
 Flight 203741 (Baron) lost the autopilot 17 min 38 s in, with nothing in the
 log to say why: Vimaan's last action was 31 s earlier, and the aircraft had
@@ -470,9 +470,13 @@ flights had the same. No stick position or button presses were logged.
   speech-to-action time and the recording; autopilot changes and whether
   Vimaan made them; startup, joystick, probe and problems. A flight in
   progress updates live.
-- [ ] D.3 Install the plugin update (owner's approval) and check, on the next
+- [x] D.3 Install the plugin update (owner's approval) and check, on the next
   flight, that a deliberate stick pull with the autopilot on is called out as
-  "Stick moved".
+  "Stick moved". Seen on 2026-11-16 (737, session 205022), though not on
+  purpose: with no joystick plugged in, X-Plane flies the yoke with the mouse
+  while its button is held in the 3-D view. The pull (pitch +1.00) took the
+  autopilot, and Vimaan logged cause `stick` and said "Autopilot
+  disconnected. Stick moved."
 
 ## Phase A: automated testing in the sim 🟡
 
@@ -733,7 +737,15 @@ the gate refuse a set heard with another grammar.
   Cause: the Vosk grammar is the command words plus `[unk]`, which is dropped,
   so a stretch it can't place vanishes. "Tune" was lost in all six test
   voices; "transponder altitude" was heard right in all of them.
-- [ ] The owner's real-voice check of Tier 2 in flight.
+- [x] The owner's real-voice check of Tier 2 in flight (2026-11-16, with v26,
+  in the same flight as Tier 3's check below). 16 of the 17 radio and
+  transponder lines were right first time: COM and NAV standby, swaps,
+  courses, squawks (7700 held, then cancelled), the transponder modes, and
+  the refusals of ident in standby and "transponder off" on the 737. The
+  17th, "tune nav one to one one zero decimal five", was heard all three
+  times as "... nav one two one one zero ..." and refused. The "to" heard as
+  "two" made the number impossible (#61 now asks "Did you mean NAV 1 one one
+  zero decimal five?"). **Tier 2 closed.**
 - [x] Why Vosk drops words like "tune" (2026-11-13). Measured on the 118
   real clips, the checklist phrases in six voices, six phrasings of every
   intent in three voices, and 160 non-command sentences, end to end with v25:
@@ -920,7 +932,33 @@ training run (v26).
   - Measuring sets (information only): ATCOSIM 655 / 1,220 / 199 (v25 650 /
     1,231 / 193); heard dev 1,086 / 98 / 28 (v25 786 / 83 / 23). What is
     left is mostly what Vosk hears, not the model.
-- [ ] Install v26 (owner's approval) and the Tier 3 checklist in the sim.
+- [x] Install v26 (owner's approval) and the Tier 3 checklist in the sim.
+  - **Installed 2026-11-14** with the plugin from main 39ed242; the plugin
+    before it is backed up, and v25, v19, v17 and v11 are kept for rollback.
+  - **Runner:** `simtest run tier3 all` 127/127 (Baron 28, King Air 31, 737
+    33, A330 35). By voice 124 of 126 understood. Only "prop heat on" was
+    missed, heard as "probe heat on" on the 737 and A330; redone as text, it
+    was refused correctly.
+  - **Owner's real-voice check (2026-11-16, 737 at 10,000 ft, EarPods,
+    session 205022).** The script had 56 lines: 18 switches, 7 holds and
+    refusals, 17 radio lines (Tier 2's check), 10 in natural speech and 4
+    spoken at the instant of the press. 55 were said (one was skipped), and
+    **51 were right first time, 4 refused, 0 wrong**.
+    - The holds (pitot heat off, fuel pumps off in flight, squawk 7700) all
+      waited, and "cancel" dropped each one.
+    - The refusals for the 737's missing switches (no smoking sign, prop
+      heat, avionics) were all correct.
+    - All 4 lines spoken at the press were right ("nav two transfer" swapped
+      NAV 2), so the pre-roll (#57) works.
+    - The natural phrasing worked: fillers, "can you …", "let me think,
+      maybe squawk one two zero zero".
+    - Speech to action: p50 322 ms, p95 334 ms. No errors or stalls.
+    - The 4 refusals: "prop heat" heard as "drop heat" ("Which anti ice?",
+      right on the third try), and three where "to" before a number was heard
+      as "two" (NAV 121, auto brake 23, COM 212.28). Decoded without the
+      command words, the same clips came out as "to". #61 asks "did you mean"
+      for these.
+    - **Tier 3 closed.**
 - Found on the way, not part of v26:
   - **#54:** a held switch could be confirmed by another switch command
     (the token lacked the switch slots).
