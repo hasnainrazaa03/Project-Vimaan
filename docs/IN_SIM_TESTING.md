@@ -124,7 +124,9 @@ To replay a recording instead of using the mic (debugging):
 
 **Talking:** push-to-talk is *hold*-to-talk — recording runs while Z (or the
 bound button) is held and stops on release (12 s cap; taps under 0.3 s are
-ignored). Start speaking a beat after pressing — the mic takes ~0.2 s to open. The copilot stays quiet while you talk so its voice isn't recorded.
+ignored). You can start speaking as you press: the mic stays open and each recording starts with the last 300 ms before the key went down (`VIMAAN_MIC_PREROLL_MS`, #57; checked in flight on 2026-11-16). The copilot stays quiet while you talk so its voice isn't recorded.
+
+**No joystick?** Then X-Plane flies the aircraft with the mouse while its button is held in the 3-D view. To give X-Plane the keyboard for Z, click once and let go. On 2026-11-16 a drag pulled the yoke fully back: the autopilot dropped out ("Autopilot disconnected. Stick moved.") and the 737 climbed and slowed to 90 kt.
 
 **Overlay:** a bar at the bottom of the screen shows what Vimaan hears
 *while you talk* (Vosk), then what it heard, what it understood (command,
