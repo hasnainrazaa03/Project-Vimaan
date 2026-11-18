@@ -45,6 +45,16 @@ Hold push-to-talk (Z), say the command, release.
 | Intent | Say | Reply |
 | --- | --- | --- |
 | Not a command | "what's the weather like today"<br>"how are you doing" | (silent) |
-| Status question | "are we there yet"<br>"how much longer until we arrive" | All systems nominal |
-| Time question | "what time is it"<br>"what is the current time" | I cannot read the clock yet |
+| Flight question | "what's our {reading}"<br>"what's the {reading}" | (silent) |
+| Fuel question | "how much fuel do we have"<br>"how much fuel is left" | (silent) |
+| Endurance question | "how long will our fuel last"<br>"how long will the fuel last" | (silent) |
+| Engine question | "what's the {engine_reading}"<br>"what's our {engine_reading}" | (silent) |
+| COM question | "what's com {com_port}"<br>"what's on com {com_port}" | (silent) |
+| NAV question | "what's nav {nav_port}"<br>"what's on nav {nav_port}" | (silent) |
+| Transponder question | "what's our squawk"<br>"what's the squawk" | (silent) |
+| Autopilot question | "is the autopilot on"<br>"is the autopilot engaged" | (silent) |
+| Switch question | "are the {light} lights on"<br>"are the {light} lights off" | (silent) |
+| Waypoint question | "how far to the next way point"<br>"what's the next way point" | (silent) |
+| Status question | "are we there yet"<br>"how much longer until we arrive" | (silent) |
+| Time question | "what time is it"<br>"what is the current time" | (silent) |
 | Greeting | "hello vimaan"<br>"good morning co-pilot" | Hello, standing by |

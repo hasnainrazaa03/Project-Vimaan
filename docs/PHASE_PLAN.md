@@ -24,7 +24,7 @@ Last updated 2026-11-16.
 | T2 | Tier 2: radios & navigation → **v25** | ✅ closed 2026-11-16: runner in the sim 95/95 on four aircraft (v25) and the owner's real-voice check passed (v26: 16 of 17 radio lines right first time, the other refused) | #43, #46 |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | ✅ closed 2026-11-16: v26 passed every gate and was installed (2026-11-14); runner in the sim 127/127 on four aircraft; the owner's real-voice check passed (51 right, 4 refused, 0 wrong of 55) | #50, #51, #52, #54, #56–#60 |
 | G | Generalization: beyond the owner's voice (measured recognizer noise, other voices, calibration, other recognizers) | 🟡 measured on real voices (2026-11-14); lost-digit refusal built | #55 |
-| T4 | Tier 4: questions (read-only) → **v27** | ⬜ | |
+| T4 | Tier 4: questions (read-only) → **v27** | 🟡 scope chosen, aircraft probed, part A built: question families, answers in each cockpit's units, the question key (Shift+Z), a grammar of their own; next: data v18 and v27 | #64 |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
 | L | Later: relative commands, two commands in one breath, checklists, add-on aircraft profiles | ⬜ | |
@@ -1139,6 +1139,30 @@ up, and "what's the heading" sets heading mode.
   setting, flaps, gear, ground speed, wind, outside temperature, the state
   of every switch Vimaan can set, radio altitude, Mach, fuel endurance, the
   next waypoint, and engine readings.
+- [x] **Probe (2026-11-16):** the four aircraft in cruise, read-only: fuel
+  and altimeter units, engine readings, waypoint datarefs
+  (`AIRCRAFT_PROFILES.md`, "Tier 4 findings"). The 737 shows fuel in pounds.
+- **Two grammars.** The question words in the one grammar changed 17 of the
+  owner's 118 clips, mostly for the worse ("flight level" as "light level",
+  "heading one eighty" as "heading quantity", "com one" as "cold one"). So the
+  command grammar stays exactly as it was (v26's, checked by a test) and the
+  questions get their own (`question_words.txt`). The question key decodes
+  with it; on the talk key a transcript that starts like a question is decoded
+  again with it. On the owner's 40 recordings it heard what the command
+  grammar garbled: "how long will our fuel last" (was "how longer lower
+  fuel"), "what the outside temperature" (was "what the"), "how far to the
+  next way point" (was "how"), "what the wind" (was "what the window").
+- [x] **Part A (no retraining):** 12 question families in the command table
+  (`answer`, never `handler`: not actionable); answers in the cockpit's units
+  (`vimaan_nlu.answers`); the question key (Shift+Z, "Vimaan: ask a
+  question"); the question grammar; bare readings answered ("heading",
+  "what the heading"); data generator questions (as the recogniser hears
+  them: "what are altitude", "r the landing lights on"; the question word
+  never dropped; no stray words; never a command's text). Works with v26
+  (bare readings only).
+- [ ] **Part B:** data v18 and v27, gated against v26.
+- [ ] **Part C:** `simtest run tier4` (each answer against the datarefs),
+  then the owner's check.
 
 ---
 

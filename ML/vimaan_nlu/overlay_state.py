@@ -32,6 +32,7 @@ OUTCOME_BADGE: dict[str, tuple[str, str]] = {
     "pending": ("WORKING", "accent"),
     "safety_hold": ("CONFIRM?", "warn"),
     "ambiguous": ("WHICH?", "warn"),
+    "answered": ("ANSWER", "ok"),
     "low_confidence": ("REPEAT", "warn"),
     "rejected": ("REJECTED", "warn"),
     "non_actionable": ("INFO", "muted"),
@@ -161,6 +162,12 @@ class OverlayState:
             self.confidence = ev.get("confidence")
         elif kind in ("answered", "safety_override"):
             # A bare-number reply to "to or two?": show what it was taken as.
+            self.intent = ev.get("intent")
+            self.slots = dict(ev.get("slots") or {})
+            self.confidence = None
+        elif kind == "question_answered":
+            # Show the question answered (a bare "heading" the model read as
+            # heading mode is answered as the heading).
             self.intent = ev.get("intent")
             self.slots = dict(ev.get("slots") or {})
             self.confidence = None

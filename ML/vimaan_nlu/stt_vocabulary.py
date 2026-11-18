@@ -49,6 +49,25 @@ EXCLUDED_WORDS = {"do", "like"}
 # recordings came back "ice director on" and "fuel com ...". A word that is
 # also said on its own somewhere keeps its own line too.
 JOINED_TERMS = ("anti ice", "fuel pump", "fuel pumps", "fuel boost")
+# Tier 4: questions have a grammar of their own (question_words.txt). Their
+# words in the command grammar made commands worse: of the owner's 118 clips
+# 17 came out differently ("flight level" as "light level", "heading one
+# eighty" as "heading quantity", "com one" as "cold one"). The command grammar
+# keeps the question words it always had, from these phrases (the status and
+# time questions before Tier 4), so "is", "are", "what" and "how" are still
+# heard and a question can be spotted (vimaan_nlu.questions).
+COMMAND_GRAMMAR_QUESTIONS = (
+    "are we there yet",
+    "how much longer until we arrive",
+    "what's our current status",
+    "how are we doing",
+    "give me a status update",
+    "what time is it",
+    "what is the current time",
+    "do you have the time please",
+    "tell me the time",
+)
+QUESTION_VOCABULARY_FILE = os.path.join(os.path.dirname(__file__), "question_words.txt")
 _DIGIT_WORDS = dict(enumerate("zero one two three four five six seven eight nine".split()))
 
 
@@ -109,6 +128,15 @@ def build_vocabulary(
 def entry_words(entries: Iterable[str]) -> set[str]:
     """The single words of grammar entries ("anti ice" -> anti, ice)."""
     return {w for e in entries for w in e.split()}
+
+
+def load_question_vocabulary() -> list[str]:
+    return load_vocabulary(QUESTION_VOCABULARY_FILE)
+
+
+def question_grammar() -> list[str]:
+    """The question grammar for Vosk: the question words and ``[unk]``."""
+    return [*load_question_vocabulary(), UNKNOWN]
 
 
 def load_vocabulary(path: str = VOCABULARY_FILE) -> list[str]:

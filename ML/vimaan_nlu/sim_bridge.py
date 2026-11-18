@@ -60,6 +60,7 @@ _SAY_KINDS = {
     "slot_rejected",
     "implausible",
     "ambiguous",
+    "question_answered",
     "bare_command",
     "not_applicable",
     "worker_error",

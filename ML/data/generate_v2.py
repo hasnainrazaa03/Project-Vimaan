@@ -40,11 +40,14 @@ from vimaan_nlu.commands import (  # noqa: E402
     COMMANDS,
     INSTANCE_WORDS,
     PREFIXES,
+    QUESTION_PREFIXES,
+    QUESTION_SUFFIXES,
     SUFFIXES,
     Command,
     Slot,
 )
 from vimaan_nlu.normalization import normalize_aviation_input  # noqa: E402
+from vimaan_nlu.questions import QUESTION_WORDS  # noqa: E402
 from vimaan_nlu.stt_vocabulary import NUMBER_WORDS, entry_words, load_vocabulary  # noqa: E402
 
 from data import spoken  # noqa: E402
@@ -124,6 +127,12 @@ STRAY_SHARE = 0.3  # of the noisy rows
 # rare, for the noise of a real microphone.
 STRAY_REPLACE_FIRST = 0.75
 STRAY_REPLACE_LAST = 0.15  # the rest: added before or after, evenly
+
+# How the recogniser hears a question. The grammar has no "what's" (only plain
+# words go in) and the owner's "our" / "are" came back as "are" or the letter
+# "r" (40 recordings, 2026-11-16: "what are altitude", "what r airspeed",
+# "what the heading", "r the landing lights on").
+HEARD_QUESTION_SHARE = 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -240,12 +249,39 @@ def wrap(text: str, rng: random.Random) -> str:
     return " ".join(f"{prefix} {text} {suffix}".split())
 
 
-def add_noise(text: str, protected: set[str], rng: random.Random) -> tuple[str, str]:
+def wrap_question(text: str, rng: random.Random) -> str:
+    prefix = rng.choice(QUESTION_PREFIXES) if rng.random() < 0.3 else ""
+    suffix = rng.choice(QUESTION_SUFFIXES) if rng.random() < 0.2 else ""
+    return " ".join(f"{prefix} {text} {suffix}".split())
+
+
+def heard_question(text: str, rng: random.Random) -> str:
+    """The question as the recogniser writes it: "what's" as "what", "our"
+    as "are" or "r", "are the" as "r the". Slot words are never touched:
+    only these function words change."""
+    words = text.split()
+    out = []
+    for i, w in enumerate(words):
+        if w == "what's":
+            out += rng.choice((["what"], ["what"], ["what", "is"]))
+        elif w == "our" and out and out[-1] != "is":
+            out.append(rng.choice(("are", "r", "our")))
+        elif w == "are" and i + 1 < len(words) and words[i + 1] == "the":
+            out.append(rng.choice(("r", "are")))
+        else:
+            out.append(w)
+    return " ".join(out)
+
+
+def add_noise(
+    text: str, protected: set[str], rng: random.Random, slot_words: frozenset[str] = frozenset()
+) -> tuple[str, str]:
     """Recognition noise from real logs: a mishearing, a stray leading word,
     or a dropped filler word. Never touches slot words."""
     words = text.split()
-    # Heard in flight: "parking the off" for "parking brake off".
-    if "parking brake" in text and rng.random() < 0.4:
+    # Heard in flight: "parking the off" for "parking brake off". Not where
+    # "parking brake" is the slot ("is the parking brake set").
+    if "parking brake" in text and "brake" not in slot_words and rng.random() < 0.4:
         return text.replace("parking brake", "parking the", 1), "mishear"
     if rng.random() < 0.5:
         return f"{rng.choice(LEADING_NOISE)} {text}", "lead"
@@ -486,17 +522,26 @@ def command_rows(
         attempts += 1
         template = rng.choice(c.templates)
         text, surfaces = fill(c, template, rng)
-        text = wrap(text, rng)
+        text = wrap_question(text, rng) if c.is_question else wrap(text, rng)
         noise = "none"
-        if rng.random() < NOISE_SHARE:
+        if c.is_question and rng.random() < HEARD_QUESTION_SHARE:
+            heard = heard_question(text, rng)
+            if heard != text:
+                text, noise = heard, "heard"
+        if noise == "none" and rng.random() < NOISE_SHARE:
             slot_words = {w for s in surfaces.values() for w in s.split()}
-            protected = slot_words | set(c.command_words)
-            strays = stray_words(c, text) if rng.random() < STRAY_SHARE else []
+            # A question keeps its question word: without it "is the gear
+            # down" is the command "gear down" (vimaan_nlu.questions).
+            protected = slot_words | set(c.command_words) | set(QUESTION_WORDS)
+            # Stray words come from other commands: never in a question.
+            strays = (
+                stray_words(c, text) if not c.is_question and rng.random() < STRAY_SHARE else []
+            )
             strayed = strays and add_stray(c, text, rng.choice(strays), slot_words, rng, surfaces)
             if strayed:
                 text, noise = strayed, "stray"
             else:
-                text, noise = add_noise(text, protected, rng)
+                text, noise = add_noise(text, protected, rng, frozenset(slot_words))
         slots = label(text, surfaces)
         if slots is None:
             stats[f"dropped:{c.intent}"] += 1
@@ -636,8 +681,18 @@ def generate(per_intent: int = 3000, seed: int = 42) -> tuple[list[dict[str, Any
     for c in actionable:
         rows += command_rows(c, per_intent, rng, stats)
     rows += negative_rows(int(len(rows) * NEGATIVE_SHARE), rng)
+    # Tier 4: questions, built like commands (slots, held-out templates).
+    commands_text = {r["text"] for r in rows if r["intent"] != "None"}
     for c in COMMANDS:
-        if not c.actionable and c.intent != "None":
+        if c.is_question:
+            asked = command_rows(c, per_intent, rng, stats)
+            # A question never repeats a command's words: the same text can't
+            # be both "act" and "answer".
+            kept = [r for r in asked if r["text"] not in commands_text]
+            stats[f"dropped:question_is_command:{c.intent}"] = len(asked) - len(kept)
+            rows += kept
+    for c in COMMANDS:
+        if not c.actionable and not c.is_question and c.intent != "None":
             rows += conversation_rows(c, CONVERSATION_ROWS, rng)
     rows += [
         {

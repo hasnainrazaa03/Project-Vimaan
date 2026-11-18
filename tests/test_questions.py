@@ -1,7 +1,7 @@
 """vimaan_nlu.questions: a question is never acted on as a command."""
 
 import pytest
-from vimaan_nlu.questions import looks_like_question
+from vimaan_nlu.questions import bare_reading, looks_like_question
 
 
 @pytest.mark.parametrize(
@@ -11,8 +11,11 @@ from vimaan_nlu.questions import looks_like_question
         "is the autopilot off",
         "is the parking brakes set",
         "is the throttle throttle on",
-        "r the landing lights on",  # "are the ..."
+        "r the landing lights on",  # "are the ..." (command grammar)
+        "our the landing lights on",  # "are the ..." (question grammar)
         "r the strobes off",
+        "now is the autopilot on",  # the recogniser's stray leading word
+        "the is the gear down",
         "what the heading",
         "what r airspeed",
         "what are vertical speed",
@@ -54,3 +57,38 @@ def test_questions(heard):
 )
 def test_not_questions(heard):
     assert not looks_like_question(heard)
+
+
+@pytest.mark.parametrize(
+    ("heard", "want"),
+    [
+        ("heading", ("ask_flight_data", {"reading": "heading"})),
+        ("what the heading", ("ask_flight_data", {"reading": "heading"})),
+        ("what are altitude", ("ask_flight_data", {"reading": "altitude"})),
+        ("what r airspeed", ("ask_flight_data", {"reading": "airspeed"})),
+        ("what are vertical speed", ("ask_flight_data", {"reading": "vertical speed"})),
+        ("say altitude", ("ask_flight_data", {"reading": "altitude"})),
+        ("what are squawk", ("ask_transponder", {})),
+        ("check the altimeter", ("ask_flight_data", {"reading": "altimeter"})),
+    ],
+)
+def test_a_bare_reading(heard, want):
+    assert bare_reading(heard) == want
+
+
+@pytest.mark.parametrize(
+    "heard",
+    [
+        "heading two seven zero",  # a value: a command
+        "altitude hold",  # a mode
+        "heading mode",
+        "flaps",  # a switch: its command asks which way
+        "gear",
+        "fuel",
+        "landing lights",
+        "what com one",
+        "",
+    ],
+)
+def test_not_a_bare_reading(heard):
+    assert bare_reading(heard) is None

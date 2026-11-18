@@ -186,6 +186,11 @@ def bare_command(text: str) -> str | None:
     if not words or words <= _BARE_EXTRA:
         return None
     # Exactly one command may own the words: "heading" names the heading
-    # value and the heading mode, so it is not a bare name.
-    found = [i for i, names in COMMAND_WORDS.items() if words <= names | _BARE_EXTRA]
+    # value and the heading mode, so it is not a bare name. Questions (Tier
+    # 4) share the words ("gear", "flaps") but act on nothing: not counted.
+    found = [
+        i
+        for i, names in COMMAND_WORDS.items()
+        if _commands.BY_INTENT[i].actionable and words <= names | _BARE_EXTRA
+    ]
     return found[0] if len(found) == 1 and found[0] in CHOICE_INTENTS else None

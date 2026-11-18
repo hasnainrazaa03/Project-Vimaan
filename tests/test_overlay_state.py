@@ -269,6 +269,36 @@ def test_question_reason_shown():
     assert s.lines()[-1].text.endswith("(questions aren't answered yet)")
 
 
+def test_an_answered_question_shows_the_question_and_the_answer():
+    s = OverlayState(Clock())
+    run(
+        s,
+        {"kind": "ptt_press", "cmd": "c1"},
+        {"kind": "ptt_release", "cmd": "c1"},
+        {"kind": "stage", "stage": "stt", "cmd": "c1", "text": "heading", "backend": "vosk"},
+        {
+            "kind": "stage",
+            "stage": "nlu",
+            "cmd": "c1",
+            "intent": "set_autopilot_mode",
+            "slots": {"mode": "heading"},
+            "confidence": 1.0,
+        },
+        {
+            "kind": "question_answered",
+            "cmd": "c1",
+            "intent": "ask_flight_data",
+            "slots": {"reading": "heading"},
+            "answer": "Heading zero niner five",
+        },
+        {"kind": "speak", "cmd": "c1", "text": "Heading zero niner five"},
+        {"kind": "command_done", "cmd": "c1", "outcome": "answered"},
+    )
+    _, understood, outcome = s.lines()
+    assert "heading" in understood.text.lower() and "mode" not in understood.text.lower()
+    assert outcome.badge == "ANSWER"
+
+
 def test_bare_number_reason_shown():
     s = OverlayState(Clock())
     run(

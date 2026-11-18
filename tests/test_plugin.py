@@ -140,9 +140,10 @@ def sim(monkeypatch, tmp_path):
     plugin.XPluginStop()
 
 
-def say(plugin, text, intent=None, slots=None, conf=0.99, to_reading=None):
+def say(plugin, text, intent=None, slots=None, conf=0.99, to_reading=None, ask=False):
     """Dispatch a prediction as if the worker had just returned it.
-    ``to_reading``: what the worker found with one "two" read as "to"."""
+    ``to_reading``: what the worker found with one "two" read as "to";
+    ``ask``: said on the question key."""
     if intent is not None:
         NLU[text] = (intent, slots or {}, conf)
     xp_spoken_before = len(sys.modules["XPPython3"].xp.spoken)
@@ -155,6 +156,7 @@ def say(plugin, text, intent=None, slots=None, conf=0.99, to_reading=None):
             "prediction": {**p, "nlu_ms": 5.0, "normalized": text, "to_reading": to_reading},
             "t_press": now,
             "t_release": now,
+            "ask": ask,
         }
     )
     return sys.modules["XPPython3"].xp.spoken[xp_spoken_before:]
@@ -962,13 +964,12 @@ def test_clear_answers_set_the_target(sim, heard, intent, slots, dataref, value)
         ("is the autopilot off", "toggle_autopilot", {"state": "off", "instance": "1"}),
         ("is the parking brakes set", "toggle_parking_brake", {"state": "on"}),
         ("r the strobes off", "toggle_lights", {"light": "strobe", "switch": "off"}),
-        ("what the heading", "set_autopilot_mode", {"mode": "heading"}),
         ("is the gear up", "toggle_landing_gear", {"state": "up"}),
     ],
 )
 def test_a_question_is_never_acted_on(sim, heard, intent, slots):
     _, plugin, xp = sim
-    assert say(plugin, heard, intent, slots) == ["I can't answer questions yet"]
+    assert say(plugin, heard, intent, slots) == ["I can't answer that"]
     assert xp.writes == [] and xp.commands_fired == []
     assert events(plugin, "command_done")[-1]["outcome"] == "non_actionable"
     refused = events(plugin, "implausible")[-1]
@@ -992,7 +993,7 @@ def test_a_question_with_a_to_reading_is_not_asked_about(sim):
         "set_com_frequency",
         {"frequency": "2122.8"},
     )
-    assert say(plugin, *heard, to_reading=reading) == ["I can't answer questions yet"]
+    assert say(plugin, *heard, to_reading=reading) == ["I can't answer that"]
 
 
 def test_commands_still_act(sim):

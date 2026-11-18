@@ -134,6 +134,29 @@ DEFAULT_DATAREFS: dict[str, Any] = {
     "sim/cockpit2/switches/avionics_power_on": 1,
     "sim/cockpit2/engine/actuators/fuel_pump_on": [0] * 16,
     "sim/cockpit2/fuel/fuel_tank_pump_on": [0] * 9,
+    # Tier 4: what the questions read (in cruise, as the probe found them).
+    "sim/cockpit2/gauges/indicators/ground_speed_kt": 0.0,
+    "sim/cockpit2/gauges/indicators/mach_pilot": 0.0,
+    "sim/cockpit2/gauges/indicators/radio_altimeter_height_ft_pilot": 0.0,
+    "sim/cockpit2/gauges/indicators/wind_heading_deg_mag": 0.0,
+    "sim/cockpit2/gauges/indicators/wind_speed_kts": 0.0,
+    "sim/cockpit2/temperature/outside_air_temp_degc": 15.0,
+    "sim/cockpit2/gauges/actuators/barometer_setting_is_std_pilot": 0,
+    "sim/flightmodel/weight/m_fuel_total": 0.0,
+    "sim/cockpit2/engine/indicators/fuel_flow_kg_sec": [0.0] * 16,
+    "sim/cockpit2/engine/indicators/prop_speed_rpm": [0.0] * 16,
+    "sim/cockpit2/engine/indicators/MPR_in_hg": [0.0] * 16,
+    "sim/cockpit2/engine/indicators/torque_n_mtr": [0.0] * 16,
+    "sim/cockpit2/engine/indicators/ITT_deg_C": [0.0] * 16,
+    "sim/cockpit2/engine/indicators/EGT_deg_C": [0.0] * 16,
+    "sim/cockpit2/engine/indicators/oil_temperature_deg_C": [0.0] * 16,
+    "sim/cockpit2/engine/indicators/oil_pressure_psi": [0.0] * 16,
+    "sim/cockpit2/radios/indicators/gps_dme_distance_nm": 0.0,
+    "sim/cockpit2/radios/indicators/gps_dme_time_min": 0.0,
+    "sim/cockpit/gps/destination_index": -1,
+    "sim/time/zulu_time_sec": 0.0,
+    "sim/time/local_time_sec": 0.0,
+    "sim/flightmodel2/gear/deploy_ratio": [1.0] * 10,
 }
 
 # What X-Plane's own Tier 3 commands do: (dataref, element or None, value),
@@ -316,7 +339,7 @@ def make_xp() -> types.ModuleType:
     # need an aircraft to respond (or to ignore a command, by leaving it out).
     xp.effects = {name: switch_effect(*how) for name, how in SWITCH_EFFECTS.items()}
 
-    xp.VK_Z, xp.DownFlag, xp.UpFlag, xp.ControlFlag = 90, 1, 2, 4
+    xp.VK_Z, xp.DownFlag, xp.UpFlag, xp.ControlFlag, xp.ShiftFlag = 90, 1, 2, 4, 8
     xp.CommandBegin, xp.CommandContinue, xp.CommandEnd = 0, 1, 2
     xp.MSG_PLANE_LOADED, xp.MSG_AIRPORT_LOADED = 102, 103
 

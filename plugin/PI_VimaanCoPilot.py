@@ -40,6 +40,7 @@ _IMPORT_T0 = time.perf_counter()
 
 import logging  # noqa: E402
 import os  # noqa: E402
+import re  # noqa: E402
 import sys  # noqa: E402
 import threading  # noqa: E402
 from typing import Any  # noqa: E402
@@ -63,7 +64,7 @@ if _ML_PATH not in sys.path:
 
 # Only light, stdlib-backed modules load into X-Plane; the heavy ones live in
 # the worker process.
-from vimaan_nlu import probe, sim_bridge, switches  # noqa: E402
+from vimaan_nlu import answers, probe, sim_bridge, switches  # noqa: E402
 from vimaan_nlu.aircraft import (  # noqa: E402
     AircraftInfo,
     acf_flap_limits,
@@ -95,7 +96,7 @@ from vimaan_nlu.overlay import Overlay  # noqa: E402
 from vimaan_nlu.overlay_state import OverlayState  # noqa: E402
 from vimaan_nlu.pilot_replies import override_prefix, pilot_reply  # noqa: E402
 from vimaan_nlu.questions import REPLY as QUESTION_REPLY  # noqa: E402
-from vimaan_nlu.questions import looks_like_question  # noqa: E402
+from vimaan_nlu.questions import bare_reading, looks_like_question  # noqa: E402
 from vimaan_nlu.readback import spell_digits  # noqa: E402
 from vimaan_nlu.safety import (  # noqa: E402
     ConfirmationGate,
@@ -314,6 +315,32 @@ DREF_XPDR_IDENT = "sim/cockpit2/radios/indicators/transponder_id"
 XPDR_SETS = {"off": 0, "standby": 1, "on": 2, "alt": 3}
 XPDR_ALREADY = {"off": {0}, "standby": {1}, "on": {2, 3, 5, 6, 7}, "alt": {3, 6, 7}}
 XPDR_SPOKEN = {"off": "off", "standby": "standby", "on": "on", "alt": "altitude"}
+# X-Plane's transponder_mode as answered (5-7: its own test / mode S states).
+XPDR_MODE_SPOKEN = {
+    0: "off",
+    1: "standby",
+    2: "on",
+    3: "altitude",
+    5: "on",
+    6: "altitude",
+    7: "altitude",
+}
+# sim/cockpit2/switches/auto_brake_level -> the setting (0 RTO, 1 off, 2-4 levels 1-3, 5 max).
+AUTOBRAKE_LEVELS = {0: "rto", 1: "off", 2: "1", 3: "2", 4: "3", 5: "max"}
+# Tier 4: what each engine reading is read from (vimaan_nlu.answers words it).
+ENGINE_READING_DATAREFS = {
+    "n one": "sim/cockpit2/engine/indicators/N1_percent",
+    "n two": "sim/cockpit2/engine/indicators/N2_percent",
+    "r p m": "sim/cockpit2/engine/indicators/prop_speed_rpm",
+    "manifold pressure": "sim/cockpit2/engine/indicators/MPR_in_hg",
+    "torque": "sim/cockpit2/engine/indicators/torque_n_mtr",
+    "i t t": "sim/cockpit2/engine/indicators/ITT_deg_C",
+    "e g t": "sim/cockpit2/engine/indicators/EGT_deg_C",
+    "oil temperature": "sim/cockpit2/engine/indicators/oil_temperature_deg_C",
+    "oil pressure": "sim/cockpit2/engine/indicators/oil_pressure_psi",
+    "fuel flow": "sim/cockpit2/engine/indicators/fuel_flow_kg_sec",
+}
+DREF_GEAR_DEPLOY = "sim/flightmodel2/gear/deploy_ratio"
 XPDR_ALREADY_SPOKEN = {
     "off": "Transponder already off",
     "standby": "Transponder already in standby",
@@ -511,6 +538,8 @@ class PythonInterface:
         self.hotkeyPress = None
         self.hotkeyRelease = None
         self.hotkeySelfTest = None
+        self.hotkeyAskPress = None
+        self.hotkeyAskRelease = None
         self._commands: list[tuple[Any, Any]] = []
         self._current_cmd: str | None = None
         # Deferred main-thread work: dataref read-backs and starter cranks.
@@ -662,8 +691,17 @@ class PythonInterface:
         self.hotkeySelfTest = xp.registerHotKey(
             xp.VK_Z, xp.DownFlag | xp.ControlFlag, "Vimaan Self-Test", self._run_self_test
         )
+        # Tier 4: Shift+Z asks. What is said on it is only answered, never
+        # acted on. Releasing Shift first ends it through Z's own release.
+        self.hotkeyAskPress = xp.registerHotKey(
+            xp.VK_Z, xp.DownFlag | xp.ShiftFlag, "Vimaan Ask (hold)", self.OnAskPressCallback
+        )
+        self.hotkeyAskRelease = xp.registerHotKey(
+            xp.VK_Z, xp.UpFlag | xp.ShiftFlag, "Vimaan Ask release", self.OnReleaseCallback
+        )
         # Bindable commands, so push-to-talk can live on a yoke button.
         self._register_command("vimaan/push_to_talk", "Vimaan: push to talk", self._on_ptt_command)
+        self._register_command("vimaan/ask", "Vimaan: ask a question (hold)", self._on_ask_command)
         self._register_command("vimaan/self_test", "Vimaan: run self test", self._on_self_test_cmd)
         self._register_command(
             "vimaan/toggle_overlay", "Vimaan: overlay auto / pinned / off", self._on_overlay_cmd
@@ -720,7 +758,13 @@ class PythonInterface:
         self._hooked = set()
         if self.worker is not None:
             self.worker.stop()
-        for hotkey in (self.hotkeyPress, self.hotkeyRelease, self.hotkeySelfTest):
+        for hotkey in (
+            self.hotkeyPress,
+            self.hotkeyRelease,
+            self.hotkeySelfTest,
+            self.hotkeyAskPress,
+            self.hotkeyAskRelease,
+        ):
             if hotkey:
                 xp.unregisterHotKey(hotkey)
         if self._flight_loop_id:
@@ -892,12 +936,22 @@ class PythonInterface:
             self.OnReleaseCallback(refcon, source="command")
         return 1
 
+    def _on_ask_command(self, cmd_ref, phase, refcon):
+        if phase == xp.CommandBegin:
+            self.OnPressCallback(refcon, source="command", ask=True)
+        elif phase == xp.CommandEnd:
+            self.OnReleaseCallback(refcon, source="command")
+        return 1
+
+    def OnAskPressCallback(self, inRefcon):
+        self.OnPressCallback(inRefcon, source="hotkey", ask=True)
+
     def _on_self_test_cmd(self, cmd_ref, phase, refcon):
         if phase == xp.CommandBegin:
             self._run_self_test()
         return 1
 
-    def OnPressCallback(self, inRefcon, source="hotkey"):
+    def OnPressCallback(self, inRefcon, source="hotkey", ask=False):
         t_press = time.perf_counter()
         if self._active is not None:
             if self._active.get("t_release") is not None:
@@ -908,16 +962,23 @@ class PythonInterface:
             self._say("Vimaan is not ready yet")
             return
         cmd = self.tel.new_command_id()
-        if not self.worker.send({"op": "start", "cmd": cmd}):
+        if not self.worker.send({"op": "start", "cmd": cmd, "ask": ask}):
             self.tel.event("ptt_ignored", logging.ERROR, reason="worker_gone", source=source)
             return
-        self._active = {"cmd": cmd, "t_press": t_press, "t_release": None, "source": source}
+        self._active = {
+            "cmd": cmd,
+            "t_press": t_press,
+            "t_release": None,
+            "source": source,
+            "ask": ask,
+        }
         if self._flight_loop_id:
             xp.scheduleFlightLoop(self._flight_loop_id, -1.0, 1)  # replies from next frame
         self.tel.event(
             "ptt_press",
             cmd=cmd,
             source=source,
+            ask=ask,
             handler_ms=round((time.perf_counter() - t_press) * 1000, 3),
         )
 
@@ -1041,6 +1102,7 @@ class PythonInterface:
         elif kind == "result" and active is not None and mine:
             self._active = None
             if msg.get("stt_ms") is not None:
+                extra = {"heard_commands": msg["heard"]} if msg.get("heard") else {}
                 self.tel.event(
                     "stage",
                     stage="stt",
@@ -1048,6 +1110,7 @@ class PythonInterface:
                     ms=msg["stt_ms"],
                     backend=self.STT_BACKEND,
                     text=msg["text"],
+                    **extra,
                 )
             self._execute_command(
                 {
@@ -1056,6 +1119,7 @@ class PythonInterface:
                     "prediction": msg,
                     "t_press": active["t_press"],
                     "t_release": active["t_release"],
+                    "ask": bool(active.get("ask") or msg.get("ask")),
                 }
             )
         elif kind == "error" and mine:
@@ -1113,14 +1177,38 @@ class PythonInterface:
                 outcome = self._pilot_reply(cmd, "override")
                 return
 
-            # A question is never acted on: the model knows none yet, and
-            # "is the autopilot off" reads as "autopilot off" (in the owner's
-            # voice 9 of 10 such questions would have acted). See
-            # vimaan_nlu.questions; Tier 4 answers them.
-            if looks_like_question(text):
+            # Tier 4: a question is answered, never acted on. On the question
+            # key everything is a question. A command read into a question
+            # ("is the autopilot off" -> "autopilot off": 9 of the owner's 10
+            # yes/no questions with v26) is refused (vimaan_nlu.questions).
+            # Re-decoded with the question grammar ("heard" is the command
+            # grammar's transcript): the worker found it started like one.
+            asked = bool(job.get("ask") or result.get("heard")) or looks_like_question(text)
+            question = BY_INTENT.get(intent_pred)
+            if (
+                question is not None
+                and question.is_question
+                and result["confidence"] >= self.CONFIDENCE_FLOOR
+                and has_command_word(intent_pred, normalized)
+            ):
+                outcome = self._answer(cmd, question, slots, normalized)
+                return
+            # A reading named alone ("heading", "what the heading") is
+            # answered: never a command that changes something.
+            reading = bare_reading(text)
+            # A number in the slots came from the words: then it isn't bare.
+            if reading is not None and not any(str(v)[:1].isdigit() for v in slots.values()):
+                outcome = self._answer(cmd, BY_INTENT[reading[0]], reading[1], normalized)
+                return
+            if asked:
                 outcome = "non_actionable"
                 self.tel.event(
-                    "implausible", cmd=cmd, reason="question", intent=intent_pred, slots=slots
+                    "implausible",
+                    cmd=cmd,
+                    reason="question",
+                    intent=intent_pred,
+                    slots=slots,
+                    ask=bool(job.get("ask")),
                 )
                 self._say(QUESTION_REPLY)
                 return
@@ -1476,10 +1564,11 @@ class PythonInterface:
         for r in results:
             intent, slots = r.get("intent"), r.get("slots") or {}
             missing = [s for s in REQUIRED_SLOTS.get(intent, ()) if not slots.get(s)]
+            answerable = intent in BY_INTENT and BY_INTENT[intent].is_question
             ok = (
                 "error" not in r
                 and intent == r["expected"]
-                and intent in self.intent_to_command
+                and (intent in self.intent_to_command or answerable)
                 and not missing
             )
             passed += ok
@@ -3174,6 +3263,355 @@ class PythonInterface:
         self._hold_check("Squawk", DREF_XPDR_CODE, number, is_float=False)
         self._say(f"Squawk {spell_digits(value)}")
         return "executed"
+
+    # ------------------------------------------------------------------
+    # Tier 4: answers. Read the sim, never write; the words are in
+    # vimaan_nlu.answers, the units per aircraft in its profile.
+    # ------------------------------------------------------------------
+    def _answer(self, cmd, question, slots, text):
+        """Answer a question: read, speak, change nothing."""
+        try:
+            spoken = getattr(self, question.answer)(slots, text)
+        except Exception as exc:
+            self.tel.error("answer_error", exc, cmd=cmd, intent=question.intent)
+            spoken = None
+        spoken = spoken or "I can't read that now"
+        self.tel.event(
+            "question_answered", cmd=cmd, intent=question.intent, slots=dict(slots), answer=spoken
+        )
+        self._say(spoken)
+        return "answered"
+
+    def _engine_count(self):
+        n = self.profile.info.num_engines or self._read_int(DREF_NUM_ENGINES) or 1
+        return max(1, min(int(n), 8))
+
+    def _engine_values(self, name, n):
+        return [self._read_array(name, i, is_float=True) for i in range(n)]
+
+    @staticmethod
+    def _asked_unit(text, nouns):
+        """The engine / generator / pump the question names ("engine 2", "the
+        left engine"), or None for all of them. The model's instance slot
+        can't say: it reads "1" when none was named."""
+        match = re.search(rf"\b(?:{nouns}) (1|2)\b", text) or re.search(
+            rf"\b(first|second|left|right) (?:{nouns})\b", text
+        )
+        if not match:
+            return None
+        return {"first": "1", "left": "1", "second": "2", "right": "2"}.get(
+            match.group(1), match.group(1)
+        )
+
+    def _fuel_units(self):
+        """(gal / lb / kg, avgas / jet): the gauge's unit, from the profile;
+        without one, gallons for a piston, pounds for a turboprop, else kg."""
+        engine = self.profile.info.engine_kind
+        unit = self.profile.settings.get("fuel_unit") or {"piston": "gal", "turboprop": "lb"}.get(
+            engine, "kg"
+        )
+        kind = self.profile.settings.get("fuel_kind") or ("avgas" if engine == "piston" else "jet")
+        return unit, kind
+
+    def _answer_flight_data(self, slots, text):
+        reading = slots.get("reading")
+        g = "sim/cockpit2/gauges/indicators/"
+        if reading == "altitude":
+            return answers.altitude(self._read_float(g + "altitude_ft_pilot"))
+        if reading == "heading":
+            return answers.heading(self._read_float(g + "heading_AHARS_deg_mag_pilot"))
+        if reading == "airspeed":
+            return answers.airspeed(self._read_float(g + "airspeed_kts_pilot"))
+        if reading == "vertical speed":
+            return answers.vertical_speed(self._read_float(g + "vvi_fpm_pilot"))
+        if reading == "ground speed":
+            return answers.ground_speed(self._read_float(g + "ground_speed_kt"))
+        if reading == "mach":
+            return answers.mach(self._read_float(g + "mach_pilot"))
+        if reading == "height above ground":
+            # Every aircraft reports it, the Baron too (no radio altimeter).
+            feet = self._read_float(g + "radio_altimeter_height_ft_pilot")
+            return answers.height_above_ground(feet)
+        if reading == "wind":
+            return answers.wind(
+                self._read_float(g + "wind_heading_deg_mag"),
+                self._read_float(g + "wind_speed_kts"),
+            )
+        if reading == "temperature":
+            return answers.temperature(
+                self._read_float("sim/cockpit2/temperature/outside_air_temp_degc")
+            )
+        if reading == "altimeter":
+            std = self._read_int("sim/cockpit2/gauges/actuators/barometer_setting_is_std_pilot")
+            unit = self.profile.settings.get("baro_hpa")  # (dataref, value meaning hPa)
+            hpa = unit is not None and self._read_float(unit[0]) == unit[1]
+            inches = self._read_float("sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot")
+            return answers.altimeter(inches, std == 1, hpa)
+        return "Which reading?"
+
+    def _answer_fuel(self, slots, text):
+        unit, kind = self._fuel_units()
+        return answers.fuel(self._read_float("sim/flightmodel/weight/m_fuel_total"), unit, kind)
+
+    def _answer_fuel_time(self, slots, text):
+        flows = self._engine_values(ENGINE_READING_DATAREFS["fuel flow"], self._engine_count())
+        return answers.fuel_time(
+            self._read_float("sim/flightmodel/weight/m_fuel_total"),
+            sum(f or 0.0 for f in flows),
+        )
+
+    def _answer_engine(self, slots, text):
+        n = self._engine_count()
+        kind = self.profile.info.engine_kind
+        instance = self._asked_unit(text, "engine|engines")
+        unit, fuel_kind = self._fuel_units()
+        if "running" in text.split():
+            running = [bool(self._read_array(DREF_ENGINE_RUNNING, i)) for i in range(n)]
+            return answers.engines_running(running, instance)
+        reading = slots.get("engine_reading")
+        readings = answers.ENGINE_READINGS.get(kind, ())
+        if not reading:
+            return (
+                ". ".join(
+                    answers.engine(
+                        r, self._engine_values(ENGINE_READING_DATAREFS[r], n), None, unit, fuel_kind
+                    )
+                    for r in answers.ENGINE_SUMMARY.get(kind, ())
+                )
+                or "I can't read the engines"
+            )
+        if reading not in readings:
+            return f"This aircraft shows no {answers.READING_NAMES[reading]}"
+        values = self._engine_values(ENGINE_READING_DATAREFS[reading], n)
+        return answers.engine(reading, values, instance, unit, fuel_kind)
+
+    def _answer_com(self, slots, text):
+        port = str(slots.get("com_port") or "1")
+        if port not in DREF_COM_KHZ:
+            return f"COM {port} is not supported. Ask about COM 1 or 2."
+        which = slots.get("which") if slots.get("which") in ("active", "standby") else None
+        return answers.radio(
+            f"COM {port}",
+            self._read_int(DREF_COM_KHZ[port]),
+            self._read_int(DREF_COM_STANDBY_KHZ[port]),
+            1000,
+            which,
+        )
+
+    def _answer_nav(self, slots, text):
+        port = str(slots.get("nav_port") or "1")
+        if port not in DREF_NAV_10KHZ:
+            return f"NAV {port} is not supported. Ask about NAV 1 or 2."
+        which = slots.get("which")
+        if which == "course":
+            obs = f"sim/cockpit2/radios/actuators/nav{port}_obs_deg_mag_pilot"
+            return answers.course(f"NAV {port}", self._read_float(obs))
+        return answers.radio(
+            f"NAV {port}",
+            self._read_int(DREF_NAV_10KHZ[port]),
+            self._read_int(DREF_NAV_STANDBY_10KHZ[port]),
+            100,
+            which if which in ("active", "standby") else None,
+        )
+
+    def _answer_transponder(self, slots, text):
+        knobs = self.profile.settings.get("xpdr_knobs")
+        if knobs:  # the 737's and A330's own selectors
+            mode = next(
+                (
+                    XPDR_SPOKEN[value]
+                    for value, steps in knobs.items()
+                    if steps and all(self._knob_at(k) for k in steps)
+                ),
+                None,
+            )
+        else:
+            mode = XPDR_MODE_SPOKEN.get(self._read_int(DREF_XPDR_MODE))
+        return answers.transponder(self._read_int(DREF_XPDR_CODE), mode)
+
+    def _answer_autopilot(self, slots, text):
+        ap = "sim/cockpit2/autopilot/"
+        heading = self._read_float(ap + "heading_dial_deg_mag_pilot")
+        altitude = self._read_float(ap + "altitude_dial_ft")
+        target = slots.get("ap_target")
+        if target == "heading":
+            return f"Heading bug {answers.three_digits(heading)}"
+        if target == "altitude":
+            return f"Altitude set {int(round(altitude / 10) * 10)} feet"
+        if target == "speed":
+            speed = self._read_float(ap + "airspeed_dial_kts_mach")
+            if self._read_int(ap + "airspeed_is_mach") == 1:
+                return f"{answers.mach(speed)} set"
+            return f"Speed set {int(round(speed))} knots"
+        if target == "vertical speed":
+            vs = self._read_float(ap + "vvi_dial_fpm")
+            return f"Vertical speed set {int(round(vs / 50) * 50)} feet per minute"
+        status = {key: self._read_int(name) for key, name in AUTOPILOT_STATE.items()}
+        engaged = bool(status["servos_on"])
+        parts = ["Autopilot on" if engaged else "Autopilot off"]
+        if status["heading_status"] == 2:
+            parts.append(f"heading {answers.three_digits(heading)}")
+        for key, name in (("nav_status", "nav"), ("approach_status", "approach")):
+            if status[key] == 2:
+                parts.append(name)
+            elif status[key] == 1:
+                parts.append(f"{name} armed")
+        if status["altitude_hold_status"] == 2:
+            parts.append("altitude hold")
+        if status["vs_status"] == 2:
+            vs = self._read_float(ap + "vvi_dial_fpm")
+            parts.append(f"vertical speed {int(round(vs / 50) * 50)}")
+        if status["speed_status"] == 2:
+            parts.append("level change")
+        if engaged:
+            parts.append(f"altitude set {int(round(altitude / 10) * 10)} feet")
+        if (self._read_int(ap + "autothrottle_enabled") or 0) > 0:
+            parts.append("autothrottle on")
+        if not engaged and (status["flight_director"] or 0) >= 1:
+            parts.append("flight director on")
+        return ", ".join(parts)
+
+    def _switch_now(self, keys):
+        """The setting every switch in ``keys`` is at: a setting, None when
+        it can't be read, "mixed" when they differ, "absent" when the
+        aircraft has none. Read as the Tier 3 commands check before acting:
+        the setting whose plan has nothing left to do."""
+        present, seen = False, set()
+        for key in keys:
+            current, here = None, False
+            for setting in self.profile.switch_settings(key):
+                found, steps = self._plan_steps(key, setting)
+                if found == "absent":
+                    break
+                here = True
+                if found == "ok" and not steps:
+                    current = setting
+                    break
+            if here:
+                present = True
+                seen.add(current)
+        if not present:
+            return "absent"
+        return next(iter(seen)) if len(seen) == 1 else "mixed"
+
+    def _switch_words(self, name, keys):
+        now = self._switch_now(keys)
+        if now == "absent":
+            return f"This aircraft has no {name.lower()}"
+        if now == "mixed":
+            return f"{name} partly on"
+        if now is None:
+            return f"I can't read the {name.lower()}"
+        return f"{name} {now}"
+
+    def _answer_switch(self, slots, text):
+        if slots.get("light") in LIGHT_NAMES:
+            light = slots["light"]
+            lights = switches.LIGHTS if light == "all" else (light,)
+            return self._switch_words(LIGHT_NAMES[light], tuple(f"light:{x}" for x in lights))
+        if slots.get("sign") in SIGN_NAMES:
+            return self._switch_words(SIGN_NAMES[slots["sign"]], [f"sign:{slots['sign']}"])
+        if slots.get("ice") in ICE_NAMES:
+            return self._switch_words(ICE_NAMES[slots["ice"]], [f"ice:{slots['ice']}"])
+        power = slots.get("power")
+        if power == "generator":
+            unit = self._asked_unit(text, "generator|generators")
+            generators = switches.GENERATORS[unit] if unit else switches.ALL_GENERATORS
+            return self._switch_words(f"Generator {unit}" if unit else "Generators", generators)
+        if power in POWER_NAMES:
+            return self._switch_words(POWER_NAMES[power], [f"power:{power}"])
+        system = slots.get("switch_system")
+        if system == "gear":
+            return self._gear_words()
+        if system == "flaps":
+            return self._flap_words()
+        if system == "parking brake":
+            ratio = self._read_float(DREF_PARKING_BRAKE)
+            if ratio is None:
+                return "I can't read the parking brake"
+            return "Parking brake set" if ratio > 0.5 else "Parking brake released"
+        if system == "speed brake":
+            if self._read_int(switches.HAS_SPEEDBRAKE) == 0:
+                return "This aircraft has no speed brakes"
+            now = self._switch_now(["speed_brake"])
+            return SPEEDBRAKE_SPOKEN.get(now, "I can't read the speed brake")
+        if system == "auto brake":
+            if (
+                not self.profile.settings.get("autobrake_off")
+                and self.profile.switch_plan("autobrake", "off")[0] == "absent"
+            ):
+                return "This aircraft has no auto brake"
+            setting = AUTOBRAKE_LEVELS.get(self._read_int(switches.AUTOBRAKE))
+            table = (
+                AUTOBRAKE_AIRBUS if self.profile.settings.get("autobrake_off") else AUTOBRAKE_SPOKEN
+            )
+            return f"Auto brake {table[setting]}" if setting else "I can't read the auto brake"
+        if system == "yaw damper":
+            return self._switch_words("Yaw damper", ["yaw_damper"])
+        if system == "fuel pumps":
+            unit = self._asked_unit(text, "pump|pumps")
+            pumps = switches.FUEL_PUMPS[unit] if unit else switches.ALL_FUEL_PUMPS
+            return self._switch_words(f"Fuel pump {unit}" if unit else "Fuel pumps", pumps)
+        return "Which switch?"
+
+    def _gear_words(self):
+        if self._read_int(DREF_GEAR_RETRACTABLE) == 0:
+            return "The gear is fixed down"
+        ratios = [
+            r
+            for r in (self._read_array(DREF_GEAR_DEPLOY, i, is_float=True) for i in range(3))
+            if r is not None
+        ]
+        if ratios and all(r >= 0.99 for r in ratios):
+            return "Gear down"
+        if ratios and all(r <= 0.01 for r in ratios):
+            return "Gear up"
+        handle = self._read_int(DREF_GEAR_HANDLE)
+        return "Gear moving down" if handle == 1 else "Gear moving up"
+
+    def _flap_words(self):
+        """The handle's notch as the cockpit labels it (737 "Flaps 15")."""
+        detents = self.profile.info.flap_detents
+        ratio = self._read_float(DREF_FLAP_HANDLE)
+        if not detents or ratio is None:
+            return "I can't read the flaps"
+        notch = int(round(ratio * detents))
+        if notch == 0:
+            return "Flaps up"
+        labels = self.profile.settings.get("flap_labels") or ()
+        full_word = 1 if len(labels) == detents - 1 else 0  # A330: 1 2 3 + "full"
+        if labels and len(labels) + full_word == detents:
+            return "Flaps full" if notch > len(labels) else f"Flaps {labels[notch - 1]}"
+        angles = self.profile.info.flap_notch_degrees()
+        if notch < len(angles) and angles[notch]:
+            return f"Flaps {int(round(angles[notch]))}"
+        return f"Flaps notch {notch} of {detents}"
+
+    def _answer_waypoint(self, slots, text):
+        r = "sim/cockpit2/radios/indicators/"
+        destination = self._read_int("sim/cockpit/gps/destination_index")
+        return answers.waypoint(
+            self._read_float(r + "gps_dme_distance_nm") or 0.0,
+            self._read_float(r + "gps_dme_time_min") or 0.0,
+            destination is not None and destination >= 0,
+        )
+
+    def _answer_time(self, slots, text):
+        zone = slots.get("zone") if slots.get("zone") in ("zulu", "local") else "zulu"
+        name = "sim/time/local_time_sec" if zone == "local" else "sim/time/zulu_time_sec"
+        return answers.clock(self._read_float(name), zone)
+
+    def _answer_status(self, slots, text):
+        g = "sim/cockpit2/gauges/indicators/"
+        engaged = self._read_int("sim/cockpit2/autopilot/servos_on")
+        return ", ".join(
+            (
+                answers.altitude(self._read_float(g + "altitude_ft_pilot")),
+                answers.heading(self._read_float(g + "heading_AHARS_deg_mag_pilot")).lower(),
+                answers.airspeed(self._read_float(g + "airspeed_kts_pilot")).lower(),
+                f"autopilot {'on' if engaged else 'off'}",
+            )
+        )
 
     def _set_transponder_mode(self, slots, intent):
         value, ok, _ = validate_slot("xpdr_mode", slots.get("xpdr_mode") or "")
