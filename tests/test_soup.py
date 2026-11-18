@@ -171,6 +171,7 @@ def test_within_needs_one_dev_set(tmp_path):
         within([a, b], tmp_path / "soup", a, 0.02, score=_fixed({"soup": 0.0}))
 
 
+@pytest.mark.requires_torch
 def test_a_question_model_is_told_from_a_command_model(tmp_path):
     from average_models import is_question_model
 
