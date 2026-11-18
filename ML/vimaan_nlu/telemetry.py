@@ -8,6 +8,11 @@ Answers three questions from the logs alone, without a debugger attached:
 * **Is it slow?** Each stage is timed; stages over their budget are logged at
   WARNING with ``slow: true``. A flight-loop monitor flags sim stalls (gaps
   between our callbacks) and main-thread time we spend inside X-Plane's frame.
+* **Does it slow the game?** X-Plane's own frame times (a callback that runs
+  every frame and only records how long the frame took): once a minute the
+  frame rate, the slow frames, and per command the frames from key press to
+  done. Mac usage (CPU, memory, GPU) is sampled by the voice worker, outside
+  X-Plane (vimaan_nlu.usage).
 * **Did it crash or hang?** ``faulthandler`` writes native-crash tracebacks
   (e.g. a segfault in torch) to a faults file, uncaught exceptions on any
   thread are recorded, and a hang detector dumps every thread's stack if the
@@ -29,6 +34,7 @@ safe to import first.
 
 from __future__ import annotations
 
+import bisect
 import faulthandler
 import itertools
 import json
@@ -39,6 +45,7 @@ import sys
 import threading
 import time
 import traceback
+from collections import deque
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
@@ -64,6 +71,13 @@ STALL_GAP_SEC = 2.0
 # If the main thread stops calling back for this long, dump all stacks.
 HANG_DUMP_SEC = 30.0
 HEARTBEAT_SEC = 60.0
+# Frame times: one summary per FRAME_WINDOW_SEC; per command, the frames from
+# key press to done (kept for FRAME_RECENT_SEC). A frame over HITCH_MS is one
+# the pilot can see (at 60 fps a frame is ~17 ms); over STALL_GAP_SEC it is a
+# stall, logged on its own and left out of the frame statistics.
+FRAME_WINDOW_SEC = 60.0
+FRAME_RECENT_SEC = 30.0
+HITCH_MS = (50.0, 100.0)
 
 
 def _peak_rss_mb() -> float | None:
@@ -85,6 +99,73 @@ def _jsonable(value: Any) -> Any:
     if isinstance(value, (list, tuple, set)):
         return [_jsonable(v) for v in value]
     return repr(value)
+
+
+def frame_summary(frame_ms: list[float]) -> dict[str, Any]:
+    """Frame count, average frame rate, median / p95 / worst frame and the
+    frames over each HITCH_MS, from frame times in milliseconds."""
+    if not frame_ms:
+        return {"frames": 0}
+    ms = sorted(frame_ms)
+    n = len(ms)
+    out: dict[str, Any] = {
+        "frames": n,
+        "fps": round(n * 1000.0 / sum(ms), 1) if sum(ms) > 0 else None,
+        "frame_ms_p50": round(ms[(n - 1) // 2], 2),
+        "frame_ms_p95": round(ms[min(n - 1, int(0.95 * n))], 2),
+        "frame_ms_max": round(ms[-1], 2),
+    }
+    for limit in HITCH_MS:
+        out[f"over_{limit:g}ms"] = n - bisect.bisect_right(ms, limit)
+    return out
+
+
+class FrameStats:
+    """X-Plane's frame times, fed once a frame from a flight-loop callback
+    (``add(seconds since the last call)``). Costs a clock read and an append
+    per frame; the summaries are computed once a window."""
+
+    def __init__(
+        self,
+        clock: Callable[[], float] = time.perf_counter,
+        window_sec: float = FRAME_WINDOW_SEC,
+        recent_sec: float = FRAME_RECENT_SEC,
+    ) -> None:
+        self._clock = clock
+        self._window_sec = window_sec
+        self._recent_sec = recent_sec
+        self._window: list[float] = []
+        self._window_start: float | None = None
+        self._stalls = 0
+        self._recent: deque[tuple[float, float]] = deque()
+
+    def add(self, frame_sec: float) -> dict[str, Any] | None:
+        """Record one frame. Returns the window's summary when a window ends."""
+        now = self._clock()
+        if self._window_start is None:
+            self._window_start = now
+        if frame_sec >= STALL_GAP_SEC:
+            self._stalls += 1  # a stall, not a frame: logged as sim_stall
+        elif frame_sec > 0:
+            ms = frame_sec * 1000.0
+            self._window.append(ms)
+            self._recent.append((now, ms))
+        while self._recent and now - self._recent[0][0] > self._recent_sec:
+            self._recent.popleft()
+        if now - self._window_start < self._window_sec:
+            return None
+        out = {
+            "window_sec": round(now - self._window_start, 1),
+            **frame_summary(self._window),
+            "stalls": self._stalls,
+        }
+        self._window, self._window_start, self._stalls = [], now, 0
+        return out
+
+    def since(self, t0: float) -> dict[str, Any]:
+        """The frames that ended after ``t0`` (a clock reading, e.g. a key
+        press): a frame that ended at the press was drawn before it."""
+        return frame_summary([ms for t, ms in self._recent if t > t0])
 
 
 class Telemetry:

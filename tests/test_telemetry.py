@@ -146,3 +146,46 @@ def test_command_done_ignores_key_hold_time(tel):
     tel.fake_clock.now += 6.0  # pilot held the key for ~5 s
     tel.command_done("c0005", "executed", start, speech_to_action_ms=900.0)
     assert "slow" not in read_events(tel)[-1]
+
+
+# ---------------------------------------------------------------------------
+# Frame times (FrameStats): is the game slowed?
+# ---------------------------------------------------------------------------
+def test_frame_summary_counts_rate_percentiles_and_slow_frames():
+    s = telemetry.frame_summary([16.0] * 95 + [60.0] * 4 + [120.0])
+    assert s["frames"] == 100
+    assert s["fps"] == pytest.approx(100 * 1000 / (16 * 95 + 60 * 4 + 120), abs=0.1)
+    assert (s["frame_ms_p50"], s["frame_ms_p95"], s["frame_ms_max"]) == (16.0, 60.0, 120.0)
+    assert (s["over_50ms"], s["over_100ms"]) == (5, 1)
+    assert telemetry.frame_summary([]) == {"frames": 0}
+
+
+def test_frame_stats_summarises_each_window_and_leaves_stalls_out():
+    clock = FakeClock()
+    f = telemetry.FrameStats(clock=clock, window_sec=1.0)
+    for _ in range(59):
+        clock.now += 1 / 60
+        assert f.add(1 / 60) is None
+    clock.now += 3.0
+    out = f.add(3.0)  # a 3 s stall (loading) ends the window: counted, not a frame
+    assert out["frames"] == 59 and out["stalls"] == 1
+    assert out["fps"] == pytest.approx(60.0, abs=0.1) and out["frame_ms_max"] < 17
+    clock.now += 1 / 60
+    assert f.add(1 / 60) is None  # a new window has started
+
+
+def test_frame_stats_since_a_key_press():
+    clock = FakeClock()
+    f = telemetry.FrameStats(clock=clock, recent_sec=5.0)
+    for ms in (16, 16, 16):
+        clock.now += ms / 1000
+        f.add(ms / 1000)
+    pressed = clock.now
+    for ms in (16, 80, 16):
+        clock.now += ms / 1000
+        f.add(ms / 1000)
+    during = f.since(pressed)
+    assert during["frames"] == 3 and during["frame_ms_max"] == 80.0 and during["over_50ms"] == 1
+    clock.now += 10.0
+    f.add(0.016)
+    assert f.since(pressed)["frames"] == 1  # older frames are dropped after recent_sec

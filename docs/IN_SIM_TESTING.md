@@ -301,7 +301,15 @@ The report shows how the session ended (clean stop vs **crash**), startup and
 per-stage latency (p50/p95/max), every command with its transcript, intent,
 slots and outcome, and every problem: errors with tracebacks, slow stages,
 sim stalls, failed dataref writes, and post-command verifications that didn't
-match.
+match. Two performance sections answer "does Vimaan slow the game?":
+
+- **Game performance**: X-Plane's frame rate and frame times per minute
+  (median, p95, worst, frames over 50 and 100 ms), and the same for the frames
+  from each key press to done, next to the whole flight's.
+- **Mac usage**, sampled every 15 s by the voice worker (outside X-Plane):
+  CPU (% of one core) and memory of X-Plane and of the worker, GPU
+  utilisation and memory, macOS's free-memory level, swap and load.
+  `--usage-every 0` on the worker turns it off.
 
 Raw files in `~/Vimaan_Logs/` per session:
 
@@ -325,6 +333,8 @@ X-Plane's own logs, for crashes outside Python: `<X-Plane 12>/Log.txt` and
 | Wrong action | `stage nlu` (transcript, normalized text, intent, slots, confidence) → `sim_write` / `sim_command` → `verify` | |
 | Mic dead/muted | `command_done outcome=silent_mic`; `rms` on `audio_level` | `microphone_ready` shows which input device is used |
 | No mic permission | `microphone_unavailable`, or capture with `rms` ≈ 0 | System Settings → Privacy & Security → Microphone → enable X-Plane (and Steam, if launched from Steam) |
+| Game slowed | `frames` (once a minute), `frames` on `command_done` | X-Plane's own frame times, recorded by a callback that runs every frame and does nothing else |
+| Mac busy | `usage` (every 15 s) | from `ps`, `ioreg` and `sysctl`, run by the worker; no admin rights needed |
 | Memory | `peak_rss_mb` on `heartbeat` / `session_end` | X-Plane's whole process (scenery included, ~5 GB in flight); torch + model live in the worker process, not here |
 
 ## 6. Speech recognition

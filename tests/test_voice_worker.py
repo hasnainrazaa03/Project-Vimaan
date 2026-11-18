@@ -636,3 +636,23 @@ def test_self_test_asks_each_model_its_own_probes():
     )
     assert asked == [("command", "flaps five"), ("question", "fuel check")]
     assert [r["intent"] for r in out[-1]["results"]] == ["set_flaps", "ask_fuel"]
+
+
+def test_usage_reports_come_from_their_own_thread():
+    import threading
+
+    got = threading.Event()
+    sent = []
+
+    class Sampler:
+        def sample(self):
+            return {"worker_rss_mb": 900}
+
+    def send(msg):
+        sent.append(msg)
+        got.set()
+
+    assert voice_worker.start_usage_reports(send, 0) is None  # 0: never
+    thread = voice_worker.start_usage_reports(send, 0.01, Sampler())
+    assert thread.daemon and got.wait(2)
+    assert sent[0] == {"type": "usage", "every_sec": 0.01, "worker_rss_mb": 900}

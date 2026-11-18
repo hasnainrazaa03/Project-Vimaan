@@ -109,7 +109,7 @@ from vimaan_nlu.safety import (  # noqa: E402
     command_token,
     evaluate_safety,
 )
-from vimaan_nlu.telemetry import Telemetry  # noqa: E402
+from vimaan_nlu.telemetry import FrameStats, Telemetry  # noqa: E402
 from vimaan_nlu.validators import (  # noqa: E402
     bare_command,
     clipped_number,
@@ -542,6 +542,8 @@ class PythonInterface:
         # The question model's intents (Tier 4), when one is loaded.
         self._question_intents: set[str] = set()
         self._flight_loop_id = None
+        self._frame_loop_id = None
+        self.frames = FrameStats()
         self.hotkeyPress = None
         self.hotkeyRelease = None
         self.hotkeySelfTest = None
@@ -742,6 +744,9 @@ class PythonInterface:
         # Flight loop: worker replies, dispatch, verification, engine cranks.
         self._flight_loop_id = xp.createFlightLoop(self._flight_loop, phase=1)
         xp.scheduleFlightLoop(self._flight_loop_id, QUEUE_POLL_INTERVAL_SEC, 1)
+        # Frame times: every frame, records only how long the frame took.
+        self._frame_loop_id = xp.createFlightLoop(self._on_frame, phase=0)
+        xp.scheduleFlightLoop(self._frame_loop_id, -1.0, 1)
 
         self.tel.event("plugin_start", worker=self.worker is not None, sim=self._sim_info())
         if self.worker is None:
@@ -777,6 +782,9 @@ class PythonInterface:
         if self._flight_loop_id:
             xp.destroyFlightLoop(self._flight_loop_id)
             self._flight_loop_id = None
+        if self._frame_loop_id:
+            xp.destroyFlightLoop(self._frame_loop_id)
+            self._frame_loop_id = None
         self.tel.event("plugin_stop")
         self.tel.close()
 
@@ -1012,11 +1020,28 @@ class PythonInterface:
         speech = self.OUTCOME_SPEECH.get(outcome, "An error occurred")
         if speech:
             self._say(speech)
-        self.tel.command_done(active["cmd"], outcome, active["t_press"], **fields)
+        self.tel.command_done(
+            active["cmd"],
+            outcome,
+            active["t_press"],
+            frames=self.frames.since(active["t_press"]),
+            **fields,
+        )
 
     # ------------------------------------------------------------------
     # Flight loop (main thread)
     # ------------------------------------------------------------------
+    def _on_frame(self, since_last, *_):
+        """Every frame: X-Plane's frame time, nothing else (telemetry
+        FrameStats); once a minute, the window's frame rate and slow frames."""
+        try:
+            summary = self.frames.add(since_last)
+            if summary is not None:
+                self.tel.event("frames", logging.DEBUG, **summary)
+        except Exception as exc:
+            self.tel.error("frame_stats_error", exc)
+        return -1.0
+
     def _flight_loop(self, *_):
         t0 = time.perf_counter()
         try:
@@ -1146,6 +1171,8 @@ class PythonInterface:
             self._finish_self_test(msg.get("results", []))
         elif kind == "log":
             self.tel.log(f"[worker] {msg.get('msg')}", logging.WARNING)
+        elif kind == "usage":
+            self.tel.event("usage", logging.DEBUG, **{k: v for k, v in msg.items() if k != "type"})
         else:
             self.tel.event("worker_message_ignored", logging.DEBUG, msg=msg)
 
@@ -1329,7 +1356,14 @@ class PythonInterface:
                 extra["speech_to_action_ms"] = round(
                     (time.perf_counter() - job["t_release"]) * 1000, 1
                 )
-            self.tel.command_done(cmd, outcome, job["t_press"], text=text, **extra)
+            self.tel.command_done(
+                cmd,
+                outcome,
+                job["t_press"],
+                text=text,
+                frames=self.frames.since(job["t_press"]),
+                **extra,
+            )
 
     def _ask(self, cmd, intent, as_two, as_to):
         """Ask which target was meant, and keep the question open for a reply."""
