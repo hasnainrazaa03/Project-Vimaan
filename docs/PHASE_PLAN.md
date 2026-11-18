@@ -1309,7 +1309,14 @@ up, and "what's the heading" sets heading mode.
   "degree have the seatbelt sign on"). The blind questions: not written
   yet.
 - [ ] **Part C:** `simtest run tier4` (each answer against the datarefs),
-  then the owner's check.
+  then the owner's check. Built 2026-11-18, not yet run in the sim
+  (`simtest/tier4.py`; docs/IN_SIM_TESTING.md): every question family on the
+  question key, each answer's value against the sim read just after it in the
+  cockpit's units, no sim write or command from any question, commands on the
+  question key refused. Writing it found that q1 reads "what's the n one" as
+  engine_reading "n 1" (number words become digits), which the plugin's
+  engine readings don't know ("I can't read that now"); the N1 step fails
+  until that is mapped.
 
 ---
 

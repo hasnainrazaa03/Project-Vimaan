@@ -6,6 +6,9 @@ through recognition) or does something as the *pilot* (an X-Plane command).
 Then it checks:
 
 - Vimaan's outcome, and optionally that a reply contains some words;
+- for a question (Tier 4), that the spoken answer says what the sim shows
+  (``Answer``: the datarefs are read again right after the reply) and that
+  the question changed nothing (``no_actions``: no sim write or command);
 - Vimaan's own read-backs (``checks`` in the say result) all passed;
 - the sim itself (``SimCheck``): a dataref, or something computed from
   several, must hold, possibly within a deadline (the aircraft has to turn
@@ -94,6 +97,18 @@ def levelled_at(
 
 
 @dataclass(frozen=True)
+class Answer:
+    """A spoken answer checked against the sim: ``datarefs`` are read right
+    after the reply, and ``ok(reply, readings)`` must hold for one of the
+    replies; ``expected(readings)`` says what was wanted, for the report."""
+
+    what: str
+    datarefs: tuple[str, ...]
+    ok: Callable[[str, dict[str, Any]], bool]
+    expected: Callable[[dict[str, Any]], str] = lambda r: ""
+
+
+@dataclass(frozen=True)
 class Step:
     name: str
     say: str | None = None  # a phrase for Vimaan
@@ -105,6 +120,9 @@ class Step:
     callout: str | None = None  # Vimaan must say this (within a few seconds)
     no_callout: str | None = None  # and must not say this
     vimaan_checks: bool = True  # Vimaan's own read-backs must pass
+    ask: bool = False  # said on the question key (Shift+Z): only ever answered
+    answer: Answer | None = None  # what the spoken answer must say (questions)
+    no_actions: bool = False  # the command must not write to or command the sim
     settle_sec: float = 0.0  # wait before checking (a knob turning, a mode settling)
     note: str = ""
     # Run only when this holds now (e.g. above flap speed); else skipped.
@@ -157,7 +175,7 @@ class Runner:
         started = datetime.now()
         problems: list[str] = []
         if step.say:
-            said = self._say(step.say, r)
+            said = self._say(step.say, r, ask=step.ask)
             r.update(
                 {
                     k: said.get(k)
@@ -167,6 +185,7 @@ class Runner:
                         "slots",
                         "outcome",
                         "replies",
+                        "actions",
                         "checks",
                         "latency_ms",
                     )
@@ -182,6 +201,15 @@ class Runner:
                 problems.append(f"no reply with “{step.reply}”")
             if step.vimaan_checks and any(not c.get("ok") for c in said.get("checks") or []):
                 problems.append("a read-back failed")
+            if step.no_actions and said.get("actions"):
+                problems.append(f"changed the sim: {said['actions']}")
+            if step.answer is not None:
+                got = self._answer(step.answer, said.get("replies") or [])
+                r["answer"] = got
+                if not got["ok"]:
+                    problems.append(
+                        f"{step.answer.what}: said {got['replies']}, sim shows {got['expected']}"
+                    )
         elif step.command:
             done = self.bridge.command(step.command)
             if not done.get("ok"):
@@ -210,11 +238,13 @@ class Runner:
         r["note"] = step.note
         return r
 
-    def _say(self, phrase: str, r: dict[str, Any]) -> dict[str, Any]:
+    def _say(self, phrase: str, r: dict[str, Any], ask: bool = False) -> dict[str, Any]:
+        # The question key only when asked: the talk key's requests stay as they were.
+        key = {"ask": True} if ask else {}
         if self.voice is None:
             r["heard"], r["heard_ok"] = phrase, None
-            return self.bridge.say_text(phrase)
-        said = self.bridge.say_wav(voice_mod.synthesize(phrase, self.voice))
+            return self.bridge.say_text(phrase, **key)
+        said = self.bridge.say_wav(voice_mod.synthesize(phrase, self.voice), **key)
         r["heard"] = said.get("heard")
         r["heard_ok"] = said.get("heard") == phrase
         r["understood_ok"] = r["heard_ok"] or bool(
@@ -225,7 +255,18 @@ class Runner:
         # Misunderstood: score recognition separately, then do it as text so
         # the check is about the sim, not the recogniser.
         r["misheard"] = {k: said.get(k) for k in ("heard", "intent", "slots", "outcome", "replies")}
-        return self.bridge.say_text(phrase)
+        return self.bridge.say_text(phrase, **key)
+
+    def _answer(self, answer: Answer, replies: list[str]) -> dict[str, Any]:
+        """The reply against the sim as it is now (just after the reply)."""
+        readings = self.bridge.read(*answer.datarefs)
+        return {
+            "what": answer.what,
+            "replies": replies,
+            "readings": readings,
+            "expected": answer.expected(readings),
+            "ok": any(answer.ok(reply, readings) for reply in replies),
+        }
 
     def _check(self, check: SimCheck) -> dict[str, Any]:
         deadline = time.monotonic() + check.within_sec

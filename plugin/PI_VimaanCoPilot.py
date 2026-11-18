@@ -1913,20 +1913,23 @@ class PythonInterface:
 
     def _bridge_say(self, req):
         """Start a command as if the pilot had pressed push-to-talk and said
-        it: a WAV goes through recognition, text to the model only."""
+        it: a WAV goes through recognition, text to the model only. ``ask``:
+        on the question key (Shift+Z), so it is only ever answered."""
         if not self.ready or self.worker is None:
             return "Vimaan is not ready"
         if self._active is not None or self._say_results.busy:
             return "busy"
         cmd = self.tel.new_command_id()
+        ask = bool(req.get("ask"))
         if req.get("wav"):
             msg, said = {"op": "wav", "cmd": cmd, "path": req["wav"]}, {"wav": req["wav"]}
         else:
             msg, said = {"op": "text", "cmd": cmd, "text": req["text"]}, {"text": req["text"]}
+        msg["ask"] = ask
         now = time.perf_counter()
-        self._active = {"cmd": cmd, "t_press": now, "t_release": now, "source": "test"}
+        self._active = {"cmd": cmd, "t_press": now, "t_release": now, "source": "test", "ask": ask}
         self._say_results.start(req["id"], cmd, now)
-        self.tel.event("ptt_press", cmd=cmd, source="test", request=req["id"], **said)
+        self.tel.event("ptt_press", cmd=cmd, source="test", request=req["id"], ask=ask, **said)
         self.tel.event("ptt_release", cmd=cmd, source="test", held_ms=0.0)
         if not self.worker.send(msg):
             self._end_command("worker_error")

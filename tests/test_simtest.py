@@ -603,3 +603,253 @@ def test_the_tier3_switches_that_differ_pass_on_the_fake_jets(monkeypatch, tmp_p
 def test_tier3_needs_a_tier3_model():
     assert cli._model_lacks("tier3", {"model_intents": ["set_transponder_code"]})
     assert cli._model_lacks("tier3", {"model_intents": ["set_autobrake"]}) is None
+
+
+# --- Tier 4: questions on the question key, answers against the sim -----------
+
+from simtest import tier4  # noqa: E402
+
+# The question model's reading of each checklist question (as q1 reads them).
+TIER4_QNLU = {
+    "what's our altitude": ("ask_flight_data", {"reading": "altitude"}),
+    "what's our airspeed": ("ask_flight_data", {"reading": "airspeed"}),
+    "what's the heading": ("ask_flight_data", {"reading": "heading"}),
+    "what's our vertical speed": ("ask_flight_data", {"reading": "vertical speed"}),
+    "what's our ground speed": ("ask_flight_data", {"reading": "ground speed"}),
+    "what's the wind": ("ask_flight_data", {"reading": "wind"}),
+    "what's the outside temperature": ("ask_flight_data", {"reading": "temperature"}),
+    "what's the altimeter setting": ("ask_flight_data", {"reading": "altimeter"}),
+    "how high are we above the ground": ("ask_flight_data", {"reading": "height above ground"}),
+    "what's our mach number": ("ask_flight_data", {"reading": "mach"}),
+    "how much fuel do we have": ("ask_fuel", {}),
+    "how long will our fuel last": ("ask_fuel_time", {}),
+    "what's the oil pressure": ("ask_engine", {"engine_reading": "oil pressure"}),
+    "what's the manifold pressure": ("ask_engine", {"engine_reading": "manifold pressure"}),
+    "what's the torque": ("ask_engine", {"engine_reading": "torque"}),
+    "what's the e g t": ("ask_engine", {"engine_reading": "e g t"}),
+    "what's the n one": ("ask_engine", {"engine_reading": "n one"}),
+    "what's com one": ("ask_com", {"com_port": "1"}),
+    "what's com one standby": ("ask_com", {"com_port": "1", "which": "standby"}),
+    "what's nav one": ("ask_nav", {"nav_port": "1"}),
+    "what's our squawk": ("ask_transponder", {}),
+    "autopilot status": ("ask_autopilot", {}),
+    "what altitude is set": ("ask_autopilot", {"ap_target": "altitude"}),
+    "what's the heading bug": ("ask_autopilot", {"ap_target": "heading"}),
+    "are the landing lights on": ("ask_switch", {"light": "landing"}),
+    "landing lights status": ("ask_switch", {"light": "landing"}),
+    "is the gear down": ("ask_switch", {"switch_system": "gear"}),
+    "where are the flaps": ("ask_switch", {"switch_system": "flaps"}),
+    "how far to the next waypoint": ("ask_waypoint", {}),
+    "what time is it": ("ask_time", {}),
+    "status report": ("ask_status_generic", {}),
+}
+# What the command model makes of the ones it reads as commands.
+TIER4_NLU = {
+    "gear down": ("toggle_landing_gear", {"state": "down"}),
+    "autopilot off": ("toggle_autopilot", {"state": "off"}),
+    "landing lights status": ("toggle_lights", {"light": "landing"}),  # no on / off
+}
+G4 = "sim/cockpit2/gauges/indicators/"
+E4 = "sim/cockpit2/engine/indicators/"
+
+
+def _cruise(xp):
+    """A twin in cruise, as an air start leaves it."""
+    xp.datarefs.update(
+        {
+            G4 + "altitude_ft_pilot": 6004.0,
+            G4 + "airspeed_kts_pilot": 151.4,
+            G4 + "heading_AHARS_deg_mag_pilot": 269.6,
+            G4 + "vvi_fpm_pilot": 40.0,
+            G4 + "ground_speed_kt": 163.2,
+            G4 + "mach_pilot": 0.412,
+            G4 + "radio_altimeter_height_ft_pilot": 4972.0,
+            G4 + "wind_heading_deg_mag": 45.0,
+            G4 + "wind_speed_kts": 12.0,
+            "sim/cockpit2/temperature/outside_air_temp_degc": -4.6,
+            "sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot": 29.92,
+            "sim/flightmodel/weight/m_fuel_total": 10439.0,
+            "sim/cockpit2/autopilot/heading_dial_deg_mag_pilot": 270.0,
+            "sim/cockpit2/autopilot/altitude_dial_ft": 6000.0,
+            "sim/cockpit2/controls/gear_handle_down": 0,
+            "sim/time/zulu_time_sec": 52230.0,
+        }
+    )
+    xp.datarefs["sim/flightmodel2/gear/deploy_ratio"] = [0.0] * 10
+    for name, values in (
+        ("fuel_flow_kg_sec", (0.0125, 0.0125)),
+        ("oil_pressure_psi", (60.2, 61.4)),  # differ: said engine by engine
+        ("MPR_in_hg", (23.5, 23.5)),
+        ("torque_n_mtr", (1900.0, 1900.0)),
+        ("EGT_deg_C", (566.0, 566.0)),
+        ("N1_percent", (85.2, 85.4)),
+    ):
+        xp.datarefs[E4 + name][:2] = list(values)
+
+
+def _run_tier4(monkeypatch, tmp_path, aircraft, steps, qnlu=None, datarefs=None):
+    import test_plugin
+
+    test_plugin.NLU.clear()
+    for text, (intent, slots) in {**TIER2_NLU, **TIER3_NLU, **TIER4_NLU}.items():
+        test_plugin.NLU[text] = (intent, slots, 0.99)
+    readings = {**TIER4_QNLU, **(qnlu or {})}
+
+    def question_model(text):  # q1 beside the command model, as the worker loads it
+        intent, slots = readings.get(text, ("None", {}))
+        return {"intent": intent, "slots": dict(slots), "confidence": 0.99, "normalized_text": text}
+
+    module, plugin, xp = test_plugin._load_plugin(monkeypatch, tmp_path)
+    results: list = []
+    try:
+        monkeypatch.setattr(module, "BRIDGE_POLL_SEC", 0.0)
+        monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+        plugin.worker.worker.predict_question = question_model
+        plugin._question_intents = {intent for intent, _ in TIER4_QNLU.values()} | {"None"}
+        _generic_sim(xp)
+        _cruise(xp)
+        xp.datarefs["sim/flightmodel/position/y_agl"] = 5000 * 0.3048
+        script = {"baron": _baron3, "737": _b738_3, "a330": _a333_3}[aircraft](plugin, xp)
+        xp.datarefs.update(datarefs or {})
+        br = Bridge(tmp_path / "Vimaan_Logs", poll_sec=0.002)
+        br.enable()
+        plugin._bridge_next = 0.0
+        runner = scenario.Runner(br, voice=None, poll_sec=0.005, log=lambda _line: None)
+        t = threading.Thread(target=lambda: results.extend(runner.run(steps)), daemon=True)
+        t.start()
+        while t.is_alive():  # X-Plane's flight loop
+            if script is not None:
+                script(xp)
+            plugin._flight_loop()
+            t.join(0.001)
+        state = plugin._bridge_state()
+    finally:
+        plugin.XPluginStop()
+    return results, state, xp
+
+
+def test_the_tier4_checklist_passes_on_the_fake_baron(monkeypatch, tmp_path):
+    results, state, xp = _run_tier4(monkeypatch, tmp_path, "baron", tier4.steps("baron"))
+    failed = {r["step"]: r["problems"] for r in results if not r["ok"]}
+    assert failed == {}
+    assert not any(r.get("skipped") for r in results)
+    by_step = {r["step"]: r for r in results}
+    assert by_step["fuel"]["replies"] == ["Fuel 3836 gallons"]  # avgas 6 lb/gal, from 10,439 kg
+    assert by_step["oil pressure"]["replies"] == [
+        "Engine 1 oil pressure 60 P S I, engine 2 oil pressure 61 P S I"
+    ]
+    assert by_step["altimeter"]["replies"] == ["Altimeter two niner niner two"]
+    assert by_step["gear down on the question key is refused"]["replies"] == ["I can't answer that"]
+    questions = [r for r in results if r["step"] in {s.name for s in tier4.steps("baron") if s.ask}]
+    assert questions and all(r["actions"] == [] for r in questions)
+    assert tier4.NEEDS_QUESTION_INTENT in state["question_intents"]
+    assert xp.datarefs["sim/cockpit2/autopilot/servos_on"] == 1
+
+
+@pytest.mark.parametrize("aircraft", ["737", "a330"])
+def test_the_tier4_answers_that_differ_pass_on_the_fake_jets(monkeypatch, tmp_path, aircraft):
+    names = {"altimeter", "fuel", "mach", "E G T", "N1", "transponder", "landing lights"}
+    steps = [tier4._landing_lights_on(aircraft)]
+    steps += [s for s in tier4.steps(aircraft) if s.name in names]
+    results, _, _ = _run_tier4(monkeypatch, tmp_path, aircraft, steps)
+    failed = {r["step"]: r["problems"] for r in results if not r["ok"]}
+    assert failed == {}
+    by_step = {r["step"]: r for r in results}
+    unit = {"737": "Fuel 23000 pounds", "a330": "Fuel 10400 kilograms"}[aircraft]
+    assert by_step["fuel"]["replies"] == [unit]
+    assert by_step["mach"]["replies"] == ["Mach point four one"]
+
+
+def test_the_altimeter_check_follows_the_737s_hpa_selector(monkeypatch, tmp_path):
+    steps = [s for s in tier4.steps("737") if s.name == "altimeter"]
+    selector = "laminar/B738/EFIS_control/capt/baro_in_hpa"
+    results, _, _ = _run_tier4(monkeypatch, tmp_path, "737", steps, datarefs={selector: 1.0})
+    (r,) = results
+    assert r["ok"] and r["replies"] == ["Q N H one zero one three"]
+
+
+def test_the_n1_step_fails_with_the_question_models_digit_slot(monkeypatch, tmp_path):
+    # q1 reads "what's the n one" as engine_reading "n 1" (number words become
+    # digits); the plugin's engine readings say "n one", so the answer is
+    # "I can't read that now" and the step catches it.
+    steps = [s for s in tier4.steps("737") if s.name == "N1"]
+    results, _, _ = _run_tier4(
+        monkeypatch,
+        tmp_path,
+        "737",
+        steps,
+        qnlu={"what's the n one": ("ask_engine", {"engine_reading": "n 1"})},
+    )
+    (r,) = results
+    assert not r["ok"] and r["replies"] == ["I can't read that now"]
+
+
+def test_every_question_family_is_asked_on_every_aircraft():
+    for aircraft in tier4.SETUPS:
+        steps = tier4.steps(aircraft)
+        names = {s.name for s in steps}
+        for family, asked in tier4.FAMILIES.items():
+            assert names & set(asked), (aircraft, family)
+        assert ("mach" in names) == (aircraft in ("737", "a330"))
+        for s in steps:
+            if s.outcomes == ("answered",):
+                assert s.no_actions and (s.answer is not None or s.reply), s.name
+        assert sum(s.ask for s in steps) >= 25
+        assert any(s.outcomes == ("answered",) and not s.ask for s in steps)  # the talk key too
+
+
+@pytest.mark.parametrize(
+    ("reply", "readings", "ok"),
+    [
+        ("Altitude 7400 feet", {tier4.ALT: 7404.0}, True),
+        ("Altitude 7400 feet", {tier4.ALT: 7600.0}, False),
+        ("Heading three six zero", {tier4.HDG: 1.5}, True),  # 0 is said as 360
+        ("Heading two seven zero", {tier4.HDG: 90.0}, False),
+    ],
+)
+def test_an_answer_is_checked_against_the_reading(reply, readings, ok):
+    check = tier4.altitude_answer() if reply.startswith("Altitude") else tier4.heading_answer()
+    assert check.ok(reply, readings) is ok
+
+
+def test_answers_in_the_wrong_unit_or_mode_fail():
+    pounds = tier4.fuel_answer(tier4.COCKPITS["737"])
+    assert pounds.ok("Fuel 23000 pounds", {tier4.FUEL: 10439.0})
+    assert not pounds.ok("Fuel 10400 kilograms", {tier4.FUEL: 10439.0})
+    alt = tier4.altimeter_answer(tier4.COCKPITS["a330"])
+    inches = {
+        tier4.BARO_IN: 29.92,
+        tier4.BARO_STD: 0,
+        "laminar/A333/barometer/capt_inHg_hPa_pos": 0,
+    }
+    assert alt.ok("Altimeter two niner niner two", inches)
+    assert not alt.ok("Q N H one zero one three", inches)
+    hpa = {**inches, "laminar/A333/barometer/capt_inHg_hPa_pos": 1}
+    assert alt.ok("Q N H one zero one three", hpa)
+    assert alt.ok("Altimeter standard", {**inches, tier4.BARO_STD: 1})
+    vs = tier4.vertical_speed_answer()
+    assert vs.ok("Level", {tier4.VVI: 60.0}) and vs.ok(
+        "Climbing 500 feet per minute", {tier4.VVI: 480.0}
+    )
+    assert not vs.ok("Descending 500 feet per minute", {tier4.VVI: 480.0})
+
+
+def test_spoken_numbers():
+    assert tier4.spoken_number("two niner niner two") == 2992
+    assert tier4.spoken_number("one two one decimal niner") == 121.9
+    assert tier4.spoken_number("two seven heading") is None
+
+
+def test_tier4_needs_a_question_model():
+    assert cli._model_lacks("tier4", {"model_intents": ["set_autobrake"], "question_intents": []})
+    assert (
+        cli._model_lacks("tier4", {}) is not None
+    )  # an older plugin doesn't say: no question model
+    assert cli._model_lacks("tier4", {"question_intents": ["None", "ask_flight_data"]}) is None
+
+
+def test_a_question_goes_over_the_bridge_on_the_question_key(br):
+    assert br.say_text("what's our altitude", ask=True)["echo"]["ask"] is True
+    assert "ask" not in br.say_text("gear down")["echo"]  # the talk key, as before
+    assert sim_bridge.problem({"id": "a", "op": "say", "text": "x", "ask": "yes"})
+    assert sim_bridge.problem({"id": "a", "op": "say", "text": "x", "ask": True}) is None
