@@ -125,3 +125,5 @@ ML/datasets/external/
 
 # live training-run metrics + logs (runtime output, not source)
 ML/training_runs/
+# Queues of terminal training runs the dashboard shows (dashboard/plans.py)
+ML/training_plans/

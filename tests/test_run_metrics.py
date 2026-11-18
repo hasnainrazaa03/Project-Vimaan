@@ -267,10 +267,19 @@ def test_names_that_are_not_runs(runs, bad):
     assert run_metrics.summarize(bad) is None
 
 
-def test_runs_are_listed_newest_version_first(runs):
-    for v in ("v2", "v10", "scratch"):
-        write(runs / "runs" / v / "metrics.jsonl", [{**META, "version": v}])
-    assert [r["run"] for r in run_metrics.list_runs()] == ["v10", "v2", "scratch"]
+def test_runs_are_listed_running_first_then_newest(runs):
+    # By version, "q1-lp5" (no v<N>) sank below every numbered run, and
+    # "Latest" followed a finished v-run while it trained.
+    now = time.time()
+    for i, v in enumerate(("v10", "v2", "q1-lp5", "q1-lp6")):
+        path = runs / "runs" / v / "metrics.jsonl"
+        write(path, [{**META, "version": v}, *steps(1, 2, 1)])
+        if v != "q1-lp6":  # q1-lp6 is still training: no end record
+            write(path, [{"type": "done", "elapsed": 1.0}])
+        os.utime(path, (now - 100 + i, now - 100 + i))
+    os.utime(runs / "runs" / "v2" / "metrics.jsonl", (now - 10, now - 10))
+    order = [r["run"] for r in run_metrics.list_runs()]
+    assert order == ["q1-lp6", "v2", "q1-lp5", "v10"]
 
 
 def test_the_step_curve_is_downsampled_but_keeps_the_last_step(runs):
@@ -339,8 +348,12 @@ def test_eval_detail_and_bad_versions(runs):
         assert evals.eval_detail(bad) is None
 
 
-def test_a_run_named_for_averaging_counts_as_its_version(runs):
-    # v26-a, v26-b, v26-c are averaged into v26 (ML/average_models.py).
-    for v in ("v24", "v26-a", "scratch"):
-        write(runs / "runs" / v / "metrics.jsonl", [{**META, "version": v}])
-    assert [r["run"] for r in run_metrics.list_runs()] == ["v26-a", "v24", "scratch"]
+def test_runs_to_be_averaged_stay_together_in_the_order_they_trained(runs):
+    # v26-a, v26-b are averaged into v26 (ML/average_models.py); trained one
+    # after another, they sit together, the latest first.
+    now = time.time()
+    for i, v in enumerate(("v24", "v26-a", "v26-b")):
+        path = runs / "runs" / v / "metrics.jsonl"
+        write(path, [{**META, "version": v}, {"type": "done", "elapsed": 1.0}])
+        os.utime(path, (now - 100 + i, now - 100 + i))
+    assert [r["run"] for r in run_metrics.list_runs()] == ["v26-b", "v26-a", "v24"]
