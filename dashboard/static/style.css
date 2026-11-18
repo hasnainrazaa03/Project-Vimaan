@@ -559,3 +559,29 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: var(--ring)
   .tabs { order: 3; width: 100%; overflow-x: auto; }
   .tab { flex: 1; padding: 7px 10px; }
 }
+
+/* ---- training plans (plans.js) ---- */
+.plan + .plan { margin-top: 14px; }
+.plan summary { cursor: pointer; font-size: 13px; line-height: 1.5; }
+.plan-total { margin: 10px 0 6px; }
+.progress.thin { height: 4px; margin-top: 4px; min-width: 60px; }
+.plan-note { font-size: 12px; margin: 4px 0 0; white-space: normal; max-width: 52ch; }
+.plan-result { font-size: 12px; margin-top: 4px; font-weight: 600; white-space: normal; max-width: 52ch; }
+.plan-table td { vertical-align: top; }
+.plan-count { width: 90px; }
+.plan-runs { display: flex; flex-wrap: wrap; gap: 6px; white-space: normal; }
+.plan-run {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  font: inherit; font-size: 12px; background: transparent; color: var(--fg-dim);
+  border: 1px solid var(--border-strong); cursor: pointer;
+}
+.plan-run .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.plan-run b { color: var(--fg); font-weight: 600; }
+.plan-run[data-status="queued"] { border-style: dashed; cursor: default; opacity: .75; }
+.plan-run[data-status="running"] { color: var(--series-1); border-color: var(--series-1); }
+.plan-run[data-status="running"] .dot { animation: blink 1.1s ease-in-out infinite; }
+.plan-run[data-status="finished"] { color: var(--good); border-color: var(--good); }
+.plan-run[data-status="failed"] { color: var(--critical); border-color: var(--critical); }
+.plan-run[data-status="stopped"], .plan-run[data-status="interrupted"] { color: var(--warning); border-color: var(--warning); }
+.plan-run:not([data-status="queued"]):hover { background: var(--surface-2); }
+.plan-bad { color: var(--critical); }

@@ -374,7 +374,10 @@ def tail(name: str, offset: int) -> tuple[list[dict[str, Any]], int] | None:
 
 
 def list_runs() -> list[dict[str, Any]]:
-    """Every run with a metrics stream, newest version first."""
+    """Every run with a metrics stream: running runs first, then the most
+    recently written. (Ordered by version, a run not named v<N> sank below
+    every numbered run, and "Latest" followed a finished v-run while a
+    question-model run was training.)"""
     if not paths.TRAINING_RUNS.is_dir():
         return []
     out = []
@@ -384,12 +387,7 @@ def list_runs() -> list[dict[str, Any]]:
             if s is not None:
                 out.append(s)
 
-    def order(s: dict[str, Any]) -> tuple[int, float]:
-        # "v26-a" (a run to be averaged into v26) counts as 26, newest first.
-        m = re.match(r"v(\d+)", s["run"])
-        return (int(m.group(1)) if m else -1, s["updated"])
-
-    out.sort(key=order, reverse=True)
+    out.sort(key=lambda s: (s["status"] == "running", s["updated"]), reverse=True)
     return out
 
 

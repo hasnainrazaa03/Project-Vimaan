@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import evals, flights, run_metrics
+from . import evals, flights, plans, run_metrics
 from .paths import (
     ensure_dirs,
     list_datasets,
@@ -204,8 +204,14 @@ STREAM_PING_SEC = 15.0
 
 @app.get("/api/runs")
 def api_runs() -> dict[str, Any]:
-    """Every training run (dashboard or terminal), newest version first."""
+    """Every training run (dashboard or terminal): running first, then newest."""
     return {"runs": run_metrics.list_runs()}
+
+
+@app.get("/api/plans")
+def api_plans() -> dict[str, Any]:
+    """Queued rounds of runs (ML/training_plans/*.json) with each run's state."""
+    return {"plans": plans.list_plans()}
 
 
 @app.get("/api/runs/{name}")
