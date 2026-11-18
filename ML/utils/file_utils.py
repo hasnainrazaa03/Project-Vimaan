@@ -50,16 +50,27 @@ def get_model_versions_dir(base_dir="models"):
     return ensure_directory(models_dir)
 
 
-def get_latest_model_path():
+def _latest(prefix):
     models_dir = get_model_versions_dir()
     versions = []
     if os.path.exists(models_dir):
         for item in os.listdir(models_dir):
-            if item.startswith("v") and item[1:].isdigit():
-                versions.append(int(item[1:]))
+            if item.startswith(prefix) and item[len(prefix) :].isdigit():
+                versions.append(int(item[len(prefix) :]))
 
     if not versions:
         return None
 
-    latest_version = max(versions)
-    return os.path.join(models_dir, f"v{latest_version}")
+    return os.path.join(models_dir, f"{prefix}{max(versions)}")
+
+
+def get_latest_model_path():
+    """The newest command model, ``vN``. Only ``v`` and digits: a run
+    (``v27-a``), an average on trial (``v27-soup1``) or a question model
+    (``q1``) is never picked up as the command model."""
+    return _latest("v")
+
+
+def get_latest_question_model_path():
+    """The newest question model (Tier 4), ``qN``, or None when there is none."""
+    return _latest("q")

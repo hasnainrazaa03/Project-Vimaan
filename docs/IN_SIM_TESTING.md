@@ -144,7 +144,7 @@ worst draw time per frame.
 
 - On the talk key a question works too, as long as Vosk hears how it starts (is, are, what, how, where, do, does, or "r the" / "our the" for "are the"): it is decoded again with the question words and answered, or refused with "I can't answer that". It is never acted on. A question whose first word went unheard can't be told from the command ("is the autopilot off" heard as "the autopilot off" switches it off), so for yes/no questions use Shift+Z, or ask without on/off: "autopilot status", "landing lights status".
 - A reading named on its own is answered, never acted on: "heading", "what the heading", "say altitude", "what are squawk". Switch names on their own ("flaps", "gear") still ask which way.
-- With v26 installed only those bare readings are answered; v27 learns the questions below.
+- The questions are read by a question model of their own (`q1`, installed with `install_plugin.py --question-model q1`) beside the command model (v26), so they never change how commands are read. On the talk key it answers only what the command model would not do ("landing lights status" is not "landing lights on"); a system named alone ("flaps") still asks which way. Without a question model only those bare readings are answered.
 - What you can ask, and how it answers (each answer names what it answers):
 
 | Ask | Answer |

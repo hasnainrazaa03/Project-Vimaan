@@ -1,7 +1,7 @@
 """vimaan_nlu.questions: a question is never acted on as a command."""
 
 import pytest
-from vimaan_nlu.questions import bare_reading, looks_like_question
+from vimaan_nlu.questions import bare_reading, looks_like_question, one_word
 
 
 @pytest.mark.parametrize(
@@ -92,3 +92,35 @@ def test_a_bare_reading(heard, want):
 )
 def test_not_a_bare_reading(heard):
     assert bare_reading(heard) is None
+
+
+def test_complete_command_is_what_the_command_model_would_act_on():
+    from vimaan_nlu.questions import complete_command
+
+    floor = 0.55
+    on = {"light": "landing", "switch": "on"}
+    assert complete_command("toggle_lights", on, 0.99, "landing lights on", floor)
+    # No on/off: "landing lights status" is a question to the question model.
+    assert not complete_command(
+        "toggle_lights", {"light": "landing"}, 0.99, "landing lights status", floor
+    )
+    assert not complete_command("toggle_lights", on, 0.3, "landing lights on", floor)
+    assert not complete_command("toggle_lights", on, 0.99, "seventy on", floor)  # no command word
+    assert not complete_command("ask_status_generic", {}, 0.99, "status report", floor)
+    assert not complete_command("set_flaps", {"position": "check"}, 0.99, "flaps check", floor)
+
+
+@pytest.mark.parametrize(
+    ("text", "want"),
+    [
+        ("armed", True),
+        ("uh torque", True),
+        ("okay", True),
+        ("", True),
+        ("the armed", False),
+        ("what's armed", False),
+        ("oil pressure", False),
+    ],
+)
+def test_one_word(text, want):
+    assert one_word(text) is want

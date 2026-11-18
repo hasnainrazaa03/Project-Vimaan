@@ -576,3 +576,63 @@ def test_short_and_silent_wavs_are_reported_as_such(tmp_path):
     w.handle({"op": "wav", "cmd": "c1", "path": write_wav(tmp_path / "s.wav", LOUD[:3200])})
     w.handle({"op": "wav", "cmd": "c2", "path": write_wav(tmp_path / "q.wav", b"\0\0" * 16000)})
     assert [m.get("outcome") for m in out if m["type"] == "error"] == ["too_short", "silent_mic"]
+
+
+def _p(intent, text, slots=None):
+    return {"intent": intent, "slots": slots or {}, "confidence": 0.9, "normalized_text": text}
+
+
+def test_the_question_models_reading_goes_with_the_result():
+    out: list[dict] = []
+    w = VoiceWorker(
+        out.append,
+        None,
+        lambda r, s: "",
+        lambda t: _p("toggle_lights", t, {"light": "landing"}),
+        predict_question=lambda t: _p("ask_switch", t, {"light": "landing"}),
+    )
+    w.handle({"op": "text", "cmd": "c1", "text": "landing lights status"})
+    assert out[-1]["intent"] == "toggle_lights"
+    assert out[-1]["question"] == {
+        "intent": "ask_switch",
+        "slots": {"light": "landing"},
+        "confidence": 0.9,
+        "normalized": "landing lights status",
+    }
+
+
+def test_without_a_question_model_there_is_no_question_reading():
+    out: list[dict] = []
+    w = VoiceWorker(out.append, None, lambda r, s: "", lambda t: _p("None", t))
+    w.handle({"op": "text", "cmd": "c1", "text": "hello"})
+    assert out[-1]["question"] is None
+
+
+def test_a_failing_question_model_leaves_the_command_reading():
+    def broken(text):
+        raise RuntimeError("question model went away")
+
+    out: list[dict] = []
+    w = VoiceWorker(
+        out.append, None, lambda r, s: "", lambda t: _p("set_flaps", t), predict_question=broken
+    )
+    w.handle({"op": "text", "cmd": "c1", "text": "flaps five"})
+    result = [m for m in out if m["type"] == "result"][-1]
+    assert result["intent"] == "set_flaps" and result["question"] is None
+    assert any(m["type"] == "log" and "question model failed" in m["msg"] for m in out)
+
+
+def test_self_test_asks_each_model_its_own_probes():
+    asked = []
+    w = VoiceWorker(
+        (out := []).append,
+        None,
+        lambda r, s: "",
+        lambda t: asked.append(("command", t)) or _p("set_flaps", t),
+        predict_question=lambda t: asked.append(("question", t)) or _p("ask_fuel", t),
+    )
+    w.handle(
+        {"op": "selftest", "probes": [["flaps five", "set_flaps"], ["fuel check", "ask_fuel"]]}
+    )
+    assert asked == [("command", "flaps five"), ("question", "fuel check")]
+    assert [r["intent"] for r in out[-1]["results"]] == ["set_flaps", "ask_fuel"]

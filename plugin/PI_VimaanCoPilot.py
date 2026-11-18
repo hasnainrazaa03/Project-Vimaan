@@ -96,7 +96,12 @@ from vimaan_nlu.overlay import Overlay  # noqa: E402
 from vimaan_nlu.overlay_state import OverlayState  # noqa: E402
 from vimaan_nlu.pilot_replies import override_prefix, pilot_reply  # noqa: E402
 from vimaan_nlu.questions import REPLY as QUESTION_REPLY  # noqa: E402
-from vimaan_nlu.questions import bare_reading, looks_like_question  # noqa: E402
+from vimaan_nlu.questions import (  # noqa: E402
+    bare_reading,
+    complete_command,
+    looks_like_question,
+    one_word,
+)
 from vimaan_nlu.readback import spell_digits  # noqa: E402
 from vimaan_nlu.safety import (  # noqa: E402
     ConfirmationGate,
@@ -534,6 +539,8 @@ class PythonInterface:
         # Intents the loaded model knows (from the worker's ready message);
         # None until then, or from a worker that doesn't say.
         self._model_intents: set[str] | None = None
+        # The question model's intents (Tier 4), when one is loaded.
+        self._question_intents: set[str] = set()
         self._flight_loop_id = None
         self.hotkeyPress = None
         self.hotkeyRelease = None
@@ -1065,6 +1072,7 @@ class PythonInterface:
             self.ready = True
             intents = msg.get("intents")
             self._model_intents = set(intents) if intents else None
+            self._question_intents = set(msg.get("question_intents") or ())
             self.tel.event(
                 "stage",
                 stage="model_load",
@@ -1184,15 +1192,24 @@ class PythonInterface:
             # Re-decoded with the question grammar ("heard" is the command
             # grammar's transcript): the worker found it started like one.
             asked = bool(job.get("ask") or result.get("heard")) or looks_like_question(text)
-            question = BY_INTENT.get(intent_pred)
-            if (
-                question is not None
-                and question.is_question
-                and result["confidence"] >= self.CONFIDENCE_FLOOR
-                and has_command_word(intent_pred, normalized)
-            ):
-                outcome = self._answer(cmd, question, slots, normalized)
-                return
+            # With a question model (qN) the questions are its to answer; the
+            # command model only says whether it heard a command. Without one,
+            # the command model's own question intents answer, as before.
+            asked_model = self._question_reading(result, normalized)
+            if result.get("question") is not None:
+                if asked and asked_model is not None:
+                    outcome = self._answer(cmd, *asked_model)
+                    return
+            else:
+                question = BY_INTENT.get(intent_pred)
+                if (
+                    question is not None
+                    and question.is_question
+                    and result["confidence"] >= self.CONFIDENCE_FLOOR
+                    and has_command_word(intent_pred, normalized)
+                ):
+                    outcome = self._answer(cmd, question, slots, normalized)
+                    return
             # A reading named alone ("heading", "what the heading") is
             # answered: never a command that changes something.
             reading = bare_reading(text)
@@ -1231,6 +1248,15 @@ class PythonInterface:
             if bare is not None and bare != intent_pred and found_none:
                 self.tel.event("bare_command", cmd=cmd, intent=bare, predicted=intent_pred)
                 outcome = self._dispatch(cmd, bare, {})
+                return
+
+            # A question said like a command ("landing lights status", "time
+            # check"): the command model found nothing it would act on, the
+            # question model found a question. Answering changes nothing.
+            if asked_model is not None and not complete_command(
+                intent_pred, slots, result["confidence"], normalized, self.CONFIDENCE_FLOOR
+            ):
+                outcome = self._answer(cmd, *asked_model)
                 return
 
             if result["confidence"] < self.CONFIDENCE_FLOOR:
@@ -1554,6 +1580,8 @@ class PythonInterface:
         """The probes for commands the loaded model was trained on: v19 knows
         nothing of Tier 2, and "15 of 23 passed" would hide a real failure."""
         known = self._model_intents
+        if known is not None:
+            known = known | self._question_intents
         return tuple(p for p in self.SELF_TEST_PROBES if known is None or p[1] in known)
 
     def _finish_self_test(self, results):
@@ -1894,6 +1922,7 @@ class PythonInterface:
             # What the loaded model knows (a runner refuses a checklist the
             # model wasn't trained for); None from a worker that doesn't say.
             "model_intents": None if self._model_intents is None else sorted(self._model_intents),
+            "question_intents": sorted(self._question_intents),
             "aircraft": {
                 "icao": info.icao,
                 "key": info.key,
@@ -3268,6 +3297,25 @@ class PythonInterface:
     # Tier 4: answers. Read the sim, never write; the words are in
     # vimaan_nlu.answers, the units per aircraft in its profile.
     # ------------------------------------------------------------------
+    def _question_reading(self, result, normalized):
+        """The question model's reading, when it is one to answer: (question,
+        slots, text), or None. A question family, confident, more than one
+        word, its words said: the gate's rule (model_gate.answer_decision)."""
+        q = result.get("question")
+        if not q:
+            return None
+        question = BY_INTENT.get(q["intent"])
+        text = q.get("normalized") or normalized
+        if (
+            question is None
+            or not question.is_question
+            or q["confidence"] < self.CONFIDENCE_FLOOR
+            or one_word(text)
+            or not has_command_word(q["intent"], text)
+        ):
+            return None
+        return question, q.get("slots") or {}, text
+
     def _answer(self, cmd, question, slots, text):
         """Answer a question: read, speak, change nothing."""
         try:

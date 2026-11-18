@@ -100,3 +100,73 @@ def test_gate_counts_a_question_as_not_acted_on():
     assert model_gate.decision(p) == ("question", {})
     p["original_text"] = p["normalized_text"] = "autopilot off"
     assert model_gate.decision(p)[0] == "act"
+
+
+def _q(intent, conf=0.99, text="what's our altitude", slots=None):
+    return {"intent": intent, "slots": slots or {}, "confidence": conf, "normalized_text": text}
+
+
+def test_a_question_model_answers_only_a_sure_question_with_its_words():
+    assert model_gate.answer_decision(_q("ask_flight_data")) == "answer"
+    assert model_gate.answer_decision(_q("ask_flight_data", conf=0.3)) == "low_confidence"
+    assert (
+        model_gate.answer_decision(_q("ask_fuel", text="what's our altitude")) == "no_command_word"
+    )
+    assert model_gate.answer_decision(_q("None")) == "not_a_question"
+    assert model_gate.answer_decision(_q("set_flaps", text="flaps five")) == "not_a_question"
+
+
+def test_a_question_model_never_answers_a_word_alone():
+    assert model_gate.answer_decision(_q("ask_autopilot", text="armed")) == "one_word"
+    assert model_gate.answer_decision(_q("ask_autopilot", text="uh armed")) == "one_word"
+    assert model_gate.answer_decision(_q("ask_autopilot", text="what's armed")) == "answer"
+
+
+def test_question_dev_score_counts_right_misanswered_and_answered_commands():
+    from utils.dev_score import question_score
+
+    table = {
+        "what's our altitude": _q("ask_flight_data", slots={"reading": "altitude"}),
+        "what's the heading": _q(
+            "ask_flight_data", text="what's the heading", slots={"reading": "altitude"}
+        ),
+        "how much fuel": _q("ask_fuel", conf=0.2, text="how much fuel"),
+        "gear down": _q("ask_switch", text="gear down", slots={"switch_system": "gear"}),
+        "flaps five": _q("None", text="flaps five"),
+    }
+    rows = [
+        {
+            "text": "what's our altitude",
+            "intent": "ask_flight_data",
+            "slots": {"reading": "altitude"},
+        },
+        {
+            "text": "what's the heading",
+            "intent": "ask_flight_data",
+            "slots": {"reading": "heading"},
+        },
+        {"text": "how much fuel", "intent": "ask_fuel", "slots": {}},
+        {"text": "gear down", "intent": "None", "slots": {}},
+        {"text": "flaps five", "intent": "None", "slots": {}},
+    ]
+    s = question_score(lambda t: table[t], rows, wrong_weight=5.0)
+    assert (s["right"], s["misanswered"], s["declined"]) == (1, 1, 1)
+    assert (s["others"], s["others_answered"]) == (2, 1)
+    assert s["score"] == 1 - 1 - 5.0
+
+
+def test_question_dev_score_weighs_every_phrasing_the_same():
+    # q1 attempt 2: one dev phrasing with many rows chose the run.
+    from utils.dev_score import PHRASING_POINTS, question_score
+
+    right = _q("ask_flight_data", slots={"reading": "altitude"})
+    wrong = _q("ask_flight_data", slots={"reading": "heading"})
+    row = {"text": "", "intent": "ask_flight_data", "slots": {"reading": "altitude"}}
+    rows = [{**row, "text": f"big {i}", "template": "ask_flight_data#1"} for i in range(9)]
+    rows += [{**row, "text": "small", "template": "ask_flight_data#2"}]
+    # The big phrasing wrong, the small one right: one phrasing each way.
+    s = question_score(lambda t: wrong if t.startswith("big") else right, rows)
+    assert (s["phrasings"], s["right"], s["misanswered"]) == (2, 1, 9)
+    assert s["score"] == 0
+    s = question_score(lambda t: right, rows)
+    assert s["score"] == 2 * PHRASING_POINTS
