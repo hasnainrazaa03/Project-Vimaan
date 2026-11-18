@@ -629,8 +629,8 @@ def _ask(
 
 
 N1_NOTE = (
-    "the question model's slot reads 'n 1' (number words become digits), which "
-    "the plugin's engine readings don't know: fails until that is mapped (2026-11-18)"
+    "q1 tags 'n 1' (number words become digits); the postprocessor reads it back "
+    "as 'n one', the plugin's name (2026-11-18)"
 )
 
 

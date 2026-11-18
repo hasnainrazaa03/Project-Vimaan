@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from .commands import INSTANCE_WORDS, choice_synonyms, command
+from .normalization import normalize_aviation_input
 from .validators import in_range
 
 # Verbs that imply a choice ("raise" -> gear up, "disconnect" -> autopilot
@@ -124,6 +125,12 @@ def extract_digit_sequence_frequency(text: str) -> str | None:
     return None
 
 
+def _heard(name: str) -> str:
+    """A name as it reads in normalized text: number words become digits
+    ("n one" -> "n 1"), so the model tags "n 1" where the table says "n one"."""
+    return normalize_aviation_input(name)
+
+
 def _build_matchers(synonyms: dict[str, tuple[str, ...]]) -> list[tuple[re.Pattern[str], str]]:
     """Compiled (regex, canonical) matchers for one choice slot.
 
@@ -135,6 +142,8 @@ def _build_matchers(synonyms: dict[str, tuple[str, ...]]) -> list[tuple[re.Patte
     literals: list[tuple[str, str]] = []
     for canon, syns in synonyms.items():
         literals.append((canon, canon))
+        if _heard(canon) != canon:  # "n one" is "n 1" in normalized text
+            literals.append((_heard(canon), canon))
         verbs.extend((v, canon) for v in syns)
         verbs.extend((v, canon) for v in _GENERIC_STATE.get(canon, ()))
     verbs.sort(key=lambda c: len(c[0]), reverse=True)
@@ -166,6 +175,7 @@ def _build_exact(synonyms: dict[str, tuple[str, ...]]) -> dict[str, str]:
     for canon, syns in synonyms.items():
         for name in (canon, *syns, *_GENERIC_STATE.get(canon, ())):
             owners.setdefault(name.lower(), set()).add(canon)
+            owners.setdefault(_heard(name).lower(), set()).add(canon)
     return {name: next(iter(c)) for name, c in owners.items() if len(c) == 1}
 
 

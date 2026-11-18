@@ -768,10 +768,10 @@ def test_the_altimeter_check_follows_the_737s_hpa_selector(monkeypatch, tmp_path
     assert r["ok"] and r["replies"] == ["Q N H one zero one three"]
 
 
-def test_the_n1_step_fails_with_the_question_models_digit_slot(monkeypatch, tmp_path):
-    # q1 reads "what's the n one" as engine_reading "n 1" (number words become
-    # digits); the plugin's engine readings say "n one", so the answer is
-    # "I can't read that now" and the step catches it.
+def test_the_n1_step_catches_an_engine_reading_the_plugin_doesnt_know(monkeypatch, tmp_path):
+    # Before the postprocessor read "n 1" back as "n one", q1's "what's the
+    # n one" reached the plugin as engine_reading "n 1": the answer was "I
+    # can't read that now", and the step catches an answer like it.
     steps = [s for s in tier4.steps("737") if s.name == "N1"]
     results, _, _ = _run_tier4(
         monkeypatch,

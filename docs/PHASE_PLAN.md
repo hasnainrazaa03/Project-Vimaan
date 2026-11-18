@@ -1315,8 +1315,9 @@ up, and "what's the heading" sets heading mode.
   cockpit's units, no sim write or command from any question, commands on the
   question key refused. Writing it found that q1 reads "what's the n one" as
   engine_reading "n 1" (number words become digits), which the plugin's
-  engine readings don't know ("I can't read that now"); the N1 step fails
-  until that is mapped.
+  engine readings don't know ("I can't read that now"). Fixed: the
+  postprocessor reads a choice name in digits back as its name ("n 1" ->
+  "n one"; only "n one" and "n two" change; q1's gate and data unchanged).
 
 ---
 

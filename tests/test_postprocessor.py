@@ -302,6 +302,17 @@ def test_a_tagged_value_is_not_taken_for_a_synonym_inside_it(reading):
     assert out["reading"] == "airspeed"
 
 
+@pytest.mark.parametrize("heard,value", [("n 1", "n one"), ("n 2", "n two")])
+def test_an_engine_reading_tagged_in_digits_is_the_name_the_plugin_knows(heard, value):
+    # The text is normalized before the model reads it ("n one" -> "n 1"), so
+    # q1 tagged "n 1"; the plugin's engine readings say "n one", and "what's
+    # the n one" was answered "I can't read that now".
+    out = canonicalize_choices({"engine_reading": heard}, f"what's the {heard}", "ask_engine")
+    assert out["engine_reading"] == value
+    out = canonicalize_choices({}, f"what's engine 1 {heard} reading", "ask_engine")
+    assert out["engine_reading"] == value  # untagged: found in the text
+
+
 def test_every_name_a_choice_slot_knows_gives_its_own_value():
     # Each value, synonym and generic verb, tagged on its own, comes back as
     # the value it is listed under (unless two values list it).
