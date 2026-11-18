@@ -12,7 +12,8 @@
   <link rel="stylesheet" href="/static/style.css?v=7" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
   <script src="/static/app.js?v=6" defer></script>
-  <script src="/static/live.js?v=3" defer></script>
+  <script src="/static/live.js?v=4" defer></script>
+  <script src="/static/plans.js?v=1" defer></script>
   <script src="/static/evals.js?v=2" defer></script>
   <script src="/static/flights.js?v=1" defer></script>
 </head>
@@ -123,6 +124,15 @@
 
     <!-- ============================= TRAINING ============================= -->
     <div class="panel" id="panel-training" role="tabpanel">
+      <!-- queued rounds of runs (dashboard/plans.py) -->
+      <section class="card glass" id="plans-card" hidden>
+        <header class="card-head">
+          <h2>Training plan</h2>
+          <span class="badge ghost" id="plans-badge"></span>
+        </header>
+        <div id="plans"></div>
+      </section>
+
       <!-- live run header -->
       <section class="card glass live-card">
         <header class="card-head live-head">

@@ -680,6 +680,14 @@
   window.vimaanLive = {
     setManagerLog(lines) { st.managerLog = lines; renderLog(); },
     followLatest() { st.follow = true; setTimeout(refreshRuns, 1500); },
+    show(name) { // a run picked elsewhere (the training plan): pin it
+      st.follow = false;
+      st.baselineAuto = true;
+      st.baseline = null;
+      st.base = null;
+      connect(name);
+      fillSelects();
+    },
   };
 
   document.addEventListener("DOMContentLoaded", () => {

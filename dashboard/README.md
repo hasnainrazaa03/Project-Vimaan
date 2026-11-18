@@ -30,8 +30,9 @@ to one; `?run=v18&compare=v17` pins a run and the run to compare it with;
 
 Every run is read from its metrics stream,
 `ML/training_runs/<version>/metrics.jsonl`, so a run started in a terminal
-shows up exactly like one started from the form. The page follows the newest
-run by default and switches when a new one starts.
+shows up exactly like one started from the form. Runs are listed training
+first, then the most recently updated; the page follows the top one by
+default and switches when a new one starts.
 
 | Panel | Shows |
 | --- | --- |
@@ -55,6 +56,23 @@ is decaying.
 "Interrupted" means no new line for 3 minutes and no end record: the process
 was killed or the machine slept. A crash is recorded as "failed" with its
 message, and Ctrl-C as "stopped".
+
+**Training plan.** A round of runs queued in a terminal (several candidates,
+a few seeds each) can be followed as one card at the top of the tab. Whoever
+queues the runs writes a plan, `ML/training_plans/<name>.json` (not in git):
+
+```json
+{"title": "q1 round 4", "note": "how the winner is picked",
+ "groups": [{"name": "LP-FT", "runs": ["q1-lp5", "q1-lp6"],
+             "cost": 1, "note": "...", "result": "..."}]}
+```
+
+The card shows each group's runs as done, training or queued (no metrics
+stream yet), with each run's best dev score and time, the group's `note` and
+`result`, and about when the round ends. That is an estimate: a queued run
+takes as long as its group's finished runs did, else the plan's finished runs
+times the group's `cost` (2 for a run that does twice the work per step).
+Clicking a run opens it in the charts. `/api/plans` serves the same data.
 
 ### Evals: every model version's record
 
