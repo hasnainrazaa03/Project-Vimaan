@@ -21,7 +21,8 @@ Requests (``op``):
     ping                 reply ``pong``
     quit                 exit
 Replies (``type``):
-    ready, fatal, recording, partial, captured, result, error, selftest, pong, log
+    ready, fatal, recording, partial, captured, result, error, selftest, pong, log,
+    usage (every --usage-every seconds: Mac CPU / memory / GPU, vimaan_nlu.usage)
     (``partial`` = live transcript while recording, streaming backends only;
     ``result.to_reading`` = the command with one "two" read as "to", when the
     number is impossible as heard: see vimaan_nlu.ambiguity.to_reading)
@@ -37,6 +38,7 @@ import json
 import os
 import select
 import sys
+import threading
 import time
 import traceback
 from collections.abc import Callable
@@ -46,6 +48,7 @@ from vimaan_nlu.ambiguity import to_reading
 from vimaan_nlu.audio_health import is_silent, rms_from_pcm16
 from vimaan_nlu.commands import command
 from vimaan_nlu.questions import looks_like_question
+from vimaan_nlu.usage import USAGE_SEC, UsageSampler
 
 MAX_RECORD_SEC = 12.0  # recording is cut off after this even if still held
 MIN_RECORD_SEC = 0.3  # shorter than this is an accidental tap, not a command
@@ -598,11 +601,39 @@ def _protocol_writer() -> Callable[[dict[str, Any]], None]:
     os.dup2(2, 1)
     sys.stdout = sys.stderr
 
+    lock = threading.Lock()  # the usage thread writes too
+
     def send(msg: dict[str, Any]) -> None:
-        proto.write(json.dumps(msg, ensure_ascii=False) + "\n")
-        proto.flush()
+        line = json.dumps(msg, ensure_ascii=False) + "\n"
+        with lock:
+            proto.write(line)
+            proto.flush()
 
     return send
+
+
+def start_usage_reports(
+    send: Callable[[dict[str, Any]], None], every: float, sampler: Any = None
+) -> threading.Thread | None:
+    """Report the Mac's usage every ``every`` seconds from a daemon thread
+    (vimaan_nlu.usage), off X-Plane and off the request loop. 0: never.
+    The parent process is X-Plane when the plugin starts the worker."""
+    if every <= 0:
+        return None
+    sampler = sampler or UsageSampler({"xplane": os.getppid(), "worker": os.getpid()})
+
+    def loop() -> None:
+        sampler.sample()  # the first sample only sets the CPU baseline
+        while True:
+            time.sleep(every)
+            try:
+                send({"type": "usage", "every_sec": every, **sampler.sample()})
+            except Exception as exc:  # never let a usage probe stop the worker
+                send({"type": "log", "msg": f"usage sample failed: {type(exc).__name__}: {exc}"})
+
+    thread = threading.Thread(target=loop, name="vimaan-usage", daemon=True)
+    thread.start()
+    return thread
 
 
 def _make_stream_stt(args: argparse.Namespace) -> tuple[Any, Any, str, dict[str, Any]]:
@@ -709,6 +740,12 @@ def main(argv: list[str] | None = None) -> int:
         help="the question model (default: the newest qN; none: questions go to the command model)",
     )
     parser.add_argument(
+        "--usage-every",
+        type=float,
+        default=USAGE_SEC,
+        help="seconds between Mac usage reports (CPU, memory, GPU); 0: none",
+    )
+    parser.add_argument(
         "--audio-file",
         default=os.environ.get("VIMAAN_WORKER_AUDIO_FILE"),
         help="debug: 'record' this 16-bit mono WAV instead of the microphone",
@@ -809,6 +846,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     if recorder is not None and hasattr(recorder, "listen"):
         recorder.listen()  # pre-roll: the mic stays open from now on
+    start_usage_reports(send, args.usage_every)
     try:
         VoiceWorker(
             send,

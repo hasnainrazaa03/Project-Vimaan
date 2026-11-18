@@ -78,6 +78,80 @@ def is_problem(ev: dict) -> bool:
     return ev.get("kind") == "self_test_probe" and not ev.get("ok")
 
 
+def _median(values: list[float]) -> float:
+    return percentile(values, 50)
+
+
+def performance(events: list[dict]) -> list[str]:
+    """Game performance (X-Plane's frame times: the plugin's ``frames``
+    windows, and each command's frames from key press to done) and Mac usage
+    (the worker's ``usage`` samples). Empty for sessions logged before them."""
+    out: list[str] = []
+    w = out.append
+    windows = [e for e in events if e["kind"] == "frames" and e.get("frames")]
+    if windows:
+        frames = sum(e["frames"] for e in windows)
+        fps = [e["fps"] for e in windows if e.get("fps")]
+        p95 = [e["frame_ms_p95"] for e in windows]
+        w("")
+        w(
+            f"Game performance (X-Plane frame times, {len(windows)} one-minute windows, {frames:,} frames):"
+        )
+        if fps:
+            w(f"  frame rate: median {_median(fps):.1f} fps, lowest minute {min(fps):.1f} fps")
+        w(
+            f"  frame time: median minute's p95 {_median(p95):.1f} ms, worst minute's p95 "
+            f"{max(p95):.1f} ms, worst frame {max(e['frame_ms_max'] for e in windows):.0f} ms"
+        )
+        w(
+            f"  slow frames: {sum(e.get('over_50ms', 0) for e in windows)} over 50 ms, "
+            f"{sum(e.get('over_100ms', 0) for e in windows)} over 100 ms; "
+            f"stalls over 2 s: {sum(e.get('stalls', 0) for e in windows)}"
+        )
+        during = [
+            e["frames"]
+            for e in events
+            if e["kind"] == "command_done" and (e.get("frames") or {}).get("frames")
+        ]
+        if during:
+            w(
+                f"  during commands ({len(during)}, key press to done): median frame "
+                f"{_median([d['frame_ms_p50'] for d in during]):.1f} ms "
+                f"(whole flight {_median([e['frame_ms_p50'] for e in windows]):.1f} ms), "
+                f"worst frame {max(d['frame_ms_max'] for d in during):.0f} ms, "
+                f"{sum(d.get('over_50ms', 0) for d in during)} over 50 ms, "
+                f"{sum(d.get('over_100ms', 0) for d in during)} over 100 ms"
+            )
+    usage = [e for e in events if e["kind"] == "usage"]
+    if usage:
+        every = usage[0].get("every_sec")
+        w("")
+        w(
+            f"Mac usage ({len(usage)} samples"
+            + (f", every {every:g} s" if every else "")
+            + "; CPU in % of one core):"
+        )
+        w(f"  {'':<26}{'median':>10}{'max':>10}")
+        rows = (
+            ("X-Plane CPU %", "xplane_cpu_pct"),
+            ("X-Plane memory MB", "xplane_rss_mb"),
+            ("Vimaan worker CPU %", "worker_cpu_pct"),
+            ("Vimaan worker memory MB", "worker_rss_mb"),
+            ("GPU utilisation %", "gpu_pct"),
+            ("GPU memory MB", "gpu_mem_mb"),
+            ("swap used MB", "swap_used_mb"),
+            ("load (1 min)", "load_1m"),
+        )
+        for label, key in rows:
+            vals = [e[key] for e in usage if e.get(key) is not None]
+            if vals:
+                w(f"  {label:<26}{_median(vals):>10.1f}{max(vals):>10.1f}")
+        free = [e["mem_free_pct"] for e in usage if e.get("mem_free_pct") is not None]
+        if free:
+            w(f"  {'memory free % (macOS)':<26}{_median(free):>10.1f}{min(free):>10.1f}  (lowest)")
+    return out
+
+
 def report(path: Path) -> str:
     events = load_events(path)
     out: list[str] = []
@@ -157,6 +231,8 @@ def report(path: Path) -> str:
                     f"{name:<22}{len(vals):>5}{percentile(vals, 50):>10.1f}"
                     f"{percentile(vals, 95):>10.1f}{max(vals):>10.1f}"
                 )
+
+    out.extend(performance(events))
 
     if done:
         w("")

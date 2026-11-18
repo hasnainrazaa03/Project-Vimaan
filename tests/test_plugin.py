@@ -176,7 +176,7 @@ def test_startup_registers_and_logs(sim):
     assert plugin.ready
     assert "vimaan/push_to_talk" in xp.custom_commands
     assert "vimaan/self_test" in xp.custom_commands
-    assert len(xp.flight_loops) == 1
+    assert xp.flight_loops == [plugin._flight_loop, plugin._on_frame]  # + frame times
     assert xp.spoken[-1] == "Vimaan AI CoPilot ready"
     kinds = [e["kind"] for e in events(plugin)]
     for kind in ("session_start", "worker_spawn", "plugin_start", "worker_ready"):
@@ -1680,6 +1680,59 @@ def test_log_report_summarises_clean_session(monkeypatch, tmp_path):
     assert "Ended: clean shutdown" in text
     assert "executed" in text and "rejected" in text
     assert "slot_rejected" in text  # the out-of-range altitude is a listed problem
+
+
+def test_frame_times_and_mac_usage_are_logged_and_reported(monkeypatch, tmp_path):
+    NLU.clear()
+    module, plugin, _ = _load_plugin(monkeypatch, tmp_path)
+    clock = {"now": 100.0}
+    plugin.frames = module.FrameStats(clock=lambda: clock["now"], window_sec=1.0)
+
+    def frames(*ms):
+        for m in ms:
+            clock["now"] += m / 1000
+            assert plugin._on_frame(m / 1000, 0.0, 0, None) == -1.0  # every frame
+
+    frames(*[16.0] * 40)
+    pressed = clock["now"]
+    frames(16.0, 70.0, 16.0)
+    plugin._execute_command(
+        {
+            "cmd": "c0001",
+            "text": "gear down",
+            "prediction": {**_fake_predict("gear down"), "nlu_ms": 5.0, "normalized": "gear down"},
+            "t_press": pressed,
+            "t_release": pressed,
+        }
+    )
+    frames(*[16.0] * 40)  # the window ends
+    plugin._on_worker_message(
+        {"type": "usage", "every_sec": 15, "xplane_cpu_pct": 310.0, "worker_rss_mb": 960}
+    )
+    plugin.XPluginStop()
+
+    (window,) = events(plugin, "frames")
+    assert window["frames"] == 61 and window["over_50ms"] == 1 and window["stalls"] == 0
+    done = events(plugin, "command_done")[-1]
+    assert done["frames"]["frame_ms_max"] == 70.0 and done["frames"]["over_50ms"] == 1
+    (sample,) = events(plugin, "usage")
+    assert sample["xplane_cpu_pct"] == 310.0 and sample["worker_rss_mb"] == 960
+    text = _report_module().report(plugin.tel.events_path)
+    assert "Game performance (X-Plane frame times, 1 one-minute windows" in text
+    assert "during commands (1, key press to done)" in text and "worst frame 70 ms" in text
+    assert "Mac usage (1 samples, every 15 s" in text and "X-Plane CPU %" in text
+
+
+def test_frame_stats_never_stop_the_frame_callback(sim):
+    _, plugin, _ = sim
+
+    class Broken:
+        def add(self, _):
+            raise RuntimeError("boom")
+
+    plugin.frames = Broken()
+    assert plugin._on_frame(0.016, 0.0, 0, None) == -1.0
+    assert events(plugin, "frame_stats_error")
 
 
 def test_log_report_flags_abrupt_end(monkeypatch, tmp_path):
