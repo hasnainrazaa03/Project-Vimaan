@@ -72,3 +72,16 @@ class TestFindLatestVersionPath:
         (tmp_path / "dataset_v2.jsonl").write_text("{}")
         out = find_latest_version_path(str(tmp_path / "dataset.jsonl"))
         assert out.endswith("dataset_v2.jsonl")
+
+
+def test_command_and_question_models_are_never_mixed_up(tmp_path, monkeypatch):
+    from utils import file_utils
+
+    for name in ("v9", "v26", "v27-a", "v27-soup1", "q1", "q2", "q2-a"):
+        (tmp_path / name).mkdir()
+    monkeypatch.setattr(file_utils, "get_model_versions_dir", lambda: str(tmp_path))
+    assert file_utils.get_latest_model_path() == str(tmp_path / "v26")
+    assert file_utils.get_latest_question_model_path() == str(tmp_path / "q2")
+    for name in ("q1", "q2", "q2-a"):
+        os.rmdir(tmp_path / name)
+    assert file_utils.get_latest_question_model_path() is None

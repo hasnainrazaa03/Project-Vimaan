@@ -78,6 +78,44 @@ def extract_slots(slot_pred_indices, tokens, slot_map_rev):
     return extracted_slots
 
 
+def is_wordpiece(tokenizer) -> bool:
+    """WordPiece (DistilBERT: "##" pieces, offsets without spaces), or not
+    (Ettin / ModernBERT: byte-level BPE). A tokenizer with no fast backend is
+    taken as WordPiece, as every model before the question model's round 4."""
+    backend = getattr(tokenizer, "backend_tokenizer", None)
+    model = getattr(backend, "model", None)
+    return model is None or type(model).__name__ == "WordPiece"
+
+
+def extract_slots_by_offsets(slot_pred_indices, offsets, text, slot_map_rev):
+    """Like extract_slots, but each value is the text its tokens cover
+    (from the first token's start to the last's end): for tokenizers whose
+    pieces don't spell the words back (byte-level BPE's "Ġvertical")."""
+    from utils.slot_alignment import trim_offsets
+
+    extracted: dict[str, str] = {}
+    current, start, end = None, 0, 0
+
+    def close():
+        if current is not None:
+            extracted[current] = text[start:end].strip()
+
+    for (s, e), slot_idx in zip(trim_offsets(text, offsets), slot_pred_indices):
+        if s == e:  # special token
+            continue
+        tag = slot_map_rev.get(int(slot_idx), "O")
+        if tag.startswith("B-"):
+            close()
+            current, start, end = tag[2:], s, e
+        elif tag.startswith("I-") and current == tag[2:]:
+            end = e
+        elif not tag.startswith("I-"):
+            close()
+            current = None
+    close()
+    return extracted
+
+
 def predict(
     text,
     model,
@@ -102,12 +140,14 @@ def predict(
         limit = getattr(tokenizer, "model_max_length", None)
         max_length = limit if isinstance(limit, int) and 0 < limit <= 512 else DEFAULT_MAX_LENGTH
 
+    wordpiece = is_wordpiece(tokenizer)
     encoding = tokenizer(
         text_normalized,
         padding="max_length" if pad_to_max_length else False,
         truncation=True,
         max_length=max_length,
         return_tensors="pt",
+        **({} if wordpiece else {"return_offsets_mapping": True}),
     )
     input_ids = encoding["input_ids"].to(device)
     attention_mask = encoding["attention_mask"].to(device)
@@ -127,9 +167,14 @@ def predict(
     )
 
     slot_pred_indices = torch.argmax(slot_logits, dim=2)[0].cpu().numpy()
-    tokens = tokenizer.convert_ids_to_tokens(input_ids[0].cpu().numpy())
-
-    extracted_slots = extract_slots(slot_pred_indices, tokens, slot_map_rev)
+    if wordpiece:
+        tokens = tokenizer.convert_ids_to_tokens(input_ids[0].cpu().numpy())
+        extracted_slots = extract_slots(slot_pred_indices, tokens, slot_map_rev)
+    else:
+        offsets = encoding["offset_mapping"][0].tolist()
+        extracted_slots = extract_slots_by_offsets(
+            slot_pred_indices, offsets, text_normalized, slot_map_rev
+        )
     for old, new in (LEGACY_INTENTS[intent_raw][2] if intent_raw in LEGACY_INTENTS else {}).items():
         if old in extracted_slots:
             extracted_slots[new] = extracted_slots.pop(old)

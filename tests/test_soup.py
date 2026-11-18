@@ -128,3 +128,52 @@ def test_greedy_needs_one_dev_set(tmp_path):
     (b,) = _weighted_models(tmp_path, {"b": 1.0}, dataset="other")
     with pytest.raises(ValueError, match="same dataset"):
         greedy([a, b], tmp_path / "soup", a, score=_closeness_to(1.0))
+
+
+def _fixed(scores):
+    """A dev score per member name (the average gets ``scores["soup"]``)."""
+
+    def score(path):
+        return {
+            "score": scores.get(path.name, scores["soup"]),
+            "right": 0,
+            "rejected": 0,
+            "wrong": 0,
+            "negatives_acted": 0,
+        }
+
+    return score
+
+
+@pytest.mark.requires_torch
+def test_within_averages_every_member_near_the_best_with_equal_weight(tmp_path):
+    from average_models import BODY, within
+    from safetensors.torch import load_file
+
+    a, b, c, d = _weighted_models(tmp_path, {"a": 1.0, "b": 2.0, "c": 3.0, "d": 40.0})
+    # d is more than 2% below the best (100): left out; c is 1.5% below: kept.
+    scores = {"a": 100.0, "b": 99.0, "c": 98.5, "d": 97.9, "soup": 99.5}
+    manifest = within([a, b, c, d], tmp_path / "soup", d, 0.02, score=_fixed(scores))
+    assert manifest["soup_of"] == ["a", "b", "c"]
+    assert load_file(tmp_path / "soup" / BODY)["w"].item() == pytest.approx(2.0)
+    assert [t["kept"] for t in manifest["soup_trail"]] == [True, True, True, False, True]
+    assert manifest["soup_trail"][-1]["score"] == 99.5
+    assert "within 0.02" in manifest["soup_method"]
+
+
+@pytest.mark.requires_torch
+def test_within_needs_one_dev_set(tmp_path):
+    from average_models import within
+
+    (a,) = _weighted_models(tmp_path, {"a": 1.0})
+    (b,) = _weighted_models(tmp_path, {"b": 1.0}, dataset="other")
+    with pytest.raises(ValueError, match="same dataset"):
+        within([a, b], tmp_path / "soup", a, 0.02, score=_fixed({"soup": 0.0}))
+
+
+@pytest.mark.requires_torch
+def test_a_question_model_is_told_from_a_command_model(tmp_path):
+    from average_models import is_question_model
+
+    assert is_question_model(model_dir(tmp_path, "q1-a", ("None", "ask_fuel", "ask_time")))
+    assert not is_question_model(model_dir(tmp_path, "v27-a", ("None", "ask_fuel", "set_flaps")))

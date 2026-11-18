@@ -12,14 +12,15 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-from transformers import DistilBertTokenizerFast
+from transformers import AutoTokenizer
 from utils import dev_score, find_latest_version_path, get_model_versions_dir
 from utils.convergence import Convergence
 from utils.device import resolve_device
 from utils.eval_metrics import per_intent_accuracy, per_slot_f1
 from utils.lr_schedule import SCHEDULES, lr_factor
+from utils.robust_ft import linear_probe, rdrop_loss
 from utils.run_logger import RunLogger
-from utils.slot_alignment import align_offsets_to_labels, find_slot_char_spans
+from utils.slot_alignment import align_offsets_to_labels, find_slot_char_spans, trim_offsets
 from utils.splits import template_split
 from vimaan_nlu import (
     JointIntentAndSlotModel,
@@ -59,7 +60,7 @@ class AviationCommandDataset(Dataset):
             return_offsets_mapping=True,
         )
         input_ids = encoding["input_ids"][0]
-        offsets = encoding["offset_mapping"][0].tolist()
+        offsets = trim_offsets(text, encoding["offset_mapping"][0].tolist())
 
         # Offset-based BIO alignment (T1.1/T1.2): anchor each slot value at a
         # word boundary and label tokens by char-span containment — no more
@@ -80,18 +81,33 @@ class AviationCommandDataset(Dataset):
 GRAD_NORM_EVERY = 25
 # What a dev check picks the best weights by: dev loss, or dev scored the way
 # the gate scores (utils/dev_score.py).
-SELECT = ("loss", "actions")
+# "questions": a question model's dev (utils/dev_score.question_score).
+SELECT = ("loss", "actions", "questions")
 # With "wsd" and "actions": dev must gain more than this share of its rows
 # (0.05%, ~4 of 7,708) to count as still improving.
 MIN_GAIN_SHARE = 0.0005
 
 
+def _dev_line(dev):
+    if "misanswered" in dev:  # a question model (select="questions")
+        return (
+            f"  Dev questions right/misanswered/declined {dev['right']}/{dev['misanswered']}"
+            f"/{dev['declined']} others answered {dev['others_answered']} score {dev['score']:g}"
+        )
+    return (
+        f"  Dev right/rejected/wrong {dev['right']}/{dev['rejected']}/{dev['wrong']}"
+        f" negatives acted {dev['negatives_acted']} score {dev['score']:g}"
+    )
+
+
 def _trim(batch):
     """Cut the batch's padding to its longest example. Rows are padded to
     max_length (40) but the longest averages 12 tokens; padding is masked, so
-    the loss and outputs are the same (to ~1e-6) and a step is ~1.3x faster."""
+    the loss and outputs are the same (to ~1e-6) and a step is ~1.3x faster.
+    Contiguous: on the CPU ``.to(device)`` keeps the slice, and the model's
+    ``.view`` needs contiguous labels (a GPU copy hid this)."""
     n = int(batch["attention_mask"].sum(dim=1).max())
-    return {k: v[:, :n] if v.dim() == 2 else v for k, v in batch.items()}
+    return {k: v[:, :n].contiguous() if v.dim() == 2 else v for k, v in batch.items()}
 
 
 def _optimizer(model, lr, device):
@@ -154,6 +170,9 @@ def train_model(
     select="loss",
     decay_epochs=1.0,
     save_last=False,
+    lp_epochs=0.0,
+    lp_lr=1e-3,
+    rdrop=0.0,
 ):
     # Reproducibility (T1.10): the pipeline was fully unseeded except the split.
     random.seed(42)
@@ -214,7 +233,7 @@ def train_model(
             slots.add(f"I-{slot_name}")
     slot_map = {name: i for i, name in enumerate(sorted(list(slots)))}
 
-    tokenizer = DistilBertTokenizerFast.from_pretrained(base_model)
+    tokenizer = AutoTokenizer.from_pretrained(base_model)
     train_dataset = AviationCommandDataset(
         train_data, tokenizer, intent_map, slot_map, max_length=max_length
     )
@@ -226,13 +245,20 @@ def train_model(
 
     device = resolve_device(device)  # cuda > mps (Apple GPU) > cpu, or forced
     print(f"Using device: {device}")
-    model = JointIntentAndSlotModel(num_intents=len(intent_map), num_slots=len(slot_map)).to(device)
+    model = JointIntentAndSlotModel(
+        num_intents=len(intent_map), num_slots=len(slot_map), base_model=base_model
+    ).to(device)
     if run_seed is not None:
         # Runs of one recipe to be averaged (ML/average_models.py): the same
         # starting weights (seeded above), a different data order and dropout.
         random.seed(42 + run_seed)
         np.random.seed(42 + run_seed)
         torch.manual_seed(42 + run_seed)
+    if lp_epochs > 0:
+        # LP-FT (utils/robust_ft.py): fit the heads on frozen features first.
+        print(f"Linear probe: the heads alone for {lp_epochs:g} epochs at lr {lp_lr:g}...")
+        probe_loss = linear_probe(model, train_loader, device, lp_epochs, lp_lr, trim=_trim)
+        print(f"Linear probe done: mean loss {probe_loss:.4f}")
     optimizer, optimizer_name = _optimizer(model, lr, device)
     # "linear": warm up over the first `warmup` share of steps, then fall to
     # zero at the last step (utils/lr_schedule.py). Early stopping cuts the
@@ -259,7 +285,7 @@ def train_model(
             decay_steps=max(1, min(total_steps, round(decay_epochs * steps_per_epoch))),
             # Dev must gain more than this to count as still improving: a
             # check or two of dev rows going either way is noise.
-            min_gain=MIN_GAIN_SHARE * len(val_data) if select == "actions" else 0.0,
+            min_gain=MIN_GAIN_SHARE * len(val_data) if select != "loss" else 0.0,
         )
         scheduler = LambdaLR(optimizer, convergence.factor)
     elif schedule == "linear":
@@ -309,6 +335,9 @@ def train_model(
         eval_every=eval_every,
         select=select,
         decay_epochs=decay_epochs if schedule == "wsd" else None,
+        lp_epochs=lp_epochs,
+        lp_lr=lp_lr if lp_epochs > 0 else None,
+        rdrop=rdrop,
         num_intents=len(intent_map),
         num_slots=len(slot_map),
         steps_per_epoch=steps_per_epoch,
@@ -331,6 +360,9 @@ def train_model(
             "eval_every": eval_every,
             "select": select,
             "decay_epochs": decay_epochs if schedule == "wsd" else None,
+            "lp_epochs": lp_epochs,
+            "lp_lr": lp_lr if lp_epochs > 0 else None,
+            "rdrop": rdrop,
             "early_stopping_patience": patience,
             "train_val_split": None if by_template else 0.85,
             "validation": validation,
@@ -410,9 +442,10 @@ def train_model(
                 slot_true.extend(slot_labels[mask].cpu().tolist())
                 slot_pred.extend(slot_logits.argmax(dim=-1)[mask].cpu().tolist())
             dev = None
-            if select == "actions":
+            if select != "loss":
                 run = dev_score.live_runner(model, tokenizer, device, intent_map, slot_map)
-                dev = dev_score.score(run, val_data)
+                scorer = dev_score.question_score if select == "questions" else dev_score.score
+                dev = scorer(run, val_data)
         model.train()
         val_slot_f1 = (
             f1_score(slot_true, slot_pred, average="macro", zero_division=0) if slot_true else 0.0
@@ -448,12 +481,7 @@ def train_model(
         print(
             f"Epoch {at_epoch:g} - Val Loss: {m['val_loss']:.4f}  "
             f"Intent Acc: {m['val_intent_acc']:.4f}  Slot F1(macro): {m['val_slot_f1']:.4f}"
-            + (
-                f"  Dev right/rejected/wrong {dev['right']}/{dev['rejected']}/{dev['wrong']}"
-                f" negatives acted {dev['negatives_acted']} score {dev['score']:g}"
-                if dev
-                else ""
-            )
+            + (_dev_line(dev) if dev else "")
         )
         score = dev["score"] if dev else -m["val_loss"]
         if convergence is not None:
@@ -517,7 +545,12 @@ def train_model(
                 intent_labels = batch["intent_label"].to(device)
                 slot_labels = batch["slot_labels"].to(device)
 
-                loss, _, _ = model(input_ids, attention_mask, intent_labels, slot_labels)
+                if rdrop > 0:  # utils/robust_ft.py: two dropout passes that must agree
+                    loss = rdrop_loss(
+                        model, (input_ids, attention_mask, intent_labels, slot_labels), rdrop
+                    )
+                else:
+                    loss, _, _ = model(input_ids, attention_mask, intent_labels, slot_labels)
 
                 step_loss = loss.item()
                 window_loss += step_loss
@@ -660,6 +693,19 @@ if __name__ == "__main__":
         help="Also save the final weights, as <name>-last.",
     )
     parser.add_argument(
+        "--lp-epochs",
+        type=float,
+        default=0.0,
+        help="LP-FT: first train only the heads on frozen features for this many epochs.",
+    )
+    parser.add_argument("--lp-lr", type=float, default=1e-3, help="LP-FT: the heads' rate.")
+    parser.add_argument(
+        "--rdrop",
+        type=float,
+        default=0.0,
+        help="R-Drop: weight of the KL between two dropout passes (0: off; 2x the compute).",
+    )
+    parser.add_argument(
         "--model-save-dir",
         type=str,
         default=None,
@@ -722,4 +768,7 @@ if __name__ == "__main__":
         select=args.select,
         decay_epochs=args.decay_epochs,
         save_last=args.save_last,
+        lp_epochs=args.lp_epochs,
+        lp_lr=args.lp_lr,
+        rdrop=args.rdrop,
     )

@@ -19,6 +19,8 @@ Pure Python: it works on the transcript, before anything reaches the sim.
 
 from __future__ import annotations
 
+from typing import Any
+
 # A transcript starting with one of these is a question. Only "is", "are",
 # "what" and "how" are in the Vosk grammar today; the rest come from other
 # recognisers (and Tier 4's grammar).
@@ -109,6 +111,15 @@ _AROUND = (
 )
 
 
+def one_word(text: str) -> bool:
+    """Whether ``text`` is one word, hesitations aside ("armed", "uh
+    torque"). The question model never answers one: a word alone is a
+    fragment, not a question (q1 attempt 1 answered "armed" as the autopilot,
+    and which lone words it answered changed with the seed). A reading named
+    alone is answered by bare_reading instead."""
+    return len([w for w in text.lower().split() if w not in _FILLER]) < 2
+
+
 def bare_reading(text: str) -> tuple[str, dict[str, str]] | None:
     """(question intent, slots) when ``text`` names one reading and nothing
     else ("heading", "what are altitude"), else None. A value or a state
@@ -116,3 +127,24 @@ def bare_reading(text: str) -> tuple[str, dict[str, str]] | None:
     words = [w for w in text.lower().split() if w not in _AROUND]
     found = BARE_READINGS.get(" ".join(words))
     return None if found is None else (found[0], dict(found[1]))
+
+
+def complete_command(
+    intent: str, slots: dict[str, Any], confidence: float, normalized: str, floor: float
+) -> bool:
+    """Would the command model's reading be acted on: a command, confident,
+    its command word said, every slot it needs there and valid? When it
+    isn't, the question model's answer stands in: "landing lights status"
+    is toggle_lights with no on/off to v26, and a question to the question
+    model (Tier 4, design B)."""
+    from vimaan_nlu.commands import command, required_slots
+    from vimaan_nlu.validators import has_command_word, validate_slot
+
+    cmd = command(intent)
+    if cmd is None or not cmd.actionable or confidence < floor:
+        return False
+    if not has_command_word(intent, normalized):
+        return False
+    if any(not slots.get(name) for name in required_slots().get(intent, ())):
+        return False
+    return all(validate_slot(name, slots[name])[1] for name in cmd.slots if name in slots)

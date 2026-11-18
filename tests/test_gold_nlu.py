@@ -150,6 +150,31 @@ GOLD_TIER3 = [
     ("fuel pump one off", "toggle_fuel_pump", {"instance": "1", "switch": "off"}),
     ("boost pumps on", "toggle_fuel_pump", {"switch": "on"}),
 ]
+# Tier 4: questions, answered and never acted on. Written on 2026-11-16 before
+# any v27 result was seen. The question model answers them (option B), so
+# scripts/question_gate.py grades them (Q2), not the command model's gate.
+GOLD_TIER4 = [
+    ("what's our altitude", "ask_flight_data", {"reading": "altitude"}),
+    ("what's the heading", "ask_flight_data", {"reading": "heading"}),
+    ("what's our airspeed", "ask_flight_data", {"reading": "airspeed"}),
+    ("what's our vertical speed", "ask_flight_data", {"reading": "vertical speed"}),
+    ("what's the wind", "ask_flight_data", {"reading": "wind"}),
+    ("what's the outside temperature", "ask_flight_data", {"reading": "temperature"}),
+    ("how much fuel do we have", "ask_fuel", {}),
+    ("how long will our fuel last", "ask_fuel_time", {}),
+    ("what's the oil pressure", "ask_engine", {"engine_reading": "oil pressure"}),
+    ("what's com one", "ask_com", {"com_port": "1"}),
+    ("what's nav two standby", "ask_nav", {"nav_port": "2", "which": "standby"}),
+    ("what's our squawk", "ask_transponder", {}),
+    ("is the autopilot on", "ask_autopilot", {}),
+    ("what altitude is set", "ask_autopilot", {"ap_target": "altitude"}),
+    ("are the landing lights on", "ask_switch", {"light": "landing"}),
+    ("is the gear down", "ask_switch", {"switch_system": "gear"}),
+    ("where are the flaps", "ask_switch", {"switch_system": "flaps"}),
+    ("how far to the next way point", "ask_waypoint", {}),
+    ("what time is it", "ask_time", {}),
+    ("status report", "ask_status_generic", {}),
+]
 GOLD = GOLD + GOLD_TIER1 + GOLD_TIER2 + GOLD_TIER3
 
 # Bare numbers and fragments must never be acted on (scripts/model_gate.py

@@ -37,6 +37,19 @@ def find_slot_char_spans(text: str, slots: dict | None):
     return spans
 
 
+def trim_offsets(text: str, offsets):
+    """Offsets without the whitespace in front of a token: a byte-level BPE
+    token carries its space ("Ġvertical" covers " vertical"), so it would never
+    sit inside a slot's span. WordPiece offsets never cover a space: theirs come
+    back unchanged. Special tokens ``(0, 0)`` stay as they are."""
+    out = []
+    for start, end in offsets:
+        while start < end and text[start].isspace():
+            start += 1
+        out.append((start, end))
+    return out
+
+
 def align_offsets_to_labels(offsets, spans, slot_map):
     """Map tokenizer ``(start, end)`` offsets to BIO label ids via char spans.
 

@@ -2,7 +2,7 @@ import json
 import os
 
 import torch
-from transformers import DistilBertTokenizerFast
+from transformers import AutoTokenizer
 from utils import get_latest_model_path
 
 from vimaan_nlu import JointIntentAndSlotModel
@@ -94,7 +94,7 @@ class ModelLoader:
         return True
 
     def load_tokenizer(self, model_path):
-        self.tokenizer = DistilBertTokenizerFast.from_pretrained(model_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         # Truncate where the model was trained to (v17: 40), not at a fixed
         # constant: predict() reads tokenizer.model_max_length.
         self.max_length = self.trained_max_length(model_path)

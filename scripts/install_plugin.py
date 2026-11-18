@@ -11,6 +11,10 @@ Usage::
     python scripts/install_plugin.py --xplane "/path/to/X-Plane 12"
     python scripts/install_plugin.py --xplane "..." --dry-run
     python scripts/install_plugin.py --xplane "..." --model v10
+    python scripts/install_plugin.py --xplane "..." --model v26 --question-model q1
+
+A question model (Tier 4, ``qN``) is installed only when named: it changes
+what Vimaan answers, so it goes in by choice, never as "the latest".
 """
 
 from __future__ import annotations
@@ -52,7 +56,12 @@ def python_plugins_dir(xplane_root: str) -> str:
     return os.path.join(plugins, "PythonPlugins")
 
 
-def build_plan(repo_root: str, xplane_root: str, model_version: str | None = None):
+def build_plan(
+    repo_root: str,
+    xplane_root: str,
+    model_version: str | None = None,
+    question_model: str | None = None,
+):
     """Return a list of ``(src, dst, kind)`` copy ops (``kind`` in {"file","tree"}).
 
     Raises ``FileNotFoundError`` if the X-Plane root or a trained model is missing.
@@ -88,6 +97,19 @@ def build_plan(repo_root: str, xplane_root: str, model_version: str | None = Non
             "tree",
         ),
     ]
+    if question_model:
+        if not (question_model.startswith("q") and question_model[1:].isdigit()):
+            raise FileNotFoundError(f"not a question model (qN): {question_model}")
+        question_src = os.path.join(models_root, question_model)
+        if not os.path.isdir(question_src):
+            raise FileNotFoundError(f"question model not found: {question_src}")
+        plan.append(
+            (
+                question_src,
+                os.path.join(ml_dest, "models", "vimaan_nlu_model_best", question_model),
+                "tree",
+            )
+        )
     vosk_src = os.path.join(repo_root, VOSK_MODEL_SUBDIR)
     if os.path.isdir(vosk_src):
         plan.append((vosk_src, os.path.join(dest_root, VOSK_MODEL_SUBDIR), "tree"))
@@ -108,11 +130,14 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Install the Vimaan plugin into X-Plane.")
     parser.add_argument("--xplane", required=True, help="X-Plane root (contains Resources/)")
     parser.add_argument("--model", default=None, help="model version, e.g. v10 (default: latest)")
+    parser.add_argument(
+        "--question-model", default=None, help="question model, e.g. q1 (default: none)"
+    )
     parser.add_argument("--dry-run", action="store_true", help="print the plan without copying")
     args = parser.parse_args(argv)
 
     try:
-        plan = build_plan(REPO_ROOT, args.xplane, args.model)
+        plan = build_plan(REPO_ROOT, args.xplane, args.model, args.question_model)
     except FileNotFoundError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2

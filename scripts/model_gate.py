@@ -142,6 +142,28 @@ def decision(p: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     return "act", action
 
 
+def answer_decision(p: dict[str, Any], one_word_rule: bool = True) -> str:
+    """ "answer" when the plugin would answer the prediction as a question
+    (a question model's, Tier 4), else why not. Mirrors the plugin's
+    _question_reading: a question family, confident, more than one word
+    (questions.one_word), its words said."""
+    from vimaan_nlu.commands import command
+    from vimaan_nlu.questions import one_word
+    from vimaan_nlu.validators import has_command_word
+
+    cmd = command(p["intent"])
+    if cmd is None or not cmd.is_question:
+        return "not_a_question"
+    if p["confidence"] < CONFIDENCE_FLOOR:
+        return "low_confidence"
+    text = p.get("normalized_text") or ""
+    if one_word_rule and one_word(text):
+        return "one_word"
+    if not has_command_word(p["intent"], text):
+        return "no_command_word"
+    return "answer"
+
+
 def same_value(name: str, a: Any, b: Any) -> bool:
     if a is None or b is None:
         return a == b

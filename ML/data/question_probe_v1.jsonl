@@ -1,0 +1,96 @@
+{"v": 2, "text": "altitude reading please", "intent": "ask_flight_data", "slots": {"reading": "altitude"}, "template": "probe#0", "split": "probe", "noise": "none"}
+{"v": 2, "text": "current heading", "intent": "ask_flight_data", "slots": {"reading": "heading"}, "template": "probe#1", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how is our airspeed looking", "intent": "ask_flight_data", "slots": {"reading": "airspeed"}, "template": "probe#2", "split": "probe", "noise": "none"}
+{"v": 2, "text": "rate of descent please", "intent": "ask_flight_data", "slots": {"reading": "rate of descent"}, "template": "probe#3", "split": "probe", "noise": "none"}
+{"v": 2, "text": "ground speed reading", "intent": "ask_flight_data", "slots": {"reading": "ground speed"}, "template": "probe#4", "split": "probe", "noise": "none"}
+{"v": 2, "text": "altimeter setting check", "intent": "ask_flight_data", "slots": {"reading": "altimeter setting"}, "template": "probe#5", "split": "probe", "noise": "none"}
+{"v": 2, "text": "temperature outside", "intent": "ask_flight_data", "slots": {"reading": "temperature"}, "template": "probe#6", "split": "probe", "noise": "none"}
+{"v": 2, "text": "mach number check", "intent": "ask_flight_data", "slots": {"reading": "mach number"}, "template": "probe#7", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how far above the ground", "intent": "ask_flight_data", "slots": {"reading": "above the ground"}, "template": "probe#8", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how are the winds", "intent": "ask_flight_data", "slots": {"reading": "winds"}, "template": "probe#9", "split": "probe", "noise": "none"}
+{"v": 2, "text": "fuel reading", "intent": "ask_fuel", "slots": {}, "template": "probe#10", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how is the fuel looking", "intent": "ask_fuel", "slots": {}, "template": "probe#11", "split": "probe", "noise": "none"}
+{"v": 2, "text": "are we good on fuel", "intent": "ask_fuel", "slots": {}, "template": "probe#12", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how many gallons left", "intent": "ask_fuel", "slots": {}, "template": "probe#13", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how many pounds of fuel", "intent": "ask_fuel", "slots": {}, "template": "probe#14", "split": "probe", "noise": "none"}
+{"v": 2, "text": "fuel quantity remaining", "intent": "ask_fuel", "slots": {}, "template": "probe#15", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how much is in the tanks", "intent": "ask_fuel", "slots": {}, "template": "probe#16", "split": "probe", "noise": "none"}
+{"v": 2, "text": "fuel total please", "intent": "ask_fuel", "slots": {}, "template": "probe#17", "split": "probe", "noise": "none"}
+{"v": 2, "text": "endurance status", "intent": "ask_fuel_time", "slots": {}, "template": "probe#18", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how many hours of fuel left", "intent": "ask_fuel_time", "slots": {}, "template": "probe#19", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how long can the fuel last", "intent": "ask_fuel_time", "slots": {}, "template": "probe#20", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how many hours left on fuel", "intent": "ask_fuel_time", "slots": {}, "template": "probe#21", "split": "probe", "noise": "none"}
+{"v": 2, "text": "endurance left", "intent": "ask_fuel_time", "slots": {}, "template": "probe#22", "split": "probe", "noise": "none"}
+{"v": 2, "text": "remaining endurance", "intent": "ask_fuel_time", "slots": {}, "template": "probe#23", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how much flying time remaining", "intent": "ask_fuel_time", "slots": {}, "template": "probe#24", "split": "probe", "noise": "none"}
+{"v": 2, "text": "fuel time check", "intent": "ask_fuel_time", "slots": {}, "template": "probe#25", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how is the oil pressure looking", "intent": "ask_engine", "slots": {"engine_reading": "oil pressure"}, "template": "probe#26", "split": "probe", "noise": "none"}
+{"v": 2, "text": "engine two torque check", "intent": "ask_engine", "slots": {"engine_reading": "torque", "instance": "two"}, "template": "probe#27", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how are the engine instruments looking", "intent": "ask_engine", "slots": {}, "template": "probe#28", "split": "probe", "noise": "none"}
+{"v": 2, "text": "engine one e g t reading", "intent": "ask_engine", "slots": {"engine_reading": "e g t", "instance": "one"}, "template": "probe#29", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how is the fuel flow looking", "intent": "ask_engine", "slots": {"engine_reading": "fuel flow"}, "template": "probe#30", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how is the oil temperature", "intent": "ask_engine", "slots": {"engine_reading": "oil temperature"}, "template": "probe#31", "split": "probe", "noise": "none"}
+{"v": 2, "text": "are the engines normal", "intent": "ask_engine", "slots": {}, "template": "probe#32", "split": "probe", "noise": "none"}
+{"v": 2, "text": "prop speed check", "intent": "ask_engine", "slots": {"engine_reading": "prop speed"}, "template": "probe#33", "split": "probe", "noise": "none"}
+{"v": 2, "text": "com one active frequency", "intent": "ask_com", "slots": {"com_port": "1", "which": "active"}, "template": "probe#34", "split": "probe", "noise": "none"}
+{"v": 2, "text": "com one frequency reading", "intent": "ask_com", "slots": {"com_port": "1"}, "template": "probe#35", "split": "probe", "noise": "none"}
+{"v": 2, "text": "radio frequency check", "intent": "ask_com", "slots": {}, "template": "probe#36", "split": "probe", "noise": "none"}
+{"v": 2, "text": "what frequency is on com one", "intent": "ask_com", "slots": {"com_port": "1"}, "template": "probe#37", "split": "probe", "noise": "none"}
+{"v": 2, "text": "what have we got on com two", "intent": "ask_com", "slots": {"com_port": "2"}, "template": "probe#38", "split": "probe", "noise": "none"}
+{"v": 2, "text": "com two standby frequency please", "intent": "ask_com", "slots": {"com_port": "2", "which": "standby"}, "template": "probe#39", "split": "probe", "noise": "none"}
+{"v": 2, "text": "nav one active frequency", "intent": "ask_nav", "slots": {"nav_port": "1", "which": "active"}, "template": "probe#40", "split": "probe", "noise": "none"}
+{"v": 2, "text": "nav one frequency please", "intent": "ask_nav", "slots": {"nav_port": "1"}, "template": "probe#41", "split": "probe", "noise": "none"}
+{"v": 2, "text": "what have we got on nav one", "intent": "ask_nav", "slots": {"nav_port": "1"}, "template": "probe#42", "split": "probe", "noise": "none"}
+{"v": 2, "text": "obs setting", "intent": "ask_nav", "slots": {"which": "obs"}, "template": "probe#43", "split": "probe", "noise": "none"}
+{"v": 2, "text": "course setting please", "intent": "ask_nav", "slots": {"which": "course"}, "template": "probe#44", "split": "probe", "noise": "none"}
+{"v": 2, "text": "what course is nav two on", "intent": "ask_nav", "slots": {"nav_port": "2", "which": "course"}, "template": "probe#45", "split": "probe", "noise": "none"}
+{"v": 2, "text": "nav two frequency check", "intent": "ask_nav", "slots": {"nav_port": "2"}, "template": "probe#46", "split": "probe", "noise": "none"}
+{"v": 2, "text": "squawk status", "intent": "ask_transponder", "slots": {}, "template": "probe#47", "split": "probe", "noise": "none"}
+{"v": 2, "text": "transponder code please", "intent": "ask_transponder", "slots": {}, "template": "probe#48", "split": "probe", "noise": "none"}
+{"v": 2, "text": "what is in the transponder", "intent": "ask_transponder", "slots": {}, "template": "probe#49", "split": "probe", "noise": "none"}
+{"v": 2, "text": "what mode is the transponder on", "intent": "ask_transponder", "slots": {}, "template": "probe#50", "split": "probe", "noise": "none"}
+{"v": 2, "text": "read me the transponder code", "intent": "ask_transponder", "slots": {}, "template": "probe#51", "split": "probe", "noise": "none"}
+{"v": 2, "text": "which code are we squawking", "intent": "ask_transponder", "slots": {}, "template": "probe#52", "split": "probe", "noise": "none"}
+{"v": 2, "text": "transponder reading", "intent": "ask_transponder", "slots": {}, "template": "probe#53", "split": "probe", "noise": "none"}
+{"v": 2, "text": "autopilot modes please", "intent": "ask_autopilot", "slots": {}, "template": "probe#54", "split": "probe", "noise": "none"}
+{"v": 2, "text": "what is the autopilot in", "intent": "ask_autopilot", "slots": {}, "template": "probe#55", "split": "probe", "noise": "none"}
+{"v": 2, "text": "autopilot check", "intent": "ask_autopilot", "slots": {}, "template": "probe#56", "split": "probe", "noise": "none"}
+{"v": 2, "text": "selected heading please", "intent": "ask_autopilot", "slots": {"ap_target": "heading"}, "template": "probe#57", "split": "probe", "noise": "none"}
+{"v": 2, "text": "target altitude check", "intent": "ask_autopilot", "slots": {"ap_target": "altitude"}, "template": "probe#58", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how is the auto throttle set", "intent": "ask_autopilot", "slots": {}, "template": "probe#59", "split": "probe", "noise": "none"}
+{"v": 2, "text": "are the flight directors engaged", "intent": "ask_autopilot", "slots": {}, "template": "probe#60", "split": "probe", "noise": "none"}
+{"v": 2, "text": "speed bug setting", "intent": "ask_autopilot", "slots": {"ap_target": "speed"}, "template": "probe#61", "split": "probe", "noise": "none"}
+{"v": 2, "text": "are the landing lights still off", "intent": "ask_switch", "slots": {"light": "landing"}, "template": "probe#62", "split": "probe", "noise": "none"}
+{"v": 2, "text": "is the gear locked", "intent": "ask_switch", "slots": {"switch_system": "gear"}, "template": "probe#63", "split": "probe", "noise": "none"}
+{"v": 2, "text": "where are the flaps set", "intent": "ask_switch", "slots": {"switch_system": "flaps"}, "template": "probe#64", "split": "probe", "noise": "none"}
+{"v": 2, "text": "beacon status", "intent": "ask_switch", "slots": {"light": "beacon"}, "template": "probe#65", "split": "probe", "noise": "none"}
+{"v": 2, "text": "seatbelt sign check", "intent": "ask_switch", "slots": {"sign": "seatbelt"}, "template": "probe#66", "split": "probe", "noise": "none"}
+{"v": 2, "text": "pitot heat check", "intent": "ask_switch", "slots": {"ice": "pitot"}, "template": "probe#67", "split": "probe", "noise": "none"}
+{"v": 2, "text": "are the boost pumps running", "intent": "ask_switch", "slots": {"switch_system": "boost pumps"}, "template": "probe#68", "split": "probe", "noise": "none"}
+{"v": 2, "text": "is the battery switch off", "intent": "ask_switch", "slots": {"power": "battery"}, "template": "probe#69", "split": "probe", "noise": "none"}
+{"v": 2, "text": "where is the next way point", "intent": "ask_waypoint", "slots": {}, "template": "probe#70", "split": "probe", "noise": "none"}
+{"v": 2, "text": "distance remaining to the next fix", "intent": "ask_waypoint", "slots": {}, "template": "probe#71", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how much distance to the next fix", "intent": "ask_waypoint", "slots": {}, "template": "probe#72", "split": "probe", "noise": "none"}
+{"v": 2, "text": "next fix please", "intent": "ask_waypoint", "slots": {}, "template": "probe#73", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how far out is the next fix", "intent": "ask_waypoint", "slots": {}, "template": "probe#74", "split": "probe", "noise": "none"}
+{"v": 2, "text": "time remaining to the next way point", "intent": "ask_waypoint", "slots": {}, "template": "probe#75", "split": "probe", "noise": "none"}
+{"v": 2, "text": "where is the next fix", "intent": "ask_waypoint", "slots": {}, "template": "probe#76", "split": "probe", "noise": "none"}
+{"v": 2, "text": "what time have we got", "intent": "ask_time", "slots": {}, "template": "probe#77", "split": "probe", "noise": "none"}
+{"v": 2, "text": "time in zulu please", "intent": "ask_time", "slots": {"zone": "zulu"}, "template": "probe#78", "split": "probe", "noise": "none"}
+{"v": 2, "text": "what does the clock read", "intent": "ask_time", "slots": {}, "template": "probe#79", "split": "probe", "noise": "none"}
+{"v": 2, "text": "clock check", "intent": "ask_time", "slots": {}, "template": "probe#80", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how much time is it in zulu", "intent": "ask_time", "slots": {"zone": "zulu"}, "template": "probe#81", "split": "probe", "noise": "none"}
+{"v": 2, "text": "have you got the time", "intent": "ask_time", "slots": {}, "template": "probe#82", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how is it going", "intent": "ask_status_generic", "slots": {}, "template": "probe#83", "split": "probe", "noise": "none"}
+{"v": 2, "text": "everything good", "intent": "ask_status_generic", "slots": {}, "template": "probe#84", "split": "probe", "noise": "none"}
+{"v": 2, "text": "all good", "intent": "ask_status_generic", "slots": {}, "template": "probe#85", "split": "probe", "noise": "none"}
+{"v": 2, "text": "any problems up here", "intent": "ask_status_generic", "slots": {}, "template": "probe#86", "split": "probe", "noise": "none"}
+{"v": 2, "text": "situation check", "intent": "ask_status_generic", "slots": {}, "template": "probe#87", "split": "probe", "noise": "none"}
+{"v": 2, "text": "anything wrong", "intent": "ask_status_generic", "slots": {}, "template": "probe#88", "split": "probe", "noise": "none"}
+{"v": 2, "text": "what is the status", "intent": "ask_status_generic", "slots": {}, "template": "probe#89", "split": "probe", "noise": "none"}
+{"v": 2, "text": "how is the flight looking", "intent": "ask_status_generic", "slots": {}, "template": "probe#90", "split": "probe", "noise": "none"}
+{"v": 2, "text": "altitude five thousand", "intent": "None", "slots": {}, "template": "probe#n0", "split": "probe", "noise": "none"}
+{"v": 2, "text": "heading one eight zero", "intent": "None", "slots": {}, "template": "probe#n1", "split": "probe", "noise": "none"}
+{"v": 2, "text": "set the altimeter to two nine nine two", "intent": "None", "slots": {}, "template": "probe#n2", "split": "probe", "noise": "none"}
+{"v": 2, "text": "turn on the strobes", "intent": "None", "slots": {}, "template": "probe#n3", "split": "probe", "noise": "none"}
+{"v": 2, "text": "com one one two one point five", "intent": "None", "slots": {}, "template": "probe#n4", "split": "probe", "noise": "none"}

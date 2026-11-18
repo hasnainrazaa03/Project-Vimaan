@@ -99,6 +99,22 @@ class TestBuildPlan:
         with pytest.raises(FileNotFoundError):
             ip.build_plan(str(repo), str(xp), "v99")
 
+    def test_question_model_only_when_named(self, tmp_path):
+        repo, xp = _fake_repo(tmp_path), _fake_xplane(tmp_path)
+        (repo / ip.MODELS_SUBDIR / "q1").mkdir()
+        assert not any(d.endswith("q1") for _, d, _ in ip.build_plan(str(repo), str(xp)))
+        plan = ip.build_plan(str(repo), str(xp), None, "q1")
+        assert any(d.endswith(os.path.join("vimaan_nlu_model_best", "q1")) for _, d, _ in plan)
+        # Never taken for the command model either.
+        assert ip.find_latest_model(str(repo / ip.MODELS_SUBDIR))[0] != "q1"
+
+    def test_question_model_must_be_one(self, tmp_path):
+        repo, xp = _fake_repo(tmp_path), _fake_xplane(tmp_path)
+        with pytest.raises(FileNotFoundError):
+            ip.build_plan(str(repo), str(xp), None, "v10")  # a command model
+        with pytest.raises(FileNotFoundError):
+            ip.build_plan(str(repo), str(xp), None, "q7")  # not there
+
     def test_bad_xplane_raises(self, tmp_path):
         repo = _fake_repo(tmp_path)
         with pytest.raises(FileNotFoundError):

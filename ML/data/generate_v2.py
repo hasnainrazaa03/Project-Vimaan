@@ -59,6 +59,25 @@ HOLDOUT_TEMPLATE_SHARE = 0.15
 # them, and training ideas are compared on them, so the test templates (the
 # gate's new phrasings) are only read for a final candidate.
 DEV_TEMPLATES = 1
+# A question family has more templates (35-85), and with one dev template its
+# dev score was all or nothing: v27's ask_autopilot read 0.000 on dev from its
+# one dev template ("is the flight director on") and 0.873 on the test ones.
+# Five, not three: with three, q1 attempt 2's dev chose a run that failed on
+# test phrasings (0.877 ask_autopilot) that dev had no phrasing like.
+QUESTION_DEV_TEMPLATES = 5
+# The question model (Tier 4): rows per command, labelled None ("not a
+# question"), so it declines a command the command model refused.
+QUESTION_MODEL_PER_COMMAND = 1000
+# A question family's word said alone ("armed", "torque", "next") is not a
+# question: q1 attempt 1 never saw one and each seed answered different ones
+# (14-23 of 64), "armed" as the autopilot. Whole words are held out, like
+# templates, so dev and test ask whether the idea carries to unseen words.
+LONE_WORD_FORMS = ("{w}", "uh {w}", "um {w}", "okay {w}", "{w} uh", "the {w}")
+LONE_WORD_REPEAT = 4  # rows per form
+LONE_DEV_WORDS = 6
+# Fragments the gold set checks (tests/test_gold_nlu.py MUST_NOT_ACT) are
+# never trained on, so gold still asks whether the idea carries over.
+GOLD_FRAGMENTS = frozenset({"armed"})
 DEV_ROW_SHARE = 0.05  # of the negatives and conversation rows
 NOISE_SHARE = 0.2
 NEGATIVE_SHARE = 0.1  # of the actionable rows
@@ -498,7 +517,8 @@ def dev_templates(c: Command) -> set[str]:
     """Development templates: the next DEV_TEMPLATES in the same order, so
     the test templates are exactly what they would be without them."""
     n = _holdout_count(c)
-    return set(_ranked(c)[n : n + DEV_TEMPLATES])
+    k = QUESTION_DEV_TEMPLATES if c.is_question else DEV_TEMPLATES
+    return set(_ranked(c)[n : n + k])
 
 
 def _row_split(rng: random.Random) -> str:
@@ -721,12 +741,328 @@ def generate(per_intent: int = 3000, seed: int = 42) -> tuple[list[dict[str, Any
     return rows, stats
 
 
-def _next_path(directory: str) -> str:
+def _not_a_question(r: dict[str, Any], kind: str) -> dict[str, Any]:
+    """A command or greeting row relabelled for the question model: None, no
+    slots, its template kept (``None#cmd:set_flaps#3``) so its split and the
+    gate's per-template view still hold."""
+    return {**r, "intent": "None", "slots": {}, "template": f"None#{kind}:{r['template']}"}
+
+
+def lone_words() -> list[str]:
+    """The question families' words that mean nothing alone: every command
+    word of a question family that is neither a reading answered alone
+    (questions.BARE_READINGS) nor a system name a command asks about
+    (validators.bare_command: "flaps" asks which way)."""
+    from vimaan_nlu.questions import BARE_READINGS
+    from vimaan_nlu.validators import bare_command
+
+    words = {w for c in COMMANDS if c.is_question for w in c.command_words}
+    return sorted(
+        w
+        for w in words
+        if w not in BARE_READINGS and w not in QUESTION_WORDS and bare_command(w) is None
+    )
+
+
+def lone_word_split() -> dict[str, str]:
+    """test / dev / train per lone word, by a stable hash of the word (adding
+    a word elsewhere doesn't reshuffle them). The gold fragments are test."""
+    words = sorted(lone_words(), key=lambda w: hashlib.sha256(f"lone|{w}".encode()).hexdigest())
+    n_test = max(2, math.ceil(len(words) * HOLDOUT_TEMPLATE_SHARE))
+    split = {}
+    for i, w in enumerate(words):
+        if i < n_test or w in GOLD_FRAGMENTS:
+            split[w] = "test"
+        elif i < n_test + LONE_DEV_WORDS:
+            split[w] = "dev"
+        else:
+            split[w] = "train"
+    return split
+
+
+def lone_word_rows() -> list[dict[str, Any]]:
+    return [
+        {
+            "v": SCHEMA_VERSION,
+            "text": form.format(w=w),
+            "intent": "None",
+            "slots": {},
+            "template": f"None#lone:{w}",
+            "split": split,
+            "noise": "none",
+        }
+        for w, split in sorted(lone_word_split().items())
+        for form in LONE_WORD_FORMS
+        for _ in range(LONE_WORD_REPEAT)
+    ]
+
+
+def generate_questions(
+    per_intent: int = 4000,
+    seed: int = 42,
+    per_command: int = QUESTION_MODEL_PER_COMMAND,
+    extra: str | None = None,
+) -> tuple[list[dict[str, Any]], Counter[str]]:
+    """The question model's data (Tier 4): every question family, and the
+    commands, greetings and negatives as None ("not a question").
+
+    The command model (v26) never sees these questions, so question data
+    can't move a command; the question model has no commands, so whatever it
+    gets wrong, it can only answer. Commands keep their own held-out
+    templates: the question model's test then asks whether it declines
+    commands phrased in ways it never saw.
+
+    ``extra`` (one of QUESTION_EXTRAS) appends that kind's extra training rows
+    after the rest, which stay exactly as they are without it."""
+    rng = random.Random(seed)
+    stats: Counter[str] = Counter()
+    rows: list[dict[str, Any]] = []
+    for c in COMMANDS:
+        if c.actionable:
+            rows += [_not_a_question(r, "cmd") for r in command_rows(c, per_command, rng, stats)]
+    rows += negative_rows(int(len(rows) * NEGATIVE_SHARE), rng)
+    commands_text = {r["text"] for r in rows}
+    for c in COMMANDS:
+        if c.is_question:
+            asked = command_rows(c, per_intent, rng, stats)
+            kept = [r for r in asked if r["text"] not in commands_text]
+            stats[f"dropped:question_is_command:{c.intent}"] = len(asked) - len(kept)
+            rows += kept
+    for c in COMMANDS:
+        if not c.actionable and not c.is_question and c.intent != "None":
+            rows += [
+                _not_a_question(r, "conv") for r in conversation_rows(c, CONVERSATION_ROWS, rng)
+            ]
+    rows += [
+        {
+            "v": SCHEMA_VERSION,
+            "text": wrap(t, rng),
+            "intent": "None",
+            "slots": {},
+            "template": "None#table",
+            "split": "train",
+            "noise": "none",
+        }
+        for t in next(c for c in COMMANDS if c.intent == "None").templates
+        for _ in range(20)
+    ]
+    rows += lone_word_rows()
+    asked_text = {r["text"] for r in rows if r["intent"] != "None"}
+    kept = [r for r in rows if r["intent"] != "None" or r["text"] not in asked_text]
+    stats["dropped:negative_collides"] = len(rows) - len(kept)
+    rows = kept
+    rng.shuffle(rows)
+    if extra:
+        rows += extra_rows(extra, rows, seed, stats)
+    stats["rows"] = len(rows)
+    for r in rows:
+        stats[f"intent:{r['intent']}"] += 1
+        stats[f"split:{r['split']}"] += 1
+        stats[f"noise:{r['noise']}"] += 1
+    return rows, stats
+
+
+# ---------------------------------------------------------------------------
+# Extra question rows (q1 round 4, 2026-11-17)
+# ---------------------------------------------------------------------------
+# q1 attempt 3 failed only on a request with no carrier ("quick update"), and
+# the dev probe (ML/data/question_probe_v1.jsonl) found the same gap in every
+# family ("transponder code please", "autopilot modes please"). Three ways to
+# teach requests without "what's", "give me", "tell me":
+#   terse         "{topic} {word}": a family's topic and a request word
+#   terse_update  the same, "update" one of the request words
+#   carrier       each training template with its carrier taken off
+# The rows are appended after every other row (their own random stream), so
+# each dev and test row is exactly what it was without them; they are train
+# only, and never a test or dev template, a test, dev or None row, a probe
+# phrasing, or "quick" (attempt 3's failed test phrasing must stay unseen).
+QUESTION_EXTRAS = ("terse", "terse_update", "carrier")
+EXTRA_PER_FAMILY = 300
+TERSE_WORDS = ("check", "status", "reading", "report")
+TERSE_TOPICS: dict[str, tuple[str, ...]] = {
+    "ask_flight_data": ("{reading}", "current {reading}", "our {reading}"),
+    "ask_fuel": ("fuel", "fuel quantity", "fuel on board", "fuel remaining", "fuel total"),
+    "ask_fuel_time": ("endurance", "fuel endurance", "endurance remaining", "flying time"),
+    "ask_engine": (
+        "{engine_reading}",
+        "engine {instance} {engine_reading}",
+        "engine {instance}",
+        "engine",
+        "engines",
+    ),
+    "ask_com": ("com {com_port}", "com {com_port} {which}", "com {com_port} frequency", "radio"),
+    "ask_nav": ("nav {nav_port}", "nav {nav_port} {which}", "nav {nav_port} frequency"),
+    "ask_transponder": ("transponder", "squawk", "transponder code", "transponder mode"),
+    "ask_autopilot": (
+        "autopilot",
+        "autopilot modes",
+        "auto throttle",
+        "flight director",
+        "flight directors",
+        "{ap_target} target",
+        "selected {ap_target}",
+        "{ap_target} bug",
+    ),
+    "ask_switch": ("{light} lights", "{sign} sign", "{ice} heat", "{power}", "{switch_system}"),
+    "ask_waypoint": ("next way point", "next fix", "distance to the next fix"),
+    "ask_time": ("time", "{zone} time", "clock", "current time"),
+    "ask_status_generic": ("status", "flight status", "situation", "flight", "everything"),
+}
+# A template's leading carrier, longest first. "what's the" / "what's our"
+# go only when what is left asks nothing else ("what's the autopilot doing").
+CARRIERS = (
+    "can you tell me",
+    "can you check",
+    "let me know",
+    "give me",
+    "tell me",
+    "read me",
+    "i need",
+    "say",
+)
+WHAT_CARRIERS = ("what's the", "what's our", "what is the", "what is our")
+VERBISH = frozenset(
+    "set doing tuned showing going blowing flying happening wrong read reading look looking "
+    "running doing last is are do does".split()
+)
+NEVER_EXTRA = frozenset({"quick"})
+PROBE_FILE = os.path.join(_ML, "data", "question_probe_v1.jsonl")
+# A phrasing's core: the generator's fillers, leading noise and question
+# suffixes dropped, "what's" as "what" (heard_question): two texts with one
+# core are one phrasing.
+_CORE_DROP = frozenset(
+    "uh um er oh okay ok so hey the a an and now feet eighty vimaan please right".split()
+)
+
+
+def core(text: str) -> str:
+    return " ".join(
+        "what" if w == "what's" else w for w in text.lower().split() if w not in _CORE_DROP
+    )
+
+
+def _held_templates(c: Command) -> set[str]:
+    return holdout_templates(c) | dev_templates(c)
+
+
+def terse_templates(c: Command, words: tuple[str, ...] = TERSE_WORDS) -> list[str]:
+    out = []
+    for topic in TERSE_TOPICS.get(c.intent, ()):
+        for w in words:
+            if w not in topic.split():
+                out.append(f"{topic} {w}")
+    return [t for t in out if t not in _held_templates(c)]
+
+
+def _uncarried(template: str) -> str | None:
+    for carrier in CARRIERS:
+        if template.startswith(carrier + " "):
+            rest = template[len(carrier) + 1 :]
+            return rest[len("the ") :] if rest.startswith("the ") else rest
+    for carrier in WHAT_CARRIERS:
+        if template.startswith(carrier + " "):
+            rest = template[len(carrier) + 1 :]
+            if not VERBISH & set(rest.split()):
+                return rest
+    return None
+
+
+def carrier_templates(c: Command) -> list[str]:
+    """The family's training templates without their carrier (none of its
+    templates, held out or not)."""
+    held = _held_templates(c)
+    out = []
+    for t in c.templates:
+        if t in held:
+            continue
+        rest = _uncarried(t)
+        if rest and rest not in c.templates and rest not in out:
+            out.append(rest)
+    return out
+
+
+def extra_templates(c: Command, kind: str) -> list[str]:
+    if kind == "terse":
+        return terse_templates(c)
+    if kind == "terse_update":
+        return terse_templates(c, (*TERSE_WORDS, "update"))
+    if kind == "carrier":
+        return carrier_templates(c)
+    raise ValueError(f"extra must be one of {QUESTION_EXTRAS}, not {kind!r}")
+
+
+def _probe_cores() -> set[str]:
+    if not os.path.exists(PROBE_FILE):
+        return set()
+    with open(PROBE_FILE, encoding="utf-8") as fh:
+        return {core(json.loads(line)["text"]) for line in fh if line.strip()}
+
+
+def extra_rows(
+    kind: str, rows: list[dict[str, Any]], seed: int, stats: Counter[str]
+) -> list[dict[str, Any]]:
+    """EXTRA_PER_FAMILY rows a question family of ``kind``, never one whose
+    core is a dev, test or None row's of ``rows`` or a probe phrasing's."""
+    from vimaan_nlu.questions import one_word
+    from vimaan_nlu.stt_vocabulary import load_question_vocabulary
+
+    heard = set(load_question_vocabulary())
+    protected = _probe_cores() | {
+        core(r["text"]) for r in rows if r["split"] != "train" or r["intent"] == "None"
+    }
+    rng = random.Random(f"{seed}|{kind}")
+    out = []
+    for c in COMMANDS:
+        if not c.is_question:
+            continue
+        templates = extra_templates(c, kind)
+        stats[f"extra_templates:{c.intent}"] = len(templates)
+        attempts = 0
+        made = 0
+        while templates and made < EXTRA_PER_FAMILY and attempts < EXTRA_PER_FAMILY * 20:
+            attempts += 1
+            k = rng.randrange(len(templates))
+            text, surfaces = fill(c, templates[k], rng)
+            text = wrap_question(text, rng)
+            words = set(text.split())
+            why = (
+                "protected"
+                if core(text) in protected
+                else "not_heard"
+                if words - heard
+                else "never"
+                if words & NEVER_EXTRA
+                else "one_word"
+                if one_word(text)
+                else None
+            )
+            slots = label(text, surfaces) if why is None else None
+            if why is None and slots is None:
+                why = "label"
+            if why:
+                stats[f"extra_dropped:{why}"] += 1
+                continue
+            made += 1
+            out.append(
+                {
+                    "v": SCHEMA_VERSION,
+                    "text": text,
+                    "intent": c.intent,
+                    "slots": slots,
+                    "template": f"{c.intent}#{kind}:{k}",
+                    "split": "train",
+                    "noise": "none",
+                }
+            )
+    return out
+
+
+def _next_path(directory: str, stem: str = "aviation_v2_v") -> str:
     os.makedirs(directory, exist_ok=True)
     n = 1
-    while os.path.exists(os.path.join(directory, f"aviation_v2_v{n}.jsonl")):
+    while os.path.exists(os.path.join(directory, f"{stem}{n}.jsonl")):
         n += 1
-    return os.path.join(directory, f"aviation_v2_v{n}.jsonl")
+    return os.path.join(directory, f"{stem}{n}.jsonl")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -734,9 +1070,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--per-intent", type=int, default=3000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out", default=None)
+    parser.add_argument(
+        "--questions",
+        action="store_true",
+        help="the question model's data (questions_vN.jsonl): questions, and "
+        "commands, greetings and negatives as None",
+    )
+    parser.add_argument(
+        "--question-extra",
+        choices=QUESTION_EXTRAS,
+        default=None,
+        help="with --questions: append this kind of extra training rows (round 4)",
+    )
     args = parser.parse_args(argv)
-    rows, stats = generate(args.per_intent, args.seed)
-    out = args.out or _next_path(os.path.join(_ML, "datasets", "07_v2"))
+    if args.question_extra and not args.questions:
+        parser.error("--question-extra needs --questions")
+    if args.questions:
+        rows, stats = generate_questions(args.per_intent, args.seed, extra=args.question_extra)
+        stem = "questions_v"
+    else:
+        rows, stats = generate(args.per_intent, args.seed)
+        stem = "aviation_v2_v"
+    out = args.out or _next_path(os.path.join(_ML, "datasets", "07_v2"), stem)
     with open(out, "w", encoding="utf-8") as fh:
         for r in rows:
             fh.write(json.dumps(r) + "\n")

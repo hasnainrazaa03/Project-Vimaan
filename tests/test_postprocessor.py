@@ -292,6 +292,33 @@ def test_a_longer_choice_value_wins_over_one_inside_it():
         assert out["mode"] == value
 
 
+@pytest.mark.parametrize("reading", ["vertical speed", "ground speed", "airspeed"])
+def test_a_tagged_value_is_not_taken_for_a_synonym_inside_it(reading):
+    # "speed" is a synonym of airspeed: synonyms were searched before values,
+    # so a correctly tagged "vertical speed" was answered as airspeed.
+    out = canonicalize_choices({"reading": reading}, f"what's our {reading}", "ask_flight_data")
+    assert out["reading"] == reading
+    out = canonicalize_choices({"reading": "speed"}, "what's our speed", "ask_flight_data")
+    assert out["reading"] == "airspeed"
+
+
+def test_every_name_a_choice_slot_knows_gives_its_own_value():
+    # Each value, synonym and generic verb, tagged on its own, comes back as
+    # the value it is listed under (unless two values list it).
+    from vimaan_nlu.postprocessor import _GENERIC_STATE
+
+    for intent, slots in CHOICE_SYNONYMS.items():
+        for slot, values in slots.items():
+            names: dict[str, set[str]] = {}
+            for canon, syns in values.items():
+                for name in (canon, *syns, *_GENERIC_STATE.get(canon, ())):
+                    names.setdefault(name, set()).add(canon)
+            for name, owners in names.items():
+                if len(owners) == 1:
+                    out = canonicalize_choices({slot: name}, "", intent)[slot]
+                    assert out in owners, (intent, slot, name, out)
+
+
 @pytest.mark.parametrize(
     ("text", "tagged"),
     [

@@ -44,6 +44,7 @@ from typing import Any
 
 from vimaan_nlu.ambiguity import to_reading
 from vimaan_nlu.audio_health import is_silent, rms_from_pcm16
+from vimaan_nlu.commands import command
 from vimaan_nlu.questions import looks_like_question
 
 MAX_RECORD_SEC = 12.0  # recording is cut off after this even if still held
@@ -158,6 +159,7 @@ class VoiceWorker:
         clock: Callable[[], float] = time.perf_counter,
         stream_stt: Any = None,
         question_stt: Any = None,
+        predict_question: Callable[[str], dict[str, Any]] | None = None,
         audio_dir: str | None = None,
         audio_prefix: str = "",
     ) -> None:
@@ -175,6 +177,9 @@ class VoiceWorker:
         # decoded again with it: question words in the command grammar made
         # commands worse ("flight level" heard as "light level").
         self.question_stt = question_stt
+        # Tier 4: the question model (qN), beside the command model. It knows
+        # only questions, so whatever it reads, the plugin can only answer.
+        self.predict_question = predict_question
         self.audio_dir = audio_dir
         self.audio_prefix = audio_prefix
         self._audio_dir_bytes = _dir_bytes(audio_dir) if audio_dir else 0
@@ -219,8 +224,14 @@ class VoiceWorker:
         elif op == "selftest":
             results = []
             for text, expected in msg.get("probes", []):
+                asked = command(expected)
+                on_question_model = (
+                    self.predict_question is not None and asked is not None and asked.is_question
+                )
+                predict = self.predict_question if on_question_model else self.predict_text
                 try:
-                    p = self.predict_text(text)
+                    assert predict is not None
+                    p = predict(text)
                     results.append(
                         {
                             "text": text,
@@ -497,6 +508,21 @@ class VoiceWorker:
         except Exception as exc:
             meant = None
             self.send({"type": "log", "msg": f"to_reading failed: {type(exc).__name__}: {exc}"})
+        question = None
+        if self.predict_question is not None:
+            # A second look only: if it fails, the command model's reading stands.
+            try:
+                q = self.predict_question(text)
+                question = {
+                    "intent": q["intent"],
+                    "confidence": q["confidence"],
+                    "slots": q["slots"],
+                    "normalized": q.get("normalized_text"),
+                }
+            except Exception as exc:
+                self.send(
+                    {"type": "log", "msg": f"question model failed: {type(exc).__name__}: {exc}"}
+                )
         self.send(
             {
                 "type": "result",
@@ -513,6 +539,8 @@ class VoiceWorker:
                 # What the command grammar heard, when the question grammar's
                 # transcript replaced it.
                 "heard": heard,
+                # The question model's reading (None without one).
+                "question": question,
             }
         )
 
@@ -620,6 +648,37 @@ def _make_stream_stt(args: argparse.Namespace) -> tuple[Any, Any, str, dict[str,
     )
 
 
+def _load_question_model(args: Any, model_loader: Any, predict: Callable[..., dict[str, Any]]):
+    """(predict_question, loader, path) for the question model, or Nones
+    when there is none: then the command model's own question intents answer,
+    as before Tier 4's question model."""
+    import torch
+    from utils import get_latest_question_model_path
+
+    path = args.question_model_path or get_latest_question_model_path()
+    if not path:
+        return None, None, None
+    loader = model_loader(torch.device("cpu"))
+    loader.load_all(
+        model_path=path,
+        quantize=not args.no_quantize and args.backend != "onnx",
+        backend=args.backend,
+    )
+
+    def predict_question(text: str) -> dict[str, Any]:
+        return predict(
+            text,
+            loader.model,
+            loader.tokenizer,
+            loader.device,
+            loader.intent_map_rev,
+            loader.slot_map_rev,
+        )
+
+    predict_question("what's our altitude")  # warm-up
+    return predict_question, loader, path
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Vimaan voice worker (spawned by the plugin)")
     parser.add_argument("--stt-backend", default="vosk", help="vosk | google | whisper | sphinx")
@@ -644,6 +703,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--backend", default="torch", choices=("torch", "onnx"))
     parser.add_argument("--no-quantize", action="store_true")
     parser.add_argument("--model-path", default=None)
+    parser.add_argument(
+        "--question-model-path",
+        default=None,
+        help="the question model (default: the newest qN; none: questions go to the command model)",
+    )
     parser.add_argument(
         "--audio-file",
         default=os.environ.get("VIMAAN_WORKER_AUDIO_FILE"),
@@ -682,6 +746,9 @@ def main(argv: list[str] | None = None) -> int:
             )
 
         predict_text("set heading two seven zero")  # warm-up: first pass is slow
+        predict_question, question_loader, question_path = _load_question_model(
+            args, ModelLoader, predict
+        )
         stream_stt, question_stt, stt_backend, stt_info = _make_stream_stt(args)
         recognizer = sr.Recognizer()
         recognizer.operation_timeout = STT_TIMEOUT_SEC
@@ -729,6 +796,8 @@ def main(argv: list[str] | None = None) -> int:
             # model older than the command table isn't failed for commands
             # it was never trained on.
             "intents": sorted(loader.intent_map),
+            "question_model_path": question_path,
+            "question_intents": sorted(question_loader.intent_map) if question_loader else None,
             "quantized": loaded.get("quantized"),
             "torch_version": torch.__version__,
             "transformers_version": transformers.__version__,
@@ -748,6 +817,7 @@ def main(argv: list[str] | None = None) -> int:
             predict_text,
             stream_stt=stream_stt,
             question_stt=question_stt,
+            predict_question=predict_question,
             audio_dir=args.save_audio_dir,
             audio_prefix=args.audio_prefix,
         ).run(sys.stdin)

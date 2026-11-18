@@ -5,7 +5,11 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "ML"))
 
-from utils.slot_alignment import align_offsets_to_labels, find_slot_char_spans  # noqa: E402
+from utils.slot_alignment import (  # noqa: E402
+    align_offsets_to_labels,
+    find_slot_char_spans,
+    trim_offsets,
+)
 
 
 class TestFindSlotCharSpans:
@@ -61,3 +65,24 @@ class TestAlignOffsetsToLabels:
         spans = [(4, 5, "com_port"), (6, 9, "frequency")]
         labels = align_offsets_to_labels(offsets, spans, smap)
         assert labels == [0, 1, 3]  # "com"=O, "1"=B-com_port, "118"=B-frequency
+
+
+# Byte-level BPE (Ettin / ModernBERT) puts the space in front of a word into
+# its token: "Ġvertical" covers " vertical" (q1 round 4).
+BPE_TEXT = "what's our vertical speed"
+BPE_OFFSETS = [(0, 0), (0, 4), (4, 6), (6, 10), (10, 19), (19, 25), (0, 0)]
+
+
+def test_trimmed_bpe_offsets_label_every_token_of_the_slot():
+    slot_map = {"O": 0, "B-reading": 1, "I-reading": 2}
+    spans = find_slot_char_spans(BPE_TEXT, {"reading": "vertical speed"})
+    assert align_offsets_to_labels(BPE_OFFSETS, spans, slot_map)[4:6] == [0, 1]  # untrimmed
+    trimmed = trim_offsets(BPE_TEXT, BPE_OFFSETS)
+    assert trimmed[3:6] == [(7, 10), (11, 19), (20, 25)]
+    assert align_offsets_to_labels(trimmed, spans, slot_map) == [-100, 0, 0, 0, 1, 2, -100]
+
+
+def test_wordpiece_offsets_come_back_unchanged():
+    text = "tune com 1 to 121.5"
+    offsets = [(0, 0), (0, 4), (5, 8), (9, 10), (11, 13), (14, 17), (17, 18), (18, 19), (0, 0)]
+    assert trim_offsets(text, offsets) == offsets

@@ -124,6 +124,7 @@ def test_every_pinned_value_of_a_held_out_template_is_also_trained():
 def test_dev_leaves_the_test_rows_as_they_were(monkeypatch):
     with_dev, _ = generate_v2.generate(per_intent=60, seed=5)
     monkeypatch.setattr(generate_v2, "DEV_TEMPLATES", 0)
+    monkeypatch.setattr(generate_v2, "QUESTION_DEV_TEMPLATES", 0)
     monkeypatch.setattr(generate_v2, "DEV_ROW_SHARE", 0.0)
     without, _ = generate_v2.generate(per_intent=60, seed=5)
     assert [r for r in with_dev if r["split"] == "test"] == [
@@ -348,3 +349,140 @@ def test_questions_as_the_recogniser_hears_them(data):
     assert heard
     assert all("what's" not in t.split() or "our" in t.split() for t in heard[:0])
     assert any(t.startswith(("what are", "what r", "what the")) for t in heard)
+
+
+# --- the question model's data (Tier 4) -------------------------------------
+
+
+@pytest.fixture(scope="module")
+def question_data():
+    return generate_v2.generate_questions(per_intent=200, seed=7, per_command=40)
+
+
+def test_question_data_has_only_questions_and_not_a_question(question_data):
+    rows, _ = question_data
+    by_intent = {c.intent: c for c in COMMANDS}
+    for r in rows:
+        assert r["intent"] == "None" or by_intent[r["intent"]].is_question
+    # Every command is there, as "not a question", with no slots.
+    commands = {
+        r["template"].split(":")[1].split("#")[0] for r in rows if "None#cmd:" in r["template"]
+    }
+    assert commands == {c.intent for c in COMMANDS if c.actionable}
+    assert all(not r["slots"] for r in rows if r["intent"] == "None")
+    assert {r["intent"] for r in rows} >= {c.intent for c in COMMANDS if c.is_question}
+
+
+def test_question_data_commands_keep_their_held_out_templates(question_data):
+    # A held-out command phrasing stays held out: the question model's test
+    # asks whether it declines commands it never saw.
+    rows, _ = question_data
+    held = {
+        f"{c.intent}#{c.templates.index(t)}": c
+        for c in COMMANDS
+        if c.actionable
+        for t in generate_v2.holdout_templates(c)
+    }
+    for r in rows:
+        if r["template"].startswith("None#cmd:"):
+            original = r["template"].split(":", 1)[1]
+            assert (r["split"] == "test") == (original in held)
+
+
+def test_question_data_no_text_is_both(question_data):
+    rows, _ = question_data
+    labels = defaultdict(set)
+    for r in rows:
+        labels[r["text"]].add(r["intent"])
+    assert [t for t, s in labels.items() if len(s) > 1] == []
+
+
+def test_a_question_family_has_three_dev_templates():
+    for c in COMMANDS:
+        want = generate_v2.QUESTION_DEV_TEMPLATES if c.is_question else generate_v2.DEV_TEMPLATES
+        assert len(generate_v2.dev_templates(c)) == want
+
+
+def test_a_question_word_alone_is_not_a_question(question_data):
+    from vimaan_nlu.questions import BARE_READINGS
+
+    rows, _ = question_data
+    lone = {r["text"]: r for r in rows if r["template"].startswith("None#lone:")}
+    words = generate_v2.lone_words()
+    assert "armed" in words and "torque" in words
+    # Readings answered alone and system names that ask which way are not.
+    assert not set(words) & (set(BARE_READINGS) | {"flaps", "gear"})
+    assert {f"uh {w}" for w in words} <= set(lone)
+    assert all(r["intent"] == "None" and not r["slots"] for r in lone.values())
+
+
+def test_lone_words_are_held_out_whole_and_gold_fragments_never_trained():
+    from test_gold_nlu import MUST_NOT_ACT
+
+    split = generate_v2.lone_word_split()
+    assert {"train", "dev", "test"} == set(split.values())
+    assert sum(s == "dev" for s in split.values()) == generate_v2.LONE_DEV_WORDS
+    gold = set(MUST_NOT_ACT) & set(split)
+    assert gold <= generate_v2.GOLD_FRAGMENTS
+    assert all(split[w] == "test" for w in generate_v2.GOLD_FRAGMENTS)
+    rows = generate_v2.lone_word_rows()
+    for r in rows:
+        assert r["split"] == split[r["template"].split(":", 1)[1]]
+
+
+# q1 round 4: extra question rows, appended after an unchanged dataset.
+@pytest.mark.parametrize("kind", generate_v2.QUESTION_EXTRAS)
+def test_extra_rows_come_after_the_same_rows_and_are_train_only(question_data, kind):
+    from vimaan_nlu.questions import one_word
+    from vimaan_nlu.stt_vocabulary import load_question_vocabulary
+
+    rows, _ = question_data
+    more, stats = generate_v2.generate_questions(per_intent=200, seed=7, per_command=40, extra=kind)
+    assert more[: len(rows)] == rows
+    extra = more[len(rows) :]
+    assert extra and all(r["split"] == "train" and r["intent"] in QUESTION_INTENTS for r in extra)
+    protected = generate_v2._probe_cores() | {
+        generate_v2.core(r["text"]) for r in rows if r["split"] != "train" or r["intent"] == "None"
+    }
+    heard = set(load_question_vocabulary())
+    for r in extra:
+        words = r["text"].split()
+        assert generate_v2.core(r["text"]) not in protected, r
+        assert "quick" not in words and not one_word(r["text"]) and set(words) <= heard, r
+        if kind == "terse":
+            assert "update" not in words, r
+
+
+@pytest.mark.parametrize("kind", generate_v2.QUESTION_EXTRAS)
+def test_an_extra_template_is_never_a_held_out_or_dev_template(kind):
+    for c in COMMANDS:
+        if c.is_question:
+            held = generate_v2.holdout_templates(c) | generate_v2.dev_templates(c)
+            assert not held & set(generate_v2.extra_templates(c, kind)), c.intent
+
+
+@pytest.mark.parametrize(
+    "template, rest",
+    [
+        ("give me the fuel quantity", "fuel quantity"),
+        ("can you tell me the {reading}", "{reading}"),
+        ("say squawk code", "squawk code"),
+        ("what's the transponder code", "transponder code"),
+        ("what's our {reading}", "{reading}"),
+        ("what's the autopilot doing", None),  # asks something else
+        ("is the gear down", None),  # no carrier: "gear down" is a command
+        ("how much fuel is left", None),
+    ],
+)
+def test_a_carrier_comes_off_only_when_what_is_left_still_asks(template, rest):
+    assert generate_v2._uncarried(template) == rest
+
+
+def test_the_dev_probe_is_one_phrasing_a_row_of_known_intents():
+    import json
+
+    with open(generate_v2.PROBE_FILE) as fh:
+        probe = [json.loads(line) for line in fh]
+    assert len(probe) == len(generate_v2._probe_cores()) >= 90
+    assert {r["intent"] for r in probe} == QUESTION_INTENTS | {"None"}
+    assert all(r["split"] == "probe" for r in probe)

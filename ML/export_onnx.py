@@ -44,7 +44,7 @@ class _ExportWrapper(nn.Module):
         self.model = model
 
     def forward(self, input_ids, attention_mask):
-        bert_output = self.model.bert_for_slots.distilbert(
+        bert_output = self.model.bert_for_slots.base_model(
             input_ids=input_ids, attention_mask=attention_mask
         )
         sequence_output = bert_output.last_hidden_state

@@ -24,7 +24,7 @@ Last updated 2026-11-16.
 | T2 | Tier 2: radios & navigation → **v25** | ✅ closed 2026-11-16: runner in the sim 95/95 on four aircraft (v25) and the owner's real-voice check passed (v26: 16 of 17 radio lines right first time, the other refused) | #43, #46 |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | ✅ closed 2026-11-16: v26 passed every gate and was installed (2026-11-14); runner in the sim 127/127 on four aircraft; the owner's real-voice check passed (51 right, 4 refused, 0 wrong of 55) | #50, #51, #52, #54, #56–#60 |
 | G | Generalization: beyond the owner's voice (measured recognizer noise, other voices, calibration, other recognizers) | 🟡 measured on real voices (2026-11-14); lost-digit refusal built | #55 |
-| T4 | Tier 4: questions (read-only) → **v27** | 🟡 scope chosen, aircraft probed, part A built: question families, answers in each cockpit's units, the question key (Shift+Z), a grammar of their own; next: data v18 and v27 | #64 |
+| T4 | Tier 4: questions (read-only) → **v26 + question model q1** | 🟡 part A built (#65): question families, answers in each cockpit's units, the question key (Shift+Z), a grammar of their own. Part B: one model (v27) failed the gate; owner chose a question model beside v26 (q1) | #64, #65 |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
 | L | Later: relative commands, two commands in one breath, checklists, add-on aircraft profiles | ⬜ | |
@@ -1160,7 +1160,154 @@ up, and "what's the heading" sets heading mode.
   them: "what are altitude", "r the landing lights on"; the question word
   never dropped; no stray words; never a command's text). Works with v26
   (bare readings only).
-- [ ] **Part B:** data v18 and v27, gated against v26.
+- [x] **Part B, first try: one model (data v18 → v27) failed the gate
+  (2026-11-17).** v26's commands plus 4,000 rows per question family, four
+  runs, the #58 recipe. Gate against v26: FAIL 1 (question families on
+  phrasings never seen: ask_nav 0.475, ask_waypoint 0.671, ask_fuel_time
+  0.766, ask_autopilot 0.873; set_autopilot_mode fell to 0.853), FAIL 2 (right
+  98.01% vs 98.61%, wrong 5 vs 3: 131 commands v26 does were refused, mostly
+  "autopilot heading / vertical speed / approach"), FAIL 3 (gold 106/107:
+  "what's our vertical speed" read as airspeed), FAIL 4 (real voice 89/28/1:
+  "flaps down again", heard "flaps down ident", set the transponder to
+  ident). Causes:
+  - the dev score (`utils/dev_score.score`) counts commands and negatives
+    only, so the runs and the average were chosen blind to the questions;
+  - 15–34 phrasings per family and one dev template each, some ideas in one
+    phrasing only ("is the flight director on": held out, so never trained);
+  - questions share words with commands ("what's the autopilot heading" /
+    "autopilot heading"), and one model learning both moved the commands.
+- **Part B, chosen (owner, option B, 2026-11-17): a question model beside the
+  command model.** v26 stays the command model, untouched: its gates and the
+  owner's 175 real-voice clips keep today's results by construction. The
+  question model (`qN`) knows the 12 question families and "not a question"
+  (every command, greeting and negative), so whatever it reads, the plugin
+  can only answer. Trade-offs considered:
+
+  | | One model (A) | Question model beside v26 (B) |
+  | --- | --- | --- |
+  | Commands | retrained with every question change; v27 lost 131 | untouched |
+  | A mistake | a question can act, a command can be refused | at worst a wrong answer |
+  | Memory, disk | one model | +250 MB memory, +253 MB per version, +0.4 s load |
+  | Routing | none | Shift+Z, a question-looking transcript, or what v26 wouldn't act on |
+  | Question word lost by Vosk | the model may still tell | v26 acts, as today (the question key avoids it) |
+  | Gates | one | v26's as they are, plus the question gate (existing bars) |
+
+  - **Data `questions_v1`** (`generate_v2.py --questions`): 12 families ×
+    4,000 rows, 35–85 phrasings each (doubled; every idea in at least two;
+    "{reading_verb}" replaced by real forms: it made rows like "what's our
+    fast"), five dev templates per family (three until attempt 3); every
+    command × 1,000 rows as "not a question", keeping its own held-out
+    templates; negatives; each question word alone (data v2 on).
+  - **Dev scored on questions** (`dev_score.question_score`, `--select
+    questions`, the greedy average too): right answers, less one per wrong
+    answer, less five per command or negative answered.
+  - **Question gate** (`scripts/question_gate.py`), existing bars only: Q1 new
+    phrasings (98.5% / 0.99 per family), Q2 gold (all 20 Tier 4 gold questions
+    right, no gold command or fragment answered), Q3 ≥ 95% of held-out
+    commands and negatives not answered, Q4 latency.
+  - **Routing (plugin, worker):** the worker runs both models; on the question
+    key, or a transcript that looks like a question, the question model's
+    answer is spoken, else "I can't answer that"; on the talk key it answers
+    only when v26 would not act (`questions.complete_command`), after a bare
+    system name ("flaps") has asked which way. Without a question model, v26's
+    own question intents answer, as in part A.
+  - **Install:** `install_plugin.py --question-model q1`, never as "the latest".
+- [x] **q1 attempt 1 failed the question gate (2026-11-17), on gold only.**
+  Runs q1-a…d; the greedy average kept q1-d + q1-b (dev 3,409 right, 0
+  misanswered, 13 declined, 1 other answered). Q1 new phrasings passed
+  (0.9993 / 1.0000, every family ≥ 0.994), Q3 99.97%, Q4 6.5 ms. Q2 failed:
+  - "what's our vertical speed" answered as airspeed: **a bug in part A's
+    code, not the model.** The canonicalizer tried synonyms before values, so
+    the airspeed synonym "speed" matched inside "vertical speed" and "ground
+    speed" (it was also v27's gold miss). Q1 couldn't see it: the expected
+    labels went through the same function. Fixed: a tagged value that is
+    exactly a name the slot knows keeps it. Of all 328 names, only those two
+    change; no command can.
+  - The fragment "armed" answered as the autopilot. A class, not one word: no
+    question word alone was in the data, and each run answered 14–23 of the
+    64 (different ones per seed). **Both fixes (owner):** a word alone is
+    never answered by the question model (`questions.one_word`, in the
+    plugin and the gate; a reading alone is still answered by the
+    bare-reading rule), and data v2 has the 64 words alone as "not a
+    question", held out whole like templates (47 train, 6 dev, 11 test), the
+    gold fragment "armed" in test only. The gate also prints, deciding
+    nothing, how many held-out lone words the model alone would answer.
+  - The owner's 40 recordings (measured; they share phrasings with the
+    data): Shift+Z 33/34 right, nothing acted; talk key 30 right, all 6
+    commands act, and the 2 mishearings v26 acts on alone ("vertical flaps",
+    "degree have the seatbelt sign on") still act, since commands come first.
+- [x] **q1 attempt 2 failed the question gate (2026-11-17), on Q1 only.**
+  Runs q1-e…h on data v2; the greedy average was q1-h alone (dev 3,412 /
+  1 / 9; q1-h + q1-f scored one point less and was left out). Q2 gold passed
+  (20/20, nothing else answered), Q3 99.98%, Q4 6.0 ms, and the model alone
+  answered 0 of 264 held-out lone-word rows (the data idea works). Q1 failed
+  on four held-out phrasings: "flight director status" → status in general
+  (ask_autopilot 0.877), "quick update" → not a question (ask_status_generic
+  0.870), "what is our fuel time" → the time (0.964), "is the n two normal"
+  → reading "normal" (slot F1 0.990). Attempt 1's average passed the same
+  phrasings, so this was the run. Dev chose it badly: one dev phrasing,
+  "where are we headed" (~110 of 3,422 rows), flipped from run to run and
+  decided the choice.
+- [ ] **q1 attempt 3 (owner, "Both"):** data v3 has five dev phrasings per
+  question family instead of three (the gate's test phrasings unchanged;
+  "what's our baro setting" added so every pinned value is still trained);
+  dev scored per phrasing (each worth 100 points, whatever its rows, less 5
+  per command or negative answered); four fresh seeds (5–8, runs q1-i…l).
+  The candidate, fixed before training: every run within 2% of the best on
+  dev, averaged with equal weight (`average_models.py --within 0.02`), then
+  the question gate. **Failed Q1 (2026-11-17), on one phrasing:** all four
+  runs kept, and the average is better on dev than any of them (5,708 right,
+  0 misanswered, 6 declined). Q2 20/20 and 96/96, Q3 99.97%, Q4 6.3 ms; no
+  question misanswered anywhere; every family 1.000 except
+  ask_status_generic 0.888, all of it "quick update" declined (74 of 119
+  rows). That phrasing was on the edge before (runs that declined most of
+  it: 1 of 4 in attempt 1, 2 of 4 in attempt 2) and v3 made it every run
+  (69–111 of 119), so averaging could not help: the larger dev draw took
+  "give me quick status", the only status phrasing with "quick", out of
+  training, and training says "update" only after "give me". The gap:
+  short requests with no verb and no "status" word.
+- [ ] **q1 round 4 (owner: "try all 3 options", and what research turns
+  up):** a dev probe first (`ML/data/question_probe_v1.jsonl`: 91 fresh
+  questions over all 12 families and 5 commands, written before any round-4
+  data, never "update" or "quick", none of it a v3 row), so dev can see the
+  gap without the test. It does: every earlier model declines requests with
+  no carrier ("transponder code please", "autopilot modes please", "all
+  good"), 5–9 of 91. Six candidates, each four runs and the within-2%
+  average: fresh seeds on v3 (option 3); LP-FT (`--lp-epochs 1`: the heads
+  first on frozen features, Kumar et al. 2022); R-Drop (`--rdrop 1.0`, Liang
+  et al. 2021); carrier dropout (data v6: training templates without "give
+  me", "tell me", "what's the"); option 1 (v4: "{topic} check/status/
+  reading/report"); option 2 (v5: the same with "update"). v3 is the first
+  84,154 rows of v4–v6, byte for byte; the extras are train only, never a
+  test or dev template, a test, dev or None row, a probe phrasing, or
+  "quick". Fixed before training: the highest dev + probe total wins, but a
+  more invasive candidate (order: seeds, LP-FT, R-Drop, carrier, option 1,
+  option 2) must beat a less invasive one by more than two phrasings; only
+  the winner is gated, once. Added before any comparison (owner approved): a
+  seventh candidate on an Ettin encoder (MIT, ModernBERT; 32M or 68M and
+  its rate chosen by five dev pilots), ranked most invasive. The model,
+  loader and trainer now take any encoder; v26 and q1-soup3 predict the
+  same on 2,504 texts before and after. Ettin-32M, int8: p95 4.6 ms (the
+  DistilBERT model 5.4 ms). And the owner's own questions, written blind in
+  `~/Vimaan_Logs/blind_questions.txt`, read once on the final model.
+  **Result (2026-11-18): carrier dropout won and passed the question gate.**
+  Dev + probe totals: carrier 14,800 (dev 6,000, the maximum; probe 88 of
+  91, no command answered); carrier + LP-FT 14,787.5 (trained because the
+  best data option and the best method each beat fresh seeds by more than
+  two phrasings; it shares carrier's rank, so the higher total wins); LP-FT
+  14,595; option 1 14,586.5; option 2 14,431.9; R-Drop 14,386.5; fresh seeds
+  14,287.9; Ettin 13,215.7 (32M at 1e-4, the best of five pilots; two of its
+  four seeds more than 2% below the best; it declines 16 of the 91 probe
+  questions). The gate, run once on the winner: Q1 intent 0.9990 and slot F1
+  1.0000, every question family 1.000 ("quick update" now answered); Q2
+  20/20 and 96/96; Q3 99.91% (6 of 6,380 answered, among them "autopilot
+  heading": the talk key still sets the mode with v26, and an answer never
+  acts); Q4 6.0 ms. Named q1, not installed. The owner's 40 recordings: on
+  Shift+Z 33 of 34 answered right and nothing acted (the miss: "parking
+  brakes", a plural the names don't know); on the talk key 30 right, and
+  the 2 that act are the 2 v26 alone acts on (mishearings: "vertical flaps",
+  "degree have the seatbelt sign on"). The blind questions: not written
+  yet.
 - [ ] **Part C:** `simtest run tier4` (each answer against the datarefs),
   then the owner's check.
 

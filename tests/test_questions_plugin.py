@@ -338,3 +338,151 @@ def test_a_transcript_the_question_grammar_redid_never_acts(sim):
     )
     assert xp.spoken[-1] == "I can't answer that"
     assert xp.writes == [] and xp.commands_fired == []
+
+
+# --- with a question model (qN) beside the command model --------------------
+
+
+def say_two(plugin, text, command, question, ask=False):
+    """Dispatch as the worker does with a question model loaded: the command
+    model's reading, and the question model's beside it (``question``:
+    (intent, slots, confidence))."""
+    import sys
+    import time
+
+    intent, slots, conf = command
+    q_intent, q_slots, q_conf = question
+    xp = sys.modules["XPPython3"].xp
+    before = len(xp.spoken)
+    now = time.perf_counter()
+    plugin._execute_command(
+        {
+            "cmd": "c9998",
+            "text": text,
+            "prediction": {
+                "intent": intent,
+                "slots": dict(slots),
+                "confidence": conf,
+                "normalized_text": text,
+                "nlu_ms": 5.0,
+                "normalized": text,
+                "to_reading": None,
+                "question": {
+                    "intent": q_intent,
+                    "slots": dict(q_slots),
+                    "confidence": q_conf,
+                    "normalized": text,
+                },
+            },
+            "t_press": now,
+            "t_release": now,
+            "ask": ask,
+        }
+    )
+    return xp.spoken[before:]
+
+
+def test_a_question_said_like_a_command_is_answered_by_the_question_model(sim):
+    # v26 reads "landing lights status" as toggle_lights with no on/off:
+    # nothing it would act on. The question model reads a question.
+    _, plugin, xp = sim
+    spoken = say_two(
+        plugin,
+        "landing lights status",
+        ("toggle_lights", {"light": "landing"}, 0.99),
+        ("ask_switch", {"light": "landing"}, 0.97),
+    )
+    assert spoken == ["Landing lights off"]
+    assert xp.writes == [] and xp.commands_fired == []
+    assert answered(plugin)["intent"] == "ask_switch"
+
+
+def test_a_command_the_command_model_would_do_is_done(sim):
+    # The question model can't take a command away: when v26 would act, it acts.
+    _, plugin, xp = sim
+    say_two(
+        plugin,
+        "beacon on",
+        ("toggle_lights", {"light": "beacon", "switch": "on"}, 0.99),
+        ("ask_switch", {"light": "beacon"}, 0.9),
+    )
+    assert test_switches.run(plugin, xp) == ["Beacon on"]
+    assert xp.commands_fired == ["sim/lights/beacon_lights_on"]
+    assert not events(plugin, "question_answered")
+
+
+def test_with_a_question_model_its_reading_answers_the_question(sim):
+    # "what's the gear doing": v26 says status (its own old question intent);
+    # the question model's family and slots are the ones answered.
+    _, plugin, xp = sim
+    spoken = say_two(
+        plugin,
+        "what's the gear doing",
+        ("ask_status_generic", {}, 0.95),
+        ("ask_switch", {"switch_system": "gear"}, 0.98),
+    )
+    assert spoken == ["Gear down"]
+    assert answered(plugin)["intent"] == "ask_switch"
+
+
+def test_with_a_question_model_an_unsure_question_is_not_answered(sim):
+    # The question model isn't sure: the command model's own question
+    # intents no longer answer, and nothing is acted on.
+    _, plugin, xp = sim
+    spoken = say_two(
+        plugin,
+        "what's the gear doing",
+        ("ask_status_generic", {}, 0.95),
+        ("ask_switch", {"switch_system": "gear"}, 0.3),
+    )
+    assert spoken == ["I can't answer that"]
+    assert xp.writes == [] and xp.commands_fired == []
+
+
+def test_a_system_named_alone_still_asks_which_way(sim):
+    # "flaps" alone asks "which way", as before the question model.
+    _, plugin, xp = sim
+    spoken = say_two(
+        plugin,
+        "flaps",
+        ("None", {}, 0.99),
+        ("ask_switch", {"switch_system": "flaps"}, 0.9),
+    )
+    assert not events(plugin, "question_answered")
+    assert events(plugin, "bare_command")[-1]["intent"] == "set_flaps"
+    assert xp.writes == [] and spoken
+
+
+def test_self_test_probes_the_question_model_too(sim):
+    _, plugin, _ = sim
+    plugin._model_intents = {"toggle_lights"}
+    plugin._question_intents = set()
+    assert {p[1] for p in plugin._self_test_probes()} == {"toggle_lights"}
+    plugin._question_intents = {"ask_flight_data", "None"}
+    assert {p[1] for p in plugin._self_test_probes()} == {"toggle_lights", "ask_flight_data"}
+
+
+@pytest.mark.parametrize("ask", [False, True])
+def test_a_word_alone_is_not_answered_by_the_question_model(sim, ask):
+    # q1 attempt 1 answered "armed" as the autopilot: a word alone is a
+    # fragment, on either key.
+    _, plugin, xp = sim
+    spoken = say_two(plugin, "armed", ("None", {}, 0.6), ("ask_autopilot", {}, 0.98), ask=ask)
+    assert not events(plugin, "question_answered")
+    assert xp.writes == [] and xp.commands_fired == []
+    if ask:
+        assert spoken == ["I can't answer that"]
+
+
+def test_a_reading_alone_is_still_answered(sim):
+    # "heading" alone is the bare-reading rule's, not the question model's.
+    _, plugin, xp = sim
+    say_two(
+        plugin,
+        "heading",
+        ("set_autopilot_mode", {"mode": "heading"}, 0.9),
+        ("ask_flight_data", {"reading": "heading"}, 0.99),
+        ask=True,
+    )
+    assert answered(plugin)["intent"] == "ask_flight_data"
+    assert xp.writes == [] and xp.commands_fired == []

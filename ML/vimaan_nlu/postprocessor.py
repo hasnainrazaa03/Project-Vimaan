@@ -156,6 +156,25 @@ _MATCHERS = {
 }
 
 
+def _build_exact(synonyms: dict[str, tuple[str, ...]]) -> dict[str, str]:
+    """Every name one choice slot knows -> its value, for a tagged value that
+    is exactly one of them. The search below tries synonyms before values, so
+    "vertical speed" (a value) used to match the airspeed synonym "speed"
+    inside it and was answered as airspeed. A name listed under two values
+    is left to the search."""
+    owners: dict[str, set[str]] = {}
+    for canon, syns in synonyms.items():
+        for name in (canon, *syns, *_GENERIC_STATE.get(canon, ())):
+            owners.setdefault(name.lower(), set()).add(canon)
+    return {name: next(iter(c)) for name, c in owners.items() if len(c) == 1}
+
+
+_EXACT = {
+    intent: {slot: _build_exact(syns) for slot, syns in slots.items()}
+    for intent, slots in CHOICE_SYNONYMS.items()
+}
+
+
 def _match_choice(matchers: list[tuple[re.Pattern[str], str]], text: str) -> str | None:
     for rx, canon in matchers:
         if rx.search(text):
@@ -171,7 +190,9 @@ def canonicalize_choices(
     ("raise", "disconnect"); the plugin needs "up" / "off"."""
     for slot, matchers in _MATCHERS.get(intent or "", {}).items():
         value = slots.get(slot)
-        found = _match_choice(matchers, str(value).lower()) if value else None
+        found = _EXACT[intent or ""][slot].get(str(value).strip().lower()) if value else None
+        if found is None and value:
+            found = _match_choice(matchers, str(value).lower())
         if found is None:
             found = _match_choice(matchers, original_text.lower())
         if found is not None:
