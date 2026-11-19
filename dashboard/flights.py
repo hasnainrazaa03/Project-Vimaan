@@ -7,6 +7,7 @@ The plugin writes ``vimaan_<YYYYMMDD_HHMMSS>.events.jsonl`` per session (see
 - one row per push-to-talk command: what was heard and understood, what
   Vimaan did to the sim and said back, the outcome, how long it took;
 - the autopilot changes, and whether Vimaan made them;
+- the phase of flight as it changed (Phase F) and the callouts said;
 - startup, the aircraft and joystick, the probe, and anything that went wrong.
 
 Read-only, stdlib only. A session still being written (a flight in progress)
@@ -377,6 +378,37 @@ def _event(ev: dict[str, Any], text: str, tone: str = "info", **extra: Any) -> d
     }
 
 
+def phase_name(phase: str | None) -> str:
+    """ "takeoff_roll" -> "takeoff roll", "go_around" -> "go-around"."""
+    if not phase:
+        return "unknown"
+    return "go-around" if phase == "go_around" else phase.replace("_", " ")
+
+
+def _phase_text(ev: dict[str, Any]) -> str:
+    """A phase change and what the aircraft was doing then."""
+    bits = []
+    if ev.get("agl_ft") is not None:
+        bits.append(f"{ev['agl_ft']:,.0f} ft")
+    if ev.get("gs_kt") is not None:
+        bits.append(f"{ev['gs_kt']:.0f} kt")
+    if ev.get("vs_fpm") is not None and abs(ev["vs_fpm"]) >= 100:
+        bits.append(f"{ev['vs_fpm']:+,.0f} ft/min")
+    if ev.get("gear") is not None:
+        bits.append(
+            "gear down"
+            if ev["gear"] >= 0.99
+            else "gear up"
+            if ev["gear"] <= 0.01
+            else "gear moving"
+        )
+    if ev.get("flaps"):
+        bits.append(f"flaps {ev['flaps'] * 100:.0f}%")
+    was = phase_name(ev.get("previous"))
+    text = f"Phase: {phase_name(ev.get('phase'))} (was {was})"
+    return text + (" · " + ", ".join(bits) if bits else "")
+
+
 def _aircraft_name(ev: dict[str, Any]) -> str:
     acf = ev.get("acf") or ""
     folder = Path(acf).parent.name if acf else ""
@@ -397,6 +429,8 @@ def parse(rows: list[dict[str, Any]], *, live: bool = False) -> dict[str, Any]:
     drops_seen_by_plugin = any(r.get("kind") == "autopilot_disconnect" for r in rows)
     ap_drops = 0
     joystick: dict[str, Any] | None = None
+    phases: list[str] = []
+    callouts = 0
 
     for ev in rows:
         kind = ev.get("kind")
@@ -522,6 +556,22 @@ def parse(rows: list[dict[str, Any]], *, live: bool = False) -> dict[str, Any]:
             )
         elif kind == "probe_step":
             items.append(_event(ev, f"Probe {ev.get('role')}: {ev.get('verdict')}", level="system"))
+        elif kind == "flight_phase":
+            phase = phase_name(ev.get("phase"))
+            if not phases or phases[-1] != phase:
+                phases.append(phase)
+            items.append(_event(ev, _phase_text(ev), level="phase", phase=ev.get("phase")))
+        elif kind == "callout":
+            callouts += 1
+            items.append(
+                _event(
+                    ev,
+                    f"Callout: “{ev.get('said')}” ({phase_name(ev.get('phase'))})",
+                    "warn",
+                    callout=ev.get("callout"),
+                    margins=ev.get("margins"),
+                )
+            )
         elif kind in ("session_end", "plugin_stop") and not ended:
             ended = True
             items.append(_event(ev, "Session ended"))
@@ -555,6 +605,8 @@ def parse(rows: list[dict[str, Any]], *, live: bool = False) -> dict[str, Any]:
         "latency_p50_ms": round(statistics.median(latencies), 1) if latencies else None,
         "latency_p95_ms": round(_percentile(latencies, 95), 1) if latencies else None,
         "autopilot_drops": ap_drops,
+        "phases": phases,
+        "callouts": callouts,
         "problems": len(problems),
         "self_test": self_test,
         "joystick": joystick,

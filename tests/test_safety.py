@@ -233,3 +233,73 @@ def test_a_different_flap_setting_does_not_confirm_a_held_one():
 def test_gear_up_holds_low_unless_climbing(ctx, held):
     verdict = evaluate_safety("toggle_landing_gear", {"state": "up"}, ctx)
     assert verdict.requires_confirmation is held
+
+
+# ---- Phase F.4: the rules read the phase of flight -------------------------
+@pytest.mark.parametrize(
+    ("phase", "vs_fpm", "held"),
+    [
+        ("approach", -700.0, True),  # a misheard "gear down" on the approach
+        ("approach", 0.0, True),  # level on the approach, above 1,000 ft too
+        ("landing", -500.0, True),
+        ("go_around", 1500.0, False),  # climbing away: one press
+        ("climb", 1500.0, False),
+        ("cruise", 0.0, False),
+        (None, 0.0, False),  # no phase yet: as before (above 1,000 ft, fine)
+        ("unknown", 0.0, False),
+    ],
+)
+def test_gear_up_on_an_approach_asks_to_confirm_at_any_height(phase, vs_fpm, held):
+    ctx = _Ctx(agl_ft=1800.0, on_ground=False, ias_kt=140.0, vs_fpm=vs_fpm, phase=phase)
+    verdict = _evaluate("toggle_landing_gear", {"state": "up"}, ctx)
+    assert verdict.requires_confirmation is held
+    assert not verdict.fail_safe
+    if held:
+        assert verdict.message == "Confirm gear up, on approach"
+    # Gear down is never held.
+    assert not _evaluate("toggle_landing_gear", {"state": "down"}, ctx).requires_confirmation
+
+
+@pytest.mark.parametrize(
+    ("phase", "on_ground", "held"),
+    [
+        ("takeoff_roll", True, True),  # they'd stop the takeoff
+        ("rollout", True, False),  # after landing: what they're for
+        ("taxi", True, False),
+        ("parked", True, False),
+        (None, True, False),  # no phase yet: as before
+    ],
+)
+def test_speed_brake_on_the_takeoff_roll_asks_to_confirm(phase, on_ground, held):
+    ctx = _Ctx(agl_ft=0.0, on_ground=on_ground, ias_kt=90.0, phase=phase)
+    verdict = _evaluate("set_speed_brake", {"speedbrake": "extend"}, ctx)
+    assert verdict.requires_confirmation is held
+    if held:
+        assert verdict.rule == "speed_brake_low"
+        assert verdict.message == "Confirm speed brake, takeoff roll"
+    # Armed for landing is never held.
+    assert not _evaluate("set_speed_brake", {"speedbrake": "armed"}, ctx).requires_confirmation
+
+
+@pytest.mark.parametrize(
+    ("ias_kt", "on_ground", "stall_clean_kt", "held", "fail_safe"),
+    [
+        (120.0, False, 139.0, True, False),  # the 737 after takeoff, below Vs
+        (145.0, False, 139.0, True, False),  # within 10 kt of it
+        (149.0, False, 139.0, False, False),  # 10 kt above: fine
+        (220.0, False, 139.0, False, False),
+        (100.0, True, 139.0, False, False),  # on the ground: fine
+        (None, False, 139.0, True, True),  # no airspeed in the air: fail safe
+        (90.0, False, None, False, False),  # no stall speed known: not judged
+    ],
+)
+def test_flaps_up_when_slow_asks_to_confirm(ias_kt, on_ground, stall_clean_kt, held, fail_safe):
+    ctx = _Ctx(ias_kt=ias_kt, on_ground=on_ground, agl_ft=900.0, stall_clean_kt=stall_clean_kt)
+    verdict = _evaluate("set_flaps", {"position": "up"}, ctx)
+    assert verdict.requires_confirmation is held
+    assert verdict.fail_safe is fail_safe
+    if held:
+        assert verdict.rule == "flaps_up_slow"
+        assert verdict.message == "Confirm flaps up, slow"
+    # Other flap commands don't read the stall speed.
+    assert not _evaluate("set_flaps", {"position": "down"}, ctx).requires_confirmation

@@ -200,13 +200,31 @@ to confirm before they execute:
 
 | Command | Gated when | Spoken warning |
 | --- | --- | --- |
-| Gear up | on the ground, below 50 ft AGL, or below 1,000 ft AGL when not climbing at 300 fpm or more | "Confirm gear up, low altitude" |
+| Gear up | on the ground, below 50 ft AGL, below 1,000 ft AGL when not climbing at 300 fpm or more, or on an approach or landing at any height | "Confirm gear up, low altitude" ("…, on approach") |
+| Flaps to a setting, or full | above the flap limit for that setting | "Confirm flaps, above flap speed" |
+| Flaps up | airborne, less than 10 kt above the clean stall speed | "Confirm flaps up, slow" |
+| Speed brake extend | airborne below 1,000 ft AGL, or on the takeoff roll | "Confirm speed brake, low altitude" ("…, takeoff roll") |
 | Engine shutdown | airborne | "Confirm engine shutdown in flight" |
+| Battery, generator or avionics off | airborne | "Confirm power off in flight" |
+| Fuel pump off | airborne | "Confirm fuel pump off in flight" |
+| Pitot heat off | airborne | "Confirm pitot heat off in flight" |
 | Parking brake on | ground speed above 5 kt | "Confirm parking brake at speed" |
+| Squawk 7500, 7600 or 7700 | always | "Confirm emergency squawk" |
 
 These **fail safe**: if a relevant dataref is unavailable, the situation is treated as risky and
-gated rather than silently skipped. Predictions below a **0.55 confidence floor** are never
-dispatched at all.
+gated rather than silently skipped. The phase of flight (approach, landing, takeoff roll) comes
+from Vimaan's phase tracker; before it has a phase, those rules stand as they were. An aircraft
+whose file gives no clean stall speed isn't judged by the flaps-up rule. Predictions below a
+**0.55 confidence floor** are never dispatched at all.
+
+### Callouts (opt-in)
+
+With callouts on, Vimaan says, at most once every 30 s each, never on the ground or in the last
+100 ft: **"Speed"** within 5 kt of the stall speed; **"Overspeed"**, **"Mach"** and **"Gear
+speed"** beyond Vne/Vmo, Mmo and Vle; **"Flap speed"** within 5 kt of the flap limit; **"Gear not
+down"** on an approach below 500 ft. They're off by default: bind **Vimaan: callouts on/off**
+(`vimaan/toggle_callouts`) to a key, or set `VIMAAN_CALLOUTS=1` before launch. The stall speeds
+are the aircraft file's, for one weight, so "Speed" is a guide.
 
 ---
 

@@ -399,7 +399,10 @@ match. Two performance sections answer "does Vimaan slow the game?":
   after a load on (an air start's airspeed reads 0 for a couple of seconds). With it, the speed
   margins (Phase F.2, `vimaan_nlu/envelope.py`): the lowest margin to the
   stall, flap, gear, Vne and Mmo limits in each phase, and every stretch
-  beyond one.
+  beyond one; and with callouts switched on (Phase F.4,
+  `vimaan/toggle_callouts`), each callout said and when it was first said.
+  The dashboard's Flights tab shows the phase changes and callouts in the
+  timeline ("Phases of flight" hides them) and the route of phases.
 
 Raw files in `~/Vimaan_Logs/` per session:
 

@@ -138,3 +138,54 @@ def test_the_report_says_where_todays_tracker_reads_a_flight_differently():
     assert report._phase_differences(logged, replayed) == ["t=193s approach -> descent"]
     assert report._phase_differences(logged, logged) == []
     assert report._phase_differences(logged, logged[:1]) == ["t=193s approach cruise -> -"]
+
+
+def test_the_safety_rules_read_the_phase(sim):
+    # F.4: on an approach "gear up" is held even above 1,000 ft (the fake
+    # sim's gear is down: configured, so the approach starts at once).
+    _, plugin, xp, clock = sim
+    plugin.phase.reset()  # an air start on the approach, not a takeoff
+    flying(xp, 1800.0, vs_fpm=-700.0)
+    seconds(plugin, clock, 2)
+    assert plugin.phase.phase == "approach"
+    spoken = test_plugin.say(plugin, "gear up", "toggle_landing_gear", {"state": "up"})
+    assert spoken[0].startswith("Confirm gear up")
+    hold = events(plugin, "safety_hold")[-1]
+    assert hold["rule"] == "gear_up_low_altitude"
+    assert hold["context"]["phase"] == "approach"
+    assert hold["context"]["stall_clean_kt"] == 84.0  # the fake Baron's Vs, for flaps up
+
+
+IAS = "sim/cockpit2/gauges/indicators/airspeed_kts_pilot"
+
+
+def test_callouts_are_off_until_switched_on(sim):
+    # F.4: "Speed" within 5 kt of the stall (the fake Baron: Vs 84 kt).
+    module, plugin, xp, clock = sim
+    plugin.phase.reset()
+    flying(xp, 3000.0)
+    xp.datarefs[IAS] = 86.0
+    seconds(plugin, clock, 5)
+    assert events(plugin, "callout") == []  # opt-in: off by default
+    assert "Speed" not in xp.spoken
+    plugin._on_callouts_cmd(None, module.xp.CommandBegin, None)
+    assert "Vimaan callouts on" in xp.spoken
+    seconds(plugin, clock, 3)
+    (c,) = events(plugin, "callout")  # once, not every second
+    assert c["callout"] == "speed" and c["said"] == "Speed" and c["margins"]["stall"] == 2.0
+    assert xp.spoken.count("Speed") == 1
+    plugin._on_callouts_cmd(None, module.xp.CommandBegin, None)
+    assert "Vimaan callouts off" in xp.spoken
+    assert events(plugin, "callouts_setting")[-1]["enabled"] is False
+
+
+def test_the_report_lists_the_callouts_said(sim):
+    module, plugin, xp, clock = sim
+    plugin.phase.reset()
+    plugin._on_callouts_cmd(None, module.xp.CommandBegin, None)
+    flying(xp, 3000.0)
+    xp.datarefs[IAS] = 86.0
+    seconds(plugin, clock, 35)  # said again after 30 s while it holds
+    plugin.XPluginStop()
+    text = test_plugin._report_module().report(plugin.tel.events_path)
+    assert "callouts: Speed 2x (first t=" in text
