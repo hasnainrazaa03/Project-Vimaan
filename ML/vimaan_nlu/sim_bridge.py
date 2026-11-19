@@ -15,6 +15,8 @@ A request is ``{"id": "...", "op": "...", ...}``:
                                                recognition first. The result
                                                comes when the command is done and
                                                its read-backs are checked.
+              [, "ask": true]                  said on the question key (Shift+Z),
+                                               so it is only ever answered.
     read      {"datarefs": ["name", "name[2]"]}
     write     {"dataref": name, "value": v}
     command   {"name": ..., "phase": "once" | "begin" | "end"}
@@ -133,6 +135,8 @@ def problem(req: dict[str, Any]) -> str | None:
         wav, text = req.get("wav"), req.get("text")
         if bool(wav) == bool(text):
             return "say needs exactly one of text or wav"
+        if not isinstance(req.get("ask", False), bool):
+            return "ask must be true or false"
         if wav and not (os.path.isabs(str(wav)) and str(wav).endswith(".wav")):
             return "wav must be an absolute path to a .wav file"
         if wav and not os.path.isfile(str(wav)):

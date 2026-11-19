@@ -258,3 +258,65 @@ def test_jets_manage_thrust_straight_after_autopilot_on(aircraft):
     assert names[start + 1 : start + 1 + len(thrust)] == thrust
     assert names.index("autothrottle on") < names.index("speed 250") < names.index("mach .78")
     assert "autothrottle on again" in names
+
+
+# --- Questions (Tier 4): the question key, the answer against the sim --------
+
+
+class AskingBridge(FakeBridge):
+    """Answers on the question key; ``acts`` lists the sim actions a phrase makes."""
+
+    def __init__(self, events_path, readings, replies, acts=None):
+        super().__init__(events_path, readings)
+        self.replies, self.acts, self.asked = replies, acts or {}, []
+
+    def say_text(self, text, ask=False):
+        self.texts.append(text)
+        self.asked.append(ask)
+        return {
+            **self._result(text),
+            "outcome": "answered",
+            "replies": [self.replies[text]],
+            "actions": self.acts.get(text, []),
+        }
+
+
+ALTITUDE = scenario.Answer(
+    "altitude",
+    ("sim/alt",),
+    lambda reply, r: reply == f"Altitude {round(r['sim/alt'], -1):.0f} feet",
+    lambda r: f"Altitude {r['sim/alt']}",
+)
+
+
+def test_a_question_is_asked_on_the_question_key_and_checked_against_the_sim(tmp_path):
+    b = AskingBridge(
+        tmp_path / "e.jsonl", {"sim/alt": [6004.0, 6004.0]}, {"alt?": "Altitude 6000 feet"}
+    )
+    step = Step("altitude", say="alt?", ask=True, outcomes=("answered",), answer=ALTITUDE)
+    (r,) = run(b, [step], voice=None)
+    assert r["ok"] and b.asked == [True]
+    assert r["answer"]["readings"] == {"sim/alt": 6004.0} and r["actions"] == []
+
+
+def test_a_wrong_answer_or_a_question_that_moves_the_sim_fails(tmp_path):
+    b = AskingBridge(
+        tmp_path / "e.jsonl",
+        {"sim/alt": 7404.0},
+        {"alt?": "Altitude 6000 feet", "gear?": "Gear up"},
+        acts={"gear?": [{"command": "sim/flight_controls/landing_gear_down", "ok": True}]},
+    )
+    steps = [
+        Step("altitude", say="alt?", ask=True, outcomes=("answered",), answer=ALTITUDE),
+        Step("gear", say="gear?", ask=True, outcomes=("answered",), no_actions=True),
+    ]
+    wrong, moved = run(b, steps, voice=None)
+    assert not wrong["ok"] and "sim shows Altitude 7404.0" in wrong["problems"][0]
+    assert not moved["ok"] and "changed the sim" in moved["problems"][0]
+
+
+def test_the_talk_key_sends_no_ask(tmp_path, fake_voice):
+    # A bridge from before the question key still works for every other step.
+    b = FakeBridge(tmp_path / "e.jsonl")
+    (r,) = run(b, [Step("x", say="autopilot on", reply="did")], voice=None)
+    assert r["ok"] and b.texts == ["autopilot on"]

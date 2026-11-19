@@ -7,7 +7,7 @@ import json
 import sys
 from typing import Any
 
-from . import scenario, tier1, tier2, tier3, voice, xplane
+from . import scenario, tier1, tier2, tier3, tier4, voice, xplane
 from .bridge import Bridge, NoAnswer
 
 
@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("quit", help="switch the bridge off and quit X-Plane")
     sub.add_parser("screenshot", help="X-Plane's own screenshot of its window, to see a message")
     rn = sub.add_parser("run", help="run a checklist scenario, unattended, and write a report")
-    rn.add_argument("checklist", choices=("tier1", "tier2", "tier3"))
+    rn.add_argument("checklist", choices=("tier1", "tier2", "tier3", "tier4"))
     rn.add_argument("aircraft", choices=(*tier1.SETUPS, "all"))
     rn.add_argument("--text", action="store_true", help="no generated voice: text to the model")
     rn.add_argument("--voice", default=voice.DEFAULT_VOICE)
@@ -190,7 +190,15 @@ def _wait_ready(br: Bridge, icao: str, wait_sec: float = 240.0) -> dict[str, Any
 
 def _model_lacks(checklist: str, state: dict) -> str | None:
     """Why the loaded model can't run this checklist, or None. A model from
-    before Tier 2 would fail every step for not knowing the commands."""
+    before Tier 2 would fail every step for not knowing the commands; Tier 4
+    needs a question model (qN) beside the command model."""
+    if checklist == "tier4":
+        if tier4.NEEDS_QUESTION_INTENT in (state.get("question_intents") or ()):
+            return None
+        return (
+            "no question model is loaded (install one first: "
+            "scripts/install_plugin.py --question-model q1)"
+        )
     known = state.get("model_intents")
     needs = {
         "tier2": (tier2.NEEDS_INTENT, "Tier 2", "v20"),
@@ -242,6 +250,8 @@ def _run(args: argparse.Namespace) -> int:
             results = runner.run(tier2.steps(name))
         elif args.checklist == "tier3":
             results = runner.run(tier3.steps(name))
+        elif args.checklist == "tier4":
+            results = runner.run(tier4.steps(name))
         else:
             results = runner.run(tier1.steps(name, vfe_full=limits.get("full")))
         total = scenario.summary(results)

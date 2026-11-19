@@ -71,11 +71,12 @@ class Bridge:
     def state(self) -> dict[str, Any]:
         return self.request("state")
 
-    def say_text(self, text: str) -> dict[str, Any]:
-        return self.request("say", text=text)
+    def say_text(self, text: str, ask: bool = False) -> dict[str, Any]:
+        """``ask``: said on the question key (Shift+Z), only ever answered."""
+        return self.request("say", text=text, **({"ask": True} if ask else {}))
 
-    def say_wav(self, path: str | os.PathLike[str]) -> dict[str, Any]:
-        return self.request("say", wav=str(Path(path).resolve()))
+    def say_wav(self, path: str | os.PathLike[str], ask: bool = False) -> dict[str, Any]:
+        return self.request("say", wav=str(Path(path).resolve()), **({"ask": True} if ask else {}))
 
     def read(self, *datarefs: str) -> dict[str, Any]:
         return self.request("read", datarefs=list(datarefs))["values"]

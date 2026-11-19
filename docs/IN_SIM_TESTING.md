@@ -259,6 +259,31 @@ nothing is switched off for real (the A330's probe heat has no off, so there
 the repeat confirms it and Vimaan asks "on or auto?"). 28 steps on the Baron,
 31 on the King Air, 33 on the 737, 35 on the A330. It needs a model that knows Tier 3 (v26 or later).
 
+**The Tier 4 checklist (questions):**
+
+```bash
+python -m simtest run tier4 baron --text   # or kingair, 737, a330, all
+```
+
+The same start, landing lights on, then every question family asked on the
+question key (as Shift+Z): altitude, airspeed, heading, vertical speed,
+ground speed, wind, outside temperature, altimeter, height above ground, Mach
+on the jets, fuel, endurance, oil pressure and what the engine kind shows
+(manifold pressure; torque and N1; E G T and N1), COM 1 and its standby, NAV
+1, the squawk, autopilot status, altitude set and heading bug, landing
+lights, gear, flaps, next waypoint, time and status. Each answer is checked
+against the sim read just after it: the numbers it says, within what moves in
+that time (60 ft, 5 kt, 3°, 1 °C, ...), in the cockpit's units from the
+2026-11-16 probe (fuel in gallons on the Baron, pounds on the King Air and
+737, kilograms on the A330; the altimeter in inches or hPa as the 737's and
+A330's selectors show). No question may write to or command the sim. Then
+"gear down" and "autopilot off" on the question key must be refused ("I
+can't answer that") with nothing changed, and on the talk key "landing lights
+status" and "what's our altitude" must be answered. 34 steps on the Baron, 35
+on the King Air, 37 on the 737, 38 on the A330. It needs a question model
+(q1) installed beside the command model. `--text` sends the questions as
+text; without it a generated voice says them through the question grammar.
+
 Two clicks remain until they're switched off once: Steam's launch-option
 question (set a default for X-Plane 12 in Steam), and X-Plane's "Quit the
 simulator?" (tick "Don't ask again").
