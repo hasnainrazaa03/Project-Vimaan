@@ -134,6 +134,7 @@ SLOT_VALIDATORS: Mapping[str, Range | Enum | AnyOf | Digits] = MappingProxyType(
                 "wind",
                 "temperature",
                 "altimeter",
+                "phase",  # Phase F.4: the phase of flight
             )
         ),
         "engine_reading": Enum(
