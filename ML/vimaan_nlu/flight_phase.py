@@ -13,10 +13,11 @@ Phases
 On the ground: ``parked`` (not moving), ``taxi``, ``takeoff_roll`` (fast,
 not after a landing), ``rollout`` (fast, after a landing). In the air:
 ``initial_climb`` (from liftoff to 1,000 ft above the ground), ``climb``,
-``cruise`` (level), ``descent``, ``approach`` (low and descending, or low
-with gear or flaps out), ``landing`` (the last 100 ft, after an approach),
-``go_around`` (climbing away from an approach or a landing, until 1,000 ft
-above the ground). ``unknown`` when neither on-ground nor height can be read.
+``cruise`` (level), ``descent``, ``approach`` (low with gear or flaps out,
+or low and still coming down from a descent), ``landing`` (the last 100 ft,
+after an approach),
+``go_around`` (climbing away from an approach or a landing below 1,000 ft
+above the ground, until 1,000 ft; higher up it is a climb). ``unknown`` when neither on-ground nor height can be read.
 
 A new phase must hold for a few seconds before it is taken (vertical speed
 wanders around a level-off), except the ground/air change, which takes one
@@ -50,7 +51,7 @@ STOPPED_KT = 1.0  # on the ground, slower than this: not moving
 ROLL_KT = 40.0  # on the ground, faster than this: a takeoff or landing roll
 LEVEL_FPM = 300.0  # vertical speed within +-this: level (cruise)
 INITIAL_CLIMB_AGL_FT = 1000.0  # after liftoff or a go-around, until this height
-APPROACH_AGL_FT = 2500.0  # below this, descending or configured: approach
+APPROACH_AGL_FT = 2500.0  # below this, configured or descending from a descent: approach
 LANDING_AGL_FT = 100.0  # below this, after an approach, not climbing: landing
 GO_AROUND_FPM = 500.0  # climbing at least this fast from an approach: go-around
 GEAR_DOWN_RATIO = 0.99  # gear deploy ratio at or above this: down
@@ -116,12 +117,24 @@ def candidate(s: FlightSample, previous: str | None) -> str:
         return "initial_climb"
     if previous in ("initial_climb", "go_around") and (agl is None or agl < INITIAL_CLIMB_AGL_FT):
         return previous
-    if previous in ("approach", "landing") and vs >= GO_AROUND_FPM:
+    # Below 1,000 ft only: higher up, a climb from an approach is a climb (the
+    # go-around ends at 1,000 ft anyway). X-Plane's final-approach start at
+    # 1,500 ft, levelled off by the autopilot at +700 fpm, read as three
+    # go-arounds (Phase F.3 replay, 2026-11-19).
+    if (
+        previous in ("approach", "landing")
+        and vs >= GO_AROUND_FPM
+        and (agl is None or agl < INITIAL_CLIMB_AGL_FT)
+    ):
         return "go_around"
     if agl is not None and agl < APPROACH_AGL_FT and vs < LEVEL_FPM:
         if agl < LANDING_AGL_FT and previous in ("approach", "landing"):
             return "landing"
-        if vs <= -LEVEL_FPM or _configured(s) or previous in ("approach", "landing"):
+        # Clean, a descent only from a descent: a dip in level flight over
+        # hills isn't an approach (the Baron in altitude hold at 2,400 ft
+        # above the ground, Tier 1 replay 2026-11-19); it's a descent first.
+        descending = previous == "descent" and vs <= -LEVEL_FPM
+        if descending or _configured(s) or previous in ("approach", "landing"):
             return "approach"
     if vs >= LEVEL_FPM:
         return "climb"

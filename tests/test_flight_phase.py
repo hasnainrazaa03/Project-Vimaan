@@ -183,8 +183,14 @@ def test_reset_starts_a_new_flight():
         (dict(on_ground=False, agl_ft=1800.0, vs_fpm=-700.0), "descent", "approach"),
         (dict(on_ground=False, agl_ft=1800.0, vs_fpm=0.0, flaps=0.3), "cruise", "approach"),
         (dict(on_ground=False, agl_ft=1800.0, vs_fpm=0.0), "cruise", "cruise"),  # low, clean, level
+        # Clean and dipping from level flight (over hills): a descent first.
+        (dict(on_ground=False, agl_ft=2380.0, vs_fpm=-311.0), "cruise", "descent"),
+        (dict(on_ground=False, agl_ft=2380.0, vs_fpm=-311.0), None, "descent"),  # an air start
         (dict(on_ground=False, agl_ft=80.0, vs_fpm=-500.0), "approach", "landing"),
         (dict(on_ground=False, agl_ft=80.0, vs_fpm=900.0), "landing", "go_around"),
+        # Above 1,000 ft a climb from an approach is a climb (an autopilot
+        # levelling off a final-approach start at 1,500 ft).
+        (dict(on_ground=False, agl_ft=1500.0, vs_fpm=700.0), "approach", "climb"),
         (dict(on_ground=False, agl_ft=800.0, vs_fpm=0.0), "initial_climb", "initial_climb"),
     ],
 )

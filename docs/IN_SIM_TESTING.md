@@ -285,6 +285,58 @@ on the King Air, 37 on the 737, 38 on the A330. It needs a question model
 (q1) installed beside the command model. `--text` sends the questions as
 text; without it a generated voice says them through the question grammar.
 
+**Flights: takeoff, landing, go-around (Phase F.3):**
+
+```bash
+python -m simtest run takeoff baron --text     # or kingair, 737, a330, all
+python -m simtest run landing baron --text
+python -m simtest run go-around baron --text
+```
+
+Whole flights at Portland, runway 10R, so the phase of flight and the speed
+margins are recorded on real takeoffs and landings (the tier checklists only
+fly in the air). Every step checks the phase Vimaan's tracker shows.
+
+- **Takeoff:** on the runway, engines running, parked. "gear up" is held on
+  the ground (cancelled); altitude 4,000 and heading 103 set; jets set
+  takeoff flaps; "parking brake off"; takeoff thrust. "parking brake on" at
+  speed is held (cancelled). At Vr the runner pulls the stick until the nose
+  is up and lets go; "autopilot on" and a 1,500 fpm climb straight after;
+  "gear up" from 200 ft; then climb thrust at once: jets the autothrottle
+  and speed 210, flaps up from 190 (737) or 200 kt (A330); the Baron and
+  King Air hold 120 and 140 kt on the runner's throttle. Phases: parked,
+  taxi (the first 40 kt), takeoff roll, initial climb, climb, cruise at
+  4,000 ft.
+- **Landing:** from an 8 nm final (X-Plane starts it about 1,500 ft up,
+  gear and flaps up, autopilot off). Autopilot on, altitude hold, heading
+  103, the 10R ILS (110.50, course 103), approach mode; on the glideslope,
+  gear down, landing flaps and the final speed. Jets: autothrottle off and
+  thrust idle at 50 ft. On the ground: thrust idle, brakes, autopilot off.
+  Phases: approach, landing (the last 100 ft), rollout, taxi, parked.
+- **Go-around:** the same approach to 500 ft, then full thrust and a
+  1,500 fpm climb to 3,000 ft, gear up, flaps one step up (the pistons then
+  hold their climb speed). Phases: approach, go-around, climb, cruise.
+
+What the runner does as the pilot: the thrust levers, the stick for the
+rotation, the throttle on the Baron and King Air (held on an airspeed, as
+they have no autothrottle) and the brakes. At the end of a flight, or if it
+stops, the throttle hold stops and the stick is centred.
+
+**The A330 takes off but doesn't land or go around yet.** On its approach
+LOC and G/S stayed armed and it flew on past the airport: its autopilot
+follows NAV 1, which on the A330 gets no localizer (the deviations read
+exactly 0), while its own ILS receiver (NAV 3) did receive IPDX. Flying its
+ILS needs its radio page, LS and APPR, which Vimaan's A330 profile doesn't
+do yet (a follow-up). `run landing a330` says so and skips it.
+
+A flight that misses the glideslope turns back west and holds its altitude,
+and the rest of it isn't run: flying on east, it leaves the installed
+scenery (east of about 122° W), where X-Plane pauses under a "Missing
+scenery" dialog that only a click closes and the bridge stops answering.
+
+Recorded flights from these runs replay through the tracker as test
+fixtures (`tests/fixtures/flights/`, `tests/test_flight_replays.py`).
+
 Two clicks remain until they're switched off once: Steam's launch-option
 question (set a default for X-Plane 12 in Steam), and X-Plane's "Quit the
 simulator?" (tick "Don't ask again").
@@ -341,8 +393,10 @@ match. Two performance sections answer "does Vimaan slow the game?":
   descent, approach, landing, go-around, rollout), with height, speeds, gear
   and flaps at each change, the time spent in each, and whether the
   recorded samples replay to the same phases through today's tracker
-  (`vimaan_nlu/flight_phase.py`). The aircraft is sampled once a second and
-  recorded in the events file (`flight`), not the log. With it, the speed
+  (`vimaan_nlu/flight_phase.py`; where they don't, when and how: "t=193s
+  approach -> descent"). The aircraft is sampled once a second and
+  recorded in the events file (`flight`), not the log, from the sixth second
+  after a load on (an air start's airspeed reads 0 for a couple of seconds). With it, the speed
   margins (Phase F.2, `vimaan_nlu/envelope.py`): the lowest margin to the
   stall, flap, gear, Vne and Mmo limits in each phase, and every stretch
   beyond one.

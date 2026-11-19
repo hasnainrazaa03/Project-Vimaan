@@ -174,8 +174,13 @@ class FakeAPI:
     Configuration screen until that's toggled."""
 
     def __init__(self):
-        self.state = {"sim/flightmodel/position/latitude": 0.0, "sim/time/paused": 1}
+        self.state = {
+            "sim/flightmodel/position/latitude": 0.0,
+            "sim/flightmodel/position/longitude": 0.0,
+            "sim/time/paused": 1,
+        }
         self.commands = []
+        self.flights = []
 
     def get(self, path):
         if path.startswith(("/datarefs?", "/commands?")):
@@ -186,9 +191,15 @@ class FakeAPI:
 
     def post(self, path, body):
         if path == "/flight":
-            self.state["sim/flightmodel/position/latitude"] = body["data"]["lle_air_start"][
-                "latitude"
-            ]
+            self.flights.append(body)
+            air = body["data"].get("lle_air_start")
+            if air:
+                lat, lon = air["latitude"], air["longitude"]
+            else:  # on a 5 nm final, west of the airport
+                lat, lon = xplane.AIRPORTS[body["data"]["runway_start"]["airport_id"]]
+                lon -= 0.1
+            self.state["sim/flightmodel/position/latitude"] = lat
+            self.state["sim/flightmodel/position/longitude"] = lon
         else:
             cid = int(path.split("/")[2])
             name = next(
@@ -213,6 +224,29 @@ def test_a_started_flight_is_brought_out_from_under_the_config_screen(monkeypatc
     xplane.start_flight(xplane.air_start_body("baron", 47.45, -122.31, 6000, 180, 150))
     assert api.commands == ["sim/operation/toggle_flight_config"]
     assert api.state["sim/time/paused"] == 0
+
+
+def test_runway_start_body():
+    body = xplane.runway_start_body("737", "KPDX", "10R")
+    d = body["data"]
+    assert d["aircraft"]["path"].endswith("Boeing 737-800/b738.acf")
+    assert d["runway_start"] == {"airport_id": "KPDX", "runway": "10R"}
+    assert d["engine_status"] == {"all_engines": {"running": True}}
+    final = xplane.runway_start_body("baron", "KPDX", "10R", final_nm=5)["data"]["runway_start"]
+    assert final["final_distance_in_nautical_miles"] == 5
+
+
+def test_a_runway_start_is_loaded_once_the_aircraft_is_near_its_airport(monkeypatch):
+    api = FakeAPI()
+    monkeypatch.setattr(xplane, "_get", api.get)
+    monkeypatch.setattr(xplane, "_post", api.post)
+    monkeypatch.setattr(xplane.time, "sleep", lambda s: None)
+    xplane.start_flight(xplane.runway_start_body("baron", "KPDX", "10R", final_nm=5))
+    assert api.state["sim/time/paused"] == 0  # on a 5 nm final, brought out from the screen
+    lat, lon, tol = xplane._where(api.flights[0])
+    assert (lat, lon) == xplane.AIRPORTS["KPDX"]
+    # The tier flights' area west of Portland isn't near it: no early "loaded".
+    assert abs(xplane.TEST_AREA[1] - lon) > tol
 
 
 def test_safe_mode_is_spotted(tmp_path):
@@ -881,3 +915,180 @@ def test_a_moving_reading_is_checked_just_before_the_question_too(before, after,
     assert r["answer"]["readings_before"][tier4.ENG + "EGT_deg_C[0]"] == before
     if not ok:
         assert "just before the question: E G T 640.0 / 640.0 degrees" in r["problems"][0]
+
+
+class _FlyingSim:
+    """A bridge on a flight that moves on with each read: Vimaan's phase in
+    its state, a dataref alongside."""
+
+    def __init__(self, phases, ias):
+        self.phases, self.ias = list(phases), list(ias)
+        self.writes = []
+
+    def state(self):
+        return {"phase": self.phases.pop(0) if len(self.phases) > 1 else self.phases[0]}
+
+    def read(self, *refs):
+        assert scenario.PHASE not in refs  # not a dataref: never asked of the sim
+        value = self.ias.pop(0) if len(self.ias) > 1 else self.ias[0]
+        return dict.fromkeys(refs, value)
+
+    def write(self, ref, value):
+        self.writes.append((ref, value))
+        return {"ok": True}
+
+
+def test_a_step_waits_for_the_phase_vimaan_shows():
+    sim = _FlyingSim(["parked", "parked", "taxi", "taxi", "takeoff_roll"], [0.0, 30.0, 45.0])
+    runner = scenario.Runner(sim, voice=None, poll_sec=0.0, log=lambda _line: None)
+    ias = "sim/cockpit2/gauges/indicators/airspeed_kts_pilot"
+    results = runner.run(
+        [
+            scenario.Step(
+                "throttle up",
+                write=("sim/cockpit2/engine/actuators/throttle_ratio_all", 1.0),
+                sim=(scenario.above("40 kt", ias, 40, within_sec=5),),
+            ),
+            scenario.Step(
+                "takeoff roll",
+                sim=(scenario.phase_is("takeoff_roll", within_sec=5),),
+            ),
+            scenario.Step("not landing", sim=(scenario.phase_is("landing", "rollout"),)),
+        ]
+    )
+    assert sim.writes == [("sim/cockpit2/engine/actuators/throttle_ratio_all", 1.0)]
+    assert [r["ok"] for r in results] == [True, True, False]
+    assert results[1]["sim"][0]["actual"] == "takeoff_roll"
+    assert results[2]["problems"] == [
+        "phase landing or rollout: got takeoff_roll, wanted landing or rollout"
+    ]
+    assert scenario.below("slow", ias, 5).ok(4.0) and not scenario.below("slow", ias, 5).ok(None)
+
+
+# ---- whole flights (simtest/flights.py, Phase F.3) ---------------------------
+from simtest import flights  # noqa: E402
+
+
+def _phases_checked(steps):
+    return [c.expected for s in steps for c in s.sim if c.datarefs == (scenario.PHASE,)]
+
+
+@pytest.mark.parametrize("aircraft", list(flights.PLANES))
+def test_each_flight_checks_its_phases_in_order(aircraft):
+    hands = flights.new_hands(aircraft)
+    takeoff = _phases_checked(flights.takeoff(aircraft, hands))
+    assert takeoff == [
+        "parked",
+        "taxi or takeoff_roll",
+        "takeoff_roll",
+        "initial_climb",
+        "climb",
+        "cruise",
+    ]
+    landing = _phases_checked(flights.landing(aircraft, hands))
+    assert landing == ["approach", "landing", "rollout", "taxi or parked", "parked"]
+    go_around = _phases_checked(flights.go_around(aircraft, hands))
+    assert go_around == ["approach", "go_around", "climb", "cruise"]
+
+
+@pytest.mark.parametrize("aircraft", list(flights.PLANES))
+def test_jets_use_their_autothrottle_and_pistons_the_runners_throttle(aircraft):
+    jet = flights.PLANES[aircraft].jet
+    steps = flights.landing(aircraft, flights.new_hands(aircraft))
+    said = [s.say for s in steps if s.say]
+    held = [s.pilot.__name__ for s in steps if s.pilot is not None]
+    assert ("auto throttle on" in said) is jet
+    assert ("auto throttle off" in said) is jet  # before touchdown: thrust off
+    assert any(h.startswith("speed hold") for h in held) is not jet
+    assert "idle and brakes" in held
+    # Every phrase is one Vimaan reads back (no numbers it can't say).
+    assert all(s.say != "speed " for s in steps)
+
+
+def test_the_a330_takes_off_but_doesnt_fly_the_ils_yet():
+    assert flights.cannot_fly("takeoff", "a330") == ""
+    assert "A330" in flights.cannot_fly("landing", "a330")
+    assert flights.cannot_fly("go-around", "a330") == flights.cannot_fly("landing", "a330")
+    assert all(flights.cannot_fly(f, a) == "" for f in flights.FLIGHTS for a in ("baron", "737"))
+
+
+def test_flights_start_on_the_runway_or_on_final():
+    takeoff = flights.start_body("takeoff", "baron")["data"]["runway_start"]
+    assert takeoff == {"airport_id": "KPDX", "runway": "10R"}
+    final = flights.start_body("landing", "737")["data"]["runway_start"]
+    assert final["final_distance_in_nautical_miles"] == flights.FINAL_NM
+
+
+class _Throttle:
+    """A bridge for the throttle hold: an airspeed that the test moves, and
+    the throttle it was given."""
+
+    def __init__(self, ias):
+        self.ias, self.throttle, self.yoke = ias, [], []
+
+    def read(self, *refs):
+        return {flights.IAS: self.ias}
+
+    def write(self, ref, value):
+        {flights.THROTTLE: self.throttle, flights.YOKE: self.yoke}[ref].append(value)
+        return {"ok": True}
+
+
+def test_the_throttle_hold_opens_when_slow_and_damps_a_speed_change():
+    hold = flights.SpeedHold(throttle_from=0.4)
+    hold.target_kt = 100.0
+    br = _Throttle(90.0)
+    hold.bridge = br
+    for t in range(10):  # slow and steady: the throttle opens a little more each tick
+        hold.tick(float(t))
+    assert br.throttle[0] > 0.4 and br.throttle[-1] > br.throttle[0]
+    fast = flights.SpeedHold(throttle_from=0.4)
+    fast.target_kt, fast.bridge = 100.0, _Throttle(100.0)
+    fast.tick(0.0)
+    fast.bridge.ias = 104.0  # gaining 4 kt in a second
+    fast.tick(1.0)
+    assert fast.bridge.throttle[-1] < 0.4  # damped: back before the error is large
+    hold.bridge = _Throttle(None)
+    assert hold.tick(11.0) is None  # no airspeed: nothing written
+
+
+def test_the_controls_are_given_back_at_the_end_of_a_flight():
+    hands = flights.new_hands("baron")
+    br = _Throttle(100.0)
+    hands.speed.target_kt = 100.0
+    hands.speed.start(br)
+    assert hands.speed.running
+    hands.release(br)
+    assert not hands.speed.running
+    assert br.yoke == [0.0]  # the stick in the middle
+
+
+def test_a_failed_step_with_an_abort_stops_the_flight_and_turns_back():
+    sim = _FlyingSim(["approach"], [1.0])  # the glideslope never captured
+    said = []
+    sim.say_text = lambda text, ask=False: said.append(text) or {"outcome": "executed"}
+    runner = scenario.Runner(sim, voice=None, poll_sec=0.0, log=lambda _line: None)
+    gs = "sim/cockpit2/autopilot/glideslope_status"
+    results = runner.run(
+        [
+            scenario.Step(
+                "on the glideslope",
+                sim=(scenario.equals("captured", gs, 2),),
+                abort=flights.TURN_BACK,
+            ),
+            scenario.Step("gear down", say="gear down"),
+            scenario.Step("landing", sim=(scenario.phase_is("landing"),)),
+        ]
+    )
+    assert said == ["heading two eight three", "altitude hold"]  # not "gear down"
+    assert [r["step"] for r in results] == [
+        "on the glideslope",
+        "turn back west",
+        "hold the altitude",
+        "gear down",
+        "landing",
+    ]
+    assert not results[0]["ok"]
+    assert results[3]["skipped"] and results[3]["note"] == "not run: on the glideslope failed"
+    assert scenario.line(results[3]) == "· gear down: skipped (not run: on the glideslope failed)"
+    assert scenario.summary(results)["failed"] == ["on the glideslope"]

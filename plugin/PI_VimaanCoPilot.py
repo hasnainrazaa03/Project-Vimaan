@@ -208,6 +208,9 @@ STATE_WATCH_SEC = 1.0
 # Phase F.1: how often the aircraft is sampled for the phase of flight (and
 # recorded, so a flight can be replayed through the tracker).
 FLIGHT_SAMPLE_SEC = 1.0
+# Samples skipped after a load (running time): an air start's airspeed reads
+# 0 for about 2 s at 250 kt over the ground (Tier 1, 2026-11-19), a stall.
+FLIGHT_SETTLE_SAMPLES = 5
 # The automated-test bridge (vimaan_nlu.sim_bridge): how often it looks for
 # its switch file and requests.
 BRIDGE_POLL_SEC = 0.25
@@ -555,6 +558,7 @@ class PythonInterface:
         # nothing acts on it yet.
         self.phase = PhaseTracker()
         self._flight_next = 0.0
+        self._flight_settle = 0  # samples still to skip after a load
         self.hotkeyPress = None
         self.hotkeyRelease = None
         self.hotkeySelfTest = None
@@ -1966,6 +1970,7 @@ class PythonInterface:
         aircraft: the phase starts again (an air start is not a takeoff).
         Recorded, so a replay starts again at the same point."""
         self.phase.reset()
+        self._flight_settle = FLIGHT_SETTLE_SAMPLES
         self.tel.record("flight_reset")
 
     def _service_flight(self):
@@ -1976,6 +1981,9 @@ class PythonInterface:
             return
         self._flight_next = now + FLIGHT_SAMPLE_SEC
         if self._read_int(DREF_PAUSED) == 1:
+            return
+        if self._flight_settle > 0:  # the instruments are still coming alive
+            self._flight_settle -= 1
             return
         sample = self._flight_sample()
         previous = self.phase.phase

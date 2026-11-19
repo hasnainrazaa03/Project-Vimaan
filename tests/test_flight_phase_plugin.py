@@ -87,6 +87,14 @@ def test_a_new_flight_starts_the_phase_again(sim):
     # would read as a takeoff (initial climb).
     plugin.XPluginReceiveMessage(None, module.xp.MSG_PLANE_LOADED, 0)
     flying(xp, 5000.0)
+    before = len(samples(plugin))
+    xp.datarefs[PAUSED] = 1  # loading: paused time doesn't count
+    seconds(plugin, clock, 3)
+    xp.datarefs[PAUSED] = 0
+    # Running, the first samples are skipped: an air start's airspeed reads
+    # 0 for a couple of seconds, which would be a stall.
+    seconds(plugin, clock, module.FLIGHT_SETTLE_SAMPLES)
+    assert len(samples(plugin)) == before
     seconds(plugin, clock, 2)
     assert [e["phase"] for e in events(plugin, "flight_phase")] == ["parked", "cruise"]
     assert events(plugin, "flight_reset")
@@ -121,3 +129,12 @@ def test_each_sample_carries_its_speed_margins_and_the_report_sums_them(sim):
     text = test_plugin._report_module().report(plugin.tel.events_path)
     assert "speed margins, lowest in each phase" in text
     assert "beyond a limit: gear 3 s" in text
+
+
+def test_the_report_says_where_todays_tracker_reads_a_flight_differently():
+    report = test_plugin._report_module()
+    logged = [(10.0, "cruise"), (193.0, "approach"), (202.0, "cruise")]
+    replayed = [(10.0, "cruise"), (192.0, "descent"), (202.0, "cruise")]
+    assert report._phase_differences(logged, replayed) == ["t=193s approach -> descent"]
+    assert report._phase_differences(logged, logged) == []
+    assert report._phase_differences(logged, logged[:1]) == ["t=193s approach cruise -> -"]
