@@ -35,8 +35,11 @@ Learned flying them (2026-11-19):
   8°, flew back into the runway from 75 ft). After an open-loop pull the
   trimmed aircraft keeps climbing until the autopilot takes over; the 737
   and the Baron engage their autopilots right after liftoff.
-- The A330's autopilot follows NAV 1, which gets no localizer on the A330
-  (its own ILS receiver, NAV 3, does): it takes off only (``no_ils``).
+- The A330's NAV 1 and 2 (its ILS receivers) start switched off, so its
+  approach never captured; Vimaan now switches a radio on when it tunes it.
+- "shut down both engines" left the 737 and King Air running (fixed: the
+  737's own cutoff, a turboprop's condition lever); the jets need the APU's
+  air to start, and the King Air's start doesn't spin up yet (``no_restart``).
 - A flight that misses the glideslope and flies on east leaves the
   installed scenery; X-Plane pauses under a dialog only a click closes. A
   missed glideslope now turns the aircraft back west (``TURN_BACK``).
@@ -96,9 +99,9 @@ class Plane:
     # The autopilot engages from this height (an Airbus not below 100 ft; its
     # flight controls hold the climb until then).
     autopilot_from_ft: float = 0.0
-    # Why the aircraft can't fly the ILS approach Vimaan sets up (landing and
-    # go-around are refused), or "" when it can.
-    no_ils: str = ""
+    # Why "shut down both engines" then "start both engines" can't be flown
+    # on this aircraft yet (the restart flight is refused), or "".
+    no_restart: str = ""
 
 
 PLANES: dict[str, Plane] = {
@@ -106,7 +109,18 @@ PLANES: dict[str, Plane] = {
         "BE58", False, 85, 7, 120, 115, 95, ("flaps down", "flaps full"), throttle_from=0.4
     ),
     "kingair": Plane(
-        "BE9L", False, 100, 7, 140, 130, 115, ("flaps down", "flaps full"), throttle_from=0.4
+        "BE9L",
+        False,
+        100,
+        7,
+        140,
+        130,
+        115,
+        ("flaps down", "flaps full"),
+        throttle_from=0.4,
+        # Its own start switch cranked it to 9 % in a minute while the other
+        # engine ran down (2026-11-19): to be looked into.
+        no_restart="the King Air's start doesn't spin its engine up yet",
     ),
     "737": Plane(
         "B738",
@@ -121,6 +135,7 @@ PLANES: dict[str, Plane] = {
         flaps_up_kt=190,
         go_around_flaps="flaps fifteen",
         pull=0.4,
+        no_restart="a jet starts on the APU's air, and Vimaan can't start the APU",
     ),
     "a330": Plane(
         "A333",
@@ -137,12 +152,10 @@ PLANES: dict[str, Plane] = {
         climb_levers=0.53,
         pull=0.4,
         autopilot_from_ft=100,
-        # Flown 2026-11-19: LOC and G/S stayed armed and it flew past the
-        # airport. Its autopilot follows NAV 1 (HSI source 0), which gets no
-        # localizer on the A330 (deviations exactly 0); its ILS receiver
-        # (NAV 3) did get IPDX. Its ILS needs its own RAD NAV, LS and APPR,
-        # which Vimaan's A330 profile doesn't do yet.
-        no_ils="the A330 doesn't fly the ILS Vimaan tunes yet (its autopilot gets no localizer)",
+        # The A330's NAV 1 and 2 (its ILS receivers) start off: Vimaan now
+        # switches the radio on when it tunes it (flown 2026-11-19: LOC and
+        # G/S captured, it flared itself and landed).
+        no_restart="a jet starts on the APU's air, and Vimaan can't start the APU",
     ),
 }
 
@@ -540,8 +553,45 @@ def _full_thrust(hands: Hands, bridge: Any) -> None:
     bridge.write(THROTTLE, 1.0)
 
 
+RUNNING = "sim/flightmodel/engine/ENGN_running"
+
+
+def _engines(what: str, value: int, within_sec: float) -> SimCheck:
+    return SimCheck(
+        what,
+        (f"{RUNNING}[0]", f"{RUNNING}[1]"),
+        lambda v: v == (value, value),
+        value=lambda r: (r.get(f"{RUNNING}[0]"), r.get(f"{RUNNING}[1]")),
+        within_sec=within_sec,
+        expected=f"both {'running' if value else 'stopped'}",
+    )
+
+
+def restart(aircraft: str, hands: Hands) -> list[Step]:
+    """On the runway: "shut down both engines", "start both engines", then
+    the takeoff (A3, the engines-off start: a cold aircraft's switches are
+    its own procedure, so the engines are started warm)."""
+    return [
+        Step("parked on the runway", sim=(phase_is("parked", within_sec=20),)),
+        Step(
+            "shut down both engines",
+            say="shut down both engines",
+            sim=(_engines("engines stopped", 0, within_sec=30),),
+        ),
+        Step(
+            "start both engines",
+            say="start both engines",
+            outcomes=("pending",),
+            vimaan_checks=False,
+            sim=(_engines("engines running", 1, within_sec=60),),
+        ),
+        *takeoff(aircraft, hands),
+    ]
+
+
 FLIGHTS: dict[str, Callable[[str, Hands], list[Step]]] = {
     "takeoff": takeoff,
+    "restart": restart,
     "landing": landing,
     "go-around": go_around,
 }
@@ -549,14 +599,14 @@ FLIGHTS: dict[str, Callable[[str, Hands], list[Step]]] = {
 
 def cannot_fly(flight: str, aircraft: str) -> str:
     """Why this aircraft can't fly this flight yet, or ""."""
-    return PLANES[aircraft].no_ils if flight in ("landing", "go-around") else ""
+    return PLANES[aircraft].no_restart if flight == "restart" else ""
 
 
 def start_body(flight: str, aircraft: str) -> dict[str, Any]:
     """Where each flight starts: on the runway, or on an 8 nm final."""
     from . import xplane
 
-    final = None if flight == "takeoff" else FINAL_NM
+    final = None if flight in ("takeoff", "restart") else FINAL_NM
     return xplane.runway_start_body(aircraft, AIRPORT, RUNWAY, final_nm=final)
 
 
