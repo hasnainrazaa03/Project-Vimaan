@@ -122,6 +122,29 @@ def temperature(celsius: float) -> str:
     return f"Outside air temperature {'minus ' if c < 0 else ''}{abs(c)} degrees Celsius"
 
 
+# The phase of flight (vimaan_nlu.flight_phase, Phase F.4), as said.
+PHASE_WORDS = {
+    "parked": "Parked",
+    "taxi": "Taxiing",
+    "takeoff_roll": "Takeoff roll",
+    "initial_climb": "Initial climb",
+    "climb": "Climbing",
+    "cruise": "Cruise",
+    "descent": "Descending",
+    "approach": "On approach",
+    "landing": "Landing",
+    "go_around": "Go-around",
+    "rollout": "Landing rollout",
+}
+
+
+def phase(name: str | None) -> str:
+    """The phase of flight now, or why it isn't known."""
+    if name not in PHASE_WORDS:
+        return "I can't tell the phase of flight yet"
+    return PHASE_WORDS[name]
+
+
 def altimeter(inches_hg: float, standard: bool, hpa: bool) -> str:
     """Inches as said ("two niner niner two"), hPa as Q N H, or standard."""
     if standard:

@@ -1840,6 +1840,13 @@ COMMANDS: tuple[Command, ...] = (
             "what {reading=mach} are we doing",
             "what {reading=mach} are we flying",
             "what's our {reading=baro setting}",
+            # Phase F.4: the phase of flight (appended at the end: the
+            # held-out templates are picked by a hash, the ids stay put).
+            "what {reading=phase} are we in",
+            "what {reading=phase of flight} are we in",
+            "which {reading=phase of flight} are we in",
+            "what {reading=flight phase} are we in",
+            "which {reading=phase} of the flight are we in",
         ),
         slots=_frozen(
             {
@@ -1872,6 +1879,7 @@ COMMANDS: tuple[Command, ...] = (
                             "cold",
                         ),
                         "altimeter": ("altimeter setting", "baro setting", "q n h"),
+                        "phase": ("phase of flight", "flight phase"),
                     }
                 ),
             }
@@ -1901,6 +1909,7 @@ COMMANDS: tuple[Command, ...] = (
                 "q",
                 "high",
                 "fast",
+                "phase",
             }
         ),
         answer="_answer_flight_data",
