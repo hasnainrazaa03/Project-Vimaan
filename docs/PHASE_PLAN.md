@@ -1453,8 +1453,24 @@ so each needs the owner's approval; F.1 to F.3 only observe.
   - [x] The Flights tab shows each phase change (height, speed, gear, flaps),
     the callouts, and the route of phases; the session report counts the
     callouts.
-  - [ ] The phase as context for answers: "what phase are we in" needs a new
-    question family in q1 (retrain and gate). Owner: later.
+  - [ ] The phase as an answer: "what phase of flight are we in" (owner's go
+    2026-11-19, "retrain or whatever"). A new reading, `phase`, in
+    ask_flight_data ("phase", "phase of flight", "flight phase"; 5 templates
+    appended at the end so the held-out templates stay put; "phase" added to
+    the question grammar, not the command grammar), answered from the
+    tracker ("Cruise", "On approach", "Takeoff roll", …; "I can't tell the
+    phase of flight yet" before it has one). Data questions_v7 = v6's recipe
+    (v6 regenerates byte for byte) with the new reading: 413 phase rows (388
+    train, 21 test, 4 dev). Model q2 = q1's recipe (carrier, seeds 5-8,
+    within-2% soup) on v7; Tier 4 asks it on every aircraft. **q2 passed
+    the question gate** (2026-11-19, against q1 on v7's held-out rows): Q1
+    intent 0.9990 / slot F1 1.0000 (q1 0.9975 / 0.9992), every family 1.000;
+    Q2 20/20 and 96/96; Q3 99.92% not answered (q1 99.91%); Q4 p95 7.2 ms.
+    Measured, deciding nothing: the owner's 45 blind questions by voice, on
+    the same transcripts, q1 39 right / 1 wrong / 5 declined, q2 38 / 3 / 4
+    on the question key; 2 lines differ, both misheard ("what the altimeter
+    set two" → an autopilot answer; "how flight looking oil" → engine oil);
+    typed, identical. Not yet installed.
 
 ## Phase C: conversational copilot → after F
 

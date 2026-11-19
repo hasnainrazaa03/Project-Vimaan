@@ -654,6 +654,7 @@ TIER4_QNLU = {
     "what's the outside temperature": ("ask_flight_data", {"reading": "temperature"}),
     "what's the altimeter setting": ("ask_flight_data", {"reading": "altimeter"}),
     "how high are we above the ground": ("ask_flight_data", {"reading": "height above ground"}),
+    "what phase of flight are we in": ("ask_flight_data", {"reading": "phase"}),
     "what's our mach number": ("ask_flight_data", {"reading": "mach"}),
     "how much fuel do we have": ("ask_fuel", {}),
     "how long will our fuel last": ("ask_fuel_time", {}),

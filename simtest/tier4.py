@@ -31,7 +31,7 @@ from vimaan_nlu import answers
 from vimaan_nlu.questions import REPLY as REFUSED
 from vimaan_nlu.readback import spell_digits
 
-from .scenario import Answer, SimCheck, Step, equals
+from .scenario import PHASE, Answer, SimCheck, Step, equals
 from .tier1 import SETUPS, hands_off
 from .tier3 import _lights
 
@@ -289,6 +289,15 @@ def mach_answer(tol: float = 0.01) -> Answer:
         return n is not None and _near(n / 100, r.get(MACH), tol)
 
     return Answer("mach", (MACH,), ok, lambda r: f"Mach {_show(r.get(MACH), 0.01)} ± {tol:g}")
+
+
+def phase_answer() -> Answer:
+    """The phase of flight Vimaan's tracker shows (Phase F.4, from q2)."""
+
+    def said(r: dict[str, Any]) -> str:
+        return answers.phase(r.get(PHASE))
+
+    return Answer("phase of flight", (PHASE,), lambda reply, r: reply == said(r), said)
 
 
 def height_answer() -> Answer:
@@ -710,6 +719,7 @@ def steps(aircraft: str) -> list[Step]:
         _ask("outside temperature", "what's the outside temperature", temperature_answer()),
         _ask("altimeter", "what's the altimeter setting", altimeter_answer(c)),
         _ask("height above ground", "how high are we above the ground", height_answer()),
+        _ask("phase of flight", "what phase of flight are we in", phase_answer()),
     ]
     if c.engine == "jet":
         out.append(_ask("mach", "what's our mach number", mach_answer()))
@@ -777,6 +787,7 @@ FAMILIES = {
         "altimeter",
         "height above ground",
         "mach",
+        "phase of flight",
     ),
     "ask_fuel": ("fuel",),
     "ask_fuel_time": ("fuel endurance",),

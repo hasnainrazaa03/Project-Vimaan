@@ -198,6 +198,7 @@ outside
 override
 p
 parking
+phase
 pitot
 please
 point

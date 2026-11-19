@@ -267,8 +267,9 @@ python -m simtest run tier4 baron --text   # or kingair, 737, a330, all
 
 The same start, landing lights on, then every question family asked on the
 question key (as Shift+Z): altitude, airspeed, heading, vertical speed,
-ground speed, wind, outside temperature, altimeter, height above ground, Mach
-on the jets, fuel, endurance, oil pressure and what the engine kind shows
+ground speed, wind, outside temperature, altimeter, height above ground, the
+phase of flight (checked against Vimaan's tracker; q2 or later), Mach on the
+jets, fuel, endurance, oil pressure and what the engine kind shows
 (manifold pressure; torque and N1; E G T and N1), COM 1 and its standby, NAV
 1, the squawk, autopilot status, altitude set and heading bug, landing
 lights, gear, flaps, next waypoint, time and status. Each answer is checked

@@ -3607,6 +3607,8 @@ class PythonInterface:
             hpa = unit is not None and self._read_float(unit[0]) == unit[1]
             inches = self._read_float("sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot")
             return answers.altimeter(inches, std == 1, hpa)
+        if reading == "phase":  # F.4: the phase tracker's
+            return answers.phase(self.phase.phase)
         return "Which reading?"
 
     def _answer_fuel(self, slots, text):
