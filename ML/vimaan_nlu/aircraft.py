@@ -420,9 +420,11 @@ class AircraftInfo:
     autopilot_type: int | None = None
     single_axis_autopilot: bool | None = None
     vso_kt: float | None = None
+    vs_kt: float | None = None  # stall, clean
     vfe_kt: float | None = None
     vno_kt: float | None = None
     vne_kt: float | None = None
+    vle_kt: float | None = None  # gear extended
     mmo: float | None = None
     # Whether the aircraft's own files (.acf, cockpit objects, scripts) use an
     # autothrottle at all; None until scanned. X-Plane's generic autothrottle
@@ -570,10 +572,12 @@ class Profile:
             "autopilot": info.autopilot_name,
             "single_axis_autopilot": info.single_axis_autopilot,
             "v_speeds": {
+                "vs": info.vs_kt,
                 "vso": info.vso_kt,
                 "vfe": info.vfe_kt,
                 "vno": info.vno_kt,
                 "vne": info.vne_kt,
+                "vle": info.vle_kt,
                 "mmo": info.mmo,
             },
             "overrides": list(self.overrides),
