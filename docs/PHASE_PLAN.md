@@ -1470,7 +1470,12 @@ so each needs the owner's approval; F.1 to F.3 only observe.
     the same transcripts, q1 39 right / 1 wrong / 5 declined, q2 38 / 3 / 4
     on the question key; 2 lines differ, both misheard ("what the altimeter
     set two" → an autopilot answer; "how flight looking oil" → engine oil);
-    typed, identical. Not yet installed.
+    typed, identical. Installed 2026-11-19 (#76); Tier 4 in X-Plane with q2:
+    Baron 35/35, King Air 36/36, 737 38/38, A330 39/39, the phase answered
+    right on every aircraft. Same session: the A330 landing and go-around
+    with #75's radio fix 26/27 each (captured, landed / climbed away; the
+    one miss: its FCU won't select 140 kt below VLS, the dial went to 144 —
+    the checklist now uses 150); the Baron restart 27/27.
 
 ## Phase C: conversational copilot → after F
 

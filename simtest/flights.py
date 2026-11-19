@@ -144,7 +144,9 @@ PLANES: dict[str, Plane] = {
         8,
         210,
         170,
-        140,
+        # Not 140: its FCU won't select below VLS (the dial went to 143.6 and
+        # 144.6 kt in CONF FULL, 2026-11-19).
+        150,
         ("flaps two", "flaps three", "flaps full"),
         takeoff_flaps="flaps one",
         flaps_up_kt=200,
@@ -165,6 +167,7 @@ SPOKEN = {
     130: "one three zero",
     140: "one four zero",
     145: "one four five",
+    150: "one five zero",
     160: "one six zero",
     170: "one seven zero",
     210: "two one zero",
