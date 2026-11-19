@@ -174,6 +174,43 @@ def _replayed(events: list[dict]) -> list[tuple[float, str]] | None:
     return out
 
 
+MARGIN_NAMES = ("stall", "flaps", "gear", "vno", "vne", "mmo")
+
+
+def _margins(samples: list[dict]) -> list[str]:
+    """F.2: the lowest margin to each speed limit in each phase, and every
+    stretch beyond one (Vno left out: above it is normal in smooth air)."""
+    lowest: dict[str, dict[str, float]] = defaultdict(dict)
+    beyond: dict[str, list[float]] = defaultdict(list)
+    for e in samples:
+        m = e.get("margins") or {}
+        phase = e.get("phase") or "unknown"
+        for name in MARGIN_NAMES:
+            v = m.get(name)
+            if v is None:
+                continue
+            if name not in lowest[phase] or v < lowest[phase][name]:
+                lowest[phase][name] = v
+            if v < 0 and name != "vno":
+                beyond[name].append(e["t"])
+    if not lowest:
+        return []
+    out = ["  speed margins, lowest in each phase (kt; Mach for mmo; - is beyond):"]
+    for phase, m in lowest.items():
+        shown = ", ".join(
+            f"{n} {m[n]:+.3f}" if n == "mmo" else f"{n} {m[n]:+.0f}" for n in MARGIN_NAMES if n in m
+        )
+        out.append(f"    {phase}: {shown}")
+    if beyond:
+        out.append(
+            "  beyond a limit: "
+            + ", ".join(f"{n} {len(ts)} s (first t={ts[0]:.0f}s)" for n, ts in beyond.items())
+        )
+    else:
+        out.append("  beyond a limit: never")
+    return out
+
+
 def flight_phases(events: list[dict]) -> list[str]:
     """Phase F.1: the phase of flight as it changed, and the time in each."""
     samples = [e for e in events if e["kind"] == "flight"]
@@ -199,6 +236,7 @@ def flight_phases(events: list[dict]) -> list[str]:
                 f"{k} {v / 60:.1f} min" for k, v in sorted(spent.items(), key=lambda x: -x[1])
             )
         )
+    out.extend(_margins(samples))
     replayed = _replayed(events)
     logged = [(e.get("since", e["t"]), e.get("phase")) for e in changes]
     if replayed is not None and samples:

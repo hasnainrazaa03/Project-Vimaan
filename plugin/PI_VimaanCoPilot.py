@@ -92,6 +92,7 @@ from vimaan_nlu.disconnect import (  # noqa: E402
     diagnose,
     dropped,
 )
+from vimaan_nlu.envelope import Limits, margins  # noqa: E402
 from vimaan_nlu.flight_phase import SAMPLE_FIELDS, FlightSample, PhaseTracker  # noqa: E402
 from vimaan_nlu.overlay import Overlay  # noqa: E402
 from vimaan_nlu.overlay_state import OverlayState  # noqa: E402
@@ -282,10 +283,12 @@ DREF_FLAP_DEGREES = "sim/aircraft/controls/acf_flap_dn"
 DREF_AUTOPILOT_TYPE = "sim/aircraft/autopilot/preconfigured_ap_type"
 DREF_SINGLE_AXIS_AP = "sim/aircraft/autopilot/single_axis_autopilot"
 V_SPEEDS = {
+    "vs_kt": "sim/aircraft/view/acf_Vs",
     "vso_kt": "sim/aircraft/view/acf_Vso",
     "vfe_kt": "sim/aircraft/view/acf_Vfe",
     "vno_kt": "sim/aircraft/view/acf_Vno",
     "vne_kt": "sim/aircraft/view/acf_Vne",
+    "vle_kt": "sim/aircraft/overflow/acf_Vle",
     "mmo": "sim/aircraft/view/acf_Mmo",
 }
 
@@ -1978,11 +1981,36 @@ class PythonInterface:
         previous = self.phase.phase
         changed = self.phase.update(sample)
         fields = {k: getattr(sample, k) for k in SAMPLE_FIELDS}
+        # F.2: the margin to each speed limit (observe only).
+        mach = _round(self._read_float(DREF_MACH), 3)
+        fields["mach"] = mach
+        fields["margins"] = margins(
+            self._limits(), sample.ias_kt, mach, sample.flaps, sample.gear, sample.on_ground
+        )
         self.tel.record("flight", t=sample.t, phase=self.phase.phase, **fields)
         if changed is not None:
             self.tel.event(
                 "flight_phase", phase=changed, previous=previous, since=self.phase.since, **fields
             )
+
+    def _limits(self):
+        """The loaded aircraft's speed limits (vimaan_nlu.envelope). The
+        full-flap limit is the .acf's, read in the background on load."""
+        info = self.profile.info
+        scan = self._flap_limits
+        acf = scan[1] if scan and scan[0] == info.acf_path else {}
+        return Limits(
+            vs_kt=info.vs_kt,
+            vso_kt=info.vso_kt,
+            vfe_first_kt=acf.get("first") or info.vfe_kt,
+            vfe_full_kt=acf.get("full"),
+            flap_detents=info.flap_detents or 0,
+            vle_kt=info.vle_kt,
+            vno_kt=info.vno_kt,
+            vne_kt=info.vne_kt,
+            mmo=info.mmo,
+            gear_retractable=info.gear_retractable,
+        )
 
     def _flight_sample(self):
         """The aircraft now, rounded as it is recorded (a replay of the

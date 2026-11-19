@@ -104,3 +104,20 @@ def test_the_session_report_shows_the_phases_and_replays_them(sim):
     assert f"Flight phases ({13 + plugin.samples_at_start} samples, one a second" in text
     assert "parked -> taxi" in text
     assert "replayed through today's tracker: the same phases" in text
+
+
+def test_each_sample_carries_its_speed_margins_and_the_report_sums_them(sim):
+    # F.2: the fake sim is a Baron (Vs 84, Vso 74, Vle 152, Vne 223 kt).
+    _, plugin, xp, clock = sim
+    flying(xp, 3000.0)
+    xp.datarefs["sim/cockpit2/gauges/indicators/airspeed_kts_pilot"] = 160.0
+    xp.datarefs["sim/flightmodel2/gear/deploy_ratio"] = [1.0] * 10  # gear down, 8 kt over Vle
+    seconds(plugin, clock, 3)
+    (first, *_) = samples(plugin)
+    assert first["margins"]["gear"] == -8.0
+    assert first["margins"]["stall"] == 76.0  # clean (flaps up): Vs 84
+    assert first["margins"]["vne"] == 63.0 and first["margins"]["mmo"] is None
+    plugin.XPluginStop()
+    text = test_plugin._report_module().report(plugin.tel.events_path)
+    assert "speed margins, lowest in each phase" in text
+    assert "beyond a limit: gear 3 s" in text

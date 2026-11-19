@@ -72,11 +72,13 @@ DEFAULT_DATAREFS: dict[str, Any] = {
     "sim/aircraft/controls/acf_flap_dn": [0.0, 13.0, 30.0, 27.0] + [0.0] * 6,
     "sim/aircraft/autopilot/preconfigured_ap_type": 0,
     "sim/aircraft/autopilot/single_axis_autopilot": 0,
+    "sim/aircraft/view/acf_Vs": 84.0,  # the Baron's .acf
     "sim/aircraft/view/acf_Vso": 74.0,
     "sim/aircraft/view/acf_Vfe": 152.0,  # the first notch's limit (.acf _Vfe1_kts)
     "sim/aircraft/view/acf_Vno": 195.0,
     "sim/aircraft/view/acf_Vne": 223.0,
     "sim/aircraft/view/acf_Mmo": 0.0,
+    "sim/aircraft/overflow/acf_Vle": 152.0,
     "sim/cockpit2/engine/actuators/mixture_ratio": [1.0] * 16,
     "sim/cockpit2/engine/indicators/N1_percent": [0.0] * 16,
     "sim/cockpit2/engine/indicators/N2_percent": [0.0] * 16,

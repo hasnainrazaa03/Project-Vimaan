@@ -342,7 +342,10 @@ match. Two performance sections answer "does Vimaan slow the game?":
   and flaps at each change, the time spent in each, and whether the
   recorded samples replay to the same phases through today's tracker
   (`vimaan_nlu/flight_phase.py`). The aircraft is sampled once a second and
-  recorded in the events file (`flight`), not the log.
+  recorded in the events file (`flight`), not the log. With it, the speed
+  margins (Phase F.2, `vimaan_nlu/envelope.py`): the lowest margin to the
+  stall, flap, gear, Vne and Mmo limits in each phase, and every stretch
+  beyond one.
 
 Raw files in `~/Vimaan_Logs/` per session:
 

@@ -1350,8 +1350,8 @@ model of the flight, updated every second:
 Steps (2026-11-18). Each use of the phase (F.4) changes what Vimaan does,
 so each needs the owner's approval; F.1 to F.3 only observe.
 
-- [ ] **F.1 Phase tracker, observe only.** *Built 2026-11-18, not yet run in
-  the sim.* `vimaan_nlu/flight_phase.py`: from a sample once a second
+- [ ] **F.1 Phase tracker, observe only.** *Merged and installed 2026-11-19
+  (#71), not yet run in the sim.* `vimaan_nlu/flight_phase.py`: from a sample once a second
   (on-ground, height above the ground, ground and air speed, vertical
   speed, gear, flap handle), the phases above plus go-around; a new phase
   must hold 3 s (1 s for the ground/air change; a bounce below 50 ft after
@@ -1363,9 +1363,17 @@ so each needs the owner's approval; F.1 to F.3 only observe.
   today's tracker. Nothing reads the phase yet. Tested on synthetic flights:
   a whole flight in order, go-around, touch-and-go, bounces, a rejected
   takeoff, air starts, a wandering level-off.
-- [ ] **F.2 Envelope margins, observe only:** airspeed against Vso, the flap
-  limit for the notch set, gear and Vno/Vne/Mmo (the .acf values the
-  aircraft profile already reads), logged with the samples.
+- [ ] **F.2 Envelope margins, observe only.** *Built 2026-11-19, not yet run
+  in the sim.* `vimaan_nlu/envelope.py`: with each sample, the knots between
+  the airspeed and each limit (Mach for Mmo), positive inside, negative
+  beyond: the stall (airborne only; Vso with flaps out, Vs clean), the flap
+  limit for the notch set (first notch to full flaps, evenly between, as the
+  flap safety rule does), Vle while the gear isn't up (retractable gear),
+  Vno, Vne (Vmo on jets) and Mmo. The profile now also reads Vs and Vle
+  (`acf_Vs`, `overflow/acf_Vle`). The .acf stall speeds are for one weight,
+  so the stall margin is a guide. The report lists the lowest margin in each
+  phase and every stretch beyond a limit (Vno left out: above it is normal
+  in smooth air). Nothing acts on them.
 - [ ] **F.3 In-sim check:** the tier runs (air starts) and the A3/A4
   scenarios (ground start and takeoff, approach and landing) record flights;
   their phases must come out in order, and replays of them become test
