@@ -2505,7 +2505,8 @@ COMMANDS: tuple[Command, ...] = (
                     {
                         "gear": ("landing gear", "wheels"),
                         "flaps": ("flap",),
-                        "parking brake": (),
+                        # "is the parking brakes set": the owner's voice, both grammars.
+                        "parking brake": ("parking brakes",),
                         "speed brake": ("speed brakes", "spoilers"),
                         "auto brake": ("auto brakes",),
                         "yaw damper": (),

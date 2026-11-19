@@ -175,6 +175,10 @@ class Runner:
         started = datetime.now()
         problems: list[str] = []
         if step.say:
+            # A reading that moves (the 737's EGT with the autothrottle hunting)
+            # can leave tolerance between the answer and the read after it, so
+            # the sim is read just before the question too.
+            before = self.bridge.read(*step.answer.datarefs) if step.answer is not None else None
             said = self._say(step.say, r, ask=step.ask)
             r.update(
                 {
@@ -204,11 +208,12 @@ class Runner:
             if step.no_actions and said.get("actions"):
                 problems.append(f"changed the sim: {said['actions']}")
             if step.answer is not None:
-                got = self._answer(step.answer, said.get("replies") or [])
+                got = self._answer(step.answer, said.get("replies") or [], before or {})
                 r["answer"] = got
                 if not got["ok"]:
                     problems.append(
                         f"{step.answer.what}: said {got['replies']}, sim shows {got['expected']}"
+                        f" (just before the question: {got['expected_before']})"
                     )
         elif step.command:
             done = self.bridge.command(step.command)
@@ -257,15 +262,18 @@ class Runner:
         r["misheard"] = {k: said.get(k) for k in ("heard", "intent", "slots", "outcome", "replies")}
         return self.bridge.say_text(phrase, **key)
 
-    def _answer(self, answer: Answer, replies: list[str]) -> dict[str, Any]:
-        """The reply against the sim as it is now (just after the reply)."""
+    def _answer(self, answer: Answer, replies: list[str], before: dict[str, Any]) -> dict[str, Any]:
+        """The reply against the sim just after it, or just before the
+        question (``before``): the plugin read it in between."""
         readings = self.bridge.read(*answer.datarefs)
         return {
             "what": answer.what,
             "replies": replies,
             "readings": readings,
+            "readings_before": before,
             "expected": answer.expected(readings),
-            "ok": any(answer.ok(reply, readings) for reply in replies),
+            "expected_before": answer.expected(before),
+            "ok": any(answer.ok(reply, r) for reply in replies for r in (readings, before)),
         }
 
     def _check(self, check: SimCheck) -> dict[str, Any]:

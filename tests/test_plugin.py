@@ -1745,8 +1745,19 @@ def test_log_report_flags_abrupt_end(monkeypatch, tmp_path):
     # Simulate a crash: drop the shutdown events and tear the last line.
     kept = [ln for ln in lines if '"plugin_stop"' not in ln and '"session_end"' not in ln]
     events_path.write_text("\n".join(kept) + '\n{"kind": "sta')
-    text = _report_module().report(events_path)
+    # ... ten minutes ago: nothing has been written since.
+    text = _report_module().report(events_path, now=events_path.stat().st_mtime + 600)
     assert "ABRUPTLY" in text
+
+
+def test_log_report_says_a_session_still_being_written_is_not_over(monkeypatch, tmp_path):
+    # Read while X-Plane is open: no clean end yet, but not a crash either.
+    NLU.clear()
+    _, plugin, _ = _load_plugin(monkeypatch, tmp_path)
+    say(plugin, "gear down", "toggle_landing_gear", {"state": "down"})
+    text = _report_module().report(plugin.tel.events_path)
+    plugin.XPluginStop()
+    assert "Ended: not yet" in text and "ABRUPTLY" not in text
 
 
 XPLANE_ROOT = os.environ.get(

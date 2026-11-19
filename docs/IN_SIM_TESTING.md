@@ -272,8 +272,9 @@ on the jets, fuel, endurance, oil pressure and what the engine kind shows
 (manifold pressure; torque and N1; E G T and N1), COM 1 and its standby, NAV
 1, the squawk, autopilot status, altitude set and heading bug, landing
 lights, gear, flaps, next waypoint, time and status. Each answer is checked
-against the sim read just after it: the numbers it says, within what moves in
-that time (60 ft, 5 kt, 3°, 1 °C, ...), in the cockpit's units from the
+against the sim read just before the question and just after the answer (it
+passes on either: the 737's EGT moved 9 °C between the answer and the read
+after it): the numbers it says, within what moves in that time (60 ft, 5 kt, 3°, 1 °C, ...), in the cockpit's units from the
 2026-11-16 probe (fuel in gallons on the Baron, pounds on the King Air and
 737, kilograms on the A330; the altimeter in inches or hPa as the 737's and
 A330's selectors show). No question may write to or command the sim. Then
