@@ -92,6 +92,7 @@ from vimaan_nlu.disconnect import (  # noqa: E402
     diagnose,
     dropped,
 )
+from vimaan_nlu.flight_phase import SAMPLE_FIELDS, FlightSample, PhaseTracker  # noqa: E402
 from vimaan_nlu.overlay import Overlay  # noqa: E402
 from vimaan_nlu.overlay_state import OverlayState  # noqa: E402
 from vimaan_nlu.pilot_replies import override_prefix, pilot_reply  # noqa: E402
@@ -203,6 +204,9 @@ VERIFY_DELAY_SEC = 1.0
 FOLLOW_UP_SEC = (0.0, 10.0, 30.0)
 # How often to look for autopilot changes nobody asked Vimaan for.
 STATE_WATCH_SEC = 1.0
+# Phase F.1: how often the aircraft is sampled for the phase of flight (and
+# recorded, so a flight can be replayed through the tracker).
+FLIGHT_SAMPLE_SEC = 1.0
 # The automated-test bridge (vimaan_nlu.sim_bridge): how often it looks for
 # its switch file and requests.
 BRIDGE_POLL_SEC = 0.25
@@ -544,6 +548,10 @@ class PythonInterface:
         self._flight_loop_id = None
         self._frame_loop_id = None
         self.frames = FrameStats()
+        # The phase of flight (vimaan_nlu.flight_phase). Observe only: logged,
+        # nothing acts on it yet.
+        self.phase = PhaseTracker()
+        self._flight_next = 0.0
         self.hotkeyPress = None
         self.hotkeyRelease = None
         self.hotkeySelfTest = None
@@ -802,6 +810,7 @@ class PythonInterface:
         ):
             self._autopilot_state = None
             self._quiet_until = time.perf_counter() + RELOAD_QUIET_SEC
+            self._new_flight()
 
     # ------------------------------------------------------------------
     # Autopilot-off diagnostics (vimaan_nlu.disconnect)
@@ -1067,6 +1076,7 @@ class PythonInterface:
             self._service_bridge()
             self._sample_stick()
             self._watch_state()
+            self._service_flight()
             if self.overlay is not None:
                 self.overlay.update()
         except Exception as exc:  # never let the flight loop die
@@ -1906,6 +1916,7 @@ class PythonInterface:
             # A new position resets the autopilot: not a disconnect to call out.
             self._autopilot_state = None
             self._quiet_until = time.perf_counter() + RELOAD_QUIET_SEC
+            self._new_flight()
             return {"ok": True}
         except Exception as exc:
             self.tel.error("test_request_failed", exc, request=req["id"], op=op)
@@ -1947,6 +1958,50 @@ class PythonInterface:
         self.tel.event("sim_command", cmd=None, command=name, ok=True, origin="test", phase=phase)
         return {"ok": True}
 
+    def _new_flight(self):
+        """An aircraft or airport loaded, or the test bridge moved the
+        aircraft: the phase starts again (an air start is not a takeoff).
+        Recorded, so a replay starts again at the same point."""
+        self.phase.reset()
+        self.tel.record("flight_reset")
+
+    def _service_flight(self):
+        """Phase F.1: the aircraft once a second (not while paused), recorded
+        for replays, and the phase of flight it shows, logged when it changes."""
+        now = time.perf_counter()
+        if now < self._flight_next:
+            return
+        self._flight_next = now + FLIGHT_SAMPLE_SEC
+        if self._read_int(DREF_PAUSED) == 1:
+            return
+        sample = self._flight_sample()
+        previous = self.phase.phase
+        changed = self.phase.update(sample)
+        fields = {k: getattr(sample, k) for k in SAMPLE_FIELDS}
+        self.tel.record("flight", t=sample.t, phase=self.phase.phase, **fields)
+        if changed is not None:
+            self.tel.event(
+                "flight_phase", phase=changed, previous=previous, since=self.phase.since, **fields
+            )
+
+    def _flight_sample(self):
+        """The aircraft now, rounded as it is recorded (a replay of the
+        recording then sees exactly what the tracker saw)."""
+        agl_m = self._read_float("sim/flightmodel/position/y_agl")
+        gs_ms = self._read_float("sim/flightmodel/position/groundspeed")
+        on_ground = self._read_int("sim/flightmodel/failures/onground_any")
+        return FlightSample(
+            t=round(self.tel.elapsed(), 3),
+            on_ground=None if on_ground is None else bool(on_ground),
+            agl_ft=_round(None if agl_m is None else agl_m / METRES_PER_FOOT, 1),
+            gs_kt=_round(None if gs_ms is None else gs_ms / MPS_PER_KNOT, 1),
+            ias_kt=_round(self._read_float("sim/cockpit2/gauges/indicators/airspeed_kts_pilot"), 1),
+            vs_fpm=_round(self._read_float(DREF_VERTICAL_SPEED_FPM), 0),
+            gear=_round(self._read_array(DREF_GEAR_DEPLOY, 0, is_float=True), 2),
+            flaps=_round(self._read_float(DREF_FLAP_HANDLE), 2),
+            altitude_ft=_round(self._read_float(DREF_ALTITUDE_ACTUAL), 0),
+        )
+
     def _bridge_state(self):
         info = self.profile.info
         agl_m = self._read_float("sim/flightmodel/position/y_agl")
@@ -1969,6 +2024,7 @@ class PythonInterface:
             "paused": self._read_int(DREF_PAUSED),
             "on_ground": self._read_int("sim/flightmodel/failures/onground_any"),
             "agl_ft": None if agl_m is None else round(agl_m / METRES_PER_FOOT, 1),
+            "phase": self.phase.phase,
             "flying": {k: _round(self._read_float(n), 1) for k, n in STATE_FLOATS.items()},
             "autopilot": {k: self._read_int(n) for k, n in AUTOPILOT_STATE.items()},
         }

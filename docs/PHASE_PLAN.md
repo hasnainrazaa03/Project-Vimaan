@@ -1347,6 +1347,34 @@ model of the flight, updated every second:
 - **Tests**: recorded flights (the A3 takeoffs and A4 landings) replayed
   through the tracker; the transitions must match. Pure Python, no training.
 
+Steps (2026-11-18). Each use of the phase (F.4) changes what Vimaan does,
+so each needs the owner's approval; F.1 to F.3 only observe.
+
+- [ ] **F.1 Phase tracker, observe only.** *Built 2026-11-18, not yet run in
+  the sim.* `vimaan_nlu/flight_phase.py`: from a sample once a second
+  (on-ground, height above the ground, ground and air speed, vertical
+  speed, gear, flap handle), the phases above plus go-around; a new phase
+  must hold 3 s (1 s for the ground/air change; a bounce below 50 ft after
+  landing stays the rollout). The plugin records every sample in the events
+  file (`flight`, not the log), logs each change (`flight_phase`), starts
+  again on a new aircraft, airport or test-bridge move (an air start is not a
+  takeoff), skips paused time, and gives the phase to the test bridge. The
+  session report shows the phases and replays the recorded samples through
+  today's tracker. Nothing reads the phase yet. Tested on synthetic flights:
+  a whole flight in order, go-around, touch-and-go, bounces, a rejected
+  takeoff, air starts, a wandering level-off.
+- [ ] **F.2 Envelope margins, observe only:** airspeed against Vso, the flap
+  limit for the notch set, gear and Vno/Vne/Mmo (the .acf values the
+  aircraft profile already reads), logged with the samples.
+- [ ] **F.3 In-sim check:** the tier runs (air starts) and the A3/A4
+  scenarios (ground start and takeoff, approach and landing) record flights;
+  their phases must come out in order, and replays of them become test
+  fixtures.
+- [ ] **F.4 Uses, each with the owner's OK:** safety rules read the phase (a
+  safety-rule change); optional callouts, ranked and rate-limited; the phase
+  as context for answers (a "what phase" question needs the question model
+  to learn it); the Flights tab shows the phases.
+
 ## Phase C: conversational copilot → after F
 
 The trained model stays the fast path for commands (6–11 ms, offline,

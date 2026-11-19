@@ -336,6 +336,13 @@ match. Two performance sections answer "does Vimaan slow the game?":
   CPU (% of one core) and memory of X-Plane and of the worker, GPU
   utilisation and memory, macOS's free-memory level, swap and load.
   `--usage-every 0` on the worker turns it off.
+- **Flight phases** (Phase F.1, observe only): the phase of flight as it
+  changed (parked, taxi, takeoff roll, initial climb, climb, cruise,
+  descent, approach, landing, go-around, rollout), with height, speeds, gear
+  and flaps at each change, the time spent in each, and whether the
+  recorded samples replay to the same phases through today's tracker
+  (`vimaan_nlu/flight_phase.py`). The aircraft is sampled once a second and
+  recorded in the events file (`flight`), not the log.
 
 Raw files in `~/Vimaan_Logs/` per session:
 
