@@ -601,7 +601,17 @@ gives the controls back at the end of a run.
   rotation at Vr by the runner (an open-loop pull: the bridge answers every
   0.25 s, too slow to hold a pitch), the autopilot climbing straight after,
   gear up from 200 ft with a positive rate, flaps up, level at 4,000 ft.
-  Still to do: starting with the engines off ("start both engines").
+  Engines off (`simtest run restart`, 2026-11-19): "shut down both engines"
+  then "start both engines" on the runway, then the takeoff. Flying it found:
+  the shutdown left the 737 and King Air running (fixed: the 737's own
+  cutoff commands, a turboprop's condition lever to cut-off); with no
+  electrical power the Baron cranked 20 s for nothing (now: "No electrical
+  power … Battery on first"); the jets don't turn without the APU's air
+  (now: "did not turn. No starting air: start the A P U", and no fuel into a
+  core still winding down). The Baron restarts; the jets need an APU, which
+  Vimaan can't start; the King Air's own start switch cranked to 9 % in a
+  minute: to look into. A cold aircraft's start is its own procedure
+  (battery, fuel selectors, pumps) beyond "start engine".
 - [ ] **A4 Approach and landing.** *`simtest run landing` and `go-around`,
   2026-11-19 (F.3): Baron, King Air, 737.* From an 8 nm final (X-Plane
   starts it at about 1,500 ft, gear and flaps up): the 10R ILS on the
@@ -610,9 +620,10 @@ gives the controls back at the end of a run.
   the jets' thrust off at 50 ft (on its autothrottle the 737 held 145 kt
   along the runway at 2 ft), brakes. No autoland: the 737 flares a little
   by itself on one autopilot, and its second autopilot engaged at 950 ft
-  dived it into the ground. The A330 doesn't capture the ILS: its autopilot
-  follows NAV 1, which gets no localizer on the A330, while its own ILS
-  receiver (NAV 3) does; a Vimaan follow-up (its radio page, LS and APPR).
+  dived it into the ground. The A330 didn't capture the ILS: its NAV 1 and
+  2 (its ILS receivers) start switched off. Vimaan now switches a NAV radio
+  on when it tunes it; so switched, the A330 captured, flared itself and
+  landed (2026-11-19).
 
 ---
 
@@ -1399,8 +1410,8 @@ so each needs the owner's approval; F.1 to F.3 only observe.
     24/24, 737 28/28, A330 30/30. Landings: Baron and King Air 22/22, 737
     26/26 (first 25/26: it stopped from 40 kt inside a phase's 3 s, rollout
     straight to parked, now accepted). Go-arounds: Baron 25/25, King Air
-    26/26, 737 26/26. The A330 doesn't fly the ILS Vimaan tunes (see A4),
-    so it takes off only.
+    26/26, 737 26/26. The A330 didn't capture the ILS (its ILS receivers
+    start off, see A4): fixed, to fly with the next install.
   - The margins caught real exceedances, all the test's own: the A330 left
     at takeoff thrust to 1,000 ft went through its flaps-1 limit (215 kt) to
     242 kt (16 kt with climb thrust after the gear), and the King Air on full

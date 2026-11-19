@@ -238,7 +238,9 @@ def _run(args: argparse.Namespace) -> int:
                     else xplane.air_start_body(name, *xplane.TEST_AREA, setup.alt_ft, 180, setup.kt)
                 )
             br.enable()
-            state = _wait_ready(br, setup.icao, airborne=args.checklist != "takeoff")
+            state = _wait_ready(
+                br, setup.icao, airborne=args.checklist not in ("takeoff", "restart")
+            )
         except (xplane.XPlaneError, NoAnswer) as exc:
             print(f"✕ {exc}", file=sys.stderr)
             return 2

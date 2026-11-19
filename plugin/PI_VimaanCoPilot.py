@@ -145,6 +145,20 @@ CORE_SPEED = {
     "turboprop": "sim/cockpit2/engine/indicators/N1_percent",
 }
 DREF_FUEL_LEVER = "sim/cockpit2/engine/actuators/mixture_ratio"  # 0 cutoff, 1 open
+DREF_BUS_VOLTS = "sim/cockpit2/electrical/bus_volts"
+# A start that adds less than this to the core speed it began with never
+# turned (the A330's N2 was still winding down from a shutdown: 23 % then 7 %).
+TURNED_PCT = 2.0
+# The fuel selectors: 0 is off. A twin's left and right; a single's one.
+DREF_FUEL_SELECTOR = "sim/cockpit2/fuel/fuel_tank_selector"
+DREF_FUEL_SELECTOR_LR = (
+    "sim/cockpit2/fuel/fuel_tank_selector_left",
+    "sim/cockpit2/fuel/fuel_tank_selector_right",
+)
+# Each NAV radio's power switch (int[12], [0] is NAV 1). The A330's NAV 1 and
+# 2 are its ILS receivers and start switched off (its VOR displays read NAV 3
+# and 4): "tune nav one" switches the radio on.
+DREF_NAV_POWER = "sim/cockpit2/radios/actuators/nav_power"
 # What the pilot must say with a number to make it a command, per "to or two?" target.
 COMMAND_NOUN = {
     "set_autopilot_altitude": "altitude",
@@ -1728,6 +1742,19 @@ class PythonInterface:
             else:
                 xp.getDatavi(dref, values, index, 1)
             return values[0] if values else None
+        except Exception as exc:
+            self.tel.event("dataref_read_error", logging.WARNING, dataref=name, error=repr(exc))
+            return None
+
+    def _read_float_array(self, name, count=8):
+        """The first ``count`` elements of a float[] dataref, or None."""
+        dref = self._find(name)
+        if not dref:
+            return None
+        values: list = []
+        try:
+            xp.getDatavf(dref, values, 0, count)
+            return [float(v) for v in values]
         except Exception as exc:
             self.tel.event("dataref_read_error", logging.WARNING, dataref=name, error=repr(exc))
             return None
@@ -3373,7 +3400,21 @@ class PythonInterface:
         port = None if fval is None else self._radio(slots, "nav_port", DREF_NAV_10KHZ, "NAV")
         if port is None:
             return "rejected"
-        return self._tune(f"NAV {port}", DREF_NAV_10KHZ[port], fval, 100, f"NAV {port} set to")
+        spoken = f"NAV {port} on, set to" if self._nav_power_on(port) else f"NAV {port} set to"
+        return self._tune(f"NAV {port}", DREF_NAV_10KHZ[port], fval, 100, spoken)
+
+    def _nav_power_on(self, port):
+        """Switch NAV ``port`` on when it's off, to tune it: True if it was
+        switched on. The A330's NAV 1 and 2, its ILS receivers, start off, so
+        "tune nav one" reached nothing and its approach never captured
+        (flown 2026-11-19); switched on, it flew the ILS to a landing."""
+        index = int(port) - 1
+        if self._read_array(DREF_NAV_POWER, index) != 0:  # on, or no such switch
+            return False
+        if not self._write_array(DREF_NAV_POWER, index, 1, is_float=False):
+            return False
+        self._expect(f"NAV {port} power", lambda: self._read_array(DREF_NAV_POWER, index), 1)
+        return True
 
     def _set_nav_standby(self, slots, intent):
         fval = self._frequency(slots, "nav_frequency")
@@ -4415,9 +4456,16 @@ class PythonInterface:
             if running == 0:
                 self._say(f"{label} already off")
                 return "no_op"
-            if not self._fire_command(eng["shutdown"]):
+            # The aircraft's own fuel cutoff when it has one (the 737's
+            # condition levers: X-Plane's shut-down command left it running).
+            role_cmd = self.profile.command(f"fuel_off_{eng['index'] + 1}")
+            if not self._fire_command(role_cmd or eng["shutdown"]):
                 self._say(f"Cannot shut down {label}")
                 return "failed"
+            if role_cmd is None and self.profile.engine_start in CORE_SPEED:
+                # A turbine's condition lever to cut-off too: the King Air
+                # kept running on the shut-down command alone.
+                self._write_array(DREF_FUEL_LEVER, eng["index"], 0.0)
             self._expect(
                 label, lambda: self._read_array(DREF_ENGINE_RUNNING, eng["index"]), 0, delay=5.0
             )
@@ -4433,6 +4481,12 @@ class PythonInterface:
         kind = self.profile.engine_start
         if kind == "electric":
             self._say(f"{label} is electric and has no starter")
+            return "rejected"
+        volts = self._read_float_array(DREF_BUS_VOLTS)
+        if volts is not None and max(volts, default=0.0) < 1.0:
+            # Nothing to turn the starter (the cold Baron cranked 20 s for
+            # nothing with its battery off).
+            self._say(f"No electrical power to start {label.lower()}. Battery on first.")
             return "rejected"
         cmd_ref = xp.findCommand(eng["starter"])
         if not cmd_ref:
@@ -4458,6 +4512,9 @@ class PythonInterface:
             "peak_pct": 0.0,
             **eng,
         }
+        # Where the core began: a start must add to it (one still winding
+        # down from a shutdown isn't turning).
+        self._cranks[label]["start_pct"] = self._core_pct(self._cranks[label]) or 0.0
         self.tel.event(
             "crank_begin",
             cmd=self._current_cmd,
@@ -4481,7 +4538,11 @@ class PythonInterface:
             core = self._core_pct(crank)
             if core is not None:
                 crank["peak_pct"] = max(crank["peak_pct"], core)
-                if not crank["fuel_on"] and core >= FUEL_ON_AT_PCT[crank["kind"]]:
+                # Fuel in once the starter has the core turning: not on a core
+                # still winding down from a shutdown (the A330 got fuel at 23 %
+                # N2 with no starting air).
+                turning = core >= crank.get("start_pct", 0.0) + TURNED_PCT
+                if not crank["fuel_on"] and core >= FUEL_ON_AT_PCT[crank["kind"]] and turning:
                     self._fuel_on(crank, core)
             running = self._read_array(DREF_ENGINE_RUNNING, crank["index"]) == 1
             spooled = core is None or core >= STARTER_CUTOUT_PCT
@@ -4514,12 +4575,29 @@ class PythonInterface:
             lever_before=before,
         )
 
-    @staticmethod
-    def _why_no_start(crank):
+    def _why_no_start(self, crank):
+        """Why a start failed, from what the sim shows, for the pilot."""
         label = crank["label"]
         if crank["kind"] not in CORE_SPEED:
+            index = crank["index"]
+            mixture = self._read_array(DREF_FUEL_LEVER, index, True)
+            if mixture is not None and mixture < 0.05:
+                return f"{label} did not start. The mixture is cut off."
+            selector = self._fuel_selector(index)
+            if selector == 0:
+                return f"{label} did not start. The fuel selector is off."
             return f"{label} did not start. Check fuel, mixture and ignition."
         core = "N2" if crank["kind"] == "jet" else "N1"
+        began = crank.get("start_pct") or 0.0
+        if crank["peak_pct"] < began + TURNED_PCT:
+            # Never turned: a jet's starter runs on air (the 737 and A330
+            # with their APUs off didn't turn at all).
+            why = (
+                "No starting air: start the A P U."
+                if crank["kind"] == "jet"
+                else "Check the starter."
+            )
+            return f"{label} did not turn. {why}"
         if crank["peak_pct"] < FUEL_ON_AT_PCT[crank["kind"]]:
             return (
                 f"{label} did not spool up. {core} reached {crank['peak_pct']:.0f} percent. "
@@ -4530,14 +4608,27 @@ class PythonInterface:
             "Check fuel and ignition."
         )
 
-    def _write_array(self, name, index, value):
-        """Write one element of a float[] dataref and read it back."""
+    def _fuel_selector(self, index):
+        """Engine ``index``'s fuel selector (0 off), or None: a twin's left
+        or right selector, a single's one."""
+        num = self._read_int(DREF_NUM_ENGINES)
+        if num == 2 and index < 2:
+            return self._read_int(DREF_FUEL_SELECTOR_LR[index])
+        if num == 1:
+            return self._read_int(DREF_FUEL_SELECTOR)
+        return None
+
+    def _write_array(self, name, index, value, is_float=True):
+        """Write one element of a float[] (or int[]) dataref and read it back."""
         dref = self._find(name)
         if not dref:
             return False
         try:
-            xp.setDatavf(dref, [float(value)], index, 1)
-            readback = self._read_array(name, index, True)
+            if is_float:
+                xp.setDatavf(dref, [float(value)], index, 1)
+            else:
+                xp.setDatavi(dref, [int(value)], index, 1)
+            readback = self._read_array(name, index, is_float)
         except Exception as exc:
             self.tel.event("dataref_write_error", logging.WARNING, dataref=name, error=repr(exc))
             return False

@@ -291,6 +291,7 @@ text; without it a generated voice says them through the question grammar.
 python -m simtest run takeoff baron --text     # or kingair, 737, a330, all
 python -m simtest run landing baron --text
 python -m simtest run go-around baron --text
+python -m simtest run restart baron --text     # shut down both, start both, take off
 ```
 
 Whole flights at Portland, runway 10R, so the phase of flight and the speed
@@ -322,12 +323,19 @@ rotation, the throttle on the Baron and King Air (held on an airspeed, as
 they have no autothrottle) and the brakes. At the end of a flight, or if it
 stops, the throttle hold stops and the stick is centred.
 
-**The A330 takes off but doesn't land or go around yet.** On its approach
-LOC and G/S stayed armed and it flew on past the airport: its autopilot
-follows NAV 1, which on the A330 gets no localizer (the deviations read
-exactly 0), while its own ILS receiver (NAV 3) did receive IPDX. Flying its
-ILS needs its radio page, LS and APPR, which Vimaan's A330 profile doesn't
-do yet (a follow-up). `run landing a330` says so and skips it.
+**The A330's ILS receivers start switched off.** Its NAV 1 and 2 are its
+ILS receivers (its VOR displays read NAV 3 and 4) and an air or final start
+leaves them off, so "tune nav one" reached nothing and LOC and G/S stayed
+armed. Vimaan now switches a NAV radio on when it tunes one ("NAV 1 on, set
+to …"); with them on, the A330 captured both, flared itself and landed.
+
+- **Restart:** on the runway, "shut down both engines", then "start both
+  engines", then the takeoff (A3's engines-off start, started warm: a cold
+  aircraft's switches are its own procedure, which "start engine" doesn't
+  do). The Baron only so far: the jets start on the APU's air, which Vimaan
+  can't start (with the APU off they don't turn; Vimaan now says "did not
+  turn, no starting air"), and the King Air's start doesn't spin up yet.
+  `run restart 737` says so and skips it.
 
 A flight that misses the glideslope turns back west and holds its altitude,
 and the rest of it isn't run: flying on east, it leaves the installed

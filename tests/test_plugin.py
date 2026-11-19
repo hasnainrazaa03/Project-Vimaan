@@ -733,9 +733,37 @@ def test_jet_that_never_spools_says_what_to_check(sim, monkeypatch):
     say(plugin, "engine", "toggle_engine", {"state": "on"})
     plugin._flight_loop()
     assert xp.held == set()
+    # It never turned: a jet's starter needs air (the 737 and A330 with their
+    # APUs off, 2026-11-19).
+    assert xp.spoken[-1] == "Engine 1 did not turn. No starting air: start the A P U."
+
+
+def test_jet_that_turns_but_never_spools_says_what_to_check(sim):
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 7)
+    say(plugin, "engine", "toggle_engine", {"state": "on"})
+    xp.datarefs[N2][0] = 9.0
+    plugin._flight_loop()
+    plugin._cranks["Engine 1"]["max_sec"] = 0.0
+    plugin._flight_loop()
     assert xp.spoken[-1] == (
-        "Engine 1 did not spool up. N2 reached 0 percent. Check bleed air and the engine start switch."
+        "Engine 1 did not spool up. N2 reached 9 percent. Check bleed air and the engine start switch."
     )
+
+
+def test_a_core_winding_down_gets_no_fuel_and_did_not_turn(sim):
+    # The A330, just shut down, its N2 at 23 % and falling, no starting air.
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 7)
+    xp.datarefs[FUEL_LEVER][0] = 0.0
+    xp.datarefs[N2][0] = 23.0
+    say(plugin, "engine", "toggle_engine", {"state": "on"})
+    xp.datarefs[N2][0] = 21.0
+    plugin._flight_loop()
+    assert xp.datarefs[FUEL_LEVER][0] == 0.0  # above 20 %, but not turning: no fuel
+    plugin._cranks["Engine 1"]["max_sec"] = 0.0
+    plugin._flight_loop()
+    assert xp.spoken[-1] == "Engine 1 did not turn. No starting air: start the A P U."
 
 
 def test_jet_that_spools_but_never_lights(sim):
@@ -3681,3 +3709,83 @@ def test_a330_transponder_turns_its_three_selectors(sim):
     assert say(plugin, "transponder off", "set_transponder_mode", {"xpdr_mode": "off"}) == [
         "This transponder has no off. Say standby."
     ]
+
+
+# ---- 2026-11-19 (F.3 follow-ups): engines and the A330's ILS -----------------
+NAV_POWER = "sim/cockpit2/radios/actuators/nav_power"
+BUS_VOLTS = "sim/cockpit2/electrical/bus_volts"
+
+
+def test_tuning_a_nav_radio_that_is_off_switches_it_on(sim):
+    # The A330's NAV 1 and 2 (its ILS receivers) start off.
+    _, plugin, xp = sim
+    xp.datarefs[NAV_POWER] = [0, 0, 1, 1] + [0] * 8
+    spoken = say(plugin, "nav", "set_nav_frequency", {"nav_frequency": "110.50", "nav_port": "1"})
+    assert spoken == ["NAV 1 on, set to one one zero decimal five"]
+    assert xp.datarefs[NAV_POWER][0] == 1
+    # On already: tuned as before.
+    spoken = say(plugin, "nav", "set_nav_frequency", {"nav_frequency": "110.30", "nav_port": "1"})
+    assert spoken == ["NAV 1 set to one one zero decimal three"]
+
+
+def test_the_737_shuts_down_with_its_own_cutoff(sim):
+    _, plugin, xp = sim
+    levers = (
+        "laminar/B738/engines/condition_lever_1_idle",
+        "laminar/B738/engines/condition_lever_2_idle",
+        "laminar/B738/engines/condition_lever_1_cutoff",
+        "laminar/B738/engines/condition_lever_2_cutoff",
+    )
+    load_aircraft(plugin, xp, 7, commands=levers)
+    xp.datarefs[RUNNING][0] = 1
+    xp.datarefs["sim/flightmodel/failures/onground_any"] = 1
+    assert say(plugin, "engine one off", "toggle_engine", {"state": "off", "instance": "1"}) == [
+        "Engine 1 shutting down"
+    ]
+    assert "laminar/B738/engines/condition_lever_1_cutoff" in xp.commands_fired
+    assert "sim/starters/shut_down_1" not in xp.commands_fired
+
+
+def test_a_turboprop_shuts_down_with_its_condition_lever_too(sim):
+    # The King Air kept running on X-Plane's shut-down command alone.
+    _, plugin, xp = sim
+    assert load_aircraft(plugin, xp, 9).engine_start == "turboprop"
+    xp.datarefs[RUNNING][0] = 1
+    xp.datarefs[FUEL_LEVER][0] = 1.0
+    xp.datarefs["sim/flightmodel/failures/onground_any"] = 1
+    say(plugin, "engine one off", "toggle_engine", {"state": "off", "instance": "1"})
+    assert "sim/starters/shut_down_1" in xp.commands_fired
+    assert xp.datarefs[FUEL_LEVER][0] == 0.0
+
+
+def test_no_start_without_electrical_power(sim):
+    # The cold Baron cranked 20 s with its battery off.
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 0)
+    xp.datarefs[BUS_VOLTS] = [0.0] * 6
+    spoken = say(plugin, "engine", "toggle_engine", {"state": "on"})
+    assert spoken == ["No electrical power to start engine 1. Battery on first."]
+    assert xp.held == set()
+    xp.datarefs[BUS_VOLTS] = [28.0] + [0.0] * 5
+    assert say(plugin, "engine", "toggle_engine", {"state": "on"}) == ["Starting engine 1"]
+
+
+@pytest.mark.parametrize(
+    ("mixture", "selector", "said"),
+    [
+        (0.0, 1, "Engine 1 did not start. The mixture is cut off."),
+        (1.0, 0, "Engine 1 did not start. The fuel selector is off."),
+        (1.0, 1, "Engine 1 did not start. Check fuel, mixture and ignition."),
+    ],
+)
+def test_a_failed_piston_start_says_why(sim, mixture, selector, said):
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 0)
+    xp.datarefs["sim/aircraft/engine/acf_num_engines"] = 2
+    xp.datarefs[FUEL_LEVER][0] = mixture
+    xp.datarefs["sim/cockpit2/fuel/fuel_tank_selector_left"] = selector
+    xp.datarefs["sim/cockpit2/fuel/fuel_tank_selector_right"] = 3
+    say(plugin, "engine", "toggle_engine", {"state": "on"})
+    plugin._cranks["Engine 1"]["max_sec"] = 0.0
+    plugin._flight_loop()
+    assert xp.spoken[-1] == said

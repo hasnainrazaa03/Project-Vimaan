@@ -1005,11 +1005,26 @@ def test_jets_use_their_autothrottle_and_pistons_the_runners_throttle(aircraft):
     assert all(s.say != "speed " for s in steps)
 
 
-def test_the_a330_takes_off_but_doesnt_fly_the_ils_yet():
-    assert flights.cannot_fly("takeoff", "a330") == ""
-    assert "A330" in flights.cannot_fly("landing", "a330")
-    assert flights.cannot_fly("go-around", "a330") == flights.cannot_fly("landing", "a330")
-    assert all(flights.cannot_fly(f, a) == "" for f in flights.FLIGHTS for a in ("baron", "737"))
+def test_only_the_baron_restarts_its_engines_yet():
+    # Flown 2026-11-19: the jets start on the APU's air (Vimaan can't start
+    # it); the King Air's start doesn't spin up. Every aircraft lands now.
+    assert flights.cannot_fly("restart", "baron") == ""
+    assert "APU" in flights.cannot_fly("restart", "737")
+    assert "APU" in flights.cannot_fly("restart", "a330")
+    assert "King Air" in flights.cannot_fly("restart", "kingair")
+    for flight in ("takeoff", "landing", "go-around"):
+        assert all(flights.cannot_fly(flight, a) == "" for a in flights.PLANES)
+
+
+def test_the_restart_shuts_down_starts_and_takes_off():
+    steps = flights.restart("baron", flights.new_hands("baron"))
+    said = [s.say for s in steps if s.say]
+    assert said[:2] == ["shut down both engines", "start both engines"]
+    assert _phases_checked(steps)[-1] == "cruise"  # then the whole takeoff
+    assert flights.start_body("restart", "baron")["data"]["runway_start"] == {
+        "airport_id": "KPDX",
+        "runway": "10R",
+    }
 
 
 def test_flights_start_on_the_runway_or_on_final():

@@ -104,6 +104,10 @@ DEFAULT_COMMANDS: Mapping[str, str | None] = MappingProxyType(
         # sim's fuel lever (mixture ratio) instead of pressing a command.
         "fuel_on_1": None,
         "fuel_on_2": None,
+        # Closing it to shut down. None: X-Plane's shut-down command (and a
+        # turbine's fuel lever to cut-off).
+        "fuel_off_1": None,
+        "fuel_off_2": None,
         # Pressed after writing a target on aircraft with selected/managed
         # targets (Airbus FCU). None: the standard sim has no such step.
         "speed_select": None,
@@ -229,6 +233,9 @@ OVERRIDES: tuple[Override, ...] = (
                 # the sim lever may be overwritten by its xlua each frame.
                 "fuel_on_1": "laminar/B738/engines/condition_lever_1_idle",
                 "fuel_on_2": "laminar/B738/engines/condition_lever_2_idle",
+                # X-Plane's shut-down command left it running (2026-11-19).
+                "fuel_off_1": "laminar/B738/engines/condition_lever_1_cutoff",
+                "fuel_off_2": "laminar/B738/engines/condition_lever_2_cutoff",
             }
         ),
         source="Laminar 737-800 xlua B738 scripts: create_command(...), X-Plane 12.4.3",
