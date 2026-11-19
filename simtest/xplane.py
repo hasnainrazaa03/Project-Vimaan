@@ -9,6 +9,9 @@ through its web API, and quit. Learned on the first live run (2026-11-12):
   ``sim/operation/toggle_flight_config`` closes it.
 - ``sim/operation/quit`` asks "Quit the simulator?" unless "Don't ask again"
   was ticked once.
+- A ``runway_start`` puts the aircraft on a runway, or on its final approach
+  with ``final_distance_in_nautical_miles`` (the key is in X-Plane 12.4's own
+  strings; Phase F.3 is its first use).
 """
 
 from __future__ import annotations
@@ -31,6 +34,10 @@ FOLDER = Path.home() / "Library/Application Support/Steam/steamapps/common/X-Pla
 TEST_AREA = (45.5, -123.5)
 FEET = 0.3048
 KNOT = 0.514444
+# Airports for ground starts and landings (Phase F.3), in the same scenery:
+# a reference point, so a runner can tell the new flight has loaded.
+AIRPORTS = {"KPDX": (45.5887, -122.5975)}
+NEAR_DEG = 0.2  # a runway start is within this of its airport (a 5 nm final too)
 # The four Tier 1 aircraft, relative to the X-Plane folder.
 AIRCRAFT = {
     "baron": "Aircraft/Laminar Research/Beechcraft Baron 58/Baron_58.acf",
@@ -106,6 +113,34 @@ def air_start_body(
     }
 
 
+def runway_start_body(
+    aircraft: str, airport: str, runway: str, final_nm: float | None = None
+) -> dict[str, Any]:
+    """The flight to ask X-Plane for: ``aircraft`` on ``runway``, engines
+    running, or on its final approach ``final_nm`` out."""
+    start: dict[str, Any] = {"airport_id": airport, "runway": runway}
+    if final_nm:
+        start["final_distance_in_nautical_miles"] = final_nm
+    return {
+        "data": {
+            "aircraft": {"path": AIRCRAFT.get(aircraft, aircraft)},
+            "runway_start": start,
+            "engine_status": {"all_engines": {"running": True}},
+        }
+    }
+
+
+def _where(body: dict[str, Any]) -> tuple[float, float, float] | None:
+    """Where the flight in ``body`` starts: (latitude, longitude, tolerance)."""
+    air = body["data"].get("lle_air_start")
+    if air:
+        return float(air["latitude"]), float(air["longitude"]), 0.01
+    runway = body["data"].get("runway_start") or {}
+    if runway.get("airport_id") in AIRPORTS:
+        return (*AIRPORTS[runway["airport_id"]], NEAR_DEG)
+    return None
+
+
 def safe_mode(folder: Path = FOLDER) -> bool:
     """Did this X-Plane session start in Safe Mode (plugins, so Vimaan, off)?"""
     try:
@@ -138,15 +173,16 @@ def start_flight(body: dict[str, Any], wait_sec: float = 120.0, poll_sec: float 
     """Start a flight and get it running: close the Flight Configuration
     screen X-Plane leaves open (paused) over a flight started this way."""
     _post("/flight", body)
-    want = body["data"].get("lle_air_start") or {}
+    where = _where(body)
     deadline = time.monotonic() + wait_sec
     while time.monotonic() < deadline:  # loaded: at the requested position
         time.sleep(poll_sec)
         try:
             lat = float(read("sim/flightmodel/position/latitude"))
+            lon = float(read("sim/flightmodel/position/longitude")) if where else 0.0
         except (urllib.error.URLError, OSError, XPlaneError):
             continue
-        if not want or abs(lat - float(want["latitude"])) < 0.01:
+        if where is None or (abs(lat - where[0]) < where[2] and abs(lon - where[1]) < where[2]):
             break
     else:
         raise XPlaneError("the flight didn't load")

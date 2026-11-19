@@ -12,7 +12,8 @@ Then it checks:
 - Vimaan's own read-backs (``checks`` in the say result) all passed;
 - the sim itself (``SimCheck``): a dataref, or something computed from
   several, must hold, possibly within a deadline (the aircraft has to turn
-  or level off first);
+  or level off first); ``PHASE`` in its datarefs is Vimaan's phase of
+  flight (Phase F), from the bridge state;
 - optionally a callout Vimaan should (or shouldn't) make.
 
 Recognition and function are scored separately: when the generated voice is
@@ -32,6 +33,9 @@ from typing import Any
 
 from . import voice as voice_mod
 from .bridge import Bridge
+
+# Not a dataref: Vimaan's phase of flight now, read from the bridge state.
+PHASE = "vimaan:phase"
 
 
 @dataclass(frozen=True)
@@ -55,6 +59,38 @@ def equals(
         lambda v: v is not None and abs(float(v) - want) <= tol,
         within_sec=within_sec,
         expected=f"{want}" + (f" ± {tol}" if tol else ""),
+    )
+
+
+def phase_is(*phases: str, within_sec: float = 0.0) -> SimCheck:
+    """Vimaan's phase tracker shows one of ``phases`` (within ``within_sec``)."""
+    return SimCheck(
+        f"phase {' or '.join(phases)}",
+        (PHASE,),
+        lambda p: p in phases,
+        within_sec=within_sec,
+        expected=" or ".join(phases),
+    )
+
+
+def above(what: str, dataref: str, value: float, within_sec: float = 0.0) -> SimCheck:
+    """``dataref`` at or above ``value``: a wait for the aircraft (``within_sec``)."""
+    return SimCheck(
+        what,
+        (dataref,),
+        lambda v: v is not None and float(v) >= value,
+        within_sec=within_sec,
+        expected=f"≥ {value:g}",
+    )
+
+
+def below(what: str, dataref: str, value: float, within_sec: float = 0.0) -> SimCheck:
+    return SimCheck(
+        what,
+        (dataref,),
+        lambda v: v is not None and float(v) <= value,
+        within_sec=within_sec,
+        expected=f"≤ {value:g}",
     )
 
 
@@ -114,6 +150,9 @@ class Step:
     say: str | None = None  # a phrase for Vimaan
     command: str | None = None  # or an X-Plane command, as the pilot
     write: tuple[str, float] | None = None  # or a dataref the pilot sets (thrust levers)
+    # or something the pilot does with the bridge (simtest.flights: a pitch or
+    # an airspeed held from here on); its __name__ goes in the report.
+    pilot: Callable[[Any], Any] | None = None
     outcomes: tuple[str, ...] = ("executed",)
     reply: str | None = None  # words one of Vimaan's replies must contain
     sim: tuple[SimCheck, ...] = ()
@@ -129,6 +168,9 @@ class Step:
     only_if: SimCheck | None = None
     # Run only if the named step ran (wasn't skipped).
     after: str | None = None
+    # If this step fails, the rest isn't run: these are, instead (a flight
+    # that missed the glideslope turns back west, into the installed scenery).
+    abort: tuple[Step, ...] | None = None
 
 
 @dataclass
@@ -145,7 +187,19 @@ class Runner:
 
     def run(self, steps: Sequence[Step]) -> list[dict[str, Any]]:
         ran: set[str] = set()
+        aborted: str | None = None
         for step in steps:
+            if aborted is not None:
+                r = {
+                    "step": step.name,
+                    "skipped": True,
+                    "ok": True,
+                    "problems": [],
+                    "note": f"not run: {aborted} failed",
+                }
+                self.results.append(r)
+                self.log(line(r))
+                continue
             skip = (step.after is not None and step.after not in ran) or (
                 step.only_if is not None and not self._check(step.only_if)["ok"]
             )
@@ -162,6 +216,12 @@ class Runner:
                 ran.add(step.name)
             self.results.append(r)
             self.log(line(r))
+            if not r["ok"] and step.abort is not None:
+                aborted = step.name
+                for undo in step.abort:
+                    u = self.run_step(undo)
+                    self.results.append(u)
+                    self.log(line(u))
         return self.results
 
     # ------------------------------------------------------------------
@@ -171,6 +231,7 @@ class Runner:
             "said": step.say,
             "command": step.command,
             "write": step.write,
+            "pilot": None if step.pilot is None else getattr(step.pilot, "__name__", "pilot"),
         }
         started = datetime.now()
         problems: list[str] = []
@@ -223,6 +284,8 @@ class Runner:
             done = self.bridge.write(*step.write)
             if not done.get("ok"):
                 problems.append(f"write: {done.get('error') or done.get('readback')}")
+        elif step.pilot is not None:
+            step.pilot(self.bridge)
         if step.settle_sec:
             time.sleep(step.settle_sec)
         r["sim"] = []
@@ -276,10 +339,18 @@ class Runner:
             "ok": any(answer.ok(reply, r) for reply in replies for r in (readings, before)),
         }
 
+    def _read(self, datarefs: Sequence[str]) -> dict[str, Any]:
+        """The datarefs, and ``PHASE`` from the bridge state."""
+        refs = [d for d in datarefs if d != PHASE]
+        readings = self.bridge.read(*refs) if refs else {}
+        if PHASE in datarefs:
+            readings[PHASE] = self.bridge.state().get("phase")
+        return readings
+
     def _check(self, check: SimCheck) -> dict[str, Any]:
         deadline = time.monotonic() + check.within_sec
         while True:
-            readings = self.bridge.read(*check.datarefs)
+            readings = self._read(check.datarefs)
             actual = check.value(readings)
             ok = bool(check.ok(actual))
             if ok or time.monotonic() >= deadline:
@@ -304,7 +375,8 @@ class Runner:
 
 def line(r: dict[str, Any]) -> str:
     if r.get("skipped"):
-        return f"· {r['step']}: skipped (doesn't apply now)"
+        why = r.get("note") if str(r.get("note", "")).startswith("not run") else "doesn't apply now"
+        return f"· {r['step']}: skipped ({why})"
     mark = "✓" if r["ok"] else "✕"
     heard = ""
     if r.get("understood_ok") is False:

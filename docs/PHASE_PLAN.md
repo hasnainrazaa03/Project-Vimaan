@@ -20,7 +20,7 @@ Last updated 2026-11-16.
 | E1 | Training data v2 + command families → **v17** | ✅ merged; flown twice | #29 |
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | ✅ closed 2026-11-12: Part C flown unattended (121/121 on four aircraft) and the owner's real-voice check passed | #30–#34, #38–#42 |
 | D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim for a switch and (2026-11-16) a stick pull | #35 |
-| A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 and A4 later | #36–#40 |
+| A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 takeoffs on all four and A4 landings on three (2026-11-19); engine start and the A330's ILS left | #36–#40 |
 | T2 | Tier 2: radios & navigation → **v25** | ✅ closed 2026-11-16: runner in the sim 95/95 on four aircraft (v25) and the owner's real-voice check passed (v26: 16 of 17 radio lines right first time, the other refused) | #43, #46 |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | ✅ closed 2026-11-16: v26 passed every gate and was installed (2026-11-14); runner in the sim 127/127 on four aircraft; the owner's real-voice check passed (51 right, 4 refused, 0 wrong of 55) | #50, #51, #52, #54, #56–#60 |
 | G | Generalization: beyond the owner's voice (measured recognizer noise, other voices, calibration, other recognizers) | 🟡 measured on real voices (2026-11-14); lost-digit refusal built | #55 |
@@ -595,12 +595,24 @@ gives the controls back at the end of a run.
     **Tier 1 closed.** "q n h one
     zero one three" and "tune com one to one two one decimal five" were
     misheard every time; check them with a real voice.
-- [ ] **A3 Ground and takeoff.** Start with engines off ("start both
-  engines"), taxi (parking brake at speed, override), take off (gear up below
-  1,000 ft with a positive rate, flaps up), climb to the A2 start.
-- [ ] **A4 Approach and landing.** Start on final (`runway_start` with a final
-  distance). Autoland where the aircraft has it (737 and A330: to confirm); a
-  scripted approach and flare for the Baron and King Air, tuned per aircraft.
+- [x] **A3 Ground and takeoff.** *`simtest run takeoff`, 2026-11-19 (F.3):
+  all four aircraft.* On the runway, engines running: "gear up" held on the
+  ground, "parking brake on" held at speed (both cancelled), takeoff thrust,
+  rotation at Vr by the runner (an open-loop pull: the bridge answers every
+  0.25 s, too slow to hold a pitch), the autopilot climbing straight after,
+  gear up from 200 ft with a positive rate, flaps up, level at 4,000 ft.
+  Still to do: starting with the engines off ("start both engines").
+- [ ] **A4 Approach and landing.** *`simtest run landing` and `go-around`,
+  2026-11-19 (F.3): Baron, King Air, 737.* From an 8 nm final (X-Plane
+  starts it at about 1,500 ft, gear and flaps up): the 10R ILS on the
+  autopilot (the course set: without it the Baron's HSI never captured the
+  localizer), the throttle held on an airspeed by the runner on the pistons,
+  the jets' thrust off at 50 ft (on its autothrottle the 737 held 145 kt
+  along the runway at 2 ft), brakes. No autoland: the 737 flares a little
+  by itself on one autopilot, and its second autopilot engaged at 950 ft
+  dived it into the ground. The A330 doesn't capture the ILS: its autopilot
+  follows NAV 1, which gets no localizer on the A330, while its own ILS
+  receiver (NAV 3) does; a Vimaan follow-up (its radio page, LS and APPR).
 
 ---
 
@@ -1350,8 +1362,8 @@ model of the flight, updated every second:
 Steps (2026-11-18). Each use of the phase (F.4) changes what Vimaan does,
 so each needs the owner's approval; F.1 to F.3 only observe.
 
-- [ ] **F.1 Phase tracker, observe only.** *Merged and installed 2026-11-19
-  (#71), not yet run in the sim.* `vimaan_nlu/flight_phase.py`: from a sample once a second
+- [x] **F.1 Phase tracker, observe only.** *Merged and installed 2026-11-19
+  (#71); flown in F.3.* `vimaan_nlu/flight_phase.py`: from a sample once a second
   (on-ground, height above the ground, ground and air speed, vertical
   speed, gear, flap handle), the phases above plus go-around; a new phase
   must hold 3 s (1 s for the ground/air change; a bounce below 50 ft after
@@ -1363,8 +1375,8 @@ so each needs the owner's approval; F.1 to F.3 only observe.
   today's tracker. Nothing reads the phase yet. Tested on synthetic flights:
   a whole flight in order, go-around, touch-and-go, bounces, a rejected
   takeoff, air starts, a wandering level-off.
-- [ ] **F.2 Envelope margins, observe only.** *Built 2026-11-19, not yet run
-  in the sim.* `vimaan_nlu/envelope.py`: with each sample, the knots between
+- [x] **F.2 Envelope margins, observe only.** *Merged and installed
+  2026-11-19 (#72); flown in F.3.* `vimaan_nlu/envelope.py`: with each sample, the knots between
   the airspeed and each limit (Mach for Mmo), positive inside, negative
   beyond: the stall (airborne only; Vso with flaps out, Vs clean), the flap
   limit for the notch set (first notch to full flaps, evenly between, as the
@@ -1374,10 +1386,40 @@ so each needs the owner's approval; F.1 to F.3 only observe.
   so the stall margin is a guide. The report lists the lowest margin in each
   phase and every stretch beyond a limit (Vno left out: above it is normal
   in smooth air). Nothing acts on them.
-- [ ] **F.3 In-sim check:** the tier runs (air starts) and the A3/A4
-  scenarios (ground start and takeoff, approach and landing) record flights;
-  their phases must come out in order, and replays of them become test
-  fixtures.
+- [ ] **F.3 In-sim check.** *Flown 2026-11-19 with #72 installed.*
+  - Tier 1 air starts, all four aircraft: 121/121. The samples showed two
+    tracker faults, fixed: an air start's airspeed reads 0 for about 2 s at
+    250 kt over the ground (a "stall" in every first sample), so the plugin
+    skips the first 5 running samples after a load; and the Baron's dip in
+    altitude hold (-311 fpm at 2,400 ft above the hills, clean, 164 kt) was
+    called an approach, so a clean aircraft is in approach only after a
+    descent.
+  - Takeoff, landing and go-around flights (`simtest/flights.py`, A3 and
+    A4 below), at Portland 10R. Takeoffs, all four: Baron 24/24, King Air
+    24/24, 737 28/28, A330 30/30. Landings: Baron and King Air 22/22, 737
+    26/26 (first 25/26: it stopped from 40 kt inside a phase's 3 s, rollout
+    straight to parked, now accepted). Go-arounds: Baron 25/25, King Air
+    26/26, 737 26/26. The A330 doesn't fly the ILS Vimaan tunes (see A4),
+    so it takes off only.
+  - The margins caught real exceedances, all the test's own: the A330 left
+    at takeoff thrust to 1,000 ft went through its flaps-1 limit (215 kt) to
+    242 kt (16 kt with climb thrust after the gear), and the King Air on full
+    throttle levelled off 22–24 kt over Vne after a takeoff and a go-around.
+    With climb thrust and speed straight after the autopilot (jets) and a
+    climb speed held on the pistons, the re-flown A330 takeoff stayed 15 kt
+    inside its flap limit and the King Air 68–76 kt below Vne.
+  - X-Plane's final-approach start (1,500 ft, -1,600 fpm), levelled off by
+    the autopilot at +700 fpm, read as three go-arounds: a go-around is now
+    only below 1,000 ft (higher up, a climb from an approach is a climb).
+  - Crashes on the way (a fixed piston throttle on the approach, a pitch
+    "held" through the slow bridge, the 737's second autopilot engaged at
+    950 ft) were read as what they were: approach, then taxi and parked.
+  - Twelve recorded flights are test fixtures (`tests/fixtures/flights/`,
+    `tests/test_flight_replays.py`): takeoffs, landings and go-arounds, a
+    bounce, the 737 floating along the runway and climbing away, a takeoff
+    flown back into the runway. Every replay must give its phases.
+  - Still to do: install this (the settle and the two tracker rules) and see
+    them live; the owner's flights replayed the same way.
 - [ ] **F.4 Uses, each with the owner's OK:** safety rules read the phase (a
   safety-rule change); optional callouts, ranked and rate-limited; the phase
   as context for answers (a "what phase" question needs the question model

@@ -7,7 +7,7 @@ import json
 import sys
 from typing import Any
 
-from . import scenario, tier1, tier2, tier3, tier4, voice, xplane
+from . import flights, scenario, tier1, tier2, tier3, tier4, voice, xplane
 from .bridge import Bridge, NoAnswer
 
 
@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("quit", help="switch the bridge off and quit X-Plane")
     sub.add_parser("screenshot", help="X-Plane's own screenshot of its window, to see a message")
     rn = sub.add_parser("run", help="run a checklist scenario, unattended, and write a report")
-    rn.add_argument("checklist", choices=("tier1", "tier2", "tier3", "tier4"))
+    rn.add_argument("checklist", choices=("tier1", "tier2", "tier3", "tier4", *flights.FLIGHTS))
     rn.add_argument("aircraft", choices=(*tier1.SETUPS, "all"))
     rn.add_argument("--text", action="store_true", help="no generated voice: text to the model")
     rn.add_argument("--voice", default=voice.DEFAULT_VOICE)
@@ -165,8 +165,11 @@ def _xplane(args: argparse.Namespace) -> int:
     return 0
 
 
-def _wait_ready(br: Bridge, icao: str, wait_sec: float = 240.0) -> dict[str, Any]:
-    """Until Vimaan is ready, on this aircraft, in the air, and idle."""
+def _wait_ready(
+    br: Bridge, icao: str, wait_sec: float = 240.0, airborne: bool = True
+) -> dict[str, Any]:
+    """Until Vimaan is ready, on this aircraft, in the air (or on the
+    ground), and idle."""
     import time
 
     deadline = time.monotonic() + wait_sec
@@ -180,7 +183,7 @@ def _wait_ready(br: Bridge, icao: str, wait_sec: float = 240.0) -> dict[str, Any
         if (
             last.get("ready")
             and last.get("aircraft", {}).get("icao") == icao
-            and not last.get("on_ground")
+            and bool(last.get("on_ground")) != airborne
             and not last.get("busy")
         ):
             return last
@@ -221,15 +224,21 @@ def _run(args: argparse.Namespace) -> int:
     for name in names:
         setup = tier1.SETUPS[name]
         print(f"\n=== {args.checklist} on {name} ({setup.icao}) ===")
+        flight = args.checklist in flights.FLIGHTS
+        if flight and (cant := flights.cannot_fly(args.checklist, name)):
+            print(f"· skipped: {cant}")
+            continue
         try:
             if not args.no_fly:
                 if not xplane.running():
                     raise xplane.XPlaneError("X-Plane isn't running: python -m simtest launch")
                 xplane.start_flight(
-                    xplane.air_start_body(name, *xplane.TEST_AREA, setup.alt_ft, 180, setup.kt)
+                    flights.start_body(args.checklist, name)
+                    if flight
+                    else xplane.air_start_body(name, *xplane.TEST_AREA, setup.alt_ft, 180, setup.kt)
                 )
             br.enable()
-            state = _wait_ready(br, setup.icao)
+            state = _wait_ready(br, setup.icao, airborne=args.checklist != "takeoff")
         except (xplane.XPlaneError, NoAnswer) as exc:
             print(f"✕ {exc}", file=sys.stderr)
             return 2
@@ -246,7 +255,19 @@ def _run(args: argparse.Namespace) -> int:
         from .aircraft_file import flap_limits
 
         limits = flap_limits(state.get("aircraft", {}).get("acf") or "")
-        if args.checklist == "tier2":
+        if flight:
+            runner.poll_sec = 0.5  # a wait for 50 ft is 7 ft a poll at 800 fpm
+            hands = flights.new_hands(name)
+            try:
+                results = runner.run(flights.FLIGHTS[args.checklist](name, hands))
+            except NoAnswer as exc:
+                # X-Plane paused under a dialog ("Missing scenery" when a flight
+                # wandered off the installed area), or quit.
+                print(f"✕ {exc} (python -m simtest screenshot to see why)", file=sys.stderr)
+                return 2
+            finally:
+                hands.release(br)  # the controls given back, whatever happened
+        elif args.checklist == "tier2":
             results = runner.run(tier2.steps(name))
         elif args.checklist == "tier3":
             results = runner.run(tier3.steps(name))

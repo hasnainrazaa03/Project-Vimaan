@@ -16,6 +16,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import sys
 import time
@@ -211,6 +212,21 @@ def _margins(samples: list[dict]) -> list[str]:
     return out
 
 
+def _phase_differences(
+    logged: list[tuple[float, str]], replayed: list[tuple[float, str]]
+) -> list[str]:
+    """Where today's tracker reads the flight differently from the plugin at
+    the time: "t=193s approach -> descent" (a phase changed), "-" for none."""
+    a, b = [p for _, p in logged], [p for _, p in replayed]
+    out = []
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
+        if tag == "equal":
+            continue
+        t = logged[i1][0] if i1 < len(logged) else replayed[j1][0]
+        out.append(f"t={t:.0f}s {' '.join(a[i1:i2]) or '-'} -> {' '.join(b[j1:j2]) or '-'}")
+    return out
+
+
 def flight_phases(events: list[dict]) -> list[str]:
     """Phase F.1: the phase of flight as it changed, and the time in each."""
     samples = [e for e in events if e["kind"] == "flight"]
@@ -240,10 +256,10 @@ def flight_phases(events: list[dict]) -> list[str]:
     replayed = _replayed(events)
     logged = [(e.get("since", e["t"]), e.get("phase")) for e in changes]
     if replayed is not None and samples:
-        same = [p for _, p in replayed] == [p for _, p in logged]
+        differ = _phase_differences(logged, replayed)
         out.append(
             "  replayed through today's tracker: "
-            + ("the same phases" if same else f"differs: {[p for _, p in replayed]}")
+            + (f"differs: {'; '.join(differ)}" if differ else "the same phases")
         )
     return out
 
