@@ -103,6 +103,17 @@ PHASES = {
         "cruise",
     ],
     "b738_go_around": ["approach", "climb", "approach", "go_around", "climb", "cruise"],
+    # A fixed throttle on the approach: slowed to 81 kt (Vs 84), the autopilot
+    # let go, and it flew into the ground short of the runway.
+    "be58_approach_slowed_to_the_stall": [
+        "descent",
+        "approach",
+        "climb",
+        "cruise",
+        "approach",
+        "taxi",
+        "parked",
+    ],
     # The pitch "held" through the slow bridge: back into the runway from
     # 75 ft. An impact reads as the ground phases.
     "be58_takeoff_flown_into_the_runway": [

@@ -1414,16 +1414,36 @@ so each needs the owner's approval; F.1 to F.3 only observe.
   - Crashes on the way (a fixed piston throttle on the approach, a pitch
     "held" through the slow bridge, the 737's second autopilot engaged at
     950 ft) were read as what they were: approach, then taxi and parked.
-  - Twelve recorded flights are test fixtures (`tests/fixtures/flights/`,
+  - Thirteen recorded flights are test fixtures (`tests/fixtures/flights/`,
     `tests/test_flight_replays.py`): takeoffs, landings and go-arounds, a
     bounce, the 737 floating along the runway and climbing away, a takeoff
     flown back into the runway. Every replay must give its phases.
   - Still to do: install this (the settle and the two tracker rules) and see
     them live; the owner's flights replayed the same way.
-- [ ] **F.4 Uses, each with the owner's OK:** safety rules read the phase (a
-  safety-rule change); optional callouts, ranked and rate-limited; the phase
-  as context for answers (a "what phase" question needs the question model
-  to learn it); the Flights tab shows the phases.
+- [ ] **F.4 Uses, each with the owner's OK.** *Owner's OK 2026-11-19 for the
+  three rules and three callouts below; built, not yet flown.*
+  - [x] Safety rules read the phase (`vimaan_nlu/safety.py`): "gear up" asks
+    to confirm on an approach or landing at any height ("Confirm gear up, on
+    approach"; a go-around climbs, one press); "speed brake" extended on the
+    takeoff roll asks ("…, takeoff roll"); new rule `flaps_up_slow`: "flaps
+    up" airborne less than 10 kt above the clean stall speed asks ("Confirm
+    flaps up, slow"; an aircraft with no stall speed in its file isn't
+    judged). Before the tracker has a phase, the rules stand as they were.
+    The model gates don't read the rules: unchanged.
+  - [x] Callouts (`vimaan_nlu/callouts.py`), opt-in (`vimaan/toggle_callouts`
+    or `VIMAAN_CALLOUTS=1`): "Speed" (within 5 kt of the stall), "Overspeed",
+    "Mach", "Gear speed", "Flap speed" (within 5 kt of the limit), "Gear not
+    down" (approach, below 500 ft); most urgent first, each at most once
+    every 30 s, never on the ground or in the last 100 ft. Replayed on the
+    13 recorded flights they fire only where something was wrong: "Speed" on
+    the Baron slowing to its stall on the approach (8 s before its autopilot
+    let go), "Flap speed" on the A330 through its flap limit, "Overspeed" on
+    the King Air over Vne; nothing on the clean flights.
+  - [x] The Flights tab shows each phase change (height, speed, gear, flaps),
+    the callouts, and the route of phases; the session report counts the
+    callouts.
+  - [ ] The phase as context for answers: "what phase are we in" needs a new
+    question family in q1 (retrain and gate). Owner: later.
 
 ## Phase C: conversational copilot → after F
 

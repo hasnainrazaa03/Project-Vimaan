@@ -79,6 +79,7 @@ from vimaan_nlu.ambiguity import (  # noqa: E402
     chosen,
     two_or_to,
 )
+from vimaan_nlu.callouts import SAID, Callouts  # noqa: E402
 from vimaan_nlu.commands import (  # noqa: E402
     BY_INTENT,
     COMMANDS,
@@ -586,6 +587,10 @@ class PythonInterface:
         # Option (b): Vimaan captures altitude where the aircraft can't. Off
         # unless VIMAAN_CAPTURE=1, or switched on with its key.
         self._capture_enabled = os.environ.get("VIMAAN_CAPTURE") == "1"
+        # Phase F.4 callouts ("Speed", "Flap speed", ...): opt-in, off unless
+        # VIMAAN_CALLOUTS=1 or switched on with vimaan/toggle_callouts.
+        self._callouts_enabled = os.environ.get("VIMAAN_CALLOUTS") == "1"
+        self.callouts = Callouts()
         # Whether the loaded aircraft's own files use an autothrottle:
         # (acf path, True/False/None), scanned off the main thread.
         self._athr_scan: tuple[str, bool | None] | None = None
@@ -752,6 +757,11 @@ class PythonInterface:
             "vimaan/toggle_capture",
             "Vimaan: altitude capture by Vimaan on/off (aircraft that can't capture)",
             self._on_capture_cmd,
+        )
+        self._register_command(
+            "vimaan/toggle_callouts",
+            "Vimaan: callouts on/off (speed, limit speeds, gear)",
+            self._on_callouts_cmd,
         )
         self._hook_off_commands()
         self._start_overlay()
@@ -1970,6 +1980,7 @@ class PythonInterface:
         aircraft: the phase starts again (an air start is not a takeoff).
         Recorded, so a replay starts again at the same point."""
         self.phase.reset()
+        self.callouts.reset()
         self._flight_settle = FLIGHT_SETTLE_SAMPLES
         self.tel.record("flight_reset")
 
@@ -2000,6 +2011,26 @@ class PythonInterface:
             self.tel.event(
                 "flight_phase", phase=changed, previous=previous, since=self.phase.since, **fields
             )
+        if self._callouts_enabled:  # F.4, opt-in
+            key = self.callouts.update(
+                sample.t,
+                self.phase.phase,
+                fields["margins"],
+                sample.on_ground,
+                sample.agl_ft,
+                sample.gear,
+            )
+            if key is not None:
+                self.tel.event(
+                    "callout",
+                    callout=key,
+                    said=SAID[key],
+                    phase=self.phase.phase,
+                    agl_ft=sample.agl_ft,
+                    ias_kt=sample.ias_kt,
+                    margins=fields["margins"],
+                )
+                self._say(SAID[key])
 
     def _limits(self):
         """The loaded aircraft's speed limits (vimaan_nlu.envelope). The
@@ -2753,6 +2784,9 @@ class PythonInterface:
             vfe_kt=self._flap_limit_for(slots)
             if slots and (slots.get("position") == "full" or slots.get("flap_setting"))
             else self.profile.info.vfe_kt or None,
+            # Phase F.4: the rules read the phase of flight and the clean stall speed.
+            phase=self.phase.phase,
+            stall_clean_kt=self.profile.info.vs_kt or None,
         )
 
     # ------------------------------------------------------------------
@@ -3034,6 +3068,14 @@ class PythonInterface:
                 self._end_capture(False, "switched off", speak=False)
             self.tel.event("capture_setting", enabled=self._capture_enabled)
             self._say(f"Vimaan altitude capture {'on' if self._capture_enabled else 'off'}")
+        return 1
+
+    def _on_callouts_cmd(self, cmd_ref, phase, refcon):
+        if phase == xp.CommandBegin:
+            self._callouts_enabled = not self._callouts_enabled
+            self.callouts.reset()
+            self.tel.event("callouts_setting", enabled=self._callouts_enabled)
+            self._say(f"Vimaan callouts {'on' if self._callouts_enabled else 'off'}")
         return 1
 
     def _later(self, delay, action):

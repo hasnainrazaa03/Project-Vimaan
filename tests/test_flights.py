@@ -309,3 +309,58 @@ def test_transponder_selector_steps_are_noted(logs):
         ("Selector set after 2 clicks", "info"),
     ]
     assert notes[1] == [("Selector not set: it is stuck", "warn")]
+
+
+def test_the_phases_of_flight_and_the_callouts_are_shown():
+    rows = [
+        ev(0, "session_start", backend="torch", stt_backend="vosk"),
+        ev(
+            5,
+            "flight_phase",
+            phase="parked",
+            previous="unknown",
+            agl_ft=0.1,
+            gs_kt=0.0,
+            vs_fpm=0.0,
+            gear=1.0,
+            flaps=0.0,
+        ),
+        ev(
+            20,
+            "flight_phase",
+            phase="takeoff_roll",
+            previous="taxi",
+            agl_ft=0.2,
+            gs_kt=52.0,
+            vs_fpm=5.0,
+            gear=1.0,
+            flaps=0.25,
+        ),
+        ev(
+            40,
+            "flight_phase",
+            phase="go_around",
+            previous="approach",
+            agl_ft=480.0,
+            gs_kt=118.0,
+            vs_fpm=1450.0,
+            gear=0.5,
+            flaps=1.0,
+        ),
+        ev(41, "flight_phase", phase="go_around", previous="go_around", agl_ft=520.0),  # no repeat
+        ev(45, "callout", callout="speed", said="Speed", phase="climb", margins={"stall": 3.0}),
+    ]
+    out = flights.parse(rows)
+    phases = [i for i in out["items"] if i.get("kind") == "flight_phase"]
+    assert phases[0]["text"] == "Phase: parked (was unknown) · 0 ft, 0 kt, gear down"
+    assert phases[1]["text"] == (
+        "Phase: takeoff roll (was taxi) · 0 ft, 52 kt, gear down, flaps 25%"
+    )
+    assert phases[2]["text"] == (
+        "Phase: go-around (was approach) · 480 ft, 118 kt, +1,450 ft/min, gear moving, flaps 100%"
+    )
+    assert all(p["level"] == "phase" for p in phases)  # the page can hide them
+    (c,) = [i for i in out["items"] if i.get("kind") == "callout"]
+    assert c["text"] == "Callout: “Speed” (climb)" and c["tone"] == "warn"
+    assert out["summary"]["phases"] == ["parked", "takeoff roll", "go-around"]
+    assert out["summary"]["callouts"] == 1

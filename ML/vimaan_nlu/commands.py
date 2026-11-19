@@ -641,7 +641,7 @@ COMMANDS: tuple[Command, ...] = (
         ),
         # Either a position (up / down one notch / full) or a setting.
         required=(),
-        safety=("flaps_above_vfe",),
+        safety=("flaps_above_vfe", "flaps_up_slow"),
         command_words=frozenset({"flaps", "flap"}),
         handler="_set_flaps",
         self_test="flaps up",

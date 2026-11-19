@@ -159,6 +159,7 @@
       kpi("Failed", fmtInt(g.failed || 0), "errors and timeouts", g.failed),
       kpi("Speech to action", ms(s.latency_p50_ms), `median · p95 ${ms(s.latency_p95_ms)}`),
       kpi("Autopilot drops", fmtInt(s.autopilot_drops), "not made by Vimaan", s.autopilot_drops),
+      kpi("Callouts", fmtInt(s.callouts || 0), "speed, limits, gear (if on)", s.callouts),
       kpi("Problems", fmtInt(s.problems), "errors and freezes", s.problems),
     ].join("");
   }
@@ -174,6 +175,7 @@
       s.duration_sec != null && mmss(s.duration_sec),
       s.self_test && `self test ${s.self_test.passed}/${s.self_test.total}`,
       s.joystick && s.joystick.nullzone != null && `joystick null zone ${Math.round(s.joystick.nullzone * 100)}%`,
+      (s.phases || []).length && `phases ${s.phases.length > 12 ? `${s.phases.slice(0, 6).join(" → ")} → … → ${s.phases.slice(-5).join(" → ")}` : s.phases.join(" → ")}`,
     ].filter(Boolean);
     el("flight-meta").textContent = bits.join(" · ");
   }
@@ -231,10 +233,12 @@
     const f = el("flight-filter").value;
     const q = el("flight-search").value.trim().toLowerCase();
     const showAp = el("flight-autopilot").checked, showSys = el("flight-system").checked;
+    const showPhase = el("flight-phases").checked;
     return items.filter((it) => {
       if (it.type === "event") {
         if (it.level === "system" && !showSys) return false;
         if (it.level === "autopilot" && !showAp) return false;
+        if (it.level === "phase" && !showPhase) return false;
         if (f === "done") return false;
         if (f === "issues" && !["warn", "bad"].includes(it.tone)) return false;
         if (f === "autopilot" && !(it.level === "autopilot" || it.kind === "autopilot_disconnect")) return false;
@@ -307,7 +311,7 @@
       const row = e.target.closest("tr.fl-cmd");
       if (row && e.key === "Enter") toggleRow(row.dataset.cmd);
     });
-    for (const [id, key] of [["flight-autopilot", "vimaan-fl-ap"], ["flight-system", "vimaan-fl-sys"], ["flight-newest", "vimaan-fl-newest"]]) {
+    for (const [id, key] of [["flight-autopilot", "vimaan-fl-ap"], ["flight-phases", "vimaan-fl-phase"], ["flight-system", "vimaan-fl-sys"], ["flight-newest", "vimaan-fl-newest"]]) {
       const box = el(id);
       box.checked = pref(key, box.checked ? "1" : "0") === "1";
       box.addEventListener("change", () => { save(key, box.checked ? "1" : "0"); if (st.detail) renderTimeline(); });

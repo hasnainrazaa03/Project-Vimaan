@@ -253,6 +253,16 @@ def flight_phases(events: list[dict]) -> list[str]:
             )
         )
     out.extend(_margins(samples))
+    said = [e for e in events if e["kind"] == "callout"]
+    if said:  # F.4, when switched on
+        first: dict[str, float] = {}
+        for e in said:
+            first.setdefault(e.get("said") or e.get("callout") or "?", e["t"])
+        counts = Counter(e.get("said") or e.get("callout") or "?" for e in said)
+        out.append(
+            "  callouts: "
+            + ", ".join(f"{k} {n}x (first t={first[k]:.0f}s)" for k, n in counts.most_common())
+        )
     replayed = _replayed(events)
     logged = [(e.get("since", e["t"]), e.get("phase")) for e in changes]
     if replayed is not None and samples:

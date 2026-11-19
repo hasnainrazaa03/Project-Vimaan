@@ -35,6 +35,12 @@ POSITIVE_RATE_FPM = 300.0
 AIRBORNE_AGL_FT = 50.0
 AIRBORNE_IAS_KT = 40.0
 PARKING_BRAKE_MAX_GROUND_SPEED_KT = 5.0
+# "flaps up" airborne within this of the clean stall speed asks to confirm.
+FLAPS_UP_MIN_MARGIN_KT = 10.0
+# Phases of flight (vimaan_nlu.flight_phase, Phase F.4) the rules read: an
+# unknown phase (None, "unknown") changes nothing, so the rules stand as
+# before when the tracker hasn't a phase yet.
+APPROACH_PHASES = frozenset({"approach", "landing"})
 
 
 @dataclass(frozen=True)
@@ -48,6 +54,8 @@ class SafetyContext:
     on_ground: bool | None = None
     vs_fpm: float | None = None  # vertical speed, + is up
     vfe_kt: float | None = None  # the flap speed limit for the setting asked for
+    phase: str | None = None  # the phase of flight (vimaan_nlu.flight_phase)
+    stall_clean_kt: float | None = None  # Vs, the clean stall speed (.acf, one weight)
 
 
 @dataclass(frozen=True)
@@ -81,13 +89,21 @@ class _Rule:
     # returns True (risky), False (safe), or None (unknown -> fail safe)
     risky_when: Callable[[SafetyContext], bool | None]
     message: str
+    # The words for this context, when they differ (on the takeoff roll, the
+    # speed brake isn't at a "low altitude").
+    says: Callable[[SafetyContext], str] | None = None
+
+    def message_for(self, ctx: SafetyContext) -> str:
+        return self.says(ctx) if self.says is not None else self.message
 
 
 def _gear_up_low(ctx: SafetyContext) -> bool | None:
-    """Risky on the ground, below 50 ft, or below 1,000 ft without a positive
-    rate of climb. Unknown height, or unknown climb rate below 1,000 ft, is
-    treated as risky (fail safe)."""
-    if ctx.on_ground:
+    """Risky on the ground, on an approach or landing at any height (a
+    misheard "gear down"; a go-around is climbing, a phase of its own), below
+    50 ft, or below 1,000 ft without a positive rate of climb. Unknown
+    height, or unknown climb rate below 1,000 ft, is treated as risky (fail
+    safe)."""
+    if ctx.on_ground or ctx.phase in APPROACH_PHASES:
         return True
     if ctx.agl_ft is None:
         return None
@@ -107,13 +123,29 @@ def _flaps_fast(ctx: SafetyContext) -> bool | None:
 
 
 def _speed_brake_low(ctx: SafetyContext) -> bool | None:
-    """Spoilers out near the ground lose lift: risky airborne below 1,000 ft.
-    Fine on the ground (ground spoilers); unknown height is risky."""
+    """Spoilers out near the ground lose lift: risky airborne below 1,000 ft,
+    and on the takeoff roll (they'd stop the takeoff). Otherwise fine on the
+    ground (ground spoilers); unknown height is risky."""
+    if ctx.phase == "takeoff_roll":
+        return True
     if ctx.on_ground:
         return False
     if ctx.agl_ft is None:
         return None
     return AIRBORNE_AGL_FT < ctx.agl_ft < SPEED_BRAKE_MIN_AGL_FT
+
+
+def _flaps_up_slow(ctx: SafetyContext) -> bool | None:
+    """Flaps up in the air within 10 kt of the clean stall speed: the wing
+    loses the lift the flaps gave. Fine on the ground. An aircraft whose
+    file gives no stall speed can't be judged, so the rule stands aside (it
+    would otherwise hold every "flaps up" in the air); an unknown airspeed is
+    risky (fail safe)."""
+    if ctx.on_ground or not ctx.stall_clean_kt:
+        return False
+    if ctx.ias_kt is None:
+        return None
+    return ctx.ias_kt < ctx.stall_clean_kt + FLAPS_UP_MIN_MARGIN_KT
 
 
 def _parking_brake_fast(ctx: SafetyContext) -> bool | None:
@@ -131,6 +163,11 @@ _RULE_LIST: tuple[_Rule, ...] = (
         applies_to=lambda s: s.get("state") == "up",
         risky_when=_gear_up_low,
         message="Confirm gear up, low altitude",
+        says=lambda ctx: (
+            "Confirm gear up, on approach"
+            if ctx.phase in APPROACH_PHASES and not ctx.on_ground
+            else "Confirm gear up, low altitude"
+        ),
     ),
     _Rule(
         name="engine_shutdown_in_flight",
@@ -148,6 +185,12 @@ _RULE_LIST: tuple[_Rule, ...] = (
         message="Confirm flaps, above flap speed",
     ),
     _Rule(
+        name="flaps_up_slow",
+        applies_to=lambda s: s.get("position") == "up",
+        risky_when=_flaps_up_slow,
+        message="Confirm flaps up, slow",
+    ),
+    _Rule(
         # Never set one on a misheard digit without the pilot confirming.
         name="emergency_squawk",
         applies_to=lambda s: str(s.get("squawk", "")) in EMERGENCY_SQUAWKS,
@@ -159,6 +202,11 @@ _RULE_LIST: tuple[_Rule, ...] = (
         applies_to=lambda s: s.get("speedbrake") in ("extend", "up", "half"),
         risky_when=_speed_brake_low,
         message="Confirm speed brake, low altitude",
+        says=lambda ctx: (
+            "Confirm speed brake, takeoff roll"
+            if ctx.phase == "takeoff_roll"
+            else "Confirm speed brake, low altitude"
+        ),
     ),
     _Rule(
         # Battery, generator or avionics off in the air.
@@ -207,9 +255,9 @@ def evaluate_safety(
             continue
         risky = rule.risky_when(ctx)
         if risky is None:
-            return SafetyVerdict(True, rule.message, rule.name, fail_safe=True)
+            return SafetyVerdict(True, rule.message_for(ctx), rule.name, fail_safe=True)
         if risky:
-            return SafetyVerdict(True, rule.message, rule.name)
+            return SafetyVerdict(True, rule.message_for(ctx), rule.name)
     return SafetyVerdict(False)
 
 
