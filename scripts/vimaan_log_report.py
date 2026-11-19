@@ -157,6 +157,59 @@ def performance(events: list[dict]) -> list[str]:
     return out
 
 
+def _replayed(events: list[dict]) -> list[tuple[float, str]] | None:
+    """The recorded samples through today's tracker (resetting where the
+    plugin did), or None when vimaan_nlu can't be imported."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ML"))
+        from vimaan_nlu.flight_phase import PhaseTracker, sample_from_event
+    except ImportError:
+        return None
+    tracker, out = PhaseTracker(), []
+    for e in events:
+        if e["kind"] == "flight_reset":
+            tracker.reset()
+        elif e["kind"] == "flight" and tracker.update(sample_from_event(e)) is not None:
+            out.append((tracker.since if tracker.since is not None else e["t"], tracker.phase))
+    return out
+
+
+def flight_phases(events: list[dict]) -> list[str]:
+    """Phase F.1: the phase of flight as it changed, and the time in each."""
+    samples = [e for e in events if e["kind"] == "flight"]
+    changes = [e for e in events if e["kind"] == "flight_phase"]
+    if not samples and not changes:
+        return []
+    out = ["", f"Flight phases ({len(samples)} samples, one a second; observe only):"]
+    for e in changes:
+        since = e.get("since", e["t"])
+        out.append(
+            f"  t={since:>8.1f}s  {e.get('previous')} -> {e.get('phase')}  "
+            f"agl {e.get('agl_ft')} ft  gs {e.get('gs_kt')} kt  vs {e.get('vs_fpm')} fpm  "
+            f"gear {e.get('gear')}  flaps {e.get('flaps')}"
+        )
+    spent: Counter[str] = Counter()
+    for a, b in zip(samples, samples[1:]):
+        if b["t"] - a["t"] < 5.0:  # not across a pause or a reload
+            spent[a.get("phase") or "unknown"] += b["t"] - a["t"]
+    if spent:
+        out.append(
+            "  time in each: "
+            + ", ".join(
+                f"{k} {v / 60:.1f} min" for k, v in sorted(spent.items(), key=lambda x: -x[1])
+            )
+        )
+    replayed = _replayed(events)
+    logged = [(e.get("since", e["t"]), e.get("phase")) for e in changes]
+    if replayed is not None and samples:
+        same = [p for _, p in replayed] == [p for _, p in logged]
+        out.append(
+            "  replayed through today's tracker: "
+            + ("the same phases" if same else f"differs: {[p for _, p in replayed]}")
+        )
+    return out
+
+
 def report(path: Path, now: float | None = None) -> str:
     events = load_events(path)
     out: list[str] = []
@@ -245,6 +298,7 @@ def report(path: Path, now: float | None = None) -> str:
                 )
 
     out.extend(performance(events))
+    out.extend(flight_phases(events))
 
     if done:
         w("")

@@ -287,6 +287,18 @@ class Telemetry:
                 self.log(f"[listener_error] {type(exc).__name__}: {exc}", logging.WARNING)
         return record
 
+    def record(self, kind: str, t: float | None = None, **fields: Any) -> None:
+        """An event for the events file only: no log line, no listeners. For
+        samples taken every second (the flight recording), which would bury
+        the log. ``t``: the sample's own time (default: now)."""
+        record = {"t": round(self.elapsed(), 3) if t is None else t, "kind": kind}
+        record.update({k: _jsonable(v) for k, v in fields.items()})
+        with self._lock:
+            try:
+                self._events.write(json.dumps(record, ensure_ascii=False) + "\n")
+            except ValueError:  # file closed during shutdown
+                pass
+
     def subscribe(self, listener: Callable[[dict[str, Any]], None]) -> None:
         """Call ``listener(record)`` for every future event."""
         self._listeners.append(listener)
