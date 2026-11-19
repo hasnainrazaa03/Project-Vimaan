@@ -70,6 +70,26 @@ def test_flight_readings(sim, reading, datarefs, want):
     assert answered(plugin)["answer"] == want
 
 
+@pytest.mark.parametrize(
+    ("phase", "want"),
+    [
+        ("cruise", "Cruise"),
+        ("approach", "On approach"),
+        ("takeoff_roll", "Takeoff roll"),
+        ("go_around", "Go-around"),
+        ("unknown", "I can't tell the phase of flight yet"),
+    ],
+)
+def test_the_phase_of_flight_is_answered_from_the_tracker(sim, phase, want):
+    # Phase F.4: "what phase are we in" (the question model learns it in q2).
+    _, plugin, xp = sim
+    plugin.phase.phase = phase
+    said = ask(plugin, "what phase are we in", "ask_flight_data", {"reading": "phase"})
+    assert said == [want]
+    assert xp.writes == [] and xp.commands_fired == []
+    assert answered(plugin)["answer"] == want
+
+
 def test_altimeter_standard_and_the_737_in_hpa(sim):
     _, plugin, xp = sim
     xp.datarefs["sim/cockpit2/gauges/actuators/barometer_setting_is_std_pilot"] = 1

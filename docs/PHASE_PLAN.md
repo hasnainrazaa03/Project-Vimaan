@@ -1453,8 +1453,16 @@ so each needs the owner's approval; F.1 to F.3 only observe.
   - [x] The Flights tab shows each phase change (height, speed, gear, flaps),
     the callouts, and the route of phases; the session report counts the
     callouts.
-  - [ ] The phase as context for answers: "what phase are we in" needs a new
-    question family in q1 (retrain and gate). Owner: later.
+  - [ ] The phase as an answer: "what phase of flight are we in" (owner's go
+    2026-11-19, "retrain or whatever"). A new reading, `phase`, in
+    ask_flight_data ("phase", "phase of flight", "flight phase"; 5 templates
+    appended at the end so the held-out templates stay put; "phase" added to
+    the question grammar, not the command grammar), answered from the
+    tracker ("Cruise", "On approach", "Takeoff roll", …; "I can't tell the
+    phase of flight yet" before it has one). Data questions_v7 = v6's recipe
+    (v6 regenerates byte for byte) with the new reading: 413 phase rows (388
+    train, 21 test, 4 dev). Model q2 = q1's recipe (carrier, seeds 5-8,
+    within-2% soup) on v7; Tier 4 asks it on every aircraft.
 
 ## Phase C: conversational copilot → after F
 

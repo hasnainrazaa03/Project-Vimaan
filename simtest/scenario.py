@@ -239,7 +239,7 @@ class Runner:
             # A reading that moves (the 737's EGT with the autothrottle hunting)
             # can leave tolerance between the answer and the read after it, so
             # the sim is read just before the question too.
-            before = self.bridge.read(*step.answer.datarefs) if step.answer is not None else None
+            before = self._read(step.answer.datarefs) if step.answer is not None else None
             said = self._say(step.say, r, ask=step.ask)
             r.update(
                 {
@@ -328,7 +328,7 @@ class Runner:
     def _answer(self, answer: Answer, replies: list[str], before: dict[str, Any]) -> dict[str, Any]:
         """The reply against the sim just after it, or just before the
         question (``before``): the plugin read it in between."""
-        readings = self.bridge.read(*answer.datarefs)
+        readings = self._read(answer.datarefs)  # PHASE too
         return {
             "what": answer.what,
             "replies": replies,

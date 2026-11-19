@@ -86,3 +86,13 @@ def test_waypoint_and_time():
     assert a.waypoint(0.0, 0.0, False) == "No waypoint set"
     assert a.clock(52500, "zulu") == "Time one four three five Zulu"
     assert a.clock(27300, "local") == "Local time zero seven three five"
+
+
+def test_the_phase_of_flight_as_said():
+    assert a.phase("initial_climb") == "Initial climb"
+    assert a.phase("rollout") == "Landing rollout"
+    assert a.phase(None) == a.phase("unknown") == "I can't tell the phase of flight yet"
+    # Every phase the tracker has, but unknown, is said.
+    from vimaan_nlu.flight_phase import PHASES
+
+    assert set(a.PHASE_WORDS) == set(PHASES) - {"unknown"}
