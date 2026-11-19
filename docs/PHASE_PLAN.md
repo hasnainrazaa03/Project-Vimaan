@@ -1309,15 +1309,22 @@ up, and "what's the heading" sets heading mode.
   "degree have the seatbelt sign on"). The blind questions: not written
   yet.
 - [ ] **Part C:** `simtest run tier4` (each answer against the datarefs),
-  then the owner's check. Built 2026-11-18, not yet run in the sim
+  then the owner's check. Built 2026-11-18
   (`simtest/tier4.py`; docs/IN_SIM_TESTING.md): every question family on the
-  question key, each answer's value against the sim read just after it in the
+  question key, each answer's value against the sim read just before and after it in the
   cockpit's units, no sim write or command from any question, commands on the
   question key refused. Writing it found that q1 reads "what's the n one" as
   engine_reading "n 1" (number words become digits), which the plugin's
   engine readings don't know ("I can't read that now"). Fixed: the
   postprocessor reads a choice name in digits back as its name ("n 1" ->
   "n one"; only "n one" and "n two" change; q1's gate and data unchanged).
+  **Run in the sim 2026-11-18** (`run tier4 all --text`, v26 + q1): Baron
+  34/34, King Air 35/35, 737 36/37, A330 38/38. The miss: the 737 said "E G T
+  620" and the sim read 608 just after (the autothrottle hunting; 1-3 °C per
+  half second); the 737 again: 37/37. The check now reads the sim just before
+  the question too. No question wrote to or commanded the sim. 87 fps
+  median, frames during commands as in the rest of the flight (10.7 vs 10.8
+  ms), the worker at 2% of a core. Left: the owner's check by voice.
 
 ---
 

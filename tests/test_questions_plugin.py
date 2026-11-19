@@ -486,3 +486,17 @@ def test_a_reading_alone_is_still_answered(sim):
     )
     assert answered(plugin)["intent"] == "ask_flight_data"
     assert xp.writes == [] and xp.commands_fired == []
+
+
+def test_the_session_report_lists_an_answer_with_its_question_not_as_a_problem(sim):
+    # 147 answers in the Tier 4 run filled "Problems"; and the command list
+    # showed the command model's reading ("what's the heading" -> heading mode).
+    _, plugin, xp = sim
+    xp.datarefs[G + "heading_AHARS_deg_mag_pilot"] = 270.3
+    ask(plugin, "what's the heading", "ask_flight_data", {"reading": "heading"})
+    plugin.XPluginStop()
+    text = test_plugin._report_module().report(plugin.tel.events_path)
+    commands = text.split("Problems")[0]
+    said = "\"what's the heading\" -> ask_flight_data {'reading': 'heading'}"
+    assert f"{said}: 'Heading two seven zero'" in commands
+    assert "Problems: none" in text

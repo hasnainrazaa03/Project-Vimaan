@@ -3,7 +3,8 @@
 Reads ``~/Vimaan_Logs/vimaan_<ts>.events.jsonl`` (+ ``.faults.log``) written by
 ``ML/vimaan_nlu/telemetry.py`` and prints: how the session ended (clean stop
 vs crash), startup timings, per-stage latency percentiles, every command with
-its outcome, and every warning/error worth looking at.
+its outcome (a question with its answer), and every warning/error worth
+looking at.
 
 Usage::
 
@@ -17,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -41,8 +43,11 @@ PROBLEM_KINDS = {
     "stt_fallback",
     "implausible",
     "ambiguous",
-    "question_answered",
 }
+# The plugin writes at least once a minute while it runs (heartbeat, frame
+# times, Mac usage), so a session with no clean end whose file changed this
+# recently is most likely still going, not crashed.
+STILL_RUNNING_SEC = 180.0
 
 
 def load_events(path: Path) -> list[dict]:
@@ -152,7 +157,7 @@ def performance(events: list[dict]) -> list[str]:
     return out
 
 
-def report(path: Path) -> str:
+def report(path: Path, now: float | None = None) -> str:
     events = load_events(path)
     out: list[str] = []
     w = out.append
@@ -197,10 +202,17 @@ def report(path: Path) -> str:
         w("Ended: clean shutdown")
     else:
         last = events[-1] if events else {}
-        w(
-            f"Ended: ABRUPTLY (crash, hang or force-quit) — last event at t={last.get('t')}s: "
-            f"{last.get('kind')}"
-        )
+        quiet = (time.time() if now is None else now) - path.stat().st_mtime
+        if quiet < STILL_RUNNING_SEC:
+            w(
+                f"Ended: not yet, it seems — the file changed {quiet:.0f}s ago (X-Plane still "
+                "open?); run the report again after quitting X-Plane"
+            )
+        else:
+            w(
+                f"Ended: ABRUPTLY (crash, hang or force-quit) — last event at t={last.get('t')}s: "
+                f"{last.get('kind')}"
+            )
     faults = path.with_name(path.name.replace(".events.jsonl", ".faults.log"))
     if faults.exists() and faults.stat().st_size:
         text = faults.read_text(errors="replace")
@@ -238,12 +250,19 @@ def report(path: Path) -> str:
         w("")
         w(f"Commands ({len(done)}): {dict(Counter(e['outcome'] for e in done))}")
         nlu = {e["cmd"]: e for e in events if e["kind"] == "stage" and e.get("stage") == "nlu"}
+        answered = {e["cmd"]: e for e in events if e["kind"] == "question_answered"}
+        asked = {e["cmd"] for e in events if e["kind"] == "ptt_press" and e.get("ask")}
         for e in done:
+            key = "?" if e["cmd"] in asked else " "  # ? = said on the question key
+            head = f"  {e['cmd']} {key} {e['outcome']:<16} {e['total_ms']:>8.0f}ms  {e.get('text', '')!r}"
+            a = answered.get(e["cmd"])
+            if a is not None:  # the answer, not the command model's reading
+                w(f"{head} -> {a.get('intent')} {a.get('slots', '')}: {a.get('answer')!r}")
+                continue
             n = nlu.get(e["cmd"], {})
             conf = n.get("confidence")
             w(
-                f"  {e['cmd']} {e['outcome']:<16} {e['total_ms']:>8.0f}ms  "
-                f"{e.get('text', '')!r} -> {n.get('intent', '-')} "
+                f"{head} -> {n.get('intent', '-')} "
                 f"{'' if conf is None else f'{conf:.2f} '}{n.get('slots', '')}"
             )
 

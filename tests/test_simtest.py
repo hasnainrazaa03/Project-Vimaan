@@ -853,3 +853,31 @@ def test_a_question_goes_over_the_bridge_on_the_question_key(br):
     assert "ask" not in br.say_text("gear down")["echo"]  # the talk key, as before
     assert sim_bridge.problem({"id": "a", "op": "say", "text": "x", "ask": "yes"})
     assert sim_bridge.problem({"id": "a", "op": "say", "text": "x", "ask": True}) is None
+
+
+class _MovingSim:
+    """A bridge whose reading moves between reads: one read before the
+    question, one after the answer."""
+
+    def __init__(self, *egt):
+        self.reads = iter(egt)
+
+    def read(self, *refs):
+        value = next(self.reads)
+        return {ref: value for ref in refs}
+
+    def say_text(self, text, ask=False):
+        return {"ok": True, "outcome": "answered", "replies": ["E G T 620 degrees on both engines"]}
+
+
+@pytest.mark.parametrize(("before", "after", "ok"), [(619.0, 608.3, True), (640.0, 608.3, False)])
+def test_a_moving_reading_is_checked_just_before_the_question_too(before, after, ok):
+    # In-sim 2026-11-18: the 737 answered "E G T 620" and the sim read 608.3
+    # just after (the autothrottle hunting); the plugin read it in between.
+    step = next(s for s in tier4.steps("737") if s.name == "E G T")
+    runner = scenario.Runner(_MovingSim(before, after), voice=None, log=lambda _line: None)
+    r = runner.run_step(step)
+    assert r["ok"] is ok
+    assert r["answer"]["readings_before"][tier4.ENG + "EGT_deg_C[0]"] == before
+    if not ok:
+        assert "just before the question: E G T 640.0 / 640.0 degrees" in r["problems"][0]

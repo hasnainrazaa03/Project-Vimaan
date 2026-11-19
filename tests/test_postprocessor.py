@@ -313,6 +313,16 @@ def test_an_engine_reading_tagged_in_digits_is_the_name_the_plugin_knows(heard, 
     assert out["engine_reading"] == value  # untagged: found in the text
 
 
+def test_parking_brakes_is_the_parking_brake():
+    # The owner's "is the parking brake set" came back "is the parking brakes
+    # set" in both grammars; q1 tagged "parking brakes", which the plugin
+    # doesn't know (speed and auto brakes already took the plural).
+    out = canonicalize_choices(
+        {"switch_system": "parking brakes"}, "is the parking brakes set", "ask_switch"
+    )
+    assert out["switch_system"] == "parking brake"
+
+
 def test_every_name_a_choice_slot_knows_gives_its_own_value():
     # Each value, synonym and generic verb, tagged on its own, comes back as
     # the value it is listed under (unless two values list it).
