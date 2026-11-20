@@ -429,9 +429,27 @@ OVERRIDES: tuple[Override, ...] = (
                     ),
                 ),
                 "apu_bleed": ("sim/bleed_air/apu_on", "sim/cockpit2/bleedair/actuators/apu_bleed"),
+                # The APU's air reaches the left duct only: the right isolation
+                # valve opens with the packs off (engine 2 didn't turn with them
+                # on, and started 15 s after they went off, 2026-11-19), as its
+                # autostart does. Each (state, off, on): those that were on go
+                # back on once the engines run.
+                "crossfeed": (
+                    (
+                        "sim/cockpit2/bleedair/actuators/pack_left",
+                        "sim/bleed_air/pack_left_off",
+                        "sim/bleed_air/pack_left_on",
+                    ),
+                    (
+                        "sim/cockpit2/bleedair/actuators/pack_right",
+                        "sim/bleed_air/pack_right_off",
+                        "sim/bleed_air/pack_right_on",
+                    ),
+                ),
             }
         ),
-        source="Laminar 737-800 xlua B738.Z.autostart (APU start, APU bleed), X-Plane 12.4.4",
+        source="Laminar 737-800 xlua B738.Z.autostart (APU start, APU bleed, packs off for "
+        "the start), X-Plane 12.4.4",
         live=(B738_LIVE,),
     ),
     Override(

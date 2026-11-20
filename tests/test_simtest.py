@@ -1103,3 +1103,10 @@ def test_a_failed_step_with_an_abort_stops_the_flight_and_turns_back():
     assert results[3]["skipped"] and results[3]["note"] == "not run: on the glideslope failed"
     assert scenario.line(results[3]) == "· gear down: skipped (not run: on the glideslope failed)"
     assert scenario.summary(results)["failed"] == ["on the glideslope"]
+
+
+def test_flights_that_end_in_the_air_turn_back_west():
+    # Left flying east, the A330 reached the end of the installed scenery.
+    for flight in (flights.takeoff, flights.go_around, flights.restart):
+        steps = flight("a330", flights.new_hands("a330"))
+        assert [s.say for s in steps[-2:]] == ["heading two eight three", "altitude hold"]

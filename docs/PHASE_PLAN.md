@@ -617,9 +617,13 @@ gives the controls back at the end of a run.
   batteries, APU BAT held, APU MASTER, APU START held until the starter
   shows START, bleed toggle), then the engines. The A330 doesn't turn on
   X-Plane's starter even with air: its engine mode selector to IGN/START
-  and the master on, and its FADEC started it to idle in 35 s. A cold
-  aircraft's start is its own procedure (battery, fuel selectors, pumps)
-  beyond "start engine".
+  and the master on, and its FADEC started it to idle in 35 s. Flown with
+  #79 + #80 (`simtest run restart`): Baron 27/27, King Air 28/28, A330
+  34/34; the 737's engine 2 didn't turn on the APU's air (left and center
+  ducts only): with the packs off its right isolation valve opens, and it
+  started in 15 s, so Vimaan turns them off for the start and back on after.
+  A cold aircraft's start is its own procedure (battery, fuel selectors,
+  pumps) beyond "start engine".
 - [ ] **A4 Approach and landing.** *`simtest run landing` and `go-around`,
   2026-11-19 (F.3): Baron, King Air, 737.* From an 8 nm final (X-Plane
   starts it at about 1,500 ft, gear and flaps up): the 10R ILS on the

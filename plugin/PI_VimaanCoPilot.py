@@ -609,6 +609,7 @@ class PythonInterface:
         self._verifications: list[dict[str, Any]] = []
         self._cranks: dict[str, dict[str, Any]] = {}
         self._apu: dict[str, Any] | None = None  # an APU start for a jet's engines
+        self._crossfeed_restore: list[str] = []  # commands to put back once the engines run
         self._follow_ups: list[dict[str, Any]] = []
         self._autopilot_state: dict[str, Any] | None = None
         self._aircraft: tuple[str, str] | None = None  # (ICAO, .acf path) last loaded
@@ -4555,6 +4556,8 @@ class PythonInterface:
             and self.profile.settings.get("apu_start")
         ):
             return self._start_apu_for(eng)
+        if kind == "jet" and self._side_air(eng["index"]) is False:
+            self._open_crossfeed()  # air on one side only: across (the 737's packs off)
         if self.profile.settings.get("fadec_start"):
             return self._fadec_start(eng)
         cmd_ref = xp.findCommand(eng["starter"])
@@ -4606,6 +4609,27 @@ class PythonInterface:
         values = [self._read_float(name) for name in DREF_BLEED_AVAILABLE]
         known = [v for v in values if v is not None]
         return max(known) >= STARTING_AIR if known else None
+
+    def _side_air(self, index):
+        """Air in this engine's own duct (left for engine 1, right for 2), or
+        None when unknown: the 737's APU filled the center and left ducts and
+        its engine 2 didn't turn."""
+        if index > 1:
+            return None
+        value = self._read_float(DREF_BLEED_AVAILABLE[0 if index == 0 else 2])
+        return None if value is None else value >= STARTING_AIR
+
+    def _open_crossfeed(self):
+        """The aircraft's steps that let air across to the other side
+        (Override setting "crossfeed": (state, off, on) each); those that
+        were on go back on when the engines run (``_end_crank``)."""
+        if self._crossfeed_restore:
+            return  # already across
+        for state, off, on in self.profile.settings.get("crossfeed", ()):
+            if self._read_number(state) and self._fire_command(off):
+                self._crossfeed_restore.append(on)  # only what was switched off
+        if self._crossfeed_restore:
+            self.tel.event("crossfeed", cmd=self._current_cmd, restore=self._crossfeed_restore)
 
     def _start_apu_for(self, eng):
         """Start the APU, open its bleed, then the engine(s): the aircraft's
@@ -4855,6 +4879,10 @@ class PythonInterface:
             self._fire_command(IGNITER_OFF.format(n=crank["index"] + 1))
         if crank.get("fadec") and not any(c.get("fadec") for c in self._cranks.values()):
             self._write(DREF_ENG_MODE, 0, is_float=False)  # back to NORM
+        if not self._cranks and self._crossfeed_restore:  # the engines are done: packs back
+            restore, self._crossfeed_restore = self._crossfeed_restore, []
+            for command in restore:
+                self._fire_command(command)
         self.tel.event(
             "crank_end",
             logging.INFO if result == "running" else logging.WARNING,

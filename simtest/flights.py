@@ -408,6 +408,9 @@ def takeoff(aircraft: str, hands: Hands) -> list[Step]:
     out += [
         Step(f"level at {CRUISE_FT}", sim=(levelled_at(CRUISE_FT, within_sec=300),)),
         Step("cruise", sim=(phase_is("cruise", within_sec=20),)),
+        # Left flying east after the run, the A330 reached the end of the
+        # installed scenery and X-Plane paused under its dialog (2026-11-19).
+        *TURN_BACK,
     ]
     return out
 
@@ -543,6 +546,7 @@ def go_around(aircraft: str, hands: Hands) -> list[Step]:
         Step("climb", sim=(phase_is("climb", within_sec=120),)),
         Step(f"level at {GO_AROUND_TO_FT}", sim=(levelled_at(GO_AROUND_TO_FT, within_sec=240),)),
         Step("cruise", sim=(phase_is("cruise", within_sec=20),)),
+        *TURN_BACK,  # back over the installed scenery
     ]
     return out
 
