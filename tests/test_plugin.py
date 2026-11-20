@@ -3940,3 +3940,43 @@ def test_a_speed_that_stays_is_not_read_back_again(sim, monkeypatch):
     say(plugin, "speed", "set_autopilot_speed", {"speed": "160"})
     plugin._flight_loop()
     assert xp.spoken[-1] == "Speed one six zero"
+
+
+def test_the_apu_steps_read_int_datarefs_as_ints(sim):
+    # In X-Plane a float read of an int dataref is 0: "APU running" read so,
+    # the 737's APU ran at 100 % and its steps never moved on (2026-11-19).
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 7, commands=(APU_SWITCH,))
+    _air(xp, 0.2)
+    xp.datarefs.update({APU_N1: 0.0, APU_RUNNING: 0, APU_BLEED: 0})
+    real_float = plugin._read_float
+    ints = {APU_RUNNING, APU_BLEED, "sim/cockpit2/electrical/APU_starter_switch"}
+    plugin._read_float = lambda name: 0.0 if name in ints else real_float(name)
+    say(plugin, "engine", "toggle_engine", {"state": "on"})
+    for _ in range(3):
+        plugin._flight_loop()
+    xp.datarefs[APU_RUNNING] = 1
+    plugin._flight_loop()
+    assert APU_SWITCH not in xp.held  # moved on, read as the int it is
+
+
+def test_a_turboprop_restarted_while_winding_down_gets_fuel_once_steady(sim, monkeypatch):
+    # The King Air, restarted 6 s after a shutdown at 28 % N1: the starter
+    # holds the core steady, never above where it began.
+    module, plugin, xp = sim
+    clock = [100.0]
+    monkeypatch.setattr(module.time, "perf_counter", lambda: clock[0])
+    load_aircraft(plugin, xp, 9)
+    xp.datarefs[FUEL_LEVER][0] = 0.0
+    xp.datarefs[N1][0] = 28.0
+    say(plugin, "engine", "toggle_engine", {"state": "on"})
+    for n1 in (26.0, 24.0, 22.0):  # still falling: no fuel
+        clock[0] += 1.0
+        xp.datarefs[N1][0] = n1
+        plugin._flight_loop()
+        assert xp.datarefs[FUEL_LEVER][0] == 0.0
+    for _ in range(3):  # held steady by the starter
+        clock[0] += 1.0
+        xp.datarefs[N1][0] = 21.9
+        plugin._flight_loop()
+    assert xp.datarefs[FUEL_LEVER][0] == 1.0

@@ -170,6 +170,9 @@ IGNITER_OFF = "sim/igniters/igniter_contin_off_{n}"
 # A start that adds less than this to the core speed it began with never
 # turned (the A330's N2 was still winding down from a shutdown: 23 % then 7 %).
 TURNED_PCT = 2.0
+# Or the core held within this of where it was this long ago: not falling.
+STEADY_SEC = 2.0
+STEADY_PCT = 0.3
 # The fuel selectors: 0 is off. A twin's left and right; a single's one.
 DREF_FUEL_SELECTOR = "sim/cockpit2/fuel/fuel_tank_selector"
 DREF_FUEL_SELECTOR_LR = (
@@ -1768,6 +1771,11 @@ class PythonInterface:
         except Exception as exc:
             self.tel.event("dataref_read_error", logging.WARNING, dataref=name, error=repr(exc))
             return None
+
+    def _read_number(self, name):
+        """A scalar dataref by its own type (int or float), or None."""
+        value = self._read_any(name)
+        return float(value) if isinstance(value, (int, float)) else None
 
     def _read_float_array(self, name, count=8):
         """The first ``count`` elements of a float[] dataref, or None."""
@@ -4630,7 +4638,10 @@ class PythonInterface:
                 if step[0] == "hold_for":
                     done = now >= held["until"]
                 else:
-                    value = self._read_float(step[2])
+                    # By its type: "APU running" and the APU starter are ints,
+                    # and a float read of an int dataref is 0 in X-Plane (the
+                    # 737's and A330's APUs ran, and the steps never moved on).
+                    value = self._read_number(step[2])
                     done = value is not None and value >= step[3]
                 if not done:
                     return
@@ -4657,7 +4668,7 @@ class PythonInterface:
             if n1 is None or n1 < APU_READY_PCT:
                 return
             command, state = self.profile.settings["apu_bleed"]
-            if not self._read_float(state):
+            if not self._read_number(state):  # an int: a float read was always 0
                 self._fire_command(command)
             a["stage"], a["bleed_since"] = "bleed", now
             return
@@ -4721,10 +4732,19 @@ class PythonInterface:
             core = self._core_pct(crank)
             if core is not None:
                 crank["peak_pct"] = max(crank["peak_pct"], core)
-                # Fuel in once the starter has the core turning: not on a core
-                # still winding down from a shutdown (the A330 got fuel at 23 %
-                # N2 with no starting air).
-                turning = core >= crank.get("start_pct", 0.0) + TURNED_PCT
+                # Fuel in once the starter has the core turning: it rose past
+                # where it began, or stopped falling (the starter holds it).
+                # Not on a core still winding down from a shutdown with no
+                # starter turning it (the A330 at 23 % N2 with no air); but the
+                # King Air restarted 6 s after a shutdown began at 28 % N1 and
+                # never rose past it, so got no fuel, until this.
+                now = time.perf_counter()
+                history = crank.setdefault("history", [])
+                history.append((now, core))
+                while len(history) > 1 and now - history[1][0] >= STEADY_SEC:
+                    history.pop(0)
+                steady = now - history[0][0] >= STEADY_SEC and core >= history[0][1] - STEADY_PCT
+                turning = core >= crank.get("start_pct", 0.0) + TURNED_PCT or steady
                 if not crank["fuel_on"] and core >= FUEL_ON_AT_PCT[crank["kind"]] and turning:
                     self._fuel_on(crank, core)
             running = self._read_array(DREF_ENGINE_RUNNING, crank["index"]) == 1

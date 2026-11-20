@@ -577,6 +577,8 @@ def restart(aircraft: str, hands: Hands) -> list[Step]:
             say="shut down both engines",
             sim=(_engines("engines stopped", 0, within_sec=30),),
         ),
+        # As a pilot would: let them wind down before starting again.
+        Step("engines winding down", settle_sec=20),
         Step(
             "start both engines",
             say="start both engines",
