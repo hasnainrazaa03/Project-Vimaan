@@ -146,6 +146,27 @@ CORE_SPEED = {
 }
 DREF_FUEL_LEVER = "sim/cockpit2/engine/actuators/mixture_ratio"  # 0 cutoff, 1 open
 DREF_BUS_VOLTS = "sim/cockpit2/electrical/bus_volts"
+# A jet's starter runs on air (flown 2026-11-19): the ducts' bleed air ratio.
+# The APU's bleed gave 1.3-1.5; one engine running across the aircraft 0.2,
+# and with that the 737's engine 1 didn't turn.
+DREF_BLEED_AVAILABLE = tuple(
+    f"sim/cockpit2/bleedair/indicators/bleed_available_{side}"
+    for side in ("left", "center", "right")
+)
+STARTING_AIR = 1.0
+DREF_APU_N1 = "sim/cockpit2/electrical/APU_N1_percent"
+APU_READY_PCT = 95.0  # its bleed gives air from about 100 % N1
+APU_MAX_SEC = 180.0  # the 737's took 50 s to spool, the A330's 65 s
+APU_BLEED_WAIT_SEC = 20.0
+# FADEC starts (the A330): the engine mode selector to IGN/START (1) and the
+# engine's master to on; the engine control does the rest.
+DREF_ENG_MODE = "sim/cockpit2/engine/actuators/eng_mode_selector"
+DREF_ENG_MASTER = "sim/cockpit2/engine/actuators/eng_master"
+FADEC_MAX_SEC = 90.0
+# A turboprop's igniters while it cranks: the King Air reached 27 % N1 with
+# fuel and never lit without them; with them it ran in 6 s.
+IGNITER_ON = "sim/igniters/igniter_contin_on_{n}"
+IGNITER_OFF = "sim/igniters/igniter_contin_off_{n}"
 # A start that adds less than this to the core speed it began with never
 # turned (the A330's N2 was still winding down from a shutdown: 23 % then 7 %).
 TURNED_PCT = 2.0
@@ -584,6 +605,7 @@ class PythonInterface:
         # Deferred main-thread work: dataref read-backs and starter cranks.
         self._verifications: list[dict[str, Any]] = []
         self._cranks: dict[str, dict[str, Any]] = {}
+        self._apu: dict[str, Any] | None = None  # an APU start for a jet's engines
         self._follow_ups: list[dict[str, Any]] = []
         self._autopilot_state: dict[str, Any] | None = None
         self._aircraft: tuple[str, str] | None = None  # (ICAO, .acf path) last loaded
@@ -1097,6 +1119,7 @@ class PythonInterface:
             ):
                 self._end_command("timeout")
             self._service_cranks()
+            self._service_apu()
             self._service_deferred()
             self._service_baro_step()
             self._service_knob_step()
@@ -4471,8 +4494,9 @@ class PythonInterface:
                 return outcome
         return "rejected"
 
-    def _engine(self, eng, state):
-        """Start (held starter, driven by the flight loop) or shut down one engine."""
+    def _engine(self, eng, state, after_apu=False):
+        """Start (held starter, driven by the flight loop) or shut down one
+        engine. ``after_apu``: called again once an APU start gave air."""
         label = eng["label"]
         running = self._read_array(DREF_ENGINE_RUNNING, eng["index"])
 
@@ -4512,6 +4536,19 @@ class PythonInterface:
             # nothing with its battery off).
             self._say(f"No electrical power to start {label.lower()}. Battery on first.")
             return "rejected"
+        if self._apu is not None:  # an APU start is under way: this engine waits for it
+            if eng not in self._apu["engines"]:
+                self._apu["engines"].append(eng)
+            return "pending"
+        if (
+            kind == "jet"
+            and not after_apu
+            and self._starting_air() is False
+            and self.profile.settings.get("apu_start")
+        ):
+            return self._start_apu_for(eng)
+        if self.profile.settings.get("fadec_start"):
+            return self._fadec_start(eng)
         cmd_ref = xp.findCommand(eng["starter"])
         if not cmd_ref:
             self.tel.event(
@@ -4525,6 +4562,8 @@ class PythonInterface:
             self._say(f"Cannot start {label}")
             return "failed"
         xp.commandBegin(cmd_ref)
+        if kind == "turboprop":
+            self._fire_command(IGNITER_ON.format(n=eng["index"] + 1))
         turbine = kind in CORE_SPEED
         self._cranks[label] = {
             "cmd": self._current_cmd,
@@ -4550,6 +4589,126 @@ class PythonInterface:
             ignition_key=self._read_array(DREF_IGNITION_KEY, eng["index"]),
             battery=self._read_array(DREF_BATTERY, 0),
         )
+        self._say(f"Starting {label.lower()}")
+        return "pending"
+
+    def _starting_air(self):
+        """Has a jet's starter air (the APU's bleed, or an engine's)? None
+        when the aircraft doesn't say."""
+        values = [self._read_float(name) for name in DREF_BLEED_AVAILABLE]
+        known = [v for v in values if v is not None]
+        return max(known) >= STARTING_AIR if known else None
+
+    def _start_apu_for(self, eng):
+        """Start the APU, open its bleed, then the engine(s): the aircraft's
+        own steps (Override settings "apu_start", "apu_bleed")."""
+        self._apu = {
+            "cmd": self._current_cmd,
+            "steps": list(self.profile.settings["apu_start"]),
+            "stage": "steps",
+            "held": None,
+            "started": time.perf_counter(),
+            "engines": [eng],
+        }
+        self.tel.event("apu_start", cmd=self._current_cmd, engines=[eng["label"]])
+        self._say("No starting air. Starting the A P U first.")
+        return "pending"
+
+    def _service_apu(self):
+        a = self._apu
+        if a is None:
+            return
+        now = time.perf_counter()
+        if now - a["started"] > APU_MAX_SEC:
+            self._end_apu("timeout")
+            self._say("The A P U did not start.")
+            return
+        if a["stage"] == "steps":
+            held = a["held"]
+            if held is not None:
+                step = held["step"]
+                if step[0] == "hold_for":
+                    done = now >= held["until"]
+                else:
+                    value = self._read_float(step[2])
+                    done = value is not None and value >= step[3]
+                if not done:
+                    return
+                xp.commandEnd(held["ref"])
+                a["held"] = None
+            if not a["steps"]:
+                a["stage"] = "spool"
+                return
+            step = a["steps"].pop(0)
+            if step[0] == "once":
+                self._fire_command(step[1])
+                return
+            ref = xp.findCommand(step[1])
+            if not ref:
+                self._end_apu("command_not_found")
+                self._say("Cannot start the A P U")
+                return
+            until = now + float(step[2]) if step[0] == "hold_for" else None
+            xp.commandBegin(ref)
+            a["held"] = {"step": step, "ref": ref, "until": until}
+            return
+        if a["stage"] == "spool":
+            n1 = self._read_float(DREF_APU_N1)
+            if n1 is None or n1 < APU_READY_PCT:
+                return
+            command, state = self.profile.settings["apu_bleed"]
+            if not self._read_float(state):
+                self._fire_command(command)
+            a["stage"], a["bleed_since"] = "bleed", now
+            return
+        if self._starting_air() or now - a["bleed_since"] > APU_BLEED_WAIT_SEC:
+            engines = a["engines"]
+            self._end_apu("running")
+            self._say("A P U running")
+            previous, self._current_cmd = self._current_cmd, a["cmd"]
+            try:
+                for eng in engines:
+                    self._engine(eng, "on", after_apu=True)
+            finally:
+                self._current_cmd = previous
+
+    def _end_apu(self, result):
+        a, self._apu = self._apu, None
+        if a is None:
+            return
+        if a["held"] is not None:
+            xp.commandEnd(a["held"]["ref"])
+        self.tel.event(
+            "apu_start_end",
+            logging.INFO if result == "running" else logging.WARNING,
+            cmd=a["cmd"],
+            result=result,
+            sec=round(time.perf_counter() - a["started"], 1),
+            apu_n1=self._read_float(DREF_APU_N1),
+        )
+
+    def _fadec_start(self, eng):
+        """The A330: the engine mode selector to IGN/START, the engine's
+        master on, and its engine control starts it (N2 watched)."""
+        index, label = eng["index"], eng["label"]
+        if not self._write(DREF_ENG_MODE, 1, is_float=False):
+            self._say(f"Cannot start {label}")
+            return "failed"
+        if self._read_array(DREF_ENG_MASTER, index) != 1:
+            self._write_array(DREF_ENG_MASTER, index, 1, is_float=False)
+        self._cranks[label] = {
+            "cmd": self._current_cmd,
+            "ref": None,
+            "fadec": True,
+            "started": time.perf_counter(),
+            "kind": "jet",
+            "max_sec": FADEC_MAX_SEC,
+            "fuel_on": True,  # its engine control adds the fuel
+            "peak_pct": 0.0,
+            **eng,
+        }
+        self._cranks[label]["start_pct"] = self._core_pct(self._cranks[label]) or 0.0
+        self.tel.event("crank_begin", cmd=self._current_cmd, engine=label, start_type="fadec")
         self._say(f"Starting {label.lower()}")
         return "pending"
 
@@ -4670,7 +4829,12 @@ class PythonInterface:
 
     def _end_crank(self, intent, result):
         crank = self._cranks.pop(intent)
-        xp.commandEnd(crank["ref"])
+        if crank["ref"] is not None:  # a FADEC start holds no starter
+            xp.commandEnd(crank["ref"])
+        if crank["kind"] == "turboprop":
+            self._fire_command(IGNITER_OFF.format(n=crank["index"] + 1))
+        if crank.get("fadec") and not any(c.get("fadec") for c in self._cranks.values()):
+            self._write(DREF_ENG_MODE, 0, is_float=False)  # back to NORM
         self.tel.event(
             "crank_end",
             logging.INFO if result == "running" else logging.WARNING,

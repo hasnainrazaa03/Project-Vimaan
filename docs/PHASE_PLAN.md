@@ -608,10 +608,18 @@ gives the controls back at the end of a run.
   electrical power the Baron cranked 20 s for nothing (now: "No electrical
   power … Battery on first"); the jets don't turn without the APU's air
   (now: "did not turn. No starting air: start the A P U", and no fuel into a
-  core still winding down). The Baron restarts; the jets need an APU, which
-  Vimaan can't start; the King Air's own start switch cranked to 9 % in a
-  minute: to look into. A cold aircraft's start is its own procedure
-  (battery, fuel selectors, pumps) beyond "start engine".
+  core still winding down). Then every aircraft's start (2026-11-19, owner
+  "do all"): the King Air reached 27 % N1 with fuel and no light-off (my
+  first probe watched N2, its propeller): its igniters on while it cranks,
+  it ran in 6 s. The jets on the APU's air: "start engine" with no starting
+  air now starts the APU first, from each aircraft's own autostart script
+  (737: APU switch ON, held at START until it runs, bleed on; A330:
+  batteries, APU BAT held, APU MASTER, APU START held until the starter
+  shows START, bleed toggle), then the engines. The A330 doesn't turn on
+  X-Plane's starter even with air: its engine mode selector to IGN/START
+  and the master on, and its FADEC started it to idle in 35 s. A cold
+  aircraft's start is its own procedure (battery, fuel selectors, pumps)
+  beyond "start engine".
 - [ ] **A4 Approach and landing.** *`simtest run landing` and `go-around`,
   2026-11-19 (F.3): Baron, King Air, 737.* From an 8 nm final (X-Plane
   starts it at about 1,500 ft, gear and flaps up): the 10R ILS on the

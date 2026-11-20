@@ -3791,6 +3791,137 @@ def test_a_failed_piston_start_says_why(sim, mixture, selector, said):
     assert xp.spoken[-1] == said
 
 
+# ---- 2026-11-19: engine starts on every aircraft ------------------------------
+BLEED = "sim/cockpit2/bleedair/indicators/bleed_available_"
+APU_N1 = "sim/cockpit2/electrical/APU_N1_percent"
+APU_RUNNING = "sim/cockpit2/electrical/APU_running"
+APU_SWITCH = "laminar/B738/spring_toggle_switch/APU_start_pos_dn"
+APU_BLEED = "sim/cockpit2/bleedair/actuators/apu_bleed"
+
+
+def _air(xp, ratio):
+    for side in ("left", "center", "right"):
+        xp.datarefs[BLEED + side] = ratio
+
+
+def test_a_turboprop_cranks_with_its_igniters_on(sim):
+    # The King Air reached 27 % N1 with fuel and never lit without them.
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 9)
+    say(plugin, "engine", "toggle_engine", {"state": "on"})
+    assert "sim/igniters/igniter_contin_on_1" in xp.commands_fired
+    xp.datarefs[N1][0] = 55.0
+    xp.datarefs[RUNNING][0] = 1
+    plugin._flight_loop()
+    assert xp.spoken[-1] == "Engine 1 running"
+    assert "sim/igniters/igniter_contin_off_1" in xp.commands_fired
+
+
+def test_a_jet_with_no_starting_air_starts_its_apu_first(sim):
+    # The 737: APU switch to ON, held at START until it runs; at 95 % its
+    # bleed; then the engines (flown 2026-11-19).
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 7, commands=(APU_SWITCH,))
+    assert "b738_apu" in plugin.profile.overrides
+    _air(xp, 0.2)  # the other engine's, across the aircraft: not enough
+    xp.datarefs.update({APU_N1: 0.0, APU_RUNNING: 0, APU_BLEED: 0})
+    spoken = say(plugin, "start both engines", "toggle_engine", {"state": "on", "instance": "both"})
+    assert spoken == ["No starting air. Starting the A P U first."]  # once, for both
+    for _ in range(3):
+        plugin._flight_loop()
+    assert xp.commands_fired[-2:] == [APU_SWITCH, APU_SWITCH + ":begin"]  # ON, then START held
+    assert STARTER_1 not in xp.held
+    xp.datarefs[APU_RUNNING] = 1
+    plugin._flight_loop()
+    assert APU_SWITCH not in xp.held  # let go at START once it runs
+    plugin._flight_loop()
+    xp.datarefs[APU_N1] = 98.0
+    plugin._flight_loop()
+    assert "sim/bleed_air/apu_on" in xp.commands_fired
+    _air(xp, 1.4)
+    plugin._flight_loop()
+    assert xp.spoken[-3:] == ["A P U running", "Starting engine 1", "Starting engine 2"]
+    assert STARTER_1 in xp.held  # now the engines, on the APU's air
+    assert [e["result"] for e in events(plugin, "apu_start_end")] == ["running"]
+
+
+def test_an_apu_that_never_starts_is_said_and_let_go(sim, monkeypatch):
+    module, plugin, xp = sim
+    load_aircraft(plugin, xp, 7, commands=(APU_SWITCH,))
+    _air(xp, 0.0)
+    xp.datarefs.update({APU_N1: 0.0, APU_RUNNING: 0, APU_BLEED: 0})
+    say(plugin, "engine", "toggle_engine", {"state": "on"})
+    for _ in range(3):
+        plugin._flight_loop()
+    assert APU_SWITCH in xp.held
+    monkeypatch.setattr(module, "APU_MAX_SEC", 0.0)
+    plugin._flight_loop()
+    assert xp.spoken[-1] == "The A P U did not start."
+    assert xp.held == set() and plugin._apu is None
+
+
+def test_with_starting_air_a_jet_starts_at_once(sim):
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 7, commands=(APU_SWITCH,))
+    _air(xp, 1.4)  # the APU's bleed already on
+    assert say(plugin, "engine", "toggle_engine", {"state": "on"}) == ["Starting engine 1"]
+    assert STARTER_1 in xp.held
+
+
+def test_the_a330_starts_through_its_mode_selector_and_master(sim):
+    # X-Plane's starter didn't turn it even with air: IGN/START and the master.
+    _, plugin, xp = sim
+    a330 = ("laminar/A333/buttons/APU_master", "laminar/A333/buttons/APU_start")
+    load_aircraft(plugin, xp, 7, commands=a330)
+    assert plugin.profile.settings.get("fadec_start")
+    _air(xp, 1.4)
+    mode, master = (
+        "sim/cockpit2/engine/actuators/eng_mode_selector",
+        "sim/cockpit2/engine/actuators/eng_master",
+    )
+    xp.datarefs.update({mode: 0, master: [0, 0]})
+    assert say(plugin, "engine", "toggle_engine", {"state": "on"}) == ["Starting engine 1"]
+    assert xp.datarefs[mode] == 1 and xp.datarefs[master][0] == 1
+    assert xp.held == set()  # no starter held: its engine control starts it
+    xp.datarefs[N2][0] = 58.0
+    xp.datarefs[RUNNING][0] = 1
+    plugin._flight_loop()
+    assert xp.spoken[-1] == "Engine 1 running"
+    assert xp.datarefs[mode] == 0  # back to NORM
+
+
+def test_the_a330s_apu_holds_its_buttons_as_its_autostart_does(sim):
+    # Batteries on, APU BAT held, APU MASTER, APU START held until the APU
+    # starter shows START (2), then its bleed toggle.
+    _, plugin, xp = sim
+    a330 = (
+        "laminar/A333/buttons/APU_master",
+        "laminar/A333/buttons/APU_start",
+        "laminar/A333/buttons/APU_batt_toggle",
+    )
+    load_aircraft(plugin, xp, 7, commands=a330)
+    _air(xp, 0.0)
+    starter = "sim/cockpit2/electrical/APU_starter_switch"
+    bleed = "laminar/A333/switch_memory/apu_bleed_on_off"
+    xp.datarefs.update({APU_N1: 0.0, starter: 0, bleed: 0})
+    say(plugin, "engine", "toggle_engine", {"state": "on"})
+    for _ in range(4):
+        plugin._flight_loop()
+    assert "laminar/A333/buttons/APU_batt_toggle" in xp.held
+    plugin._apu["held"]["until"] = 0.0  # its 2 s are up
+    for _ in range(3):
+        plugin._flight_loop()
+    assert "laminar/A333/buttons/APU_start" in xp.held
+    assert "laminar/A333/buttons/APU_master" in xp.commands_fired
+    xp.datarefs[starter] = 2
+    plugin._flight_loop()
+    assert xp.held == set()
+    plugin._flight_loop()
+    xp.datarefs[APU_N1] = 99.0
+    plugin._flight_loop()
+    assert "sim/bleed_air/apu_toggle" in xp.commands_fired
+
+
 def test_a_speed_the_aircraft_clamps_is_read_back_as_set(sim, monkeypatch):
     # The A330 won't select below VLS: "speed 140" in CONF FULL became 144.
     module, plugin, xp = sim
