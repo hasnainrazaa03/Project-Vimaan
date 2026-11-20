@@ -3980,3 +3980,54 @@ def test_a_turboprop_restarted_while_winding_down_gets_fuel_once_steady(sim, mon
         xp.datarefs[N1][0] = 21.9
         plugin._flight_loop()
     assert xp.datarefs[FUEL_LEVER][0] == 1.0
+
+
+PACK_L, PACK_R = (
+    "sim/cockpit2/bleedair/actuators/pack_left",
+    "sim/cockpit2/bleedair/actuators/pack_right",
+)
+
+
+def _sides(xp, left, center, right):
+    xp.datarefs.update({BLEED + "left": left, BLEED + "center": center, BLEED + "right": right})
+
+
+def test_the_737s_packs_go_off_for_engine_two_and_back_on(sim):
+    # The APU's air filled the left and center ducts; engine 2 didn't turn
+    # until the packs went off (its right isolation valve opens), 2026-11-19.
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 7, commands=(APU_SWITCH,))
+    _sides(xp, 1.5, 1.5, 0.0)
+    xp.datarefs.update({PACK_L: 1, PACK_R: 1})
+    say(plugin, "start both engines", "toggle_engine", {"state": "on", "instance": "both"})
+    assert "sim/bleed_air/pack_left_off" in xp.commands_fired
+    assert "sim/bleed_air/pack_right_off" in xp.commands_fired
+    assert "sim/starters/engage_starter_2" in xp.held
+    for i in (0, 1):  # both run
+        xp.datarefs[N2][i] = 58.0
+        xp.datarefs[RUNNING][i] = 1
+    plugin._flight_loop()
+    assert "sim/bleed_air/pack_left_on" in xp.commands_fired
+    assert "sim/bleed_air/pack_right_on" in xp.commands_fired
+    assert plugin._crossfeed_restore == []
+
+
+def test_packs_already_off_are_left_off(sim):
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 7, commands=(APU_SWITCH,))
+    _sides(xp, 1.5, 1.5, 0.0)
+    xp.datarefs.update({PACK_L: 0, PACK_R: 0})
+    say(plugin, "start engine two", "toggle_engine", {"state": "on", "instance": "2"})
+    xp.datarefs[N2][1] = 58.0
+    xp.datarefs[RUNNING][1] = 1
+    plugin._flight_loop()
+    assert not any("pack_" in c for c in xp.commands_fired)  # off before, off after
+
+
+def test_air_on_both_sides_needs_no_crossfeed(sim):
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 7, commands=(APU_SWITCH,))
+    _sides(xp, 1.4, 1.4, 1.4)
+    xp.datarefs.update({PACK_L: 1, PACK_R: 1})
+    say(plugin, "start both engines", "toggle_engine", {"state": "on", "instance": "both"})
+    assert not any("pack_" in c for c in xp.commands_fired)

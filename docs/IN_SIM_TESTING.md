@@ -338,7 +338,12 @@ to …"); with them on, the A330 captured both, flared itself and landed.
   its APU first ("No starting air. Starting the A P U first." … "A P U
   running"), open its bleed, then the engines; the A330 starts through its
   engine mode selector (IGN/START) and masters, its engine control doing the
-  rest. The jets' step allows 4 minutes.
+  rest. On the 737 the APU's air reaches only the left duct: for engine 2
+  Vimaan turns the packs off (its right isolation valve opens), as its
+  autostart does, and back on once the engines run. The jets' step allows 4
+  minutes. Every flight that ends in the air turns back west (heading 283):
+  left flying east, it leaves the installed scenery and X-Plane pauses under
+  a dialog only a click closes.
 
 A flight that misses the glideslope turns back west and holds its altitude,
 and the rest of it isn't run: flying on east, it leaves the installed
