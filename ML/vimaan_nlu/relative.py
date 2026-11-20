@@ -83,9 +83,28 @@ def bare_climb(text: str) -> str | None:
 
 
 def side_said(text: str) -> str | None:
-    """ "left" or "right" when exactly one is said."""
-    said = {w for w in _words(text) if w in SIDES}
+    """ "left" or "right" when exactly one is said. "Right away" names no
+    side: v27's first candidate read "turn left to one forty eight right
+    away" as a turn to the right."""
+    words = _words(text)
+    said = {
+        w
+        for i, w in enumerate(words)
+        if w in SIDES and not (w == "right" and words[i + 1 : i + 2] == ["away"])
+    }
     return said.pop() if len(said) == 1 else None
+
+
+def says_heading(text: str) -> bool:
+    """The number is a heading: "heading" is said, or "to" comes right before
+    the number ("turn left to 15"; the text is normalized, numbers in
+    digits). "Fifteen degrees to the left" names the side, not a heading."""
+    words = _words(text)
+    if "heading" in words:
+        return True
+    return any(
+        w == "to" and words[i + 1 : i + 2] and words[i + 1].isdigit() for i, w in enumerate(words)
+    )
 
 
 def bare_turn(text: str) -> bool:
@@ -143,6 +162,49 @@ def turn_reading(intent: str, slots: Mapping[str, Any], text: str) -> tuple[str,
         if n is not None and side is not None and 100 <= n <= TURN_MAX:
             return ("either", (side, n))
     return None
+
+
+_TURN_SLOTS = ("turn", "turn_degrees", "degrees")
+
+
+def resolve_turn(
+    intent: str, slots: Mapping[str, Any], text: str
+) -> tuple[str, dict[str, Any]] | None:
+    """Turn or heading, by the words, for a model that knows both (the
+    owner's choice after v27's first gate, 2026-11-20). The model finds the
+    side and the number; which command it is follows the L.1 rules
+    (docs/PHASE_PLAN.md), not the model. v27's first candidate read "turn
+    right ninety" as heading 090 and "turn left to fifteen" as a turn: the
+    heading phrasings it trained on said "turn right to" and "turn left
+    heading", and their mirror images were held out, so it took the side for
+    the cue instead of "to".
+
+    ``text`` is the normalized text. Returns the intent and slots to use, or
+    None to keep the model's:
+
+    - "heading", or "to" right before the number: the heading;
+    - otherwise, with one side said: a turn, unless the number can't be one
+      (180 or more, or a leading zero: "turn left 024" is heading 024). From
+      100 to 179 the plugin asks which (``turn_reading``), as it did;
+    - a turn with no side said, or both: the turn without its side, so it is
+      refused for the missing side.
+    """
+    if intent not in ("turn_by", "set_autopilot_heading"):
+        return None
+    raw = str(slots.get("turn_degrees") or slots.get("degrees") or "").strip()
+    n = _number(raw)
+    if n is None:
+        return None
+    rest = {k: v for k, v in slots.items() if k not in _TURN_SLOTS}
+    heading = ("set_autopilot_heading", {**rest, "degrees": raw})
+    if says_heading(text):
+        return heading
+    side = side_said(text)
+    if side is None:
+        return ("turn_by", {**rest, "turn_degrees": raw}) if intent == "turn_by" else None
+    if (len(raw) == 3 and raw.startswith("0")) or n > TURN_MAX:
+        return heading
+    return ("turn_by", {**rest, "turn": side, "turn_degrees": raw})
 
 
 def climb_reading(intent: str, slots: Mapping[str, Any], text: str) -> tuple[str, int] | None:

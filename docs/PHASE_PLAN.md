@@ -1640,6 +1640,53 @@ Steps:
   grammar; gold; data v19; tests (#85).
 - [ ] L.1.3 v27: four runs on data v19 with v26's recipe (#58), greedy soup
   on dev, gate once against v26. The gates are unchanged.
+  - **First candidate (v27-soup2 = greedy(e, f, g, h), all four kept, dev
+    7731/110/0): failed gates 1, 2 and 4.**
+    - Passed: 3 (gold 113/113, 14/14 fragments refused), 5 (2157/2158) and
+      6 (p95 7.1 ms).
+    - The held-out voice set was 50/7/0, the same as v26.
+  - **Gate 1:** turn_by 0.932, set_autopilot_heading 0.969. The rest were
+    ≥ 0.997.
+    - Only two held-out templates: "turn {side} N" (53 of 192 read as a
+      heading) and "turn left to N" (26 of 200 read as a turn).
+    - The heading phrasings in training say "turn right to N" and "turn
+      left heading N", and their mirror images are held out. The model took
+      the side for the cue instead of "to".
+    - Adding the mirror phrasings to the data would add held-out phrasings.
+  - **Gate 2:** 7 wrong against v26's 3.
+    - Four were "turn left zero two four" read as a turn of 2°. WordPiece
+      splits "024" into "02" + "##4", and only "02" was tagged, so the
+      leading-zero rule never saw a three-digit number.
+    - One was "turn left to one forty eight right away" read as a turn to
+      the right: "right away" was taken as the side.
+    - One is "please turn left forty eight if you would". The old data
+      labels it heading 048 (the noise dropped "to"), but by the L.1 rules
+      it is a 48° turn. It is the only old test row whose meaning changed.
+  - **Gate 4:** 88/28/2 against 89/29/0.
+    - The clip heard as "flaps down ident" set the flaps with v26; v27 chose
+      the transponder.
+    - The clip heard as "fuel current auto one co one decimal seven five"
+      came out as autobrake with no setting. The plugin refuses that ("Auto
+      brake off, one, two, three, or max?"), but the gate counts it as an
+      action. The gate is left as it is.
+    - No data cause was found for either.
+  - **Owner's decisions (2026-11-20, after the first gate):**
+    1. **The words decide turn or heading** (`relative.resolve_turn`, in
+       `predict` after the model, for a model that knows turns only, so v26
+       is unchanged):
+       - "heading", or "to" right before the number: a heading;
+       - one side said and nothing else: a turn, unless the number can't be
+         one (180 or more, or a leading zero);
+       - 100–179 is still asked.
+       Two more fixes: "right away" names no side, and a slot value always
+       ends at a word's end ("024", never "02"; for every model).
+       - The two failing templates were seen while diagnosing. Gate 1's
+         score on them now tests this rule, not the model.
+    2. **Four new seeds (5–8)**, the same data v19 and recipe. A greedy soup
+       on dev over all eight runs, then one gate.
+       - This is a variance re-roll for gate 4, an exception to "every
+         retrain needs a diagnosed change". If it fails again, stop and
+         report.
 - [ ] L.1.4 In the sim: `python -m simtest run relative all` (turns from the
   heading flown, both questions answered, a climb from the altitude held,
   speed from the bug or the airspeed, Mach refused).

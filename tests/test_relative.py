@@ -130,3 +130,91 @@ def test_change_words():
     assert rel.says_change("up a thousand feet")
     assert rel.says_change("climb another thousand")
     assert not rel.says_change("climb a thousand feet")
+
+
+@pytest.mark.parametrize(
+    ("text", "side"),
+    [
+        ("turn left 20", "left"),
+        ("turn left to 148 right away", "left"),  # "right away" names no side
+        ("turn right 20 right away", "right"),
+        ("turn left right 20", None),
+        ("heading 270", None),
+    ],
+)
+def test_side_said(text, side):
+    assert rel.side_said(text) == side
+
+
+@pytest.mark.parametrize(
+    ("text", "heading"),
+    [
+        ("turn left to 15", True),
+        ("turn left heading 270", True),
+        ("15 degrees to the left", False),  # "to the left" names the side
+        ("i would like to turn left 20", False),  # "to" before a verb
+        ("turn left 20", False),
+    ],
+)
+def test_says_heading(text, heading):
+    assert rel.says_heading(text) is heading
+
+
+H, T = "set_autopilot_heading", "turn_by"
+
+
+@pytest.mark.parametrize(
+    ("intent", "slots", "text", "resolved"),
+    [
+        # v27's first candidate: the model's command, then the words'.
+        (H, {"degrees": "90"}, "turn right 90", (T, {"turn": "right", "turn_degrees": "90"})),
+        (T, {"turn": "left", "turn_degrees": "15"}, "turn left to 15", (H, {"degrees": "15"})),
+        (H, {"turn_degrees": "42"}, "confirm turn left to 42", (H, {"degrees": "42"})),
+        (T, {"turn": "left", "turn_degrees": "024"}, "turn left 024", (H, {"degrees": "024"})),
+        (T, {"turn": "left", "turn_degrees": "244"}, "turn left 244", (H, {"degrees": "244"})),
+        (
+            T,
+            {"turn": "right", "turn_degrees": "148"},
+            "turn left to 148 right away",
+            (H, {"degrees": "148"}),
+        ),
+        (
+            T,
+            {"turn": "right", "turn_degrees": "20"},
+            "turn left 20 right away",
+            (T, {"turn": "left", "turn_degrees": "20"}),
+        ),
+        # 100 to 179 with nothing saying which: a turn, which the plugin asks about.
+        (H, {"degrees": "120"}, "turn right 120", (T, {"turn": "right", "turn_degrees": "120"})),
+        (
+            T,
+            {"turn": "left", "turn_degrees": "120"},
+            "turn left 120 degrees",
+            (T, {"turn": "left", "turn_degrees": "120"}),
+        ),
+        (
+            T,
+            {"turn": "left", "turn_degrees": "15"},
+            "15 degrees to the left",
+            (T, {"turn": "left", "turn_degrees": "15"}),
+        ),
+        # No side, or both: a turn loses its side (refused), a heading stays.
+        (
+            T,
+            {"turn": "left", "turn_degrees": "20"},
+            "turn left right 20",
+            (T, {"turn_degrees": "20"}),
+        ),
+        (H, {"degrees": "270"}, "fly 270 degrees", None),
+        # Nothing to decide.
+        (H, {}, "heading", None),
+        ("set_autopilot_altitude", {"altitude": "5000"}, "climb to 5000", None),
+    ],
+)
+def test_resolve_turn(intent, slots, text, resolved):
+    assert rel.resolve_turn(intent, slots, text) == resolved
+
+
+def test_resolve_turn_keeps_other_slots():
+    out = rel.resolve_turn(H, {"degrees": "90", "instance": "1"}, "turn right 90")
+    assert out == (T, {"instance": "1", "turn": "right", "turn_degrees": "90"})

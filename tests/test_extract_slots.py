@@ -94,3 +94,49 @@ class TestExtractSlots:
         preds = [0, 1, 4, 0]
         out = extract_slots(preds, tokens, slot_map_rev)
         assert out == {"degrees": "270"}
+
+
+@pytest.mark.requires_torch
+class TestWholeWords:
+    """A value ends at a word's end (phase L.1: v27's first candidate tagged
+    "02" of "024" and "turn left zero two four" became a 2-degree turn)."""
+
+    def test_a_piece_continuing_the_value_joins_it(self, slot_map_rev):
+        from vimaan_nlu.inference import extract_slots
+
+        tokens = ["[CLS]", "turn", "left", "02", "##4", "[SEP]"]
+        for tag in (0, 1, 2, 3):  # whatever the piece's own tag
+            out = extract_slots([0, 0, 0, 1, tag, 0], tokens, slot_map_rev)
+            assert out == {"degrees": "024"}
+
+    def test_a_value_starting_mid_word_is_unchanged(self, slot_map_rev):
+        from vimaan_nlu.inference import extract_slots
+
+        # "ap2": "ap" untagged, "##2" the value.
+        out = extract_slots([0, 0, 1, 0, 0], ["[CLS]", "ap", "##2", "on", "[SEP]"], slot_map_rev)
+        assert out == {"degrees": "2"}
+
+    def test_a_piece_after_a_skipped_token_does_not_join(self, slot_map_rev):
+        from vimaan_nlu.inference import extract_slots
+
+        # B-degrees, then I-altitude (skipped): that word's piece isn't degrees.
+        tokens = ["[CLS]", "270", "30", "##0", "[SEP]"]
+        out = extract_slots([0, 1, 4, 0, 0], tokens, slot_map_rev)
+        assert out == {"degrees": "270"}
+
+
+@pytest.mark.requires_torch
+class TestTurnOrHeading:
+    def test_only_for_a_model_that_knows_turns(self):
+        from vimaan_nlu.inference import turn_or_heading
+
+        slots = {"degrees": "90"}
+        assert (
+            turn_or_heading(
+                "set_autopilot_heading", slots, "turn right 90", ["set_autopilot_heading"]
+            )
+            is None
+        )
+        assert turn_or_heading(
+            "set_autopilot_heading", slots, "turn right 90", ["set_autopilot_heading", "turn_by"]
+        ) == ("turn_by", {"turn": "right", "turn_degrees": "90"})
