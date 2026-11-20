@@ -5,7 +5,7 @@ steps, each with a concrete "done when". Work happens strictly in the order of
 the status board; a phase starts only when the previous one has passed its
 gate. After each step: tick it here, commit, and keep the board current.
 
-Last updated 2026-11-16.
+Last updated 2026-11-19.
 
 ---
 
@@ -20,7 +20,7 @@ Last updated 2026-11-16.
 | E1 | Training data v2 + command families → **v17** | ✅ merged; flown twice | #29 |
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | ✅ closed 2026-11-12: Part C flown unattended (121/121 on four aircraft) and the owner's real-voice check passed | #30–#34, #38–#42 |
 | D | Flight review: autopilot-disconnect diagnostics (cause, log, callout) + dashboard Flights tab | ✅ merged, installed; callout checked in the sim for a switch and (2026-11-16) a stick pull | #35 |
-| A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | 🟡 A1 and A2 done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); A3 takeoffs on all four and A4 landings on three (2026-11-19); engine start and the A330's ILS left | #36–#40 |
+| A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | ✅ Done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); takeoff, landing, go-around and an engines-off restart on all four (2026-11-19) | #36–#40 |
 | T2 | Tier 2: radios & navigation → **v25** | ✅ closed 2026-11-16: runner in the sim 95/95 on four aircraft (v25) and the owner's real-voice check passed (v26: 16 of 17 radio lines right first time, the other refused) | #43, #46 |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | ✅ closed 2026-11-16: v26 passed every gate and was installed (2026-11-14); runner in the sim 127/127 on four aircraft; the owner's real-voice check passed (51 right, 4 refused, 0 wrong of 55) | #50, #51, #52, #54, #56–#60 |
 | G | Generalization: beyond the owner's voice (measured recognizer noise, other voices, calibration, other recognizers) | 🟡 measured on real voices (2026-11-14); lost-digit refusal built | #55 |
@@ -622,11 +622,14 @@ gives the controls back at the end of a run.
   34/34; the 737's engine 2 didn't turn on the APU's air (left and center
   ducts only): with the packs off its right isolation valve opens, and it
   started in 15 s, so Vimaan turns them off for the start and back on after.
+  Flown with #81: the 737 34/34 (the APU ran 43 s after "No starting air",
+  both engines 20 s after "A P U running"). Every aircraft now restarts.
   A cold aircraft's start is its own procedure (battery, fuel selectors,
   pumps) beyond "start engine".
-- [ ] **A4 Approach and landing.** *`simtest run landing` and `go-around`,
-  2026-11-19 (F.3): Baron, King Air, 737.* From an 8 nm final (X-Plane
-  starts it at about 1,500 ft, gear and flaps up): the 10R ILS on the
+- [x] **A4 Approach and landing.** *`simtest run landing` and `go-around`,
+  2026-11-19 (F.3): Baron, King Air, 737; the A330 after its radio fix.*
+  From an 8 nm final (X-Plane starts it at about 1,500 ft, gear and flaps
+  up): the 10R ILS on the
   autopilot (the course set: without it the Baron's HSI never captured the
   localizer), the throttle held on an airspeed by the runner on the pistons,
   the jets' thrust off at 50 ft (on its autothrottle the 737 held 145 kt
@@ -635,7 +638,8 @@ gives the controls back at the end of a run.
   dived it into the ground. The A330 didn't capture the ILS: its NAV 1 and
   2 (its ILS receivers) start switched off. Vimaan now switches a NAV radio
   on when it tunes it; so switched, the A330 captured, flared itself and
-  landed (2026-11-19).
+  landed (2026-11-19). Its final is flown at 150 kt, above its VLS (#77):
+  landing 27/27 and go-around 27/27.
 
 ---
 
