@@ -24,7 +24,7 @@ Last updated 2026-11-19.
 | T2 | Tier 2: radios & navigation → **v25** | ✅ closed 2026-11-16: runner in the sim 95/95 on four aircraft (v25) and the owner's real-voice check passed (v26: 16 of 17 radio lines right first time, the other refused) | #43, #46 |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | ✅ closed 2026-11-16: v26 passed every gate and was installed (2026-11-14); runner in the sim 127/127 on four aircraft; the owner's real-voice check passed (51 right, 4 refused, 0 wrong of 55) | #50, #51, #52, #54, #56–#60 |
 | G | Generalization: beyond the owner's voice (measured recognizer noise, other voices, calibration, other recognizers) | 🟡 measured on real voices (2026-11-14); lost-digit refusal built | #55 |
-| T4 | Tier 4: questions (read-only) → **v26 + question model q1** | 🟡 part A built (#65): question families, answers in each cockpit's units, the question key (Shift+Z), a grammar of their own. Part B: one model (v27) failed the gate; owner chose a question model beside v26 (q1) | #64, #65 |
+| T4 | Tier 4: questions (read-only) → **v26 + question model q2** | ✅ closed 2026-11-19: runner in the sim on four aircraft (q1 143/144, the miss a moving EGT; q2 148/148 with the phase question); the owner's real-voice check passed (46 of 50 right first time, none acted on) | #64–#70, #76 |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
 | L | Later: relative commands, two commands in one breath, checklists, add-on aircraft profiles | ⬜ | |
@@ -1347,7 +1347,7 @@ up, and "what's the heading" sets heading mode.
   the 2 that act are the 2 v26 alone acts on (mishearings: "vertical flaps",
   "degree have the seatbelt sign on"). The blind questions: not written
   yet.
-- [ ] **Part C:** `simtest run tier4` (each answer against the datarefs),
+- [x] **Part C:** `simtest run tier4` (each answer against the datarefs),
   then the owner's check. Built 2026-11-18
   (`simtest/tier4.py`; docs/IN_SIM_TESTING.md): every question family on the
   question key, each answer's value against the sim read just before and after it in the
@@ -1363,7 +1363,33 @@ up, and "what's the heading" sets heading mode.
   half second); the 737 again: 37/37. The check now reads the sim just before
   the question too. No question wrote to or commanded the sim. 87 fps
   median, frames during commands as in the rest of the flight (10.7 vs 10.8
-  ms), the worker at 2% of a core. Left: the owner's check by voice.
+  ms), the worker at 2% of a core.
+  - **Owner's real-voice check (2026-11-19, 737 at 10,000 ft, EarPods,
+    v26 + q2, session 230050).** The script had 51 lines: 43 questions on
+    the question key covering every family, 2 commands on it that must not
+    act, 2 commands on the talk key, and 4 questions on the talk key. 50 were said
+    (one skipped), and **46 were right first time; nothing was acted on that
+    shouldn't have been**.
+    - Two needed another try: "how fast are we going" (nothing heard the
+      first time) and "what's the E G T on the left engine" (heard "the t",
+      answered with every engine reading; right on the third try).
+    - "what's engine one n one" was heard "an one" and answered with every
+      engine reading, the N1 among them.
+    - On the talk key "what phase of flight are we in" was heard "flight
+      are we in" ("phase" is only in the question grammar) and answered
+      with the status summary. Nothing acted; on the question key the same
+      question was answered "Cruise".
+    - Refused, nothing changed: "gear down" and "autopilot off" on the
+      question key ("I can't answer that"; the gear stayed up and the
+      autopilot on), and "turn back north" (a heading of the script, read
+      aloud, 7 tries; relative turns are phase C's).
+    - Answers checked against the sim: fuel 22,700 lb, 4 h 28 min at 2,530
+      lb/h per engine; outside air −5 °C (ISA at 10,000 ft); COM 1 118.70
+      and COM 2 standby 132.45, as set; local time Zulu − 8; "This aircraft
+      shows no manifold pressure".
+    - Speech to action p50 342 ms; 97.7 fps median; the worker at 1.2% of a
+      core.
+    - **Tier 4 closed.**
 
 ---
 
