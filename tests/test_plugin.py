@@ -3789,3 +3789,23 @@ def test_a_failed_piston_start_says_why(sim, mixture, selector, said):
     plugin._cranks["Engine 1"]["max_sec"] = 0.0
     plugin._flight_loop()
     assert xp.spoken[-1] == said
+
+
+def test_a_speed_the_aircraft_clamps_is_read_back_as_set(sim, monkeypatch):
+    # The A330 won't select below VLS: "speed 140" in CONF FULL became 144.
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    assert say(plugin, "speed", "set_autopilot_speed", {"speed": "140"}) == ["Speed one four zero"]
+    xp.datarefs[SPEED_DIAL] = 143.6  # the aircraft's own limit
+    plugin._flight_loop()
+    assert xp.spoken[-1] == "Speed one four four: the aircraft wouldn't take one four zero"
+    (v,) = [e for e in events(plugin, "verify") if e["label"] == "Speed"]
+    assert v["ok"] is False and v["actual"] == 143.6
+
+
+def test_a_speed_that_stays_is_not_read_back_again(sim, monkeypatch):
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    say(plugin, "speed", "set_autopilot_speed", {"speed": "160"})
+    plugin._flight_loop()
+    assert xp.spoken[-1] == "Speed one six zero"

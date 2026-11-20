@@ -1832,17 +1832,20 @@ class PythonInterface:
         self.tel.event("sim_command", cmd=self._current_cmd, command=command_path, ok=True)
         return True
 
-    def _hold_check(self, label, name, value, is_float=True, modulo=None, tolerance=0.5):
+    def _hold_check(self, label, name, value, is_float=True, modulo=None, tolerance=0.5, fail=None):
         """Did a written value stay? The read-back in ``_write`` is in the same
         frame, so it can't tell if the sim or aircraft replaced it. Also records
-        the aircraft now and shortly after, to compare target with response."""
+        the aircraft now and shortly after, to compare target with response.
+        ``fail`` as for ``_expect``."""
         read = self._read_float if is_float else self._read_int
 
         def current():
             actual = read(name)
             return actual % modulo if actual is not None and modulo else actual
 
-        self._expect(label, current, value % modulo if modulo else value, tolerance=tolerance)
+        self._expect(
+            label, current, value % modulo if modulo else value, tolerance=tolerance, fail=fail
+        )
         now = time.perf_counter()
         for after in FOLLOW_UP_SEC:
             self._follow_ups.append(
@@ -2745,7 +2748,8 @@ class PythonInterface:
     def _expect(self, label, read, expected, delay=None, tolerance=None, fail=None):
         """After a command, check the sim actually changed; say so if it didn't
         (in-sim the A330 ignored "autopilot on" while Vimaan had said "on").
-        ``fail``: what to say instead of "<label> did not respond"."""
+        ``fail``: what to say instead of "<label> did not respond", or a
+        function of the value read that returns it (None: the default)."""
         self._verifications.append(
             {
                 "cmd": self._current_cmd,
@@ -2778,7 +2782,10 @@ class PythonInterface:
                 ok=ok,
             )
             if not ok:
-                self._say(v.get("fail") or f"{v['label'].replace('_', ' ')} did not respond")
+                fail = v.get("fail")
+                if callable(fail):
+                    fail = fail(actual)
+                self._say(fail or f"{v['label'].replace('_', ' ')} did not respond")
 
     def _not_applicable(self, intent, slots=None):
         """Why this aircraft can't perform ``intent``, or None if it can."""
@@ -2942,12 +2949,27 @@ class PythonInterface:
         select = self.profile.command("speed_select")
         if select:
             self._fire_command(select)  # Airbus: pull for a selected speed
-        self._hold_check("Speed", DREF_SPEED_DIAL, target, tolerance=0.005 if want_mach else 0.5)
-        if want_mach:
-            spoken = f"Mach point {spell_digits(f'{target:.2f}'.split('.')[1])}"
-        else:
-            spoken = f"Speed {spell_digits(str(int(target)))}"
-        self._say(spoken)
+
+        def said(value):
+            if want_mach:
+                return f"Mach point {spell_digits(f'{value:.2f}'.split('.')[1])}"
+            return f"Speed {spell_digits(str(int(round(value))))}"
+
+        def clamped(actual):
+            """The aircraft set a speed of its own: say which. The A330 won't
+            select below VLS ("speed 140" in CONF FULL became 144, 2026-11-19)."""
+            if actual is None:
+                return None
+            return f"{said(actual)}: the aircraft wouldn't take {said(target).split(' ', 1)[1]}"
+
+        self._hold_check(
+            "Speed",
+            DREF_SPEED_DIAL,
+            target,
+            tolerance=0.005 if want_mach else 0.5,
+            fail=clamped,
+        )
+        self._say(said(target))
         return "executed"
 
     def _set_vertical_speed(self, slots, intent):
