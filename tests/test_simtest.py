@@ -1002,6 +1002,11 @@ def test_jets_use_their_autothrottle_and_pistons_the_runners_throttle(aircraft):
     assert ("auto throttle off" in said) is jet  # before touchdown: thrust off
     assert any(h.startswith("speed hold") for h in held) is not jet
     assert "idle and brakes" in held
+    # Thrust off from 50 ft on every aircraft: a speed held into the flare
+    # floats it along the runway (the 737 at 145 kt, the Baron 30 s at 3 ft).
+    names = [s.name for s in steps]
+    assert names.index("50 ft") < names.index("thrust idle (pilot)") < names.index("touchdown")
+    assert ("idle" in held) is not jet  # the pistons: the throttle hold stopped
     # Every phrase is one Vimaan reads back (no numbers it can't say).
     assert all(s.say != "speed " for s in steps)
 
@@ -1110,3 +1115,91 @@ def test_flights_that_end_in_the_air_turn_back_west():
     for flight in (flights.takeoff, flights.go_around, flights.restart):
         steps = flight("a330", flights.new_hands("a330"))
         assert [s.say for s in steps[-2:]] == ["heading two eight three", "altitude hold"]
+
+
+# ---- Phase F.4's rules, flown (owner's OK 2026-11-19) ------------------------
+def _named(steps, name):
+    return next(s for s in steps if s.name == name)
+
+
+@pytest.mark.parametrize("aircraft", list(flights.PLANES))
+def test_the_speed_brake_is_held_on_the_takeoff_roll_then_cancelled(aircraft):
+    steps = flights.takeoff(aircraft, flights.new_hands(aircraft))
+    names = [s.name for s in steps]
+    held = "speed brake on the takeoff roll is held"
+    assert (held in names) is flights.PLANES[aircraft].jet  # the pistons have none
+    if held not in names:
+        return
+    vr = next(n for n in names if n.startswith("accelerate to Vr"))
+    assert names.index("takeoff roll") < names.index(held) < names.index(vr)
+    step = _named(steps, held)
+    assert step.outcomes == ("safety_hold",)
+    assert step.reply == "Confirm speed brake, takeoff roll"
+    cancel = steps[names.index(held) + 1]
+    assert (cancel.say, cancel.after) == ("cancel", held)
+    assert cancel.sim[0].datarefs == (flights.SPEEDBRAKE,)
+
+
+@pytest.mark.parametrize("flight", [flights.landing, flights.go_around])
+@pytest.mark.parametrize("aircraft", list(flights.PLANES))
+def test_gear_up_on_the_approach_is_held_then_cancelled(flight, aircraft):
+    steps = flight(aircraft, flights.new_hands(aircraft))
+    names = [s.name for s in steps]
+    held = "gear up on approach is held"
+    assert names.index("approach") < names.index(held)  # in the phase first
+    assert _named(steps, held).reply == "Confirm gear up, on approach"
+    cancel = steps[names.index(held) + 1]
+    assert (cancel.say, cancel.after) == ("cancel", held)
+    assert cancel.sim[0].datarefs == (flights.GEAR,)
+
+
+@pytest.mark.parametrize("aircraft", list(flights.PLANES))
+def test_flaps_up_when_slow_is_flown_where_the_final_is_slow_enough(aircraft):
+    from vimaan_nlu.safety import SafetyContext, evaluate_safety
+
+    p = flights.PLANES[aircraft]
+    steps = flights.landing(aircraft, flights.new_hands(aircraft))
+    names = [s.name for s in steps]
+    held = "flaps up when slow is held"
+    # The jets fly their finals within 10 kt of the clean stall speed in
+    # their files (737 145 / 139, A330 150 / 175); the pistons' are faster.
+    assert (held in names) is (aircraft in ("737", "a330"))
+    if held not in names:
+        return
+    step = _named(steps, held)
+    # Said only when the rule would hold it, 2 kt to spare: never flaps up
+    # on a final that's still slowing.
+    assert step.only_if is not None and step.only_if.ok(p.vs_clean_kt + 8)
+    assert not step.only_if.ok(p.vs_clean_kt + 8.5)
+    # What the plugin's rule says on that final is the reply looked for.
+    ctx = SafetyContext(
+        agl_ft=1200.0,
+        on_ground=False,
+        ias_kt=float(p.final_kt),
+        vs_fpm=-700.0,
+        phase="approach",
+        stall_clean_kt=p.vs_clean_kt,
+    )
+    verdict = evaluate_safety("set_flaps", {"position": "up"}, ctx)
+    assert verdict.requires_confirmation and verdict.message == step.reply
+    cancel = steps[names.index(held) + 1]
+    assert (cancel.say, cancel.after) == ("cancel", held)
+    assert cancel.sim[0].datarefs == (flights.FLAPS,)
+
+
+def test_a_rule_check_not_said_has_no_cancel():
+    # The flaps-up step skipped (not slow enough): its "cancel" isn't said.
+    class Sim:
+        def read(self, refs):
+            return dict.fromkeys(refs, 200.0)  # 200 kt: never slow
+
+    hold, cancel = flights._held(
+        "flaps up when slow",
+        "flaps up",
+        "Confirm flaps up, slow",
+        scenario.above("flaps still out", flights.FLAPS, 0.3),
+        only_if=scenario.below("slow enough", flights.IAS, 147.0),
+    )
+    runner = scenario.Runner(Sim(), voice=None, poll_sec=0.0, log=lambda _line: None)
+    results = runner.run([hold, cancel])
+    assert [r.get("skipped") for r in results] == [True, True]

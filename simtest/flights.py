@@ -71,6 +71,8 @@ AGL_M = "sim/flightmodel/position/y_agl"
 ON_GROUND = "sim/flightmodel/failures/onground_any"
 GEAR = "sim/flightmodel2/gear/deploy_ratio[0]"
 PARK = "sim/flightmodel/controls/parkbrake"
+SPEEDBRAKE = "sim/cockpit2/controls/speedbrake_ratio"  # armed: below 0
+FLAPS = "sim/cockpit2/controls/flap_handle_request_ratio"
 GLIDESLOPE = "sim/cockpit2/autopilot/glideslope_status"
 FEET = 0.3048
 ROLLOUT_BRAKE = 0.4  # the parking brake lever, partly on: brakes after touchdown
@@ -103,11 +105,24 @@ class Plane:
     # Why "shut down both engines" then "start both engines" can't be flown
     # on this aircraft yet (the restart flight is refused), or "".
     no_restart: str = ""
+    # The clean stall speed in its .acf (the plugin's stall_clean_kt, as the
+    # session events showed it, X-Plane 12.4.4): "flaps up" below this + 10 kt
+    # is held. 0: not known, nothing to check.
+    vs_clean_kt: float = 0.0
 
 
 PLANES: dict[str, Plane] = {
     "baron": Plane(
-        "BE58", False, 85, 7, 120, 115, 95, ("flaps down", "flaps full"), throttle_from=0.4
+        "BE58",
+        False,
+        85,
+        7,
+        120,
+        115,
+        95,
+        ("flaps down", "flaps full"),
+        throttle_from=0.4,
+        vs_clean_kt=84,
     ),
     "kingair": Plane(
         "BE9L",
@@ -119,6 +134,7 @@ PLANES: dict[str, Plane] = {
         115,
         ("flaps down", "flaps full"),
         throttle_from=0.4,
+        vs_clean_kt=100,
     ),
     "737": Plane(
         "B738",
@@ -133,6 +149,7 @@ PLANES: dict[str, Plane] = {
         flaps_up_kt=190,
         go_around_flaps="flaps fifteen",
         pull=0.4,
+        vs_clean_kt=139,
     ),
     "a330": Plane(
         "A333",
@@ -151,6 +168,7 @@ PLANES: dict[str, Plane] = {
         climb_levers=0.53,
         pull=0.4,
         autopilot_from_ft=100,
+        vs_clean_kt=175,
         # The A330's NAV 1 and 2 (its ILS receivers) start off: Vimaan now
         # switches the radio on when it tunes it (flown 2026-11-19: LOC and
         # G/S captured, it flared itself and landed).
@@ -290,6 +308,31 @@ def _speed_words(kt: int) -> str:
 
 
 # ---- flights ----------------------------------------------------------------
+def _held(name: str, say: str, reply: str, still: SimCheck, **kw: Any) -> list[Step]:
+    """A phrase a safety rule holds ("Confirm …"), then "cancel": nothing
+    changed. ``kw`` (only_if) is for the first step; the cancel runs only
+    after it."""
+    first = f"{name} is held"
+    return [
+        Step(
+            first,
+            say=say,
+            outcomes=("safety_hold",),
+            reply=reply,
+            vimaan_checks=False,
+            **kw,
+        ),
+        Step(
+            f"cancel ({name})",
+            say="cancel",
+            outcomes=("cancelled",),
+            vimaan_checks=False,
+            sim=(still,),
+            after=first,
+        ),
+    ]
+
+
 def takeoff(aircraft: str, hands: Hands) -> list[Step]:
     """From the runway, engines running and parked: brake off, takeoff
     thrust, rotate at Vr, autopilot, gear up with a positive rate, climb and
@@ -346,6 +389,15 @@ def takeoff(aircraft: str, hands: Hands) -> list[Step]:
             vimaan_checks=False,
             sim=(below("brake still off", PARK, 0.1, within_sec=2),),
         ),
+    ]
+    if p.jet:  # the Baron and King Air have none
+        out += _held(
+            "speed brake on the takeoff roll",
+            "extend the speed brakes",
+            "Confirm speed brake, takeoff roll",
+            below("speed brake still in", SPEEDBRAKE, 0.05, within_sec=2),
+        )
+    out += [
         Step(f"accelerate to Vr {p.rotate_kt:.0f} kt", sim=(above("Vr", IAS, p.rotate_kt, 90),)),
         Step(
             "rotate (pilot)",
@@ -471,6 +523,26 @@ def _established(aircraft: str, hands: Hands) -> list[Step]:
             )
         )
     out.append(Step("approach", sim=(phase_is("approach", within_sec=30),)))
+    # Phase F.4's rules, on the approach (owner's OK 2026-11-19).
+    out += _held(
+        "gear up on approach",
+        "gear up",
+        "Confirm gear up, on approach",
+        equals("gear still down", GEAR, 1, tol=0.01, within_sec=2),
+    )
+    from vimaan_nlu.safety import FLAPS_UP_MIN_MARGIN_KT  # ML/ is on the path by now
+
+    slow_below = p.vs_clean_kt + FLAPS_UP_MIN_MARGIN_KT
+    if p.final_kt < slow_below:  # the jets; the pistons' finals are faster
+        out += _held(
+            "flaps up when slow",
+            "flaps up",
+            "Confirm flaps up, slow",
+            above("flaps still out", FLAPS, 0.3, within_sec=2),
+            # Said only when slow enough to be held, with 2 kt to spare: an
+            # aircraft still slowing would have its flaps taken up.
+            only_if=below("slow enough", IAS, slow_below - 2, within_sec=30),
+        )
     return out
 
 
@@ -486,6 +558,11 @@ def landing(aircraft: str, hands: Hands) -> list[Step]:
             Step("50 ft", sim=(_agl_below(50, within_sec=30),)),
             Step("autothrottle off", say="auto throttle off", outcomes=DONE_OR_SET),
             Step("thrust idle (pilot)", write=(THROTTLE, 0.0)),
+        ]
+    else:  # on the throttle hold the Baron floated 30 s at 2-4 ft (2026-11-19)
+        out += [
+            Step("50 ft", sim=(_agl_below(50, within_sec=30),)),
+            Step("thrust idle (pilot)", pilot=_do("idle", lambda br: _idle(hands, br))),
         ]
     out += [
         Step("touchdown", sim=(equals("on the ground", ON_GROUND, 1, within_sec=40),)),
@@ -504,9 +581,13 @@ def landing(aircraft: str, hands: Hands) -> list[Step]:
     return out
 
 
-def _idle_and_brake(hands: Hands, bridge: Any) -> None:
+def _idle(hands: Hands, bridge: Any) -> None:
     hands.speed.stop()
     bridge.write(THROTTLE, 0.0)
+
+
+def _idle_and_brake(hands: Hands, bridge: Any) -> None:
+    _idle(hands, bridge)
     bridge.write(PARK, ROLLOUT_BRAKE)
 
 
