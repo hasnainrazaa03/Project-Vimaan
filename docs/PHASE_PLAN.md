@@ -25,7 +25,7 @@ Last updated 2026-11-19.
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | ✅ closed 2026-11-16: v26 passed every gate and was installed (2026-11-14); runner in the sim 127/127 on four aircraft; the owner's real-voice check passed (51 right, 4 refused, 0 wrong of 55) | #50, #51, #52, #54, #56–#60 |
 | G | Generalization: beyond the owner's voice (measured recognizer noise, other voices, calibration, other recognizers) | 🟡 measured on real voices (2026-11-14); lost-digit refusal built | #55 |
 | T4 | Tier 4: questions (read-only) → **v26 + question model q2** | ✅ closed 2026-11-19: runner in the sim on four aircraft (q1 143/144, the miss a moving EGT; q2 148/148 with the phase question); the owner's real-voice check passed (46 of 50 right first time, none acted on) | #64–#70, #76 |
-| F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ⬜ after T4 | |
+| F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ✅ closed 2026-11-19: tracker and margins flown on four aircraft (takeoff, landing, go-around, restart); the three phase rules held in the sim, the callouts quiet but for one real flap-speed call; "what phase of flight" answered (q2) | #71–#76, #84 |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
 | L | Later: relative commands, two commands in one breath, checklists, add-on aircraft profiles | ⬜ | |
 
@@ -1439,7 +1439,7 @@ so each needs the owner's approval; F.1 to F.3 only observe.
   so the stall margin is a guide. The report lists the lowest margin in each
   phase and every stretch beyond a limit (Vno left out: above it is normal
   in smooth air). Nothing acts on them.
-- [ ] **F.3 In-sim check.** *Flown 2026-11-19 with #72 installed.*
+- [x] **F.3 In-sim check.** *Flown 2026-11-19 with #72 installed.*
   - Tier 1 air starts, all four aircraft: 121/121. The samples showed two
     tracker faults, fixed: an air start's airspeed reads 0 for about 2 s at
     250 kt over the ground (a "stall" in every first sample), so the plugin
@@ -1471,10 +1471,12 @@ so each needs the owner's approval; F.1 to F.3 only observe.
     `tests/test_flight_replays.py`): takeoffs, landings and go-arounds, a
     bounce, the 737 floating along the runway and climbing away, a takeoff
     flown back into the runway. Every replay must give its phases.
-  - Still to do: install this (the settle and the two tracker rules) and see
-    them live; the owner's flights replayed the same way.
-- [ ] **F.4 Uses, each with the owner's OK.** *Owner's OK 2026-11-19 for the
-  three rules and three callouts below; built, not yet flown.*
+  - Installed with #73 and seen live in every flight since: air starts
+    (no false stall after the load), landings, go-arounds, restarts, each
+    checking its phases. The owner's flight (the Tier 4 voice check, 737 air
+    start) replays to the same phases.
+- [x] **F.4 Uses, each with the owner's OK.** *Owner's OK 2026-11-19 for the
+  three rules and three callouts below; flown 2026-11-19 (#84).*
   - [x] Safety rules read the phase (`vimaan_nlu/safety.py`): "gear up" asks
     to confirm on an approach or landing at any height ("Confirm gear up, on
     approach"; a go-around climbs, one press); "speed brake" extended on the
@@ -1495,7 +1497,7 @@ so each needs the owner's approval; F.1 to F.3 only observe.
   - [x] The Flights tab shows each phase change (height, speed, gear, flaps),
     the callouts, and the route of phases; the session report counts the
     callouts.
-  - [ ] The phase as an answer: "what phase of flight are we in" (owner's go
+  - [x] The phase as an answer: "what phase of flight are we in" (owner's go
     2026-11-19, "retrain or whatever"). A new reading, `phase`, in
     ask_flight_data ("phase", "phase of flight", "flight phase"; 5 templates
     appended at the end so the held-out templates stay put; "phase" added to
@@ -1518,6 +1520,20 @@ so each needs the owner's approval; F.1 to F.3 only observe.
     with #75's radio fix 26/27 each (captured, landed / climbed away; the
     one miss: its FCU won't select 140 kt below VLS, the dial went to 144 —
     the checklist now uses 150); the Baron restart 27/27.
+  - **Flown 2026-11-19 (#84):** the flights now say each rule's phrase and
+    cancel it. The speed brake on the takeoff roll ("extend the speed
+    brakes": "Confirm speed brake, takeoff roll") on the 737 and A330, the
+    takeoffs 32/32 and 34/34. Gear up on the approach ("Confirm gear up, on
+    approach") on all four. Flaps up when slow ("Confirm flaps up, slow") on
+    the 737 and A330, whose finals (145 and 150 kt) are within 10 kt of the
+    clean stall speed in their files (139 and 175); the Baron's and King
+    Air's finals are faster, so it's not said there. Each was held and, after
+    "cancel", nothing had moved. Landings: Baron 26/26, King Air 26/26, 737
+    30/30, A330 31/31. With the callouts on for all eight flights, one:
+    "Flap speed" on the A330 from X-Plane's final start, flaps 1 at 211 kt
+    and rising to 217 (limit 215), right. The first piston landings
+    floated 30 s at 2-4 ft on the runner's throttle hold: the runner now
+    takes their throttle to idle at 50 ft, as the jets' already was.
 
 ## Phase C: conversational copilot → after F
 

@@ -302,7 +302,8 @@ fly in the air). Every step checks the phase Vimaan's tracker shows.
 - **Takeoff:** on the runway, engines running, parked. "gear up" is held on
   the ground (cancelled); altitude 4,000 and heading 103 set; jets set
   takeoff flaps; "parking brake off"; takeoff thrust. "parking brake on" at
-  speed is held (cancelled). At Vr the runner pulls the stick until the nose
+  speed is held (cancelled), and on the jets "extend the speed brakes" on
+  the takeoff roll ("Confirm speed brake, takeoff roll", cancelled). At Vr the runner pulls the stick until the nose
   is up and lets go; "autopilot on" and a 1,500 fpm climb straight after;
   "gear up" from 200 ft; then climb thrust at once: jets the autothrottle
   and speed 210, flaps up from 190 (737) or 200 kt (A330); the Baron and
@@ -312,8 +313,11 @@ fly in the air). Every step checks the phase Vimaan's tracker shows.
 - **Landing:** from an 8 nm final (X-Plane starts it about 1,500 ft up,
   gear and flaps up, autopilot off). Autopilot on, altitude hold, heading
   103, the 10R ILS (110.50, course 103), approach mode; on the glideslope,
-  gear down, landing flaps and the final speed. Jets: autothrottle off and
-  thrust idle at 50 ft. On the ground: thrust idle, brakes, autopilot off.
+  gear down, landing flaps and the final speed. In the approach phase
+  "gear up" is held ("Confirm gear up, on approach", cancelled), and on the
+  jets, once below their clean stall speed + 8 kt, "flaps up" ("Confirm
+  flaps up, slow", cancelled). Thrust idle at 50 ft (jets: autothrottle off
+  first; the pistons' throttle hold stops). On the ground: thrust idle, brakes, autopilot off.
   Phases: approach, landing (the last 100 ft), rollout, taxi, parked.
 - **Go-around:** the same approach to 500 ft, then full thrust and a
   1,500 fpm climb to 3,000 ft, gear up, flaps one step up (the pistons then
