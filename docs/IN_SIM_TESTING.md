@@ -333,10 +333,12 @@ to …"); with them on, the A330 captured both, flared itself and landed.
 - **Restart:** on the runway, "shut down both engines", then "start both
   engines", then the takeoff (A3's engines-off start, started warm: a cold
   aircraft's switches are its own procedure, which "start engine" doesn't
-  do). The Baron only so far: the jets start on the APU's air, which Vimaan
-  can't start (with the APU off they don't turn; Vimaan now says "did not
-  turn, no starting air"), and the King Air's start doesn't spin up yet.
-  `run restart 737` says so and skips it.
+  do). Every aircraft: the Baron on its starter; the King Air with its
+  igniters on while it cranks; a jet with no starting air has Vimaan start
+  its APU first ("No starting air. Starting the A P U first." … "A P U
+  running"), open its bleed, then the engines; the A330 starts through its
+  engine mode selector (IGN/START) and masters, its engine control doing the
+  rest. The jets' step allows 4 minutes.
 
 A flight that misses the glideslope turns back west and holds its altitude,
 and the rest of it isn't run: flying on east, it leaves the installed

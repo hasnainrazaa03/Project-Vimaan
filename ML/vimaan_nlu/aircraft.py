@@ -407,6 +407,65 @@ OVERRIDES: tuple[Override, ...] = (
         "A333.switches, X-Plane 12.4.3",
         live=(switches.A333_STROBE,),
     ),
+    # Engine starts (flown 2026-11-19). A jet's starter runs on air: with no
+    # APU running neither jet turned. "apu_start": the steps that start the
+    # APU, each ("once", command), ("hold_until", command, dataref, at least)
+    # or ("hold_for", command, seconds); "apu_bleed": the command that opens
+    # its bleed and the dataref that shows it open (0 shut). Both from each
+    # aircraft's own autostart script.
+    Override(
+        name="b738_apu",
+        requires=("laminar/B738/spring_toggle_switch/APU_start_pos_dn",),
+        commands=MappingProxyType({}),
+        settings=MappingProxyType(
+            {
+                "apu_start": (
+                    ("once", "laminar/B738/spring_toggle_switch/APU_start_pos_dn"),  # ON
+                    (
+                        "hold_until",  # START, until it runs
+                        "laminar/B738/spring_toggle_switch/APU_start_pos_dn",
+                        "sim/cockpit2/electrical/APU_running",
+                        1.0,
+                    ),
+                ),
+                "apu_bleed": ("sim/bleed_air/apu_on", "sim/cockpit2/bleedair/actuators/apu_bleed"),
+            }
+        ),
+        source="Laminar 737-800 xlua B738.Z.autostart (APU start, APU bleed), X-Plane 12.4.4",
+        live=(B738_LIVE,),
+    ),
+    Override(
+        name="a333_engines",
+        requires=("laminar/A333/buttons/APU_master", "laminar/A333/buttons/APU_start"),
+        commands=MappingProxyType({}),
+        settings=MappingProxyType(
+            {
+                "apu_start": (
+                    ("once", "sim/electrical/battery_1_on"),
+                    ("once", "sim/electrical/battery_2_on"),
+                    ("hold_for", "laminar/A333/buttons/APU_batt_toggle", 2.0),
+                    ("once", "laminar/A333/buttons/APU_master"),
+                    (
+                        "hold_until",
+                        "laminar/A333/buttons/APU_start",
+                        "sim/cockpit2/electrical/APU_starter_switch",
+                        2.0,
+                    ),
+                ),
+                "apu_bleed": (
+                    "sim/bleed_air/apu_toggle",
+                    "laminar/A333/switch_memory/apu_bleed_on_off",
+                ),
+                # Its engines start through the engine mode selector and master
+                # switches (its FADEC does the rest): X-Plane's starter
+                # command didn't turn them, even with the APU's air.
+                "fadec_start": True,
+            }
+        ),
+        source="Laminar A330-300 xlua A333.Z.autostart (APU, APU bleed, IGN/START and "
+        "masters), X-Plane 12.4.4",
+        live=(switches.A333_STROBE,),
+    ),
 )
 
 

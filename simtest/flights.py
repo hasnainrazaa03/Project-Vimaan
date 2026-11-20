@@ -38,8 +38,9 @@ Learned flying them (2026-11-19):
 - The A330's NAV 1 and 2 (its ILS receivers) start switched off, so its
   approach never captured; Vimaan now switches a radio on when it tunes it.
 - "shut down both engines" left the 737 and King Air running (fixed: the
-  737's own cutoff, a turboprop's condition lever); the jets need the APU's
-  air to start, and the King Air's start doesn't spin up yet (``no_restart``).
+  737's own cutoff, a turboprop's condition lever). Starts: the King Air
+  needs its igniters, a jet the APU's air (Vimaan starts the APU first), and
+  the A330 its mode selector and masters (its FADEC starts it).
 - A flight that misses the glideslope and flies on east leaves the
   installed scenery; X-Plane pauses under a dialog only a click closes. A
   missed glideslope now turns the aircraft back west (``TURN_BACK``).
@@ -118,9 +119,6 @@ PLANES: dict[str, Plane] = {
         115,
         ("flaps down", "flaps full"),
         throttle_from=0.4,
-        # Its own start switch cranked it to 9 % in a minute while the other
-        # engine ran down (2026-11-19): to be looked into.
-        no_restart="the King Air's start doesn't spin its engine up yet",
     ),
     "737": Plane(
         "B738",
@@ -135,7 +133,6 @@ PLANES: dict[str, Plane] = {
         flaps_up_kt=190,
         go_around_flaps="flaps fifteen",
         pull=0.4,
-        no_restart="a jet starts on the APU's air, and Vimaan can't start the APU",
     ),
     "a330": Plane(
         "A333",
@@ -157,7 +154,6 @@ PLANES: dict[str, Plane] = {
         # The A330's NAV 1 and 2 (its ILS receivers) start off: Vimaan now
         # switches the radio on when it tunes it (flown 2026-11-19: LOC and
         # G/S captured, it flared itself and landed).
-        no_restart="a jet starts on the APU's air, and Vimaan can't start the APU",
     ),
 }
 
@@ -586,7 +582,9 @@ def restart(aircraft: str, hands: Hands) -> list[Step]:
             say="start both engines",
             outcomes=("pending",),
             vimaan_checks=False,
-            sim=(_engines("engines running", 1, within_sec=60),),
+            # A jet with no starting air starts its APU first (about a minute),
+            # then the engines (the A330's FADEC took 35 s to idle).
+            sim=(_engines("engines running", 1, within_sec=240 if PLANES[aircraft].jet else 60),),
         ),
         *takeoff(aircraft, hands),
     ]

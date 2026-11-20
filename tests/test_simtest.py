@@ -1006,14 +1006,9 @@ def test_jets_use_their_autothrottle_and_pistons_the_runners_throttle(aircraft):
     assert all(s.say != "speed " for s in steps)
 
 
-def test_only_the_baron_restarts_its_engines_yet():
-    # Flown 2026-11-19: the jets start on the APU's air (Vimaan can't start
-    # it); the King Air's start doesn't spin up. Every aircraft lands now.
-    assert flights.cannot_fly("restart", "baron") == ""
-    assert "APU" in flights.cannot_fly("restart", "737")
-    assert "APU" in flights.cannot_fly("restart", "a330")
-    assert "King Air" in flights.cannot_fly("restart", "kingair")
-    for flight in ("takeoff", "landing", "go-around"):
+def test_every_aircraft_flies_every_flight():
+    # 2026-11-19: igniters (King Air), the APU first (jets), FADEC (A330).
+    for flight in flights.FLIGHTS:
         assert all(flights.cannot_fly(flight, a) == "" for a in flights.PLANES)
 
 
