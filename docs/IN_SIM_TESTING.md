@@ -286,6 +286,33 @@ on the King Air, 37 on the 737, 38 on the A330. It needs a question model
 (q1) installed beside the command model. `--text` sends the questions as
 text; without it a generated voice says them through the question grammar.
 
+**Relative commands (phase L.1):**
+
+```bash
+python -m simtest run relative baron --text   # or kingair, 737, a330, all
+```
+
+The same start, heading 180. Each relative command is checked against the
+target it should give from what the steps before set up:
+
+- **Turns:** "turn left twenty degrees" (bug 160, from the heading flown),
+  then "come right thirty degrees" (190). Each waits for the aircraft to
+  settle within 2°.
+- **Heading or turn:** "turn right one two zero" must ask "Heading one two
+  zero or …", with nothing set. It is answered "one two zero" (always one of
+  the two offered).
+- **Compass:** "turn south".
+- **Climb:** "climb another thousand" sets the start altitude + 1,000. A V/S
+  climb then levels there.
+- **Altitude or change:** "descend two thousand feet" must ask "Altitude 2000
+  or <1,000 below the start> feet?". It is answered with that altitude.
+- **Down:** "down five hundred feet", from the altitude held.
+- **Speed:** on the jets the bug goes 250 → 260 → 240, and a change in Mach is
+  refused. On the pistons "speed up ten knots" sets the airspeed + 10, within
+  6 kt.
+
+It needs a command model that knows relative commands (v27).
+
 **Flights: takeoff, landing, go-around (Phase F.3):**
 
 ```bash

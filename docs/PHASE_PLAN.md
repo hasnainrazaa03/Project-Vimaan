@@ -5,7 +5,7 @@ steps, each with a concrete "done when". Work happens strictly in the order of
 the status board; a phase starts only when the previous one has passed its
 gate. After each step: tick it here, commit, and keep the board current.
 
-Last updated 2026-11-19.
+Last updated 2026-11-20.
 
 ---
 
@@ -27,7 +27,7 @@ Last updated 2026-11-19.
 | T4 | Tier 4: questions (read-only) → **v26 + question model q2** | ✅ closed 2026-11-19: runner in the sim on four aircraft (q1 143/144, the miss a moving EGT; q2 148/148 with the phase question); the owner's real-voice check passed (46 of 50 right first time, none acted on) | #64–#70, #76 |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ✅ closed 2026-11-19: tracker and margins flown on four aircraft (takeoff, landing, go-around, restart); the three phase rules held in the sim, the callouts quiet but for one real flap-speed call; "what phase of flight" answered (q2) | #71–#76, #84 |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
-| L | Later: relative commands, two commands in one breath, checklists, add-on aircraft profiles | ⬜ | |
+| L | Later: relative commands (L.1 → **v27**), two commands in one breath, checklists, add-on aircraft profiles | 🟡 L.1 built (2026-11-20); v27 training | #85 |
 
 Measured so far (in-sim, Vosk): speech end → action **p50 330 ms**;
 recognition 2–3 ms; model ~11 ms; 0 frame stalls. Real-voice benchmark
@@ -1550,9 +1550,101 @@ latency allowed.
 ## Later (L)
 
 Designed only after T4: relative commands ("turn left twenty", "climb
-another thousand"), two commands in one breath ("heading two seven zero,
-climb five thousand"), checklists read and verified, profiles for add-on
+another thousand"; L.1, below), two commands in one breath ("heading two seven
+zero, climb five thousand"), checklists read and verified, profiles for add-on
 aircraft (Zibo 737, ToLiss A3xx: per-aircraft dataref lists), wake word.
+
+### L.1 Relative commands → v27
+
+Started 2026-11-20, after F closed. Four new commands; the plugin works out
+each target from the aircraft (`vimaan_nlu.relative`) and reads back the
+value it set, so the pilot always hears the result:
+
+| Command | Said | Measured from | Read back |
+| --- | --- | --- | --- |
+| `turn_by` | "turn left twenty", "come right ten degrees", "fifteen degrees right" | the heading flown now (never a stale bug) | "Left 20, heading two five zero" |
+| `change_altitude_by` | "climb another thousand", "down five hundred feet", "two thousand feet lower" | the selected altitude while the autopilot climbs or descends to it; otherwise the altitude now, to 100 ft | "Up 1000. Altitude 11000 feet" |
+| `change_speed_by` | "speed up ten knots", "slow down twenty", "ten knots faster" | the bug when the autothrottle (or level change) flies it; otherwise the airspeed now, to 5 kt | "10 knots faster. Speed two six zero" |
+| `set_compass_heading` | "turn north", "heading south", "fly west" | (absolute) 360, 180, 270, 090 | "Heading three six zero" |
+
+**Owner decisions (2026-11-20):** all four kinds. A bare "climb/descend N
+feet" asks when both readings are valid and go the way said. A turn with
+heading mode off moves only the bug and says "Heading mode is off"; the
+autopilot's mode never changes unasked.
+
+**What v26 did with these (typed, 2026-11-20).** "Turn left twenty degrees"
+was refused only because the lost-digit rule caught it, and "speed up ten
+knots" as out of range. But **"descend two thousand feet", "climb one
+thousand feet" and "descend one thousand" acted: the window was set to 2,000 or
+1,000 ft.** At 10,000 ft a pilot meaning "two thousand lower" would have been
+taken down to 2,000. "Heading north" turned heading mode on and ignored "north".
+
+**Rules (pure Python, unit-tested):**
+
+- **Target or change?** "To", "maintain", "altitude", "level", "at" and
+  "heading" make the number the target. "Another", "more", "by", "up", "down",
+  "higher", "lower" and "degrees" make it the change. With neither:
+  - "descend two thousand feet" (up to 5,000 ft) is read both ways from the
+    aircraft. Each reading must be a valid altitude and go the way said (a
+    climb ends above us). Two readings left: "Altitude 2000 or 8000 feet?",
+    answered with the number as for "to" or "two". One left: it acts on that.
+    None: refused.
+  - "turn right one two zero" (100–179) asks "Heading one two zero or two one
+    zero? Say all three digits."
+  - A turn of 180 or more, or said with a leading zero ("turn left zero two
+    zero"), is a heading: the autopilot would take the short way.
+- **Limits:** turns 1–179°, altitude changes 100–5,000 ft in steps of 100,
+  speed changes 1–50 kt. The result still passes the absolute checks (altitude
+  1,000–50,000; the aircraft's stall and never-exceed speeds). A speed change
+  is refused in Mach mode, and a climb that would end below us is refused.
+- **"A thousand":** "a" and "another" count as one only where a word makes the
+  number a change ("up a thousand feet", "climb another thousand"). Vosk hears
+  "eight" as "a" (Speech Commands: 22 of 200). "Climb a thousand feet" is
+  still refused ("Say the whole number").
+- **Lost digits:** "turn left want seven zero" (one seven zero) is refused, as
+  for headings.
+- **Compass with a number or a side is refused** ("turn west twenty"): through
+  the grammar, Speech Commands' "left" came out "west" once in 300, and
+  "five" and "seven" "south" once each. "North" alone names nothing to do.
+- The gate's `decision` mirrors all of it. Without the aircraft's state, a
+  number that may be the target or the change counts as asked.
+
+**The grammar grows by nine words** (another, more, higher, faster, slower,
+north, south, east, west). Measured on Speech Commands (CC BY 4.0), 300
+clips of each of its 35 words through the old and new grammar:
+
+- the command words were heard exactly 4,977 times before and 4,973 after;
+- words outside the grammar are now sometimes heard as a new word ("marvin"
+  → "more" 24, "wow" → "west" 13), and nothing acts on one alone.
+
+Re-heard with the new grammar, 2 of the owner's 118 clips and 1 of the 57
+held-out clips came out differently. **One cost v26 a right: "parking brake
+off", heard as "parking the off" (acted) before, is now "parking the more"
+(refused).** Gate 4 compares both models on the re-heard clips, so its bar
+becomes 90/28/0. The new words were not chosen or dropped by the clips.
+
+**Data v19 = data v17 byte for byte + 16,000 new rows** (`generate_v2.py
+--extend`). v17's sha256 `2528f119…` is a prefix of v19's file, so every row
+v26 learned from and was tested on is unchanged. The new commands have their
+own held-out and dev templates (4,000 rows each, 3,257 test), plus 1,600
+negatives. 155,320 rows.
+
+**Gold (written before any v27 result):** 22 relative and compass rows, 4
+absolute phrasings that must stay absolute, and 4 fragments that must not
+act ("north", "left", "another thousand", "more").
+
+Steps:
+
+- [x] L.1.1 Design and the owner's decisions (2026-11-20).
+- [x] L.1.2 Commands, rules, plugin handlers and the asks; gate decision;
+  grammar; gold; data v19; tests (#85).
+- [ ] L.1.3 v27: four runs on data v19 with v26's recipe (#58), greedy soup
+  on dev, gate once against v26. The gates are unchanged.
+- [ ] L.1.4 In the sim: `python -m simtest run relative all` (turns from the
+  heading flown, both questions answered, a climb from the altitude held,
+  speed from the bug or the airspeed, Mach refused).
+- [ ] L.1.5 Install v27 with the owner's OK (v26 kept as the fallback); the
+  owner's voice check.
 
 ---
 
