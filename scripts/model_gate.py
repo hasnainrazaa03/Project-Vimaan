@@ -53,7 +53,16 @@ os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
 MODELS = ROOT / "ML" / "models" / "vimaan_nlu_model_best"
 CONFIDENCE_FLOOR = 0.55  # the plugin's PythonInterface.CONFIDENCE_FLOOR
-NUMERIC = {"degrees", "altitude", "flight_level", "frequency", "com_port"}
+NUMERIC = {
+    "degrees",
+    "altitude",
+    "flight_level",
+    "frequency",
+    "com_port",
+    "turn_degrees",
+    "altitude_change",
+    "speed_change",
+}
 
 INTENT_ACC_MIN = 0.985
 SLOT_F1_MIN = 0.99
@@ -98,9 +107,18 @@ def effective_action(intent: str, slots: dict[str, Any]) -> dict[str, Any]:
 def decision(p: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     """("act", effective slots) when the plugin would act on it, else (reason, {}).
     Only the slots the command declares count: its handler ignores stray ones."""
+    verdict, _intent, action = decide(p)
+    return verdict, action
+
+
+def decide(p: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
+    """As ``decision``, with the intent acted on: a turn the plugin flies as a
+    heading ("turn right two seven zero", phase L.1) acts as
+    set_autopilot_heading."""
     from vimaan_nlu.ambiguity import two_or_to
     from vimaan_nlu.commands import command, required_slots
     from vimaan_nlu.questions import looks_like_question
+    from vimaan_nlu.relative import climb_reading, compass_conflict, turn_reading
     from vimaan_nlu.validators import (
         clipped_number,
         has_command_word,
@@ -110,36 +128,63 @@ def decision(p: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     )
 
     intent, slots = p["intent"], p["slots"]
+
+    def no(reason: str) -> tuple[str, str, dict[str, Any]]:
+        return reason, intent, {}
+
     cmd = command(intent)
     if looks_like_question(p.get("original_text") or ""):
-        return "question", {}  # checked before the model's answer, as in the plugin
+        return no("question")  # checked before the model's answer, as in the plugin
     if p["confidence"] < CONFIDENCE_FLOOR:
-        return "low_confidence", {}
+        return no("low_confidence")
     if cmd is None or not cmd.actionable:
-        return "not_a_command", {}
+        return no("not_a_command")
     if not has_command_word(intent, p.get("normalized_text") or ""):
-        return "no_command_word", {}
+        return no("no_command_word")
     if clipped_number(p.get("original_text") or ""):
-        return "clipped_number", {}
+        return no("clipped_number")
     if intent == "set_autopilot_heading" and heading_too_short(slots.get("degrees")):
-        return "one_digit_heading", {}
+        return no("one_digit_heading")
     if lost_digits(intent, slots, p.get("original_text") or ""):
-        return "lost_digits", {}
+        return no("lost_digits")
     if two_or_to(intent, p.get("original_text") or ""):
-        return "ambiguous_two", {}
+        return no("ambiguous_two")
+    # Phase L.1 (the plugin's _relative_reading). Without the aircraft's
+    # state, a number that may be the target or the change counts as asked.
+    original = p.get("original_text") or ""
+    if intent == "set_compass_heading" and compass_conflict(original):
+        return no("compass_conflict")
+    turn = turn_reading(intent, slots, original)
+    if turn is not None and turn[0] == "either":
+        return no("ambiguous_by")
+    if turn is not None and turn[0] == "heading":
+        if two_or_to("set_autopilot_heading", original):
+            return no("ambiguous_two")
+        intent, slots = "set_autopilot_heading", {"degrees": str(turn[1])}
+        cmd = command(intent)
+    climb = climb_reading(intent, slots, original)
+    if climb is not None:
+        direction, feet = climb
+        if validate_slot("altitude", feet)[1]:
+            return no("ambiguous_by")
+        # Below the lowest altitude: only the change can be meant.
+        intent = "change_altitude_by"
+        slots = {"direction": direction, "altitude_change": str(feet)}
+        cmd = command(intent)
+    assert cmd is not None
     for name in required_slots().get(intent, ()):
         if not slots.get(name):
-            return f"missing_{name}", {}
+            return no(f"missing_{name}")
     for name in cmd.slots:
         if name in slots and not validate_slot(name, slots[name])[1]:
-            return f"invalid_{name}", {}
+            return no(f"invalid_{name}")
     action = effective_action(intent, slots)
     if intent == "set_com_frequency" and str(action["com_port"]) not in cmd.params["datarefs"]:
-        return "no_such_port", {}
+        return no("no_such_port")
     instances = cmd.params.get("instances")
     if instances and intent != "toggle_engine" and action.get("instance", "1") not in instances:
-        return "no_such_instance", {}
-    return "act", action
+        return no("no_such_instance")
+    return "act", intent, action
 
 
 def answer_decision(p: dict[str, Any], one_word_rule: bool = True) -> str:
@@ -238,13 +283,11 @@ def score_rows(run, rows: list[dict[str, Any]]) -> dict[str, Any]:
 def judge(run, text: str, want_intent: str, want: dict[str, Any]) -> tuple[str, str]:
     """(right | rejected | wrong, what happened)."""
     p = run(text)
-    verdict, action = decision(p)
+    verdict, intent, action = decide(p)
     if verdict != "act":
         return "rejected", verdict
-    ok = p["intent"] == want_intent and all(
-        same_value(k, action.get(k), v) for k, v in want.items()
-    )
-    return ("right" if ok else "wrong"), f"{p['intent']} {action}"
+    ok = intent == want_intent and all(same_value(k, action.get(k), v) for k, v in want.items())
+    return ("right" if ok else "wrong"), f"{intent} {action}"
 
 
 FIXTURES = ROOT / "tests" / "fixtures"

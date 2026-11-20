@@ -4031,3 +4031,179 @@ def test_air_on_both_sides_needs_no_crossfeed(sim):
     xp.datarefs.update({PACK_L: 1, PACK_R: 1})
     say(plugin, "start both engines", "toggle_engine", {"state": "on", "instance": "both"})
     assert not any("pack_" in c for c in xp.commands_fired)
+
+
+# ---------------------------------------------------------------------------
+# Phase L.1: relative commands. The target is worked out from the aircraft
+# and read back; a number that may be the target or the change is asked about.
+# ---------------------------------------------------------------------------
+HDG_BUG = "sim/cockpit2/autopilot/heading_dial_deg_mag_pilot"
+HDG_NOW = "sim/cockpit2/gauges/indicators/heading_AHARS_deg_mag_pilot"
+ALT_BUG = "sim/cockpit2/autopilot/altitude_dial_ft"
+ALT_NOW = "sim/cockpit2/gauges/indicators/altitude_ft_pilot"
+SPD_BUG = "sim/cockpit2/autopilot/airspeed_dial_kts_mach"
+IAS_NOW = "sim/cockpit2/gauges/indicators/airspeed_kts_pilot"
+
+
+def test_a_turn_is_measured_from_the_heading_flown(sim):
+    _, plugin, xp = sim
+    xp.datarefs[HDG_NOW] = 183.4
+    xp.datarefs[HDG_BUG] = 90.0  # a stale bug (NAV mode) is not the reference
+    xp.datarefs["sim/cockpit2/autopilot/heading_status"] = 2
+    spoken = say(plugin, "turn left twenty", "turn_by", {"turn": "left", "turn_degrees": "20"})
+    assert xp.datarefs[HDG_BUG] == 163.0
+    assert spoken == ["Left 20, Heading one six three"]
+
+
+def test_a_turn_with_heading_mode_off_moves_the_bug_and_says_so(sim):
+    _, plugin, xp = sim
+    xp.datarefs[HDG_NOW] = 10.0
+    xp.datarefs["sim/cockpit2/autopilot/heading_status"] = 0
+    spoken = say(plugin, "turn left thirty", "turn_by", {"turn": "left", "turn_degrees": "30"})
+    assert xp.datarefs[HDG_BUG] == 340.0
+    assert spoken == ["Left 30, Heading three four zero. Heading mode is off"]
+    assert xp.commands_fired == []  # the mode is never changed unasked
+
+
+def test_a_turn_the_autopilot_could_take_the_other_way_is_a_heading(sim):
+    _, plugin, xp = sim
+    xp.datarefs[HDG_NOW] = 90.0
+    spoken = say(
+        plugin, "turn right two seven zero", "turn_by", {"turn": "right", "turn_degrees": "270"}
+    )
+    assert xp.datarefs[HDG_BUG] == 270.0 and spoken == ["Heading two seven zero"]
+
+
+def test_turn_right_one_two_zero_asks_heading_or_turn(sim):
+    _, plugin, xp = sim
+    xp.datarefs[HDG_NOW] = 90.0
+    heard = ("turn right one two zero", "set_autopilot_heading", {"degrees": "120"})
+    assert say(plugin, *heard) == ["Heading one two zero or two one zero? Say all three digits."]
+    assert xp.writes == []
+    assert events(plugin, "ambiguous")[-1]["reason"] == "heading_or_turn"
+    assert say(plugin, "two one zero") == ["Heading two one zero"]
+    assert xp.datarefs[HDG_BUG] == 210.0
+
+
+def test_a_compass_heading(sim):
+    _, plugin, xp = sim
+    xp.datarefs["sim/cockpit2/autopilot/heading_status"] = 2
+    assert say(plugin, "turn north", "set_compass_heading", {"compass": "north"}) == [
+        "Heading three six zero"
+    ]
+    assert xp.datarefs[HDG_BUG] == 360.0
+
+
+def test_a_compass_heading_said_with_a_number_is_refused(sim):
+    _, plugin, xp = sim
+    spoken = say(plugin, "turn west twenty", "set_compass_heading", {"compass": "west"})
+    assert spoken == ["Say the heading, or the turn"] and xp.writes == []
+
+
+def test_climb_another_thousand_on_the_way_up_adds_to_the_target(sim):
+    _, plugin, xp = sim
+    xp.datarefs.update(
+        {
+            ALT_NOW: 10500.0,
+            ALT_BUG: 11000.0,
+            "sim/flightmodel/position/vh_ind_fpm": 1500.0,
+            "sim/cockpit2/autopilot/servos_on": 1,
+            "sim/cockpit2/autopilot/altitude_mode": 4,  # V/S
+        }
+    )
+    slots = {"direction": "up", "altitude_change": "1000"}
+    spoken = say(plugin, "climb another thousand", "change_altitude_by", slots)
+    assert xp.datarefs[ALT_BUG] == 12000.0
+    assert spoken[0].startswith("Up 1000. Altitude 12000 feet")
+
+
+def test_climb_a_thousand_when_level_is_from_where_we_are(sim):
+    _, plugin, xp = sim
+    xp.datarefs.update({ALT_NOW: 10012.0, ALT_BUG: 15000.0})  # held, window preset
+    slots = {"direction": "up", "altitude_change": "1000"}
+    say(plugin, "up a thousand feet", "change_altitude_by", slots)
+    assert xp.datarefs[ALT_BUG] == 11000.0
+
+
+def test_a_change_that_goes_the_wrong_way_is_refused(sim):
+    _, plugin, xp = sim
+    xp.datarefs.update(
+        {
+            ALT_NOW: 8000.0,
+            ALT_BUG: 5000.0,
+            "sim/flightmodel/position/vh_ind_fpm": -1500.0,
+            "sim/cockpit2/autopilot/servos_on": 1,
+            "sim/cockpit2/autopilot/altitude_mode": 4,
+        }
+    )
+    slots = {"direction": "up", "altitude_change": "1000"}  # 5,000 + 1,000 is below us
+    assert say(plugin, "climb another thousand", "change_altitude_by", slots) == [
+        "Altitude 6000 feet is below us"
+    ]
+    assert xp.datarefs[ALT_BUG] == 5000.0
+
+
+def test_descend_two_thousand_feet_asks_which(sim):
+    _, plugin, xp = sim
+    xp.datarefs.update({ALT_NOW: 10000.0, ALT_BUG: 10000.0})
+    heard = ("descend two thousand feet", "set_autopilot_altitude", {"altitude": "2000"})
+    assert say(plugin, *heard) == ["Altitude 2000 or 8000 feet?"]
+    assert xp.writes == []
+    assert events(plugin, "ambiguous")[-1]["reason"] == "altitude_or_change"
+    assert say(plugin, "eight thousand") == ["Altitude 8000 feet"]
+    assert xp.datarefs[ALT_BUG] == 8000.0
+
+
+def test_climb_two_thousand_feet_can_only_be_up(sim):
+    _, plugin, xp = sim
+    xp.datarefs.update({ALT_NOW: 10000.0, ALT_BUG: 10000.0})
+    heard = ("climb two thousand feet", "set_autopilot_altitude", {"altitude": "2000"})
+    assert say(plugin, *heard)[0].startswith("Up 2000. Altitude 12000 feet")
+    assert xp.datarefs[ALT_BUG] == 12000.0
+
+
+def test_descend_two_thousand_low_down_is_the_altitude(sim):
+    _, plugin, xp = sim
+    xp.datarefs.update({ALT_NOW: 2500.0, ALT_BUG: 2500.0})
+    heard = ("descend two thousand feet", "set_autopilot_altitude", {"altitude": "2000"})
+    assert say(plugin, *heard)[0].startswith("Altitude 2000 feet")
+
+
+def test_speed_up_ten_from_the_bug_the_autothrottle_flies(sim):
+    _, plugin, xp = sim
+    xp.datarefs.update({SPD_BUG: 120.0, IAS_NOW: 112.0})
+    xp.datarefs["sim/cockpit2/autopilot/autothrottle_enabled"] = 1
+    slots = {"direction": "up", "speed_change": "10"}
+    assert say(plugin, "speed up ten knots", "change_speed_by", slots) == [
+        "10 knots faster. Speed one three zero"
+    ]
+    assert xp.datarefs[SPD_BUG] == 130.0
+
+
+def test_a_speed_change_keeps_the_aircraft_limits(sim):
+    _, plugin, xp = sim
+    xp.datarefs.update({SPD_BUG: 250.0, IAS_NOW: 250.0})
+    xp.datarefs["sim/cockpit2/autopilot/autothrottle_enabled"] = 1
+    slots = {"direction": "up", "speed_change": "10"}
+    spoken = say(plugin, "speed up ten knots", "change_speed_by", slots)
+    assert spoken == ["Speed 260 is above this aircraft's never exceed speed"]
+    assert xp.datarefs[SPD_BUG] == 250.0
+
+
+def test_slow_down_without_autothrottle_is_from_the_airspeed(sim):
+    _, plugin, xp = sim
+    xp.datarefs.update({SPD_BUG: 250.0, IAS_NOW: 121.0})
+    xp.datarefs["sim/cockpit2/autopilot/autothrottle_enabled"] = -1
+    slots = {"direction": "down", "speed_change": "10"}
+    say(plugin, "slow down ten knots", "change_speed_by", slots)
+    assert xp.datarefs[SPD_BUG] == 110.0
+
+
+def test_a_speed_change_in_mach_is_refused(sim):
+    _, plugin, xp = sim
+    xp.datarefs["sim/cockpit2/autopilot/airspeed_is_mach"] = 1
+    slots = {"direction": "up", "speed_change": "10"}
+    assert say(plugin, "speed up ten knots", "change_speed_by", slots) == [
+        "The speed is set in Mach. Say the Mach number"
+    ]
+    assert xp.writes == []

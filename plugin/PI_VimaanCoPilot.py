@@ -106,6 +106,19 @@ from vimaan_nlu.questions import (  # noqa: E402
     one_word,
 )
 from vimaan_nlu.readback import spell_digits  # noqa: E402
+from vimaan_nlu.relative import (  # noqa: E402
+    COMPASS,
+    altitude_readings,
+    altitude_reference,
+    changed,
+    climb_reading,
+    compass_conflict,
+    goes_the_way,
+    speed_reference,
+    turn_reading,
+    turned,
+    valid_altitude,
+)
 from vimaan_nlu.safety import (  # noqa: E402
     ConfirmationGate,
     SafetyContext,
@@ -414,6 +427,11 @@ DREF_SPEED_IS_MACH = "sim/cockpit2/autopilot/airspeed_is_mach"
 DREF_VVI_DIAL = "sim/cockpit2/autopilot/vvi_dial_fpm"
 DREF_VVI_STATUS = "sim/cockpit2/autopilot/vvi_status"
 DREF_ALTITUDE_ACTUAL = "sim/cockpit2/gauges/indicators/altitude_ft_pilot"
+# Phase L.1: what a relative command is measured from.
+DREF_HEADING_ACTUAL = "sim/cockpit2/gauges/indicators/heading_AHARS_deg_mag_pilot"
+DREF_HEADING_STATUS = "sim/cockpit2/autopilot/heading_status"  # 2 = heading mode
+DREF_IAS = "sim/cockpit2/gauges/indicators/airspeed_kts_pilot"
+DREF_SPEED_STATUS = "sim/cockpit2/autopilot/speed_status"  # 2 = level change
 DREF_AUTOTHROTTLE = "sim/cockpit2/autopilot/autothrottle_enabled"
 DREF_BARO = (
     "sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot",
@@ -1413,6 +1431,12 @@ class PythonInterface:
                 outcome = "ambiguous"
                 self._ask(cmd, intent_pred, *either)
                 return
+            # Phase L.1: "turn right one two zero", "descend two thousand
+            # feet": the number may be the target or the change.
+            relative = self._relative_reading(cmd, intent_pred, slots, text)
+            if relative is not None:
+                outcome = relative
+                return
             outcome = self._dispatch(cmd, intent_pred, slots)
         except Exception as exc:
             self.tel.error("execute_error", exc, cmd=cmd, text=text)
@@ -1433,16 +1457,95 @@ class PythonInterface:
                 **extra,
             )
 
-    def _ask(self, cmd, intent, as_two, as_to):
+    def _ask(self, cmd, intent, as_two, as_to, prompt=None, **why):
         """Ask which target was meant, and keep the question open for a reply."""
-        self.tel.event("ambiguous", cmd=cmd, intent=intent, as_two=as_two, as_to=as_to)
+        self.tel.event("ambiguous", cmd=cmd, intent=intent, as_two=as_two, as_to=as_to, **why)
         self._question = {
             "cmd": cmd,
             "intent": intent,
             "offered": (as_to, as_two),
             "expires": time.perf_counter() + self.QUESTION_WINDOW_SEC,
         }
-        self._say(self._which_value(intent, as_two, as_to))
+        self._say(prompt or self._which_value(intent, as_two, as_to))
+
+    def _relative_reading(self, cmd, intent, slots, text):
+        """Phase L.1: when the words don't say whether a turn's or a climb's
+        number is the target or the change, work out both from the aircraft
+        and ask if both fit. Returns the outcome, or None to dispatch as
+        predicted (a plain turn or climb goes to its own handler)."""
+        if intent == "set_compass_heading" and compass_conflict(text):
+            # "turn west twenty": the "west" may be a misheard "left".
+            self.tel.event("implausible", cmd=cmd, reason="compass_conflict", intent=intent)
+            self._say("Say the heading, or the turn")
+            return "rejected"
+        turn = turn_reading(intent, slots, text)
+        if turn is not None:
+            kind, value = turn
+            if kind == "heading":  # "turn right two seven zero"
+                self.tel.event("relative", cmd=cmd, intent=intent, reading="heading", value=value)
+                either = two_or_to("set_autopilot_heading", text)  # "turn left two twenty"
+                if either:
+                    self._ask(cmd, "set_autopilot_heading", *either)
+                    return "ambiguous"
+                return self._dispatch(cmd, "set_autopilot_heading", {"degrees": str(value)})
+            if kind == "either":
+                side, n = value
+                heading = self._read_float(DREF_HEADING_ACTUAL)
+                if heading is None:
+                    self._say("Cannot read the heading")
+                    return "failed"
+                as_turn = turned(heading, side, n)
+                if as_turn == (n or 360):
+                    return self._dispatch(cmd, "set_autopilot_heading", {"degrees": str(n)})
+                self._ask(
+                    cmd,
+                    "set_autopilot_heading",
+                    str(as_turn),
+                    str(n),
+                    reason="heading_or_turn",
+                )
+                return "ambiguous"
+            if intent == "turn_by":
+                return None
+        climb = climb_reading(intent, slots, text)
+        if climb is None:
+            return None
+        direction, feet = climb
+        current = self._read_float(DREF_ALTITUDE_ACTUAL)
+        if current is None:
+            self._say("Cannot read the altitude")
+            return "failed"
+        reference = self._altitude_reference(current)
+        options = altitude_readings(direction, feet, reference, current)
+        self.tel.event(
+            "relative",
+            cmd=cmd,
+            intent=intent,
+            reading="altitude_or_change",
+            direction=direction,
+            feet=feet,
+            reference=reference,
+            options=options,
+        )
+        if not options:
+            self._say("Altitude out of range")
+            return "rejected"
+        if len(options) == 2:
+            a, b = options
+            self._ask(
+                cmd,
+                "set_autopilot_altitude",
+                str(b),
+                str(a),
+                prompt=f"Altitude {a} or {b} feet?",
+                reason="altitude_or_change",
+            )
+            return "ambiguous"
+        if options[0] == feet:
+            return self._dispatch(cmd, "set_autopilot_altitude", {"altitude": str(feet)})
+        return self._dispatch(
+            cmd, "change_altitude_by", {"direction": direction, "altitude_change": str(feet)}
+        )
 
     def _usable_to_reading(self, meant):
         """The checks the heard command passed, run on the "to" reading too."""
@@ -2873,15 +2976,130 @@ class PythonInterface:
             )
             self._say("Invalid heading value")
             return "rejected"
-        v = float(value)
+        return self._write_heading(float(value))
+
+    def _write_heading(self, v, lead="", mode_note=False):
+        """Set the heading bug and read it back. ``mode_note``: a turn
+        (phase L.1) moves only the bug, so say when heading mode is off and
+        the aircraft won't follow it (the owner's choice, 2026-11-20)."""
         if not self._write(DREF_HEADING, v):
             self._say("Cannot set heading")
             return "failed"
         self._hold_check("Heading", DREF_HEADING, v, modulo=360)
-        self._say(f"Heading {spell_digits(f'{int(v):03d}')}")
+        note = ""
+        if mode_note and self._read_int(DREF_HEADING_STATUS) not in (None, 2):
+            note = ". Heading mode is off"
+        self._say(f"{lead}Heading {spell_digits(f'{int(v):03d}')}{note}")
         return "executed"
 
-    def _set_altitude(self, slots, intent):
+    # ------------------------------------------------------------------
+    # Phase L.1: relative commands (vimaan_nlu.relative)
+    # ------------------------------------------------------------------
+    def _turn_by(self, slots, intent):
+        side = slots.get("turn")
+        value, ok, reason = validate_slot("turn_degrees", slots.get("turn_degrees"))
+        if side not in ("left", "right") or not ok:
+            self.tel.event(
+                "slot_rejected", logging.WARNING, slot="turn", value=slots, reason=reason
+            )
+            self._say("Say how far to turn, left or right")
+            return "rejected"
+        heading = self._read_float(DREF_HEADING_ACTUAL)
+        if heading is None:
+            self._say("Cannot read the heading")
+            return "failed"
+        degrees = int(value)
+        target = turned(heading, side, degrees)
+        self.tel.event("relative", reading="turn", side=side, degrees=degrees, heading_now=heading)
+        return self._write_heading(float(target), f"{side.capitalize()} {degrees}, ", True)
+
+    def _set_compass_heading(self, slots, intent):
+        degrees = COMPASS.get(str(slots.get("compass") or ""))
+        if degrees is None:
+            self._say("North, east, south or west?")
+            return "rejected"
+        return self._write_heading(float(degrees), mode_note=True)
+
+    def _altitude_reference(self, current):
+        """The selected altitude while the autopilot climbs or descends to
+        it (or Vimaan's own capture does), otherwise the altitude now."""
+        moving = self._capture is not None or (
+            self._read_int(DREF_SERVOS_ON) == 1
+            and self._read_int(DREF_VERTICAL_MODE) in VERTICAL_MOVING_MODES
+        )
+        return altitude_reference(
+            self._read_float(DREF_ALTITUDE),
+            current,
+            self._read_float(DREF_VERTICAL_SPEED_FPM),
+            moving,
+        )
+
+    def _change_altitude_by(self, slots, intent):
+        direction = slots.get("direction")
+        value, ok, reason = validate_slot("altitude_change", slots.get("altitude_change"))
+        if direction not in ("up", "down") or not ok:
+            self.tel.event(
+                "slot_rejected", logging.WARNING, slot="altitude_change", value=slots, reason=reason
+            )
+            self._say("Say how far to climb or descend")
+            return "rejected"
+        current = self._read_float(DREF_ALTITUDE_ACTUAL)
+        if current is None:
+            self._say("Cannot read the altitude")
+            return "failed"
+        feet = int(value)
+        reference = self._altitude_reference(current)
+        target = changed(reference, direction, feet)
+        self.tel.event(
+            "relative", reading="altitude", direction=direction, feet=feet, reference=reference
+        )
+        if not valid_altitude(target):
+            self._say("Altitude out of range")
+            return "rejected"
+        if not goes_the_way(direction, target, current):
+            self._say(f"Altitude {target} feet is {'below' if direction == 'up' else 'above'} us")
+            return "rejected"
+        lead = f"{'Up' if direction == 'up' else 'Down'} {feet}. "
+        return self._set_altitude({"altitude": str(target)}, "set_autopilot_altitude", lead)
+
+    def _speed_held(self):
+        """The autothrottle (or level change) is flying the speed bug."""
+        on_from = self.profile.settings.get("athr_on_from", 1)
+        athr = self._read_int(DREF_AUTOTHROTTLE)
+        return (athr is not None and athr >= on_from) or self._read_int(DREF_SPEED_STATUS) == 2
+
+    def _change_speed_by(self, slots, intent):
+        direction = slots.get("direction")
+        value, ok, reason = validate_slot("speed_change", slots.get("speed_change"))
+        if direction not in ("up", "down") or not ok:
+            self.tel.event(
+                "slot_rejected", logging.WARNING, slot="speed_change", value=slots, reason=reason
+            )
+            self._say("Say how many knots faster or slower")
+            return "rejected"
+        if self._read_int(DREF_SPEED_IS_MACH) == 1:
+            self._say("The speed is set in Mach. Say the Mach number")
+            return "rejected"
+        ias = self._read_float(DREF_IAS)
+        if ias is None:
+            self._say("Cannot read the airspeed")
+            return "failed"
+        knots = int(value)
+        held = self._speed_held()
+        reference = speed_reference(self._read_float(DREF_SPEED_DIAL), ias, held)
+        target = reference + (knots if direction == "up" else -knots)
+        self.tel.event(
+            "relative",
+            reading="speed",
+            direction=direction,
+            knots=knots,
+            reference=reference,
+            held=held,
+        )
+        lead = f"{knots} knots {'faster' if direction == 'up' else 'slower'}. "
+        return self._set_autopilot_speed({"speed": str(target)}, "set_autopilot_speed", lead)
+
+    def _set_altitude(self, slots, intent, lead=""):
         altitude = slots.get("altitude")
         if not altitude:
             self._say("Altitude value missing")
@@ -2908,7 +3126,7 @@ class PythonInterface:
             vs = self._read_float(DREF_VERTICAL_SPEED_FPM)
             if vs is not None and abs(vs) >= 100:
                 extra = self._plan_capture(vs).replace(f", to {int(v)}", "")
-        self._say(f"Altitude {int(v)} feet{extra}")
+        self._say(f"{lead}Altitude {int(v)} feet{extra}")
         return "executed"
 
     def _set_flight_level(self, slots, intent):
@@ -2944,7 +3162,7 @@ class PythonInterface:
             return False
         return float(as_to) < vso
 
-    def _set_autopilot_speed(self, slots, intent):
+    def _set_autopilot_speed(self, slots, intent, lead=""):
         info = self.profile.info
         if slots.get("mach"):
             value, ok, _ = validate_slot("mach", slots["mach"])
@@ -3001,7 +3219,7 @@ class PythonInterface:
             tolerance=0.005 if want_mach else 0.5,
             fail=clamped,
         )
-        self._say(said(target))
+        self._say(lead + said(target))
         return "executed"
 
     def _set_vertical_speed(self, slots, intent):

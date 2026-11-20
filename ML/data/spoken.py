@@ -193,3 +193,37 @@ def pressure(value: str) -> list[str]:
 def flaps(setting: int) -> list[str]:
     """Flap handle labels are said as numbers: "fifteen", "one", "twenty five"."""
     return [two_digit(setting)]
+
+
+# ---------------------------------------------------------------------------
+# Phase L.1: relative commands
+# ---------------------------------------------------------------------------
+def turn_amount(deg: int) -> list[str]:
+    """A turn is said as a number: 20 -> "twenty"; 120 -> "one twenty",
+    "one hundred twenty", "one two zero". Never with a leading zero: that
+    is a heading ("turn left zero two zero")."""
+    if deg < 100:
+        return [two_digit(deg)]
+    v = str(deg)
+    out = []
+    if (g := pilot_group(v)) is not None:
+        out.append(g)
+    out += [cardinal(deg), digits(v)]
+    return list(dict.fromkeys(out))
+
+
+def altitude_change(ft: int) -> list[str]:
+    """1000 -> "one thousand", "a thousand"; 1500 -> "one thousand five
+    hundred", "fifteen hundred"; 100 -> "one hundred", "a hundred". The
+    generator drops the "a" after "another" ("another thousand")."""
+    out = [cardinal(ft)]
+    if 1000 < ft < 10000 and ft % 1000:
+        out.append(f"{two_digit(ft // 100)} hundred")
+    if ft in (100, 1000):
+        out.append("a " + cardinal(ft).split()[1])
+    return list(dict.fromkeys(out))
+
+
+def speed_change(kt: int) -> list[str]:
+    """10 -> "ten", 25 -> "twenty five"."""
+    return [two_digit(kt)]

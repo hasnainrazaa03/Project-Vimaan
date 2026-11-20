@@ -1,5 +1,5 @@
 {
-  "grammar_sha256": "fe814f47a408545cbad57ef317df95648378ab026d30a1bda67e96c06bcb9fc0",
+  "grammar_sha256": "3841e3a8d5219ec432e84e63edc3a5b8b5d800f880fe3302d74f3a2044b65bdb",
   "vosk_model": "vosk-model-small-en-us-0.15",
   "clips": 57
 }

@@ -486,3 +486,51 @@ def test_the_dev_probe_is_one_phrasing_a_row_of_known_intents():
     assert len(probe) == len(generate_v2._probe_cores()) >= 90
     assert {r["intent"] for r in probe} == QUESTION_INTENTS | {"None"}
     assert all(r["split"] == "probe" for r in probe)
+
+
+# ---------------------------------------------------------------------------
+# Phase L.1: new commands beside an existing data set (v27 = data v17 + them)
+# ---------------------------------------------------------------------------
+L1 = ["turn_by", "set_compass_heading", "change_altitude_by", "change_speed_by"]
+
+
+@pytest.fixture(scope="module")
+def extended(tmp_path_factory):
+    base_rows = [r for r in generate_v2.generate(per_intent=60, seed=3)[0] if r["intent"] not in L1]
+    path = tmp_path_factory.mktemp("base") / "base.jsonl"
+    path.write_text("".join(__import__("json").dumps(r) + "\n" for r in base_rows))
+    rows, stats = generate_v2.extend(str(path), L1, per_intent=300, seed=5)
+    return base_rows, rows, stats
+
+
+def test_extend_keeps_every_base_row_as_it_was(extended):
+    base, rows, _ = extended
+    assert rows[: len(base)] == base
+    assert {r["intent"] for r in rows[len(base) :]} == set(L1) | {"None"}
+
+
+def test_extended_rows_hold_out_their_own_templates(extended):
+    _, rows, _ = extended
+    from vimaan_nlu.commands import command
+
+    for intent in L1:
+        held = generate_v2.holdout_templates(command(intent))
+        for r in rows:
+            if r["intent"] == intent:
+                template = command(intent).templates[int(r["template"].split("#")[1])]
+                assert (r["split"] == "test") == (template in held)
+
+
+def test_a_thousand_is_said_and_thousand_is_the_slot(extended):
+    _, rows, _ = extended
+    a = [r for r in rows if r["intent"] == "change_altitude_by" and " a thousand" in r["text"]]
+    assert a and all(r["slots"]["altitude_change"] == "1000" for r in a)
+    assert not any("another a " in r["text"] for r in rows)
+
+
+def test_extend_refuses_a_command_already_in_the_base(extended, tmp_path):
+    base, _, _ = extended
+    path = tmp_path / "base.jsonl"
+    path.write_text("".join(__import__("json").dumps(r) + "\n" for r in base))
+    with pytest.raises(ValueError, match="already in"):
+        generate_v2.extend(str(path), ["set_autopilot_heading"], per_intent=10)

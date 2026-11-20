@@ -170,3 +170,44 @@ def test_question_dev_score_weighs_every_phrasing_the_same():
     assert s["score"] == 0
     s = question_score(lambda t: right, rows)
     assert s["score"] == 2 * PHRASING_POINTS
+
+
+def _p(intent, slots, text):
+    return {
+        "intent": intent,
+        "slots": dict(slots),
+        "confidence": 0.99,
+        "normalized_text": text,
+        "original_text": text,
+    }
+
+
+def test_gate_counts_a_target_or_change_as_asked():
+    # Phase L.1: the plugin asks unless the aircraft rules a reading out.
+    bare = _p("set_autopilot_altitude", {"altitude": "2000"}, "descend two thousand feet")
+    assert model_gate.decision(bare) == ("ambiguous_by", {})
+    turn = _p("set_autopilot_heading", {"degrees": "120"}, "turn right one two zero")
+    assert model_gate.decision(turn) == ("ambiguous_by", {})
+    marked = _p("set_autopilot_altitude", {"altitude": "2000"}, "descend to two thousand feet")
+    assert model_gate.decision(marked)[0] == "act"
+
+
+def test_gate_scores_a_turn_flown_as_a_heading_as_that_heading():
+    p = _p("turn_by", {"turn": "right", "turn_degrees": "270"}, "turn right two seven zero")
+    assert model_gate.decide(p) == ("act", "set_autopilot_heading", {"degrees": "270"})
+    run = lambda text: p  # noqa: E731
+    want = {"degrees": "270"}
+    assert model_gate.judge(run, p["original_text"], "set_autopilot_heading", want)[0] == "right"
+
+
+def test_gate_scores_a_relative_command():
+    p = _p("turn_by", {"turn": "left", "turn_degrees": "20"}, "turn left twenty degrees")
+    assert model_gate.decide(p) == ("act", "turn_by", {"turn": "left", "turn_degrees": "20"})
+    low = _p("set_autopilot_altitude", {"altitude": "500"}, "descend five hundred feet")
+    assert model_gate.decide(low) == (
+        "act",
+        "change_altitude_by",
+        {"direction": "down", "altitude_change": "500"},
+    )
+    north = _p("set_compass_heading", {"compass": "west"}, "turn west twenty")
+    assert model_gate.decision(north) == ("compass_conflict", {})

@@ -14,6 +14,7 @@ altimeter
 altimeters
 altitude
 and
+another
 anti ice
 ap
 approach
@@ -78,6 +79,7 @@ disregard
 doing
 down
 drop
+east
 eight
 eighteen
 eighty
@@ -89,6 +91,7 @@ engines
 evening
 extend
 fasten
+faster
 fd
 feeling
 feet
@@ -129,6 +132,7 @@ heat
 hello
 hey
 hi
+higher
 hold
 how
 hundred
@@ -169,6 +173,7 @@ medium
 minus
 minute
 mode
+more
 morning
 move
 much
@@ -182,6 +187,7 @@ niner
 nineteen
 ninety
 no
+north
 now
 number
 o
@@ -239,8 +245,10 @@ six
 sixteen
 sixty
 slow
+slower
 smoking
 something
+south
 speed
 spoilers
 squawk
@@ -289,6 +297,7 @@ vimaan
 want
 we
 weather
+west
 what
 window
 windshield
