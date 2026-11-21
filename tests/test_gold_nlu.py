@@ -175,7 +175,63 @@ GOLD_TIER4 = [
     ("what time is it", "ask_time", {}),
     ("status report", "ask_status_generic", {}),
 ]
-GOLD = GOLD + GOLD_TIER1 + GOLD_TIER2 + GOLD_TIER3
+# Phase L.1: relative commands and compass headings, with absolute
+# phrasings beside them that must stay absolute. Written on 2026-11-20
+# before any v27 result was seen.
+GOLD_L1 = [
+    ("turn left twenty degrees", "turn_by", {"turn": "left", "turn_degrees": "20"}),
+    ("turn right thirty", "turn_by", {"turn": "right", "turn_degrees": "30"}),
+    ("come left ten degrees", "turn_by", {"turn": "left", "turn_degrees": "10"}),
+    ("fifteen degrees right", "turn_by", {"turn": "right", "turn_degrees": "15"}),
+    ("turn right by forty five degrees", "turn_by", {"turn": "right", "turn_degrees": "45"}),
+    ("left five degrees", "turn_by", {"turn": "left", "turn_degrees": "5"}),
+    ("turn left ninety degrees", "turn_by", {"turn": "left", "turn_degrees": "90"}),
+    ("turn north", "set_compass_heading", {"compass": "north"}),
+    ("heading south", "set_compass_heading", {"compass": "south"}),
+    ("fly west", "set_compass_heading", {"compass": "west"}),
+    ("turn back east", "set_compass_heading", {"compass": "east"}),
+    (
+        "climb another thousand",
+        "change_altitude_by",
+        {"direction": "up", "altitude_change": "1000"},
+    ),
+    (
+        "descend another two thousand feet",
+        "change_altitude_by",
+        {"direction": "down", "altitude_change": "2000"},
+    ),
+    ("up five hundred feet", "change_altitude_by", {"direction": "up", "altitude_change": "500"}),
+    (
+        "down a thousand feet",
+        "change_altitude_by",
+        {"direction": "down", "altitude_change": "1000"},
+    ),
+    (
+        "climb by fifteen hundred feet",
+        "change_altitude_by",
+        {"direction": "up", "altitude_change": "1500"},
+    ),
+    (
+        "two thousand feet lower",
+        "change_altitude_by",
+        {"direction": "down", "altitude_change": "2000"},
+    ),
+    ("speed up ten knots", "change_speed_by", {"direction": "up", "speed_change": "10"}),
+    ("slow down twenty knots", "change_speed_by", {"direction": "down", "speed_change": "20"}),
+    ("ten knots faster", "change_speed_by", {"direction": "up", "speed_change": "10"}),
+    (
+        "reduce speed by fifteen knots",
+        "change_speed_by",
+        {"direction": "down", "speed_change": "15"},
+    ),
+    ("increase speed by five knots", "change_speed_by", {"direction": "up", "speed_change": "5"}),
+    # Still absolute: "heading", "to" and "maintain" make the number the target.
+    ("turn left heading two seven zero", "set_autopilot_heading", {"degrees": "270"}),
+    ("turn right heading zero four zero", "set_autopilot_heading", {"degrees": "040"}),
+    ("descend and maintain four thousand", "set_autopilot_altitude", {"altitude": "4000"}),
+    ("speed up to two five zero knots", "set_autopilot_speed", {"speed": "250"}),
+]
+GOLD = GOLD + GOLD_TIER1 + GOLD_TIER2 + GOLD_TIER3 + GOLD_L1
 
 # Bare numbers and fragments must never be acted on (scripts/model_gate.py
 # checks these through the plugin's decision rules).
@@ -190,6 +246,11 @@ MUST_NOT_ACT = [
     "point seven eight",
     "auto",
     "armed",
+    # Phase L.1: a direction or a change with nothing to act on.
+    "north",
+    "left",
+    "another thousand",
+    "more",
 ]
 
 
@@ -218,6 +279,8 @@ def test_gold_intent_and_slots(gold_model, text, intent, slots):
         pytest.skip("the installed model predates Tier 2")
     if (text, intent, slots) in GOLD_TIER3 and "set_autobrake" not in known:
         pytest.skip("the installed model predates Tier 3")
+    if (text, intent, slots) in GOLD_L1 and "turn_by" not in known:
+        pytest.skip("the installed model predates relative commands (phase L.1)")
 
     r = predict(
         text,

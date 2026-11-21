@@ -165,6 +165,13 @@ SLOT_VALIDATORS: Mapping[str, Range | Enum | AnyOf | Digits] = MappingProxyType(
             )
         ),
         "zone": Enum(("zulu", "local")),
+        # Phase L.1: relative commands (vimaan_nlu.relative). A turn of 180 or
+        # more is a heading: the autopilot would turn the short way.
+        "turn": Enum(("left", "right")),
+        "turn_degrees": Range(1, 179, exact=True),
+        "altitude_change": Range(100, 5000, step=100),
+        "speed_change": Range(1, 50, exact=True),
+        "compass": Enum(("north", "east", "south", "west")),
     }
 )
 
@@ -203,6 +210,11 @@ SLOT_DISPLAY: Mapping[str, str] = MappingProxyType(
         "ap_target": "set",
         "switch_system": "",
         "zone": "time",
+        "turn": "",
+        "turn_degrees": "by",
+        "altitude_change": "by",
+        "speed_change": "by",
+        "compass": "hdg",
     }
 )
 
@@ -498,6 +510,180 @@ COMMANDS: tuple[Command, ...] = (
         handler="_set_flight_level",
         self_test="climb to flight level three five zero",
         bindings=("sim/cockpit2/autopilot/altitude_dial_ft",),
+    ),
+    # Phase L.1: relative commands. The plugin works out the target from the
+    # aircraft (vimaan_nlu.relative) and reads back the value it set. None
+    # of these templates says "to" or "heading": those make a number the
+    # target, and a bare "climb two thousand feet" is asked about.
+    Command(
+        intent="turn_by",
+        display="Turn",
+        templates=(
+            "turn {turn} {turn_degrees}",
+            "turn {turn} {turn_degrees} degrees",
+            "{turn} {turn_degrees} degrees",
+            "{turn} {turn_degrees}",
+            "come {turn} {turn_degrees}",
+            "come {turn} {turn_degrees} degrees",
+            "{turn_degrees} degrees {turn}",
+            "turn {turn_degrees} degrees {turn}",
+            "turn {turn} by {turn_degrees} degrees",
+            "turn {turn} by {turn_degrees}",
+            "{turn_degrees} degrees to the {turn}",
+            "turn {turn_degrees} degrees to the {turn}",
+            "give me {turn_degrees} degrees {turn}",
+            "go {turn} {turn_degrees} degrees",
+            "{turn} turn {turn_degrees} degrees",
+            "turn {turn} another {turn_degrees} degrees",
+            "{turn_degrees} {turn}",
+            "come {turn} by {turn_degrees}",
+            "{turn} by {turn_degrees} degrees",
+            "turn {turn} {turn_degrees} more",
+            "another {turn_degrees} degrees {turn}",
+        ),
+        slots=_frozen(
+            {
+                "turn": _choice({"left": (), "right": ()}),
+                "turn_degrees": Slot("number", range(1, 180), render="turn"),
+            }
+        ),
+        required=("turn", "turn_degrees"),
+        command_words=frozenset({"left", "right"}),
+        handler="_turn_by",
+        self_test="turn left twenty degrees",
+        bindings=(
+            "sim/cockpit2/autopilot/heading_dial_deg_mag_pilot",
+            "sim/cockpit2/gauges/indicators/heading_AHARS_deg_mag_pilot",
+            "sim/cockpit2/autopilot/heading_status",
+        ),
+    ),
+    Command(
+        intent="set_compass_heading",
+        display="Heading",
+        templates=(
+            "turn {compass}",
+            "heading {compass}",
+            "fly {compass}",
+            "turn back {compass}",
+            "turn to the {compass}",
+            "set heading {compass}",
+            "go {compass}",
+            "new heading {compass}",
+            "change heading to {compass}",
+            "fly heading {compass}",
+            "come back {compass}",
+            "turn back to the {compass}",
+            "fly back {compass}",
+            "set the heading to {compass}",
+            "turn heading {compass}",
+            "go back {compass}",
+        ),
+        slots=_frozen({"compass": _choice({"north": (), "east": (), "south": (), "west": ()})}),
+        required=("compass",),
+        # The verb, not the direction: "north" alone names nothing to do.
+        command_words=frozenset({"turn", "heading", "fly", "go", "come"}),
+        handler="_set_compass_heading",
+        self_test="turn north",
+        bindings=(
+            "sim/cockpit2/autopilot/heading_dial_deg_mag_pilot",
+            "sim/cockpit2/autopilot/heading_status",
+        ),
+    ),
+    Command(
+        intent="change_altitude_by",
+        display="Altitude change",
+        templates=(
+            "{direction=climb} another {altitude_change}",
+            "{direction=descend} another {altitude_change}",
+            "{direction=climb} another {altitude_change} feet",
+            "{direction=descend} another {altitude_change} feet",
+            "{direction=climb} {altitude_change} more",
+            "{direction=descend} {altitude_change} feet more",
+            "{direction=climb} by {altitude_change} feet",
+            "{direction=descend} by {altitude_change}",
+            "{direction} {altitude_change} feet",
+            "{direction} another {altitude_change}",
+            "go {direction} {altitude_change} feet",
+            "go {direction} another {altitude_change} feet",
+            "{altitude_change} feet {direction=higher}",
+            "{altitude_change} feet {direction=lower}",
+            "another {altitude_change} feet {direction}",
+            "{direction} by {altitude_change} feet",
+            "{altitude_change} feet {direction}",
+            "{direction=climb} {altitude_change} feet more",
+            "{direction=descend} {altitude_change} more",
+            "{direction} {altitude_change}",
+            "{altitude_change} {direction=higher}",
+            "{altitude_change} {direction=lower}",
+        ),
+        slots=_frozen(
+            {
+                "direction": _choice({"up": ("climb", "higher"), "down": ("descend", "lower")}),
+                "altitude_change": Slot("number", range(100, 5001, 100), render="altitude_change"),
+            }
+        ),
+        required=("direction", "altitude_change"),
+        command_words=frozenset(
+            {"climb", "descend", "feet", "higher", "lower", "thousand", "hundred"}
+        ),
+        handler="_change_altitude_by",
+        self_test="climb another one thousand feet",
+        bindings=(
+            "sim/cockpit2/autopilot/altitude_dial_ft",
+            "sim/cockpit2/gauges/indicators/altitude_ft_pilot",
+            "sim/flightmodel/position/vh_ind_fpm",
+            "sim/cockpit2/autopilot/altitude_mode",
+            "sim/cockpit2/autopilot/servos_on",
+        ),
+    ),
+    Command(
+        intent="change_speed_by",
+        display="Speed change",
+        templates=(
+            "speed {direction=up} {speed_change} knots",
+            "speed {direction=up} {speed_change}",
+            "{direction=slow down} {speed_change} knots",
+            "{direction=slow down} {speed_change}",
+            "{speed_change} knots {direction=faster}",
+            "{speed_change} knots {direction=slower}",
+            "{direction=increase} speed by {speed_change} knots",
+            "{direction=reduce} speed by {speed_change} knots",
+            "{direction=increase} speed {speed_change} knots",
+            "{direction=reduce} speed {speed_change} knots",
+            "{direction=plus} {speed_change} knots",
+            "{direction=minus} {speed_change} knots",
+            "speed {direction=plus} {speed_change}",
+            "speed {direction=minus} {speed_change}",
+            "{direction=slow down} by {speed_change} knots",
+            "speed {direction=up} by {speed_change} knots",
+            "another {speed_change} knots {direction=faster}",
+            "{direction=increase} the speed by {speed_change}",
+            "{direction=reduce} the speed by {speed_change}",
+            "{direction=faster} by {speed_change} knots",
+            "{direction=slower} by {speed_change} knots",
+        ),
+        slots=_frozen(
+            {
+                "direction": _choice(
+                    {
+                        "up": ("faster", "increase", "speed up", "plus"),
+                        "down": ("slower", "reduce", "slow down", "minus"),
+                    }
+                ),
+                "speed_change": Slot("number", range(1, 51), render="speed_change"),
+            }
+        ),
+        required=("direction", "speed_change"),
+        command_words=frozenset({"speed", "knots", "faster", "slower", "slow"}),
+        handler="_change_speed_by",
+        self_test="speed up ten knots",
+        bindings=(
+            "sim/cockpit2/autopilot/airspeed_dial_kts_mach",
+            "sim/cockpit2/autopilot/airspeed_is_mach",
+            "sim/cockpit2/gauges/indicators/airspeed_kts_pilot",
+            "sim/cockpit2/autopilot/autothrottle_enabled",
+            "sim/cockpit2/autopilot/speed_status",
+        ),
     ),
     Command(
         intent="set_com_frequency",

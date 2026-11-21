@@ -7,7 +7,7 @@ import json
 import sys
 from typing import Any
 
-from . import flights, scenario, tier1, tier2, tier3, tier4, voice, xplane
+from . import flights, relative, scenario, tier1, tier2, tier3, tier4, voice, xplane
 from .bridge import Bridge, NoAnswer
 
 
@@ -75,7 +75,10 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("quit", help="switch the bridge off and quit X-Plane")
     sub.add_parser("screenshot", help="X-Plane's own screenshot of its window, to see a message")
     rn = sub.add_parser("run", help="run a checklist scenario, unattended, and write a report")
-    rn.add_argument("checklist", choices=("tier1", "tier2", "tier3", "tier4", *flights.FLIGHTS))
+    rn.add_argument(
+        "checklist",
+        choices=("tier1", "tier2", "tier3", "tier4", "relative", *flights.FLIGHTS),
+    )
     rn.add_argument("aircraft", choices=(*tier1.SETUPS, "all"))
     rn.add_argument("--text", action="store_true", help="no generated voice: text to the model")
     rn.add_argument("--voice", default=voice.DEFAULT_VOICE)
@@ -206,6 +209,7 @@ def _model_lacks(checklist: str, state: dict) -> str | None:
     needs = {
         "tier2": (tier2.NEEDS_INTENT, "Tier 2", "v20"),
         "tier3": (tier3.NEEDS_INTENT, "Tier 3", "v26"),
+        "relative": (relative.NEEDS_INTENT, "relative commands", "v27"),
     }
     if checklist not in needs or known is None:
         return None
@@ -275,6 +279,8 @@ def _run(args: argparse.Namespace) -> int:
             results = runner.run(tier3.steps(name))
         elif args.checklist == "tier4":
             results = runner.run(tier4.steps(name))
+        elif args.checklist == "relative":
+            results = runner.run(relative.steps(name))
         else:
             results = runner.run(tier1.steps(name, vfe_full=limits.get("full")))
         total = scenario.summary(results)

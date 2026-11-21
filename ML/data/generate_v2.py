@@ -87,6 +87,11 @@ TWO_DIGIT_HEADING_SHARE = 0.15  # "change heading to eighty", beside three-digit
 # v9) left "eighty" untagged after "speed": the stray leading "eighty" of
 # LEADING_NOISE grows with the number of commands, the speed rows don't.
 TWO_DIGIT_SPEED_SHARE = 0.15
+# Phase L.1: the amounts pilots turn and climb by most.
+COMMON_TURNS = (5, 10, 15, 20, 30, 40, 45, 60, 90)
+COMMON_ALTITUDE_CHANGES = (500, 1000, 1000, 1500, 2000, 3000)
+# "another a thousand" is said "another thousand".
+_A_DROPPED_AFTER = re.compile(r"\b(another) a (?=hundred\b|thousand\b)")
 
 INSTANCE_SAY = {"1": "one", "2": "two"}
 INSTANCE_ORD = {"1": ("first", "left"), "2": ("second", "right")}
@@ -219,6 +224,20 @@ def render_number(kind: str, rng: random.Random) -> str:
         return rng.choice(("one", "two", "three"))
     if kind == "flaps":
         return rng.choice(spoken.flaps(rng.choice((1, 2, 3, 5, 10, 15, 20, 25, 30, 40))))
+    # Phase L.1: the change in a relative command, mostly the round amounts said.
+    if kind == "turn":
+        deg = rng.choice(COMMON_TURNS) if rng.random() < 0.6 else rng.randrange(1, 180)
+        return rng.choice(spoken.turn_amount(deg))
+    if kind == "altitude_change":
+        ft = (
+            rng.choice(COMMON_ALTITUDE_CHANGES)
+            if rng.random() < 0.5
+            else rng.randrange(100, 5001, 100)
+        )
+        return rng.choice(spoken.altitude_change(ft))
+    if kind == "speed_change":
+        kt = rng.randrange(5, 51, 5) if rng.random() < 0.7 else rng.randrange(1, 51)
+        return rng.choice(spoken.speed_change(kt))
     raise ValueError(kind)
 
 
@@ -251,6 +270,9 @@ def fill(c: Command, template: str, rng: random.Random) -> tuple[str, dict[str, 
         slot = c.slots[name]
         if slot.kind == "number":
             word = render_number(slot.render or name, rng)
+            if word.startswith("a "):  # "up a thousand": the number is "thousand"
+                surfaces[name] = word[2:]
+                return word
         elif slot.kind == "instance":
             word = INSTANCE_SAY[rng.choice(("1", "2"))]
         else:
@@ -258,7 +280,7 @@ def fill(c: Command, template: str, rng: random.Random) -> tuple[str, dict[str, 
         surfaces[name] = word
         return word
 
-    text = re.sub(PLACEHOLDER, sub, template)
+    text = _A_DROPPED_AFTER.sub(r"\1 ", re.sub(PLACEHOLDER, sub, template))
     return text, surfaces
 
 
@@ -1057,6 +1079,43 @@ def extra_rows(
     return out
 
 
+def extend(
+    base_path: str, intents: list[str], per_intent: int = 4000, seed: int = 42
+) -> tuple[list[dict[str, Any]], Counter[str]]:
+    """New commands beside an existing data set (phase L.1, v27): every row of
+    ``base_path`` exactly as it was, so what the previous model learned and
+    was tested on is unchanged, then rows for ``intents`` (held-out and dev
+    templates as for any command) and their share of negatives. A new row
+    whose text the base already labels differently is dropped."""
+    with open(base_path, encoding="utf-8") as fh:
+        base = [json.loads(line) for line in fh]
+    known = {c.intent for c in COMMANDS if c.actionable}
+    unknown = sorted(set(intents) - known)
+    if unknown:
+        raise ValueError(f"not actionable commands: {unknown}")
+    already = sorted({r["intent"] for r in base} & set(intents))
+    if already:
+        raise ValueError(f"already in {base_path}: {already}")
+    rng = random.Random(seed)
+    stats: Counter[str] = Counter()
+    new: list[dict[str, Any]] = []
+    for c in COMMANDS:
+        if c.intent in intents:
+            new += command_rows(c, per_intent, rng, stats)
+    new += negative_rows(int(len(new) * NEGATIVE_SHARE), rng)
+    labelled = {r["text"]: r["intent"] for r in base}
+    kept = [r for r in new if labelled.get(r["text"], r["intent"]) == r["intent"]]
+    stats["dropped:base_labels_differently"] = len(new) - len(kept)
+    rng.shuffle(kept)
+    stats["base_rows"] = len(base)
+    stats["rows"] = len(base) + len(kept)
+    for r in kept:
+        stats[f"intent:{r['intent']}"] += 1
+        stats[f"new_split:{r['split']}"] += 1
+        stats[f"new_noise:{r['noise']}"] += 1
+    return base + kept, stats
+
+
 def _next_path(directory: str, stem: str = "aviation_v2_v") -> str:
     os.makedirs(directory, exist_ok=True)
     n = 1
@@ -1082,10 +1141,23 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="with --questions: append this kind of extra training rows (round 4)",
     )
+    parser.add_argument(
+        "--extend",
+        metavar="BASE",
+        default=None,
+        help="keep every row of this data set and add rows for --intents (phase L.1)",
+    )
+    parser.add_argument("--intents", default="", help="with --extend: comma-separated intents")
     args = parser.parse_args(argv)
     if args.question_extra and not args.questions:
         parser.error("--question-extra needs --questions")
-    if args.questions:
+    if bool(args.extend) != bool(args.intents):
+        parser.error("--extend and --intents go together")
+    if args.extend:
+        intents = [i.strip() for i in args.intents.split(",") if i.strip()]
+        rows, stats = extend(args.extend, intents, args.per_intent, args.seed)
+        stem = "aviation_v2_v"
+    elif args.questions:
         rows, stats = generate_questions(args.per_intent, args.seed, extra=args.question_extra)
         stem = "questions_v"
     else:
@@ -1099,7 +1171,7 @@ def main(argv: list[str] | None = None) -> int:
         json.dump(dict(sorted(stats.items())), fh, indent=1)
     print(f"wrote {len(rows)} rows to {out}")
     for k, v in sorted(stats.items()):
-        if k.startswith(("split:", "noise:", "dropped:")):
+        if k.startswith(("split:", "noise:", "dropped:", "new_")):
             print(f"  {k}: {v}")
     return 0
 

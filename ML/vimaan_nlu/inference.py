@@ -2,6 +2,7 @@ import torch
 
 from vimaan_nlu import normalize_aviation_input, postprocess_slots
 from vimaan_nlu.commands import LEGACY_INTENTS
+from vimaan_nlu.relative import resolve_turn
 
 
 def family_of(intent: str) -> str:
@@ -47,10 +48,21 @@ def extract_slots(slot_pred_indices, tokens, slot_map_rev):
     extracted_slots = {}
     current_slot_name = None
     current_slot_tokens = []
+    in_value = False  # the last token went into the open value
 
     for token, slot_idx in zip(tokens, slot_pred_indices):
         if token in ["[CLS]", "[SEP]", "[PAD]"]:
             continue
+
+        # A value ends at a word's end: a piece that continues a word in the
+        # value joins it, whatever its own tag. v27's first candidate tagged
+        # "02" of "024" ("02", "##4") and not the rest, so "turn left zero two
+        # four" was a turn of 2 degrees. (A value that starts mid-word, as
+        # "2" of "ap2", is left as it was.)
+        if in_value and token.startswith("##"):
+            current_slot_tokens.append(token)
+            continue
+        in_value = False
 
         slot_name_bio = slot_map_rev.get(int(slot_idx), "O")
 
@@ -60,11 +72,13 @@ def extract_slots(slot_pred_indices, tokens, slot_map_rev):
 
             current_slot_name = slot_name_bio[2:]
             current_slot_tokens = [token]
+            in_value = True
 
         elif slot_name_bio.startswith("I-") and current_slot_name:
             slot_name_from_tag = slot_name_bio[2:]
             if slot_name_from_tag == current_slot_name:
                 current_slot_tokens.append(token)
+                in_value = True
 
         else:
             if current_slot_name and current_slot_tokens:
@@ -76,6 +90,19 @@ def extract_slots(slot_pred_indices, tokens, slot_map_rev):
         extracted_slots[current_slot_name] = reconstruct_slot_value(current_slot_tokens)
 
     return extracted_slots
+
+
+TURN_INTENTS = ("turn_by", "set_autopilot_heading")
+
+
+def turn_or_heading(intent, slots, text, intent_names):
+    """Phase L.1: the words, not the model, say whether a number after "left"
+    or "right" is a turn or a heading (``vimaan_nlu.relative.resolve_turn``).
+    Only for a model that knows turns, so v26 is unchanged. ``text`` is the
+    normalized text. Returns (intent, slots), or None to keep the model's."""
+    if "turn_by" not in set(intent_names):
+        return None
+    return resolve_turn(intent, slots, text)
 
 
 def is_wordpiece(tokenizer) -> bool:
@@ -178,6 +205,18 @@ def predict(
     for old, new in (LEGACY_INTENTS[intent_raw][2] if intent_raw in LEGACY_INTENTS else {}).items():
         if old in extracted_slots:
             extracted_slots[new] = extracted_slots.pop(old)
+
+    resolved = turn_or_heading(
+        intent_pred, extracted_slots, text_normalized, intent_map_rev.values()
+    )
+    if resolved is not None:
+        intent_pred, extracted_slots = resolved
+        # The words chose between the two: the model's confidence is in either.
+        intent_confidence = sum(
+            probs[idx].item()
+            for idx, name in intent_map_rev.items()
+            if family_of(name) in TURN_INTENTS
+        )
 
     if do_postprocess:
         extracted_slots = postprocess_slots(extracted_slots, text_normalized, intent_pred)

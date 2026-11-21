@@ -5,7 +5,7 @@ steps, each with a concrete "done when". Work happens strictly in the order of
 the status board; a phase starts only when the previous one has passed its
 gate. After each step: tick it here, commit, and keep the board current.
 
-Last updated 2026-11-19.
+Last updated 2026-11-20.
 
 ---
 
@@ -27,7 +27,7 @@ Last updated 2026-11-19.
 | T4 | Tier 4: questions (read-only) → **v26 + question model q2** | ✅ closed 2026-11-19: runner in the sim on four aircraft (q1 143/144, the miss a moving EGT; q2 148/148 with the phase question); the owner's real-voice check passed (46 of 50 right first time, none acted on) | #64–#70, #76 |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ✅ closed 2026-11-19: tracker and margins flown on four aircraft (takeoff, landing, go-around, restart); the three phase rules held in the sim, the callouts quiet but for one real flap-speed call; "what phase of flight" answered (q2) | #71–#76, #84 |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
-| L | Later: relative commands, two commands in one breath, checklists, add-on aircraft profiles | ⬜ | |
+| L | Later: relative commands (L.1 → **v27**), two commands in one breath, checklists, add-on aircraft profiles | 🟡 L.1 built (2026-11-20); v27 = gates 1–3, 5, 6 passed, gate 4 by the owner's exception; next: merge, install, sim | #85 |
 
 Measured so far (in-sim, Vosk): speech end → action **p50 330 ms**;
 recognition 2–3 ms; model ~11 ms; 0 frame stalls. Real-voice benchmark
@@ -1550,9 +1550,195 @@ latency allowed.
 ## Later (L)
 
 Designed only after T4: relative commands ("turn left twenty", "climb
-another thousand"), two commands in one breath ("heading two seven zero,
-climb five thousand"), checklists read and verified, profiles for add-on
+another thousand"; L.1, below), two commands in one breath ("heading two seven
+zero, climb five thousand"), checklists read and verified, profiles for add-on
 aircraft (Zibo 737, ToLiss A3xx: per-aircraft dataref lists), wake word.
+
+### L.1 Relative commands → v27
+
+Started 2026-11-20, after F closed. Four new commands; the plugin works out
+each target from the aircraft (`vimaan_nlu.relative`) and reads back the
+value it set, so the pilot always hears the result:
+
+| Command | Said | Measured from | Read back |
+| --- | --- | --- | --- |
+| `turn_by` | "turn left twenty", "come right ten degrees", "fifteen degrees right" | the heading flown now (never a stale bug) | "Left 20, heading two five zero" |
+| `change_altitude_by` | "climb another thousand", "down five hundred feet", "two thousand feet lower" | the selected altitude while the autopilot climbs or descends to it; otherwise the altitude now, to 100 ft | "Up 1000. Altitude 11000 feet" |
+| `change_speed_by` | "speed up ten knots", "slow down twenty", "ten knots faster" | the bug when the autothrottle (or level change) flies it; otherwise the airspeed now, to 5 kt | "10 knots faster. Speed two six zero" |
+| `set_compass_heading` | "turn north", "heading south", "fly west" | (absolute) 360, 180, 270, 090 | "Heading three six zero" |
+
+**Owner decisions (2026-11-20):** all four kinds. A bare "climb/descend N
+feet" asks when both readings are valid and go the way said. A turn with
+heading mode off moves only the bug and says "Heading mode is off"; the
+autopilot's mode never changes unasked.
+
+**What v26 did with these (typed, 2026-11-20).** "Turn left twenty degrees"
+was refused only because the lost-digit rule caught it, and "speed up ten
+knots" as out of range. But **"descend two thousand feet", "climb one
+thousand feet" and "descend one thousand" acted: the window was set to 2,000 or
+1,000 ft.** At 10,000 ft a pilot meaning "two thousand lower" would have been
+taken down to 2,000. "Heading north" turned heading mode on and ignored "north".
+
+**Rules (pure Python, unit-tested):**
+
+- **Target or change?** "To", "maintain", "altitude", "level", "at" and
+  "heading" make the number the target. "Another", "more", "by", "up", "down",
+  "higher", "lower" and "degrees" make it the change. With neither:
+  - "descend two thousand feet" (up to 5,000 ft) is read both ways from the
+    aircraft. Each reading must be a valid altitude and go the way said (a
+    climb ends above us). Two readings left: "Altitude 2000 or 8000 feet?",
+    answered with the number as for "to" or "two". One left: it acts on that.
+    None: refused.
+  - "turn right one two zero" (100–179) asks "Heading one two zero or two one
+    zero? Say all three digits."
+  - A turn of 180 or more, or said with a leading zero ("turn left zero two
+    zero"), is a heading: the autopilot would take the short way.
+- **Limits:** turns 1–179°, altitude changes 100–5,000 ft in steps of 100,
+  speed changes 1–50 kt. The result still passes the absolute checks (altitude
+  1,000–50,000; the aircraft's stall and never-exceed speeds). A speed change
+  is refused in Mach mode, and a climb that would end below us is refused.
+- **"A thousand":** "a" and "another" count as one only where a word makes the
+  number a change ("up a thousand feet", "climb another thousand"). Vosk hears
+  "eight" as "a" (Speech Commands: 22 of 200). "Climb a thousand feet" is
+  still refused ("Say the whole number").
+- **Lost digits:** "turn left want seven zero" (one seven zero) is refused, as
+  for headings.
+- **Compass with a number or a side is refused** ("turn west twenty"): through
+  the grammar, Speech Commands' "left" came out "west" once in 300, and
+  "five" and "seven" "south" once each. "North" alone names nothing to do.
+- The gate's `decision` mirrors all of it. Without the aircraft's state, a
+  number that may be the target or the change counts as asked.
+
+**The grammar grows by nine words** (another, more, higher, faster, slower,
+north, south, east, west). Measured on Speech Commands (CC BY 4.0), 300
+clips of each of its 35 words through the old and new grammar:
+
+- the command words were heard exactly 4,977 times before and 4,973 after;
+- words outside the grammar are now sometimes heard as a new word ("marvin"
+  → "more" 24, "wow" → "west" 13), and nothing acts on one alone.
+
+Re-heard with the new grammar, 2 of the owner's 118 clips and 1 of the 57
+held-out clips came out differently. **One cost v26 a right: "parking brake
+off", heard as "parking the off" (acted) before, is now "parking the more"
+(refused).** Gate 4 compares both models on the re-heard clips, so its bar
+becomes 90/28/0. The new words were not chosen or dropped by the clips.
+
+**Data v19 = data v17 byte for byte + 16,000 new rows** (`generate_v2.py
+--extend`). v17's sha256 `2528f119…` is a prefix of v19's file, so every row
+v26 learned from and was tested on is unchanged. The new commands have their
+own held-out and dev templates (4,000 rows each, 3,257 test), plus 1,600
+negatives. 155,320 rows.
+
+**Gold (written before any v27 result):** 22 relative and compass rows, 4
+absolute phrasings that must stay absolute, and 4 fragments that must not
+act ("north", "left", "another thousand", "more").
+
+Steps:
+
+- [x] L.1.1 Design and the owner's decisions (2026-11-20).
+- [x] L.1.2 Commands, rules, plugin handlers and the asks; gate decision;
+  grammar; gold; data v19; tests (#85).
+- [x] L.1.3 v27: four runs on data v19 with v26's recipe (#58), greedy soup
+  on dev, gate once against v26. The gates are unchanged. Done with the
+  owner's gate-4 exception (below).
+  - **First candidate (v27-soup2 = greedy(e, f, g, h), all four kept, dev
+    7731/110/0): failed gates 1, 2 and 4.**
+    - Passed: 3 (gold 113/113, 14/14 fragments refused), 5 (2157/2158) and
+      6 (p95 7.1 ms).
+    - The held-out voice set was 50/7/0, the same as v26.
+  - **Gate 1:** turn_by 0.932, set_autopilot_heading 0.969. The rest were
+    ≥ 0.997.
+    - Only two held-out templates: "turn {side} N" (53 of 192 read as a
+      heading) and "turn left to N" (26 of 200 read as a turn).
+    - The heading phrasings in training say "turn right to N" and "turn
+      left heading N", and their mirror images are held out. The model took
+      the side for the cue instead of "to".
+    - Adding the mirror phrasings to the data would add held-out phrasings.
+  - **Gate 2:** 7 wrong against v26's 3.
+    - Four were "turn left zero two four" read as a turn of 2°. WordPiece
+      splits "024" into "02" + "##4", and only "02" was tagged, so the
+      leading-zero rule never saw a three-digit number.
+    - One was "turn left to one forty eight right away" read as a turn to
+      the right: "right away" was taken as the side.
+    - One is "please turn left forty eight if you would". The old data
+      labels it heading 048 (the noise dropped "to"), but by the L.1 rules
+      it is a 48° turn. It is the only old test row whose meaning changed.
+  - **Gate 4:** 88/28/2 against 89/29/0.
+    - The clip heard as "flaps down ident" set the flaps with v26; v27 chose
+      the transponder.
+    - The clip heard as "fuel current auto one co one decimal seven five"
+      came out as autobrake with no setting. The plugin refuses that ("Auto
+      brake off, one, two, three, or max?"), but the gate counts it as an
+      action. The gate is left as it is.
+    - No data cause was found for either.
+  - **Owner's decisions (2026-11-20, after the first gate):**
+    1. **The words decide turn or heading** (`relative.resolve_turn`, in
+       `predict` after the model, for a model that knows turns only, so v26
+       is unchanged):
+       - "heading", or "to" right before the number: a heading;
+       - one side said and nothing else: a turn, unless the number can't be
+         one (180 or more, or a leading zero);
+       - 100–179 is still asked.
+       Two more fixes: "right away" names no side, and a slot value always
+       ends at a word's end ("024", never "02"; for every model).
+       - The two failing templates were seen while diagnosing. Gate 1's
+         score on them now tests this rule, not the model.
+    2. **Four new seeds (5–8)**, the same data v19 and recipe. A greedy soup
+       on dev over all eight runs, then one gate.
+       - This is a variance re-roll for gate 4, an exception to "every
+         retrain needs a diagnosed change". If it fails again, stop and
+         report.
+  - **Second candidate (v27-soup3 = greedy over seeds 1–8; it kept seven
+    and left out v27-k; dev 7732/109/0): failed gate 4 only.**
+    - Gate 1: intent 0.9997, slot F1 0.9999 (v26: 0.8901 / 0.8902).
+    - Gate 2: 21880/308/2 against v26's 21879/308/3.
+      - One wrong is "please turn left forty eight if you would", the row
+        whose meaning changed.
+      - The other is "radial brake off please", which v26 gets wrong too.
+    - Gates 3 and 5 as before. Gate 6: p95 6.3 ms.
+    - The held-out voice set was 50/7/0, the same as v26.
+    - **Gate 4:** 88/28/2 against 89/29/0, on the same two clips as the
+      first candidate.
+  - **The two clips, run by run.** Every single run of both models was run on
+    each clip:
+
+    | Clip (said → heard) | v26's runs (n, o, p, q) | v26 | v27's runs (e–l) | v27 |
+    | --- | --- | --- | --- | --- |
+    | "flaps down again" → "flaps down ident" | flaps: p only; o, n, q chose the transponder | flaps | flaps: f, g, j, k, l; e, h, i chose the transponder | transponder |
+    | "tune com two to one two one decimal seven five" → "fuel current auto one co one decimal seven five" | refused: n, o, q; p acts (autobrake) | refused | refused: e, g, j, l; f, h, i, k act | autobrake, no setting |
+
+    - Single runs of both models split on both clips. v26's average won both
+      and v27's averages lost both.
+    - The plugin refuses the autobrake one (no setting), so in the plugin v27
+      is 88/29/1. The one real difference is "flaps down ident", where v27
+      presses ident.
+  - **Owner's decision (2026-11-20, after the second gate):** accept gate 4's
+    result as an exception, for these two clips only. v27 = v27-soup3.
+    - Its gate.json is the gate's own output, unchanged (gate 4 failed).
+      `gate_exception.json` beside it records this decision.
+    - No more seeds: picking runs until these clips come out right would
+      select on the voice fixture.
+  - **Is v26 still safe?** v26's decisions with main's code and with this
+    code were compared on 29,849 texts (old data, the new phrasings and the
+    voice fixtures).
+    - That check found a bug: "a" and "another" counted as one for any
+      command. v26 reads "climb another thousand" as altitude 1,000, so it
+      would have flown 1,000 ft.
+    - Fixed: they count only for a change command (`clipped_number(text,
+      intent)`). v27's decisions are the same with and without the fix.
+    - After the fix, 42 decisions differ:
+      - 40 now ask instead of acting: a bare turn of 100–179 (33), and a
+        bare climb or descent of 5,000 ft or less (7);
+      - 1 acts the same way, with the whole value ("engine ignite strobes");
+      - 1 now acts where it refused: "descend five hundred feet
+        alternator". 500 ft can't be the altitude, so it is a 500 ft descent.
+    - Already on main and not changed here: v26 sets 1,000 ft for "climb
+      another one thousand feet". v27 reads it as a change.
+- [ ] L.1.4 In the sim: `python -m simtest run relative all` (turns from the
+  heading flown, both questions answered, a climb from the altitude held,
+  speed from the bug or the airspeed, Mach refused).
+- [ ] L.1.5 Install v27 with the owner's OK (v26 kept as the fallback); the
+  owner's voice check.
 
 ---
 

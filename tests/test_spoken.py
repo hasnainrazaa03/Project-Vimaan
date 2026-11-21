@@ -173,3 +173,37 @@ def test_every_squawk():
         if not reads_as(t, "squawk {}", code)
     ]
     assert bad == []
+
+
+# Phase L.1: relative commands, in the phrasings that carry them.
+def test_relative_renderers():
+    assert spoken.turn_amount(20) == ["twenty"]
+    assert spoken.turn_amount(120) == ["one twenty", "one hundred twenty", "one two zero"]
+    assert spoken.altitude_change(1000) == ["one thousand", "a thousand"]
+    assert spoken.altitude_change(1500) == ["one thousand five hundred", "fifteen hundred"]
+    assert spoken.altitude_change(100) == ["one hundred", "a hundred"]
+    assert spoken.speed_change(25) == ["twenty five"]
+
+
+@pytest.mark.parametrize("deg", range(1, 180))
+def test_every_turn_amount(deg):
+    for text in spoken.turn_amount(deg):
+        assert reads_as(text, "turn left {} degrees", str(deg)), text
+        assert not normalize_aviation_input(text).startswith("0"), text
+
+
+def test_every_altitude_change():
+    bad = []
+    for ft in range(100, 5001, 100):
+        for text in spoken.altitude_change(ft):
+            for context in ("climb another {} feet", "up {} feet", "descend {} more"):
+                said = context.format(text).replace("another a ", "another ")
+                if not reads_as(said, "{}", str(ft)):
+                    bad.append(said)
+    assert bad == []
+
+
+@pytest.mark.parametrize("kt", range(1, 51))
+def test_every_speed_change(kt):
+    for text in spoken.speed_change(kt):
+        assert reads_as(text, "speed up {} knots", str(kt)), text

@@ -1203,3 +1203,103 @@ def test_a_rule_check_not_said_has_no_cancel():
     runner = scenario.Runner(Sim(), voice=None, poll_sec=0.0, log=lambda _line: None)
     results = runner.run([hold, cancel])
     assert [r.get("skipped") for r in results] == [True, True]
+
+
+# --- Phase L.1: relative commands --------------------------------------------
+
+from simtest import relative  # noqa: E402
+from simtest.tier1 import SETUPS as AIR_STARTS  # noqa: E402
+
+# How the model reads each phrase of the checklist (v27's labels).
+RELATIVE_NLU = {
+    "autopilot on": ("toggle_autopilot", {"state": "on", "instance": "1"}),
+    "heading mode": ("set_autopilot_mode", {"mode": "heading"}),
+    "altitude hold": ("set_autopilot_mode", {"mode": "altitude hold"}),
+    "heading one eight zero": ("set_autopilot_heading", {"degrees": "180"}),
+    "turn left twenty degrees": ("turn_by", {"turn": "left", "turn_degrees": "20"}),
+    "come right thirty degrees": ("turn_by", {"turn": "right", "turn_degrees": "30"}),
+    "turn right one two zero": ("turn_by", {"turn": "right", "turn_degrees": "120"}),
+    "turn south": ("set_compass_heading", {"compass": "south"}),
+    "climb another thousand": ("change_altitude_by", {"direction": "up", "altitude_change": "1000"}),
+    "climb at one thousand feet per minute": ("set_vertical_speed", {"vs": "1000", "direction": "up"}),
+    "descend two thousand feet": ("set_autopilot_altitude", {"altitude": "2000"}),
+    "down five hundred feet": ("change_altitude_by", {"direction": "down", "altitude_change": "500"}),
+    "altitude six thousand": ("set_autopilot_altitude", {"altitude": "6000"}),
+    "speed up ten knots": ("change_speed_by", {"direction": "up", "speed_change": "10"}),
+}  # fmt: skip
+
+
+def _relative_physics(xp):
+    """An autopilot that gets there at once: the heading follows the bug, and
+    a V/S climb arrives at the selected altitude and holds it."""
+    ap = "sim/cockpit2/autopilot/"
+    g = "sim/cockpit2/gauges/indicators/"
+    xp.effects["sim/autopilot/vertical_speed"] = lambda x: x.datarefs.update(
+        {ap + "vvi_status": 2, ap + "altitude_mode": 4}
+    )
+    xp.datarefs.update(
+        {
+            g + "heading_AHARS_deg_mag_pilot": 180.0,
+            g + "altitude_ft_pilot": 6000.0,
+            g + "airspeed_kts_pilot": 148.0,
+            ap + "heading_dial_deg_mag_pilot": 180.0,
+        }
+    )
+
+    def script(x):
+        x.datarefs[g + "heading_AHARS_deg_mag_pilot"] = x.datarefs[
+            ap + "heading_dial_deg_mag_pilot"
+        ]
+        if x.datarefs.get(ap + "vvi_status") == 2:
+            x.datarefs[g + "altitude_ft_pilot"] = x.datarefs[ap + "altitude_dial_ft"]
+            x.datarefs.update({ap + "vvi_status": 0, ap + "altitude_mode": 6})
+            x.datarefs[ap + "altitude_hold_status"] = 2
+
+    return script
+
+
+def test_the_relative_checklist_passes_on_the_fake_baron(monkeypatch, tmp_path):
+    import test_plugin
+
+    test_plugin.NLU.clear()
+    for text, (intent, slots) in RELATIVE_NLU.items():
+        test_plugin.NLU[text] = (intent, slots, 0.99)
+    module, plugin, xp = test_plugin._load_plugin(monkeypatch, tmp_path)
+    results: list = []
+    try:
+        monkeypatch.setattr(module, "BRIDGE_POLL_SEC", 0.0)
+        monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+        _generic_sim(xp)
+        xp.datarefs["sim/flightmodel/position/y_agl"] = 5000 * 0.3048
+        script = _relative_physics(xp)
+        br = Bridge(tmp_path / "Vimaan_Logs", poll_sec=0.002)
+        br.enable()
+        plugin._bridge_next = 0.0
+        runner = scenario.Runner(br, voice=None, poll_sec=0.005, log=lambda _line: None)
+        t = threading.Thread(
+            target=lambda: results.extend(runner.run(relative.steps("baron"))), daemon=True
+        )
+        t.start()
+        while t.is_alive():
+            script(xp)
+            plugin._flight_loop()
+            t.join(0.001)
+    finally:
+        plugin.XPluginStop()
+    failed = {r["step"]: r["problems"] for r in results if not r["ok"]}
+    assert failed == {}
+    assert not any(r.get("skipped") for r in results)
+
+
+def test_the_relative_checklist_asks_both_questions_on_every_aircraft():
+    for aircraft in AIR_STARTS:
+        steps = relative.steps(aircraft)
+        asked = [s for s in steps if s.outcomes == ("ambiguous",)]
+        assert [s.say for s in asked] == ["turn right one two zero", "descend two thousand feet"]
+        mach = [s for s in steps if s.name == "a change in Mach is refused"]
+        assert bool(mach) == AIR_STARTS[aircraft].jet
+
+
+def test_relative_needs_a_relative_model():
+    assert cli._model_lacks("relative", {"model_intents": ["set_autobrake"]})
+    assert cli._model_lacks("relative", {"model_intents": ["turn_by"]}) is None

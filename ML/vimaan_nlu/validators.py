@@ -19,6 +19,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from vimaan_nlu import commands as _commands
+from vimaan_nlu.relative import CHANGE_INTENTS, says_change
 from vimaan_nlu.slot_types import AnyOf, Digits, Enum, Range
 
 __all__ = [
@@ -100,9 +101,10 @@ _COUNT_WORDS = frozenset(
     "seventy eighty ninety".split()
 )
 _MULTIPLIERS = frozenset({"thousand", "hundred"})
+_ONE_WORDS = frozenset({"a", "another"})
 
 
-def clipped_number(text: str) -> bool:
+def clipped_number(text: str, intent: str | None = None) -> bool:
     """True if "thousand" or "hundred" has no number before it. Pilots always
     say one ("eight thousand", "fifteen hundred"), so a bare one means the
     number's start went unheard: "altitude thousand" was "altitude eight
@@ -110,9 +112,15 @@ def clipped_number(text: str) -> bool:
     was "descend at one thousand five hundred feet per minute" (and would
     climb). No command phrasing in the training data has one."""
     words = text.lower().split()
+    # Phase L.1: "climb another thousand", "up a thousand feet". Only for a
+    # change command (``intent``) with a word that makes the number a change:
+    # Vosk hears "eight" as "a", and a relative change is never as large as
+    # 8,000. Read as an altitude, "climb another thousand" would fly 1,000 ft
+    # (v26 does), so there it stays clipped.
+    one = intent in CHANGE_INTENTS and says_change(text)
+    counts = _COUNT_WORDS | (_ONE_WORDS if one else frozenset())
     return any(
-        w in _MULTIPLIERS
-        and (i == 0 or not (words[i - 1] in _COUNT_WORDS or words[i - 1].isdigit()))
+        w in _MULTIPLIERS and (i == 0 or not (words[i - 1] in counts or words[i - 1].isdigit()))
         for i, w in enumerate(words)
     )
 
@@ -131,7 +139,12 @@ def heading_too_short(value: Any) -> bool:
 # (heading 70), "two nine zero" -> "tune nine zero" (flight level 90). Real
 # controllers' speech through the grammar (ATCOSIM, 10 speakers): 137 of v25's
 # 193 wrong actions were such numbers.
-_LOST_DIGIT_SLOTS = {"set_autopilot_heading": "degrees", "set_flight_level": "flight_level"}
+_LOST_DIGIT_SLOTS = {
+    "set_autopilot_heading": "degrees",
+    "set_flight_level": "flight_level",
+    # Phase L.1: "turn left one seven zero" heard "turn left want seven zero".
+    "turn_by": "turn_degrees",
+}
 _SPOKEN_NUMBER = _COUNT_WORDS | {"oh", "hundred", "thousand"}
 
 
@@ -143,9 +156,17 @@ def _words_before_number(intent: str, slot: str) -> frozenset[str]:
 
     cmd = _commands.command(intent)
     out: set[str] = set()
-    for template in cmd.templates if cmd else ():
+    if cmd is None:
+        return frozenset()
+    for template in cmd.templates:
         m = re.search(r"(\S+)\s+\{" + slot + r"[}=]", template)
-        if m:
+        if m and (choice := re.fullmatch(r"\{(\w+)\}", m.group(1))):
+            # Another slot just before ("{turn} {turn_degrees}"): its words.
+            other = cmd.slots.get(choice.group(1))
+            if other is not None:
+                out.update(str(v) for v in other.values)
+                out.update(w for syns in other.synonyms.values() for w in syns)
+        elif m:
             out.add(m.group(1).lower())
         elif template.startswith("{" + slot):
             out.update(p.split()[-1] for p in _commands.PREFIXES if p)

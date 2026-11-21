@@ -163,6 +163,30 @@ class TestPlausibility:
         from vimaan_nlu.validators import clipped_number
 
         assert clipped_number(text) is clipped
+        assert clipped_number(text, "set_autopilot_altitude") is clipped
+
+    @pytest.mark.parametrize(
+        ("text", "intent", "clipped"),
+        [
+            # Phase L.1: "a" and "another" count as one only in a change
+            # command with a word that makes the number a change.
+            ("climb another thousand", "change_altitude_by", False),
+            ("up a thousand feet", "change_altitude_by", False),
+            ("a thousand feet higher", "change_altitude_by", False),
+            ("climb a thousand feet", "change_altitude_by", True),  # "eight" heard as "a"
+            ("altitude a thousand", "change_altitude_by", True),
+            # Read as an altitude, "another thousand" would fly 1,000 ft (v26
+            # reads it so): it stays clipped for every other command.
+            ("climb another thousand", "set_autopilot_altitude", True),
+            ("descend another thousand feet", "set_autopilot_altitude", True),
+            ("climb another thousand", None, True),
+            ("up a thousand feet", "set_vertical_speed", True),
+        ],
+    )
+    def test_clipped_number_in_a_change(self, text, intent, clipped):
+        from vimaan_nlu.validators import clipped_number
+
+        assert clipped_number(text, intent) is clipped
 
     @pytest.mark.parametrize(
         ("intent", "value", "text", "lost"),
@@ -189,14 +213,21 @@ class TestPlausibility:
             ("set_autopilot_heading", "170", "heading want one seven zero", False),
             # Other commands are not checked.
             ("set_autopilot_speed", "75", "mach seven five", False),
+            # Phase L.1: a turn's amount, after its side or "by".
+            ("turn_by", "70", "turn left want seven zero", True),
+            ("turn_by", "20", "turn left twenty", False),
+            ("turn_by", "20", "twenty degrees right", False),
+            ("turn_by", "30", "come right by thirty", False),
         ],
     )
     def test_lost_digits(self, intent, value, text, lost):
         from vimaan_nlu.validators import lost_digits
 
-        slot = {"set_flight_level": "flight_level", "set_autopilot_speed": "speed"}.get(
-            intent, "degrees"
-        )
+        slot = {
+            "set_flight_level": "flight_level",
+            "set_autopilot_speed": "speed",
+            "turn_by": "turn_degrees",
+        }.get(intent, "degrees")
         assert lost_digits(intent, {slot: value}, text) is lost
 
     def test_lost_digits_allows_every_phrasings_word_before_the_number(self):
@@ -209,10 +240,14 @@ class TestPlausibility:
         for intent, slot in (
             ("set_autopilot_heading", "degrees"),
             ("set_flight_level", "flight_level"),
+            ("turn_by", "turn_degrees"),
         ):
             for template in command(intent).templates:
+                # The number's slot gets the number, any other slot a value.
+                filled = template.replace("{" + slot + "}", "seven zero")
+                filled = re.sub(r"\{turn\}", "left", filled)
                 for prefix in PREFIXES:
-                    text = f"{prefix} " + re.sub(r"\{[^}]*\}", "seven zero", template)
+                    text = f"{prefix} " + re.sub(r"\{[^}]*\}", "seven zero", filled)
                     assert not lost_digits(intent, {slot: "70"}, text.strip()), text
 
     @pytest.mark.parametrize(
