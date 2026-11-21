@@ -80,6 +80,20 @@ def test_gate_counts_a_clipped_number_as_not_acted_on():
     assert model_gate.decision(p)[0] == "act"
 
 
+def test_gate_counts_a_change_read_as_an_altitude_as_not_acted_on():
+    # As the plugin: "climb another two thousand" is not the altitude 2,000.
+    p = {
+        "intent": "set_autopilot_altitude",
+        "slots": {"altitude": "2000"},
+        "confidence": 0.99,
+        "normalized_text": "climb another 2000",
+        "original_text": "climb another two thousand",
+    }
+    assert model_gate.decision(p) == ("change_as_altitude", {})
+    p.update(original_text="climb up to two thousand", normalized_text="climb up to 2000")
+    assert model_gate.decision(p)[0] == "act"
+
+
 def test_gate_counts_a_lost_digit_as_not_acted_on():
     # As the plugin: "one seven zero" heard as "want seven zero".
     p = {

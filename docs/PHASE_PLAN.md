@@ -1734,6 +1734,19 @@ Steps:
         alternator". 500 ft can't be the altitude, so it is a 500 ft descent.
     - Already on main and not changed here: v26 sets 1,000 ft for "climb
       another one thousand feet". v27 reads it as a change.
+  - **A change read as an altitude is refused** (the owner's OK, 2026-11-20).
+    - Of data v19's altitude-change phrasings, v26 acted on 1,904 as the
+      altitude. "Climb another two thousand" flew to 2,000 ft.
+    - Now an altitude command is refused when a word says a change:
+      another, more, by, further, extra, higher or lower. "Up" or "down" is
+      refused too, unless a word makes the number the target ("climb up to
+      eight thousand" is the altitude). This is
+      `relative.change_said_as_altitude`, in the plugin and the gate.
+    - Vimaan says "Say the altitude to fly to" with v26, and "Say it again:
+      the altitude, or the change" with a model that knows changes.
+    - On the 29,849 texts, v26's decisions changed on 2,330, all of them
+      altitude-change phrasings: the 1,904 acted on, plus 426 it already
+      refused. v27's didn't change.
 - [x] L.1.4 In the sim: `python -m simtest run relative all --text` (turns
   from the heading flown, both questions answered, a climb from the altitude
   held, speed from the bug or the airspeed, Mach refused). Flown 2026-11-20

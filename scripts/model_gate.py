@@ -118,7 +118,12 @@ def decide(p: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
     from vimaan_nlu.ambiguity import two_or_to
     from vimaan_nlu.commands import command, required_slots
     from vimaan_nlu.questions import looks_like_question
-    from vimaan_nlu.relative import climb_reading, compass_conflict, turn_reading
+    from vimaan_nlu.relative import (
+        change_said_as_altitude,
+        climb_reading,
+        compass_conflict,
+        turn_reading,
+    )
     from vimaan_nlu.validators import (
         clipped_number,
         has_command_word,
@@ -143,6 +148,8 @@ def decide(p: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
         return no("no_command_word")
     if clipped_number(p.get("original_text") or "", intent):
         return no("clipped_number")
+    if change_said_as_altitude(intent, p.get("original_text") or ""):
+        return no("change_as_altitude")
     if intent == "set_autopilot_heading" and heading_too_short(slots.get("degrees")):
         return no("one_digit_heading")
     if lost_digits(intent, slots, p.get("original_text") or ""):

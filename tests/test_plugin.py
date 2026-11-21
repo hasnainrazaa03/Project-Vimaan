@@ -4213,6 +4213,31 @@ def test_another_thousand_read_as_an_altitude_asks_again(sim):
     assert events(plugin, "implausible")[-1]["reason"] == "clipped_number"
 
 
+@pytest.mark.parametrize(
+    ("intents", "reply"),
+    [
+        (None, "Say the altitude to fly to"),  # v26: no change command
+        (
+            {"set_autopilot_altitude", "change_altitude_by"},
+            "Say it again: the altitude, or the change",
+        ),
+    ],
+)
+def test_a_change_read_as_an_altitude_is_refused(sim, intents, reply):
+    # v26 read "climb another two thousand" as altitude 2,000 and flew there
+    # (1,904 of data v19's altitude-change phrasings acted so).
+    _, plugin, xp = sim
+    plugin._model_intents = intents
+    xp.datarefs.update({ALT_NOW: 10500.0, ALT_BUG: 11000.0})
+    slots = {"altitude": "2000"}
+    assert say(plugin, "climb another two thousand", "set_autopilot_altitude", slots) == [reply]
+    assert xp.datarefs[ALT_BUG] == 11000.0
+    assert events(plugin, "implausible")[-1]["reason"] == "change_as_altitude"
+    # Said as the target, it is the altitude.
+    say(plugin, "climb up to one two thousand", "set_autopilot_altitude", {"altitude": "12000"})
+    assert xp.datarefs[ALT_BUG] == 12000.0
+
+
 def test_climb_a_thousand_when_level_is_from_where_we_are(sim):
     _, plugin, xp = sim
     xp.datarefs.update({ALT_NOW: 10012.0, ALT_BUG: 15000.0})  # held, window preset

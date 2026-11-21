@@ -110,6 +110,7 @@ from vimaan_nlu.relative import (  # noqa: E402
     COMPASS,
     altitude_readings,
     altitude_reference,
+    change_said_as_altitude,
     changed,
     climb_reading,
     compass_conflict,
@@ -1409,6 +1410,14 @@ class PythonInterface:
                 self.tel.event("implausible", cmd=cmd, reason="clipped_number", intent=intent_pred)
                 self._say("Say the whole number")
                 return
+            # "climb another two thousand" read as the altitude 2,000.
+            if change_said_as_altitude(intent_pred, text):
+                outcome = "rejected"
+                self.tel.event(
+                    "implausible", cmd=cmd, reason="change_as_altitude", intent=intent_pred
+                )
+                self._say(self._change_as_altitude_reply())
+                return
             if intent_pred == "set_autopilot_heading" and heading_too_short(slots.get("degrees")):
                 outcome = "rejected"
                 self.tel.event(
@@ -1553,6 +1562,13 @@ class PythonInterface:
             cmd, "change_altitude_by", {"direction": direction, "altitude_change": str(feet)}
         )
 
+    def _change_as_altitude_reply(self):
+        """A change heard as an altitude: a model that knows changes (v27)
+        can be asked again; one that doesn't (v26) needs the altitude."""
+        if "change_altitude_by" in (self._model_intents or ()):
+            return "Say it again: the altitude, or the change"
+        return "Say the altitude to fly to"
+
     def _usable_to_reading(self, meant):
         """The checks the heard command passed, run on the "to" reading too."""
         intent, slots, text = meant["intent"], meant["slots"], meant["text"]
@@ -1561,6 +1577,7 @@ class PythonInterface:
             and meant.get("confidence", 0.0) >= self.CONFIDENCE_FLOOR
             and has_command_word(intent, meant.get("normalized") or text)
             and not clipped_number(text, intent)
+            and not change_said_as_altitude(intent, text)
             and not lost_digits(intent, slots, text)
         )
 
