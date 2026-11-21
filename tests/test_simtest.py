@@ -1221,9 +1221,9 @@ RELATIVE_NLU = {
     "turn right one two zero": ("turn_by", {"turn": "right", "turn_degrees": "120"}),
     "turn south": ("set_compass_heading", {"compass": "south"}),
     "climb another thousand": ("change_altitude_by", {"direction": "up", "altitude_change": "1000"}),
-    "climb at one thousand feet per minute": ("set_vertical_speed", {"vs": "1000", "direction": "up"}),
     "descend two thousand feet": ("set_autopilot_altitude", {"altitude": "2000"}),
     "down five hundred feet": ("change_altitude_by", {"direction": "down", "altitude_change": "500"}),
+    "descend at one thousand five hundred feet per minute": ("set_vertical_speed", {"vs": "1500", "direction": "down"}),
     "altitude six thousand": ("set_autopilot_altitude", {"altitude": "6000"}),
     "speed up ten knots": ("change_speed_by", {"direction": "up", "speed_change": "10"}),
 }  # fmt: skip
@@ -1231,7 +1231,9 @@ RELATIVE_NLU = {
 
 def _relative_physics(xp):
     """An autopilot that gets there at once: the heading follows the bug, and
-    a V/S climb arrives at the selected altitude and holds it."""
+    a V/S descent arrives at the selected altitude and holds it. Altitude
+    hold caught the aircraft 300 ft above the start altitude, as in the sim
+    (2026-11-20): the checklist measures from the altitude held."""
     ap = "sim/cockpit2/autopilot/"
     g = "sim/cockpit2/gauges/indicators/"
     xp.effects["sim/autopilot/vertical_speed"] = lambda x: x.datarefs.update(
@@ -1240,7 +1242,7 @@ def _relative_physics(xp):
     xp.datarefs.update(
         {
             g + "heading_AHARS_deg_mag_pilot": 180.0,
-            g + "altitude_ft_pilot": 6000.0,
+            g + "altitude_ft_pilot": 6300.0,
             g + "airspeed_kts_pilot": 148.0,
             ap + "heading_dial_deg_mag_pilot": 180.0,
         }
