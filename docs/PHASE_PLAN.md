@@ -27,7 +27,7 @@ Last updated 2026-11-20.
 | T4 | Tier 4: questions (read-only) → **v26 + question model q2** | ✅ closed 2026-11-19: runner in the sim on four aircraft (q1 143/144, the miss a moving EGT; q2 148/148 with the phase question); the owner's real-voice check passed (46 of 50 right first time, none acted on) | #64–#70, #76 |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ✅ closed 2026-11-19: tracker and margins flown on four aircraft (takeoff, landing, go-around, restart); the three phase rules held in the sim, the callouts quiet but for one real flap-speed call; "what phase of flight" answered (q2) | #71–#76, #84 |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
-| L | Later: relative commands (L.1 → **v27**), two commands in one breath, checklists, add-on aircraft profiles | 🟡 L.1 built (2026-11-20); v27 training | #85 |
+| L | Later: relative commands (L.1 → **v27**), two commands in one breath, checklists, add-on aircraft profiles | 🟡 L.1 built (2026-11-20); v27 = gates 1–3, 5, 6 passed, gate 4 by the owner's exception; next: merge, install, sim | #85 |
 
 Measured so far (in-sim, Vosk): speech end → action **p50 330 ms**;
 recognition 2–3 ms; model ~11 ms; 0 frame stalls. Real-voice benchmark
@@ -1638,8 +1638,9 @@ Steps:
 - [x] L.1.1 Design and the owner's decisions (2026-11-20).
 - [x] L.1.2 Commands, rules, plugin handlers and the asks; gate decision;
   grammar; gold; data v19; tests (#85).
-- [ ] L.1.3 v27: four runs on data v19 with v26's recipe (#58), greedy soup
-  on dev, gate once against v26. The gates are unchanged.
+- [x] L.1.3 v27: four runs on data v19 with v26's recipe (#58), greedy soup
+  on dev, gate once against v26. The gates are unchanged. Done with the
+  owner's gate-4 exception (below).
   - **First candidate (v27-soup2 = greedy(e, f, g, h), all four kept, dev
     7731/110/0): failed gates 1, 2 and 4.**
     - Passed: 3 (gold 113/113, 14/14 fragments refused), 5 (2157/2158) and
@@ -1687,6 +1688,36 @@ Steps:
        - This is a variance re-roll for gate 4, an exception to "every
          retrain needs a diagnosed change". If it fails again, stop and
          report.
+  - **Second candidate (v27-soup3 = greedy over seeds 1–8; it kept seven
+    and left out v27-k; dev 7732/109/0): failed gate 4 only.**
+    - Gate 1: intent 0.9997, slot F1 0.9999 (v26: 0.8901 / 0.8902).
+    - Gate 2: 21880/308/2 against v26's 21879/308/3.
+      - One wrong is "please turn left forty eight if you would", the row
+        whose meaning changed.
+      - The other is "radial brake off please", which v26 gets wrong too.
+    - Gates 3 and 5 as before. Gate 6: p95 6.3 ms.
+    - The held-out voice set was 50/7/0, the same as v26.
+    - **Gate 4:** 88/28/2 against 89/29/0, on the same two clips as the
+      first candidate.
+  - **The two clips, run by run.** Every single run of both models was run on
+    each clip:
+
+    | Clip (said → heard) | v26's runs (n, o, p, q) | v26 | v27's runs (e–l) | v27 |
+    | --- | --- | --- | --- | --- |
+    | "flaps down again" → "flaps down ident" | flaps: p only; o, n, q chose the transponder | flaps | flaps: f, g, j, k, l; e, h, i chose the transponder | transponder |
+    | "tune com two to one two one decimal seven five" → "fuel current auto one co one decimal seven five" | refused: n, o, q; p acts (autobrake) | refused | refused: e, g, j, l; f, h, i, k act | autobrake, no setting |
+
+    - Single runs of both models split on both clips. v26's average won both
+      and v27's averages lost both.
+    - The plugin refuses the autobrake one (no setting), so in the plugin v27
+      is 88/29/1. The one real difference is "flaps down ident", where v27
+      presses ident.
+  - **Owner's decision (2026-11-20, after the second gate):** accept gate 4's
+    result as an exception, for these two clips only. v27 = v27-soup3.
+    - Its gate.json is the gate's own output, unchanged (gate 4 failed).
+      `gate_exception.json` beside it records this decision.
+    - No more seeds: picking runs until these clips come out right would
+      select on the voice fixture.
 - [ ] L.1.4 In the sim: `python -m simtest run relative all` (turns from the
   heading flown, both questions answered, a climb from the altitude held,
   speed from the bug or the airspeed, Mach refused).
