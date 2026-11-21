@@ -27,7 +27,7 @@ Last updated 2026-11-20.
 | T4 | Tier 4: questions (read-only) → **v26 + question model q2** | ✅ closed 2026-11-19: runner in the sim on four aircraft (q1 143/144, the miss a moving EGT; q2 148/148 with the phase question); the owner's real-voice check passed (46 of 50 right first time, none acted on) | #64–#70, #76 |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ✅ closed 2026-11-19: tracker and margins flown on four aircraft (takeoff, landing, go-around, restart); the three phase rules held in the sim, the callouts quiet but for one real flap-speed call; "what phase of flight" answered (q2) | #71–#76, #84 |
 | C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
-| L | Later: relative commands (L.1 → **v27**), two commands in one breath, checklists, add-on aircraft profiles | 🟡 L.1 built (2026-11-20); v27 = gates 1–3, 5, 6 passed, gate 4 by the owner's exception; next: merge, install, sim | #85 |
+| L | Later: relative commands (L.1 → **v27**), two commands in one breath, checklists, add-on aircraft profiles | 🟡 L.1 ✅ closed 2026-11-21: v27 installed (gate 4 by the owner's exception); relative checklist in the sim on four aircraft; the owner's recorded voice 77/77 in the sim (74 of 76 heard word for word, none acted on wrongly). Next in L: not chosen | #85–#91 |
 
 Measured so far (in-sim, Vosk): speech end → action **p50 330 ms**;
 recognition 2–3 ms; model ~11 ms; 0 frame stalls. Real-voice benchmark
@@ -1806,8 +1806,24 @@ Steps:
         right way 10 of 10 (turns of 20–30° and headings, both ways), each
         bug on target.
 - [x] L.1.5 Install v27 with the owner's OK (v26 kept as the fallback):
-  installed 2026-11-20 (main dd65881, v27 + q2; backup taken first). The
-  owner's voice check is still to do.
+  installed 2026-11-20 (main dd65881, v27 + q2; backup taken first).
+- [x] L.1.6 The owner's voice check, recorded (2026-11-21, installed main
+  f15b8ac, v27 + q2). The owner recorded each of the relative checklist's 22
+  phrases once, on the EarPods they fly with (`python -m simtest record
+  relative all`, #90), and the runner played them in the sim on all four
+  aircraft (`run relative all --recordings`). Measurement only: nothing is
+  trained or tuned on the recordings.
+  - Heard word for word: 74 of 76 phrases played. Both misses were the same
+    take, "turn left twenty degrees" heard as "down left twenty degrees" on
+    the Baron and the 737 (the King Air and A330 heard that file right). The
+    model added `direction=down`, which a turn ignores: Vimaan turned left 20
+    both times. Nothing was acted on wrongly.
+  - In the sim: King Air 16/16, 737 22/22, A330 23/23. The Baron's first run
+    was 14/16 from a runner bug: it said the misheard turn again as text, so
+    the turn was set twice. Fixed (#91: a misheard phrase already acted on is
+    not repeated); the Baron again with the same recordings: 16/16.
+  - The checklist's phrases aren't blind (the owner knew them); the blind
+    real-voice measures stay in Phase G.
 
 ---
 
