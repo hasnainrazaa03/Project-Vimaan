@@ -16,9 +16,11 @@ Then it checks:
   flight (Phase F), from the bridge state;
 - optionally a callout Vimaan should (or shouldn't) make.
 
-Recognition and function are scored separately: when the generated voice is
-misheard, the step is recorded as a recognition miss and repeated as text,
-so a slip of the recogniser doesn't hide whether the sim did the right thing.
+Recognition and function are scored separately: when the voice is misheard,
+the step is recorded as a recognition miss and repeated as text, so a slip of
+the recogniser doesn't hide whether the sim did the right thing. A misheard
+phrase that Vimaan already acted on is not repeated (a turn or climb "by" would
+be flown twice): the sim checks judge what the voice did.
 """
 
 from __future__ import annotations
@@ -333,6 +335,11 @@ class Runner:
         # Misunderstood: score recognition separately, then do it as text so
         # the check is about the sim, not the recogniser.
         r["misheard"] = {k: said.get(k) for k in ("heard", "intent", "slots", "outcome", "replies")}
+        if acted(said):
+            # Already done in the sim: again as text, a relative command would
+            # be done twice. The sim checks judge what the voice did.
+            r["acted_as_heard"] = True
+            return said
         return self.bridge.say_text(phrase, **key)
 
     def _answer(self, answer: Answer, replies: list[str], before: dict[str, Any]) -> dict[str, Any]:
@@ -383,13 +390,25 @@ class Runner:
         return out
 
 
+# Outcomes after which Vimaan has changed the sim, or is changing it (the
+# A330's heading knob is "pending" while it clicks).
+ACTED = ("executed", "pending")
+
+
+def acted(result: Mapping[str, Any]) -> bool:
+    """Did this say result change the sim (or start to)?"""
+    return result.get("outcome") in ACTED or bool(result.get("actions"))
+
+
 def line(r: dict[str, Any]) -> str:
     if r.get("skipped"):
         why = r.get("note") if str(r.get("note", "")).startswith("not run") else "doesn't apply now"
         return f"· {r['step']}: skipped ({why})"
     mark = "✓" if r["ok"] else "✕"
     heard = ""
-    if r.get("understood_ok") is False:
+    if r.get("acted_as_heard"):
+        heard = f"  [misunderstood “{r.get('heard')}”, acted on as heard]"
+    elif r.get("understood_ok") is False:
         heard = f"  [misunderstood “{r.get('heard')}”, redone as text]"
     elif r.get("heard_ok") is False:
         heard = f"  [heard “{r.get('heard')}”, same meaning]"

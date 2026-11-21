@@ -221,7 +221,8 @@ values, modes, the turn to the new heading, the level-off after a V/S descent,
 the autothrottle answer, altimeter, COM, the flap-speed hold, the autopilot
 off without a callout, and a pilot disconnect with one. A voice that's
 misunderstood is scored, then the step is redone as text so the check is about
-the sim. Reports: `~/Vimaan_Logs/test/reports/<time>_<aircraft>.json`.
+the sim, unless Vimaan already acted on what it heard: then the sim checks
+judge that (redone, a turn or climb "by" would be flown twice). Reports: `~/Vimaan_Logs/test/reports/<time>_<aircraft>.json`.
 `python -m simtest screenshot` shows what has the sim paused, if it stops.
 
 **The Tier 2 checklist (radios and transponder):**
@@ -303,7 +304,9 @@ shown while you record.
 
 `run --recordings` plays your takes through the bridge in place of generated
 speech, and the report counts how many Vimaan understood. A misheard take is
-then sent as text, so the rest of the checklist still tests the sim. A phrase
+then sent as text, so the rest of the checklist still tests the sim, unless
+Vimaan acted on it as heard (the step's line says so): then the sim checks
+judge what it did. A phrase
 not recorded is sent as text too. The recordings stay in `~/Vimaan_Logs`: they
 measure, nothing is trained on them.
 

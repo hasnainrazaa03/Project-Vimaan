@@ -19,13 +19,14 @@ from simtest.scenario import Runner, Step, equals, heading_near, levelled_at  # 
 
 
 class FakeBridge:
-    def __init__(self, events_path, readings=None, voice_hears=None):
+    def __init__(self, events_path, readings=None, voice_hears=None, voice_outcome="executed"):
         self.events_path = events_path
         self.readings = readings or {}  # name -> value, or list of values (one per read)
         self.voice_hears = voice_hears or {}  # phrase -> what the voice is heard as
+        self.voice_outcome = voice_outcome  # the outcome of a say_wav
         self.texts, self.wavs, self.commands, self.writes = [], [], [], []
 
-    def _result(self, text, heard=None):
+    def _result(self, text, heard=None, outcome="executed"):
         intent = {"autopilot on": "toggle_autopilot", "autopilot of": "toggle_autopilot"}.get(
             text, "x"
         )
@@ -34,7 +35,7 @@ class FakeBridge:
             "heard": heard or text,
             "intent": intent,
             "slots": {"t": text},
-            "outcome": "executed",
+            "outcome": outcome,
             "replies": [f"Did {text}"],
             "checks": [{"ok": True}],
             "latency_ms": 5,
@@ -44,7 +45,7 @@ class FakeBridge:
         phrase = Path(path).stem
         self.wavs.append(phrase)
         heard = self.voice_hears.get(phrase, phrase)
-        return self._result(heard, heard)
+        return self._result(heard, heard, self.voice_outcome)
 
     def say_text(self, text):
         self.texts.append(text)
@@ -132,10 +133,41 @@ def test_a_sim_check_waits_for_the_aircraft(tmp_path, fake_voice, monkeypatch):
 
 
 def test_a_misunderstood_voice_is_redone_as_text(tmp_path, fake_voice):
-    b = FakeBridge(tmp_path / "e.jsonl", voice_hears={"autopilot on": "autopilot of"})
+    b = FakeBridge(
+        tmp_path / "e.jsonl",
+        voice_hears={"autopilot on": "autopilot of"},
+        voice_outcome="not_understood",
+    )
     (r,) = run(b, [Step("x", say="autopilot on")], understood=lambda res, ph: False)
     assert r["heard_ok"] is False and r["understood_ok"] is False and b.texts == ["autopilot on"]
     assert r["misheard"]["heard"] == "autopilot of" and r["ok"]
+    assert "redone as text" in scenario.line(r)
+
+
+@pytest.mark.parametrize("outcome", ["executed", "pending"])
+def test_a_misheard_phrase_already_acted_on_is_not_done_twice(tmp_path, fake_voice, outcome):
+    # "turn left twenty degrees" heard as "down left twenty degrees": the
+    # model's slots differ (direction=down), but the turn was flown. Again as
+    # text, it would be flown twice.
+    b = FakeBridge(
+        tmp_path / "e.jsonl",
+        voice_hears={"turn left twenty degrees": "down left twenty degrees"},
+        voice_outcome=outcome,
+    )
+    (r,) = run(b, [Step("x", say="turn left twenty degrees")], understood=lambda res, ph: False)
+    assert b.texts == [] and b.wavs == ["turn left twenty degrees"]
+    assert r["understood_ok"] is False and r["acted_as_heard"] is True
+    assert r["misheard"]["heard"] == "down left twenty degrees"
+    assert r["replies"] == ["Did down left twenty degrees"]
+    assert "acted on as heard" in scenario.line(r)
+    assert scenario.summary([r])["understood_by_voice"] == 0
+
+
+def test_acted_reads_the_outcome_or_the_actions():
+    assert scenario.acted({"outcome": "executed"}) and scenario.acted({"outcome": "pending"})
+    assert scenario.acted({"outcome": "x", "actions": [{"command": "c"}]})
+    for outcome in ("ambiguous", "rejected", "implausible", "not_understood", None):
+        assert not scenario.acted({"outcome": outcome, "actions": []})
 
 
 def test_heard_differently_but_understood_the_same_is_not_redone(tmp_path, fake_voice):
