@@ -1317,3 +1317,115 @@ def test_every_heading_step_lets_the_a330_turn_its_knob():
 def test_relative_needs_a_relative_model():
     assert cli._model_lacks("relative", {"model_intents": ["set_autobrake"]})
     assert cli._model_lacks("relative", {"model_intents": ["turn_by"]}) is None
+
+
+# --- Your own voice: simtest record, run --recordings ----------------------
+
+import array  # noqa: E402
+import math  # noqa: E402
+import wave  # noqa: E402
+
+from simtest import record  # noqa: E402
+
+
+def test_record_lists_each_phrase_of_a_checklist_once():
+    said = record.phrases("relative", list(AIR_STARTS))
+    words = [p for p, _ in said]
+    assert len(words) == len(set(words)) == 22
+    assert words[:4] == ["autopilot on", "heading mode", "altitude hold", "heading one eight zero"]
+    assert {"one two zero", "two thousand", "mach point seven eight"} <= set(words)  # answers, jets
+    assert not any(ask for _, ask in said)
+    assert any(ask for _, ask in record.phrases("tier4", ["baron"]))  # the question key
+
+
+class FakeMic:
+    """The plugin's recorder, faked: each take is the next of ``takes``."""
+
+    def __init__(self, takes):
+        self.takes = list(takes)
+        self.error = None
+
+    def start(self):
+        pass
+
+    def poll(self):
+        return 0
+
+    def stop(self):
+        return self.takes.pop(0) if len(self.takes) > 1 else self.takes[0]
+
+
+def tone(seconds=1.0, amplitude=6000):
+    n = int(record.SAMPLE_RATE * seconds)
+    s = [int(amplitude * math.sin(2 * math.pi * 220 * i / record.SAMPLE_RATE)) for i in range(n)]
+    return array.array("h", s).tobytes()
+
+
+def scripted(answers):
+    """Enter-to-start answers in order; Enter-to-stop is always Enter."""
+    answers = list(answers)
+    prompts = []
+
+    def ask(prompt):
+        prompts.append(prompt)
+        return "" if "recording" in prompt else answers.pop(0)
+
+    return ask, prompts
+
+
+def test_record_saves_wavs_and_goes_on_where_it_stopped(tmp_path):
+    ask, _ = scripted(["", "", "q"])
+    lines = []
+    missing = record.record("relative", ["baron"], tmp_path, FakeMic([tone()]), ask, lines.append)
+    total = len(record.phrases("relative", ["baron"]))
+    assert missing == total - 2
+    with wave.open(str(tmp_path / "001.wav")) as w:
+        assert (w.getnchannels(), w.getsampwidth(), w.getframerate()) == (1, 2, 16_000)
+    saved = record.load_recordings(tmp_path)
+    assert list(saved) == ["autopilot on", "heading mode"]
+    ask, _ = scripted(["q"])
+    lines = []
+    record.record("relative", ["baron"], tmp_path, FakeMic([tone()]), ask, lines.append)
+    assert any(line.startswith(f"[3/{total}]") for line in lines)  # resumed at the third
+
+
+def test_record_asks_again_for_a_take_with_nothing_in_it(tmp_path):
+    ask, _ = scripted(["", "", "q"])
+    lines = []
+    mic = FakeMic([bytes(32_000), tone()])  # a silent second, then the phrase
+    record.record("relative", ["baron"], tmp_path, mic, ask, lines.append)
+    assert any("Not kept: too quiet" in line for line in lines)
+    assert record.load_manifest(tmp_path)["recordings"]["autopilot on"]["takes"] == 1
+
+
+def test_record_redoes_the_one_before(tmp_path):
+    ask, _ = scripted(["", "r", "", "q"])
+    record.record("relative", ["baron"], tmp_path, FakeMic([tone()]), ask, lambda _line: None)
+    entry = record.load_manifest(tmp_path)["recordings"]["autopilot on"]
+    assert entry["takes"] == 2 and "redo" not in entry
+
+
+def test_the_runner_plays_the_pilots_recordings(tmp_path):
+    class Bridge:
+        def __init__(self):
+            self.calls = []
+
+        def say_wav(self, path, ask=False):
+            self.calls.append(("wav", str(path)))
+            return {"ok": True, "heard": "turn south", "outcome": "executed", "replies": []}
+
+        def say_text(self, text, ask=False):
+            self.calls.append(("text", text))
+            return {"ok": True, "outcome": "executed", "replies": []}
+
+    wav = tmp_path / "001.wav"
+    br = Bridge()
+    runner = scenario.Runner(
+        br, voice=None, recordings={"turn south": wav}, poll_sec=0.0, log=lambda _line: None
+    )
+    results = runner.run(
+        [scenario.Step("recorded", say="turn south"), scenario.Step("not", say="gear down")]
+    )
+    assert br.calls == [("wav", str(wav)), ("text", "gear down")]
+    assert results[0]["heard_ok"] is True and results[1].get("not_recorded") is True
+    assert scenario.summary(results)["said_by_voice"] == 1

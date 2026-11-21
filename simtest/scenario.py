@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -177,6 +177,9 @@ class Step:
 class Runner:
     bridge: Bridge
     voice: str | None = voice_mod.DEFAULT_VOICE  # None: text only, no recognition
+    # The pilot's own recordings (simtest.record), phrase -> WAV, instead of
+    # generated speech. A phrase not recorded is sent as text.
+    recordings: Mapping[str, Path] | None = None
     # understood(result, phrase): did a voice result mean what the phrase
     # means? (simtest.understand.same). None: only an exact transcript counts.
     understood: Callable[[dict[str, Any], str], bool] | None = None
@@ -309,10 +312,17 @@ class Runner:
     def _say(self, phrase: str, r: dict[str, Any], ask: bool = False) -> dict[str, Any]:
         # The question key only when asked: the talk key's requests stay as they were.
         key = {"ask": True} if ask else {}
-        if self.voice is None:
+        wav: Path | str | None = None
+        if self.recordings is not None:
+            wav = self.recordings.get(phrase)
+            if wav is None:
+                r["not_recorded"] = True
+        elif self.voice is not None:
+            wav = voice_mod.synthesize(phrase, self.voice)
+        if wav is None:
             r["heard"], r["heard_ok"] = phrase, None
             return self.bridge.say_text(phrase, **key)
-        said = self.bridge.say_wav(voice_mod.synthesize(phrase, self.voice), **key)
+        said = self.bridge.say_wav(wav, **key)
         r["heard"] = said.get("heard")
         r["heard_ok"] = said.get("heard") == phrase
         r["understood_ok"] = r["heard_ok"] or bool(
