@@ -19,6 +19,66 @@ def test_turned(heading, side, degrees, target):
     assert rel.turned(heading, side, degrees) == target
 
 
+ALT = "set_autopilot_altitude"
+
+
+@pytest.mark.parametrize(
+    ("intent", "text", "refused"),
+    [
+        # Words that say a change: v26 flew these to the number as an altitude.
+        (ALT, "climb another two thousand", True),
+        (ALT, "climb forty eight hundred feet more", True),
+        (ALT, "please down by fifteen hundred feet", True),
+        (ALT, "go ahead and one thousand feet higher please", True),
+        (ALT, "descend a further two thousand", True),
+        (ALT, "come down two thousand feet", True),
+        (ALT, "go up one thousand", True),
+        # The altitude: a word makes the number the target.
+        (ALT, "climb up to eight thousand", False),
+        (ALT, "come down to five thousand", False),
+        (ALT, "descend and maintain four thousand", False),
+        (ALT, "altitude eight thousand", False),
+        # A bare climb is asked about (climb_reading), not refused.
+        (ALT, "descend two thousand feet", False),
+        # Only an altitude read so.
+        ("change_altitude_by", "climb another two thousand", False),
+        ("set_vertical_speed", "climb at five hundred feet per minute more", False),
+    ],
+)
+def test_change_said_as_altitude(intent, text, refused):
+    assert rel.change_said_as_altitude(intent, text) is refused
+
+
+HDG = "set_autopilot_heading"
+
+
+@pytest.mark.parametrize(
+    ("intent", "text", "refused"),
+    [
+        # Words that say a turn: v26 set these as the heading.
+        (HDG, "forty five degrees to the right", True),
+        (HDG, "please turn right another one hundred twenty nine degrees", True),
+        (HDG, "turn left one five one degrees", True),
+        (HDG, "turn right by one oh four right away", True),
+        (HDG, "give me one oh nine degrees right", True),
+        # The heading: "heading", or "to" before the number.
+        (HDG, "turn left heading two seven zero", False),
+        (HDG, "turn left to one five zero degrees", False),
+        (HDG, "turn left to 150", False),
+        (HDG, "set heading to ten degrees", False),
+        (HDG, "heading two seven zero degrees", False),
+        # "Right away" names no side.
+        (HDG, "three zero four degrees right away", False),
+        # A bare turn of 100-179 is asked about (turn_reading), not refused.
+        (HDG, "turn right one two zero", False),
+        # Only a heading read so.
+        ("turn_by", "forty five degrees to the right", False),
+    ],
+)
+def test_change_said_as_heading(intent, text, refused):
+    assert rel.change_said_as_heading(intent, text) is refused
+
+
 def test_altitude_is_measured_from_where_the_autopilot_is_going():
     # Climbing to 11,000: "climb another thousand" is 12,000.
     assert rel.altitude_reference(11000, 10500, 1500, moving=True) == 11000
