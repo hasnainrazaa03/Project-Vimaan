@@ -25,6 +25,8 @@ IAS = "sim/cockpit2/gauges/indicators/airspeed_kts_pilot"
 ALT = "sim/cockpit2/gauges/indicators/altitude_ft_pilot"
 VS = "sim/cockpit2/gauges/indicators/vvi_fpm_pilot"
 DONE_OR_SET = ("executed", "no_op")
+# "pending": the A330 turns its heading knob over frames (heading_by_knob).
+SET_OR_TURNING = (*DONE_OR_SET, "pending")
 # The loaded model must know this to run the checklist.
 NEEDS_INTENT = "turn_by"
 # A turn's reference is the heading flown, settled within this of the target.
@@ -45,6 +47,7 @@ def _turn(name: str, say: str, from_deg: float, by: int) -> list[Step]:
         Step(
             name,
             say=say,
+            outcomes=SET_OR_TURNING,
             reply=f"{side} {abs(by)}",
             # From the heading flown (settled within SETTLED_DEG of the last target).
             sim=(_bug(target, tol=SETTLED_DEG + 1), heading_near(target, SETTLED_DEG, TURN_SEC)),
@@ -116,7 +119,7 @@ def steps(aircraft: str) -> list[Step]:
         Step(
             "settled on 180",
             say="heading one eight zero",
-            outcomes=DONE_OR_SET,
+            outcomes=SET_OR_TURNING,
             sim=(_bug(180), heading_near(180, SETTLED_DEG, TURN_SEC)),
         ),
     ]
@@ -132,10 +135,16 @@ def steps(aircraft: str) -> list[Step]:
             vimaan_checks=False,
             sim=(_bug(190, tol=SETTLED_DEG + 1),),  # nothing set yet
         ),
-        Step("answered: heading 120", say="one two zero", sim=(_bug(120),)),
+        Step(
+            "answered: heading 120",
+            say="one two zero",
+            outcomes=SET_OR_TURNING,
+            sim=(_bug(120),),
+        ),
         Step(
             "compass: turn south",
             say="turn south",
+            outcomes=SET_OR_TURNING,
             sim=(_bug(180), heading_near(180, SETTLED_DEG + 3, TURN_SEC)),
         ),
         # Level in altitude hold: a change is from the altitude held, to 100

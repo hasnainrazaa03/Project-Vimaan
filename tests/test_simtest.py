@@ -1302,6 +1302,18 @@ def test_the_relative_checklist_asks_both_questions_on_every_aircraft():
         assert bool(mach) == AIR_STARTS[aircraft].jet
 
 
+def test_every_heading_step_lets_the_a330_turn_its_knob():
+    # heading_by_knob: the A330 sets a heading over frames ("pending").
+    from simtest import flights, tier1
+
+    words = ("heading one", "heading two", "turn left", "turn south", "come right", "one two zero")
+    for aircraft in AIR_STARTS:
+        steps = [*relative.steps(aircraft), *tier1.steps(aircraft), *flights.TURN_BACK]
+        for step in steps:
+            if step.say and step.say.startswith(words) and "executed" in step.outcomes:
+                assert "pending" in step.outcomes, (aircraft, step.name)
+
+
 def test_relative_needs_a_relative_model():
     assert cli._model_lacks("relative", {"model_intents": ["set_autobrake"]})
     assert cli._model_lacks("relative", {"model_intents": ["turn_by"]}) is None
