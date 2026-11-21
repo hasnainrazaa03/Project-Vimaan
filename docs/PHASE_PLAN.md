@@ -5,7 +5,7 @@ steps, each with a concrete "done when". Work happens strictly in the order of
 the status board; a phase starts only when the previous one has passed its
 gate. After each step: tick it here, commit, and keep the board current.
 
-Last updated 2026-11-20.
+Last updated 2026-11-21.
 
 ---
 
@@ -15,7 +15,7 @@ Last updated 2026-11-20.
 | --- | --- | --- | --- |
 | 0 | In-sim readiness: worker process, verified bindings, telemetry | ✅ merged | #24 |
 | S | Offline speech recognition (Vosk), saved audio, benchmark | ✅ merged | #25 |
-| O | In-sim overlay (live transcript, meaning, outcome) | ✅ merged and flown (ImGui, worst draw 1.1 ms) | #26, #27 |
+| O | In-sim overlay (live transcript, meaning, outcome) | ✅ merged and flown (ImGui, worst draw 1.1 ms). O.5 redesign to a production look: planned, designs first (owner, 2026-11-21) | #26, #27 |
 | E0 | Command table: one source of truth (no behaviour change) | ✅ merged; smoke-flown on v11 | #28 |
 | E1 | Training data v2 + command families → **v17** | ✅ merged; flown twice | #29 |
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | ✅ closed 2026-11-12: Part C flown unattended (121/121 on four aircraft) and the owner's real-voice check passed | #30–#34, #38–#42 |
@@ -23,11 +23,11 @@ Last updated 2026-11-20.
 | A | Automated testing in the sim: a test bridge, recorded voice, scenarios, then takeoff and landing, so the tier checklists run without a pilot | ✅ Done: Tier 1 passes 121/121 unattended on four aircraft (2026-11-12); takeoff, landing, go-around and an engines-off restart on all four (2026-11-19) | #36–#40 |
 | T2 | Tier 2: radios & navigation → **v25** | ✅ closed 2026-11-16: runner in the sim 95/95 on four aircraft (v25) and the owner's real-voice check passed (v26: 16 of 17 radio lines right first time, the other refused) | #43, #46 |
 | T3 | Tier 3: switches (lights, anti-ice, electrical, fuel pumps, yaw damper, signs, speed brakes, autobrake) → **v26** | ✅ closed 2026-11-16: v26 passed every gate and was installed (2026-11-14); runner in the sim 127/127 on four aircraft; the owner's real-voice check passed (51 right, 4 refused, 0 wrong of 55) | #50, #51, #52, #54, #56–#60 |
-| G | Generalization: beyond the owner's voice (measured recognizer noise, other voices, calibration, other recognizers) | 🟡 measured on real voices (2026-11-14); lost-digit refusal built | #55 |
+| G | Generalization: beyond the owner's voice (measured recognizer noise, other voices, calibration, other recognizers) | 🟡 measured on real voices (2026-11-14); lost-digit refusal built; G.5 and G.6 closed 2026-11-21: Vosk stays, since every other recognizer adds delay after key-up | #55 |
 | T4 | Tier 4: questions (read-only) → **v26 + question model q2** | ✅ closed 2026-11-19: runner in the sim on four aircraft (q1 143/144, the miss a moving EGT; q2 148/148 with the phase question); the owner's real-voice check passed (46 of 50 right first time, none acted on) | #64–#70, #76 |
 | F | Flight context: phase of flight and envelope margins, every second; safety rules and callouts read it | ✅ closed 2026-11-19: tracker and margins flown on four aircraft (takeoff, landing, go-around, restart); the three phase rules held in the sim, the callouts quiet but for one real flap-speed call; "what phase of flight" answered (q2) | #71–#76, #84 |
-| C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ after F | |
-| L | Later: relative commands (L.1 → **v27**), two commands in one breath, checklists, add-on aircraft profiles | 🟡 L.1 ✅ closed 2026-11-21: v27 installed (gate 4 by the owner's exception); relative checklist in the sim on four aircraft; the owner's recorded voice 77/77 in the sim (74 of 76 heard word for word, none acted on wrongly). Next in L: not chosen | #85–#91 |
+| C | Conversational copilot: free speech answered and acted on through the same handlers, safety rules and read-backs | ⬜ the last phase: a local model only, no cost per use (owner, 2026-11-21) | |
+| L | Later: relative commands (L.1 → **v27**), two commands in one breath, checklists, add-on aircraft profiles | 🟡 L.1 ✅ closed 2026-11-21: v27 installed (gate 4 by the owner's exception); relative checklist in the sim on four aircraft; the owner's recorded voice 77/77 in the sim (74 of 76 heard word for word, none acted on wrongly). Next in L (owner, 2026-11-21): all of it, L.2–L.5 below | #85–#91 |
 
 Measured so far (in-sim, Vosk): speech end → action **p50 330 ms**;
 recognition 2–3 ms; model ~11 ms; 0 frame stalls. Real-voice benchmark
@@ -41,6 +41,10 @@ flight checklist and so closes T1 → T2.0 groundwork → A3 → A4 → T2 build
 train and gate, tested by the runner → T3 → T4 → F → C (F and C added
 2026-11-12, at the owner's question about flight-envelope awareness and a
 talking copilot).
+
+Order from here (owner, 2026-11-21): L.2 aircraft profiles → L.3 two commands
+in one breath → L.4 checklists → L.5 wake word, with the overlay redesign
+(O.5) once the owner has chosen a design, and the copilot (C) last.
 
 Model versions: E1 was planned as v12; v12–v16 were intermediate runs and
 v17 is the result. Tier 1's first model, v18, failed the gate and v19 passed,
@@ -105,6 +109,11 @@ auto / pinned / off.
   adjust `IMGUI_FONT_SCALE`, width, colours if needed.
 - [x] O.4 E0 replaces the overlay's hard-coded intent/slot display names with
   the command table's (step E0.9).
+- [ ] O.5 Redesign (owner, 2026-11-21): a better-looking, professional,
+  production-ready overlay. Design mockups come first; the owner goes
+  through them and chooses before any of it is built. Done when the chosen
+  design is built, flown on the four aircraft, and the draw time stays under
+  1 ms with no stalls (as O.2).
 
 ---
 
@@ -1096,8 +1105,8 @@ committed; not a gate).
     - The rule in #61 was designed from three of these clips, so they are
       not a fresh test of #61 itself. The gate's decision chain doesn't
       model #61's question either: those clips stay "refused".
-- [ ] **G.5 Recognizer comparison** (approved 2026-11-14; measuring only,
-  nothing installed).
+- [x] **G.5 Recognizer comparison** (approved 2026-11-14; measuring only,
+  nothing installed). Closed 2026-11-21: **Vosk stays**.
   - Each recognizer runs through the same harness as Vosk: the owner's 118
     clips, the ATCOSIM set and the one-word set. Counted: right / refused /
     wrong with the current model, and the delay after key-up with X-Plane
@@ -1113,10 +1122,59 @@ committed; not a gate).
     the training text before it is compared fairly.
   - Vosk stays the default unless a candidate is better on all three sets
     with no more wrong actions on the owner's voice.
-- [ ] **G.6 Two recognizers agree** (approved 2026-11-14; measuring first).
+  - **Measured 2026-11-21** with v27 on a Mac CPU, two threads, X-Plane not
+    running. Each recognizer's text goes through the gate's decision
+    (`model_gate.judge` and `decide`). Prose ("Heading 180.") is only
+    lowercased and stripped of punctuation. Nothing was tuned on any set.
+
+    | Recognizer | Owner's 118 (right / refused / wrong) | Held-out 57 | Recordings 22 | Lone words acted on (of 3,500) | After key-up (median) |
+    | --- | --- | --- | --- | --- | --- |
+    | **Vosk + command grammar** (shipped) | 88 / 28 / 2 | 50 / 7 / 0 | 22 / 0 / 0 | 4 | 1.3 ms |
+    | Whisper small.en | 92 / 26 / 0 | 40 / 13 / 4 | 22 / 0 / 0 | 0 | 1.4 s |
+    | Whisper small.en, command prompt | 94 / 20 / 4 | 39 / 15 / 3 | 22 / 0 / 0 | not run | 1.4 s |
+    | Whisper base.en | 80 / 36 / 2 | 38 / 18 / 1 | 21 / 1 / 0 | 0 | 0.37 s |
+    | Parakeet TDT 0.6B v2 | 82 / 33 / 3 | 42 / 13 / 2 | 20 / 1 / 1 | 0 | 86 ms |
+    | Moonshine base | 39 / 76 / 3 | 36 / 19 / 2 | 8 / 13 / 1 | 0 | 20 ms |
+    | Zipformer (streaming) | 31 / 85 / 2 | 13 / 44 / 0 | 12 / 10 / 0 | 0 | 12 ms |
+    | Zipformer with command hotwords | 37 / 77 / 4 | 20 / 36 / 1 | 13 / 9 / 0 | 0 | 13.5 ms |
+    | Vosk, no grammar | 53 / 54 / 11 | 29 / 26 / 2 | 14 / 8 / 0 | 0 | 2.6 ms |
+
+    - "After key-up": a streaming recognizer (Vosk, Zipformer) hears the
+      audio while the pilot talks, so only its finish is timed. An offline
+      one (Whisper, Parakeet, Moonshine) starts when the key is released, so
+      its whole decode is timed.
+    - "Recordings 22" are the owner's L.1.6 takes. Each is judged by the
+      decision on what was heard against the decision on what was said.
+    - The lone words are Speech Commands (CC BY 4.0), the first 100 clips of
+      each of 35 words. The open recognizers write the word itself
+      ("forward"), and the model doesn't act on it. Through the grammar,
+      Vosk acted on 4: five → "ident", forward → "four right" (a 4° turn),
+      happy → "heading", left → "nav".
+    - Only Whisper small beat Vosk on the 118 clips. It did worse on the
+      held-out set (4 wrong), and it adds 1.4 s.
+    - Parakeet's wrong actions were number slips: "heading one eighteen" for
+      180, "heading to seventy" for 270.
+    - Whisper writes things that weren't said on clipped audio ("thank you",
+      "like comment and subscribe").
+    - The model never trained on these recognizers' text ("1 to 1 decimal
+      75"), so the fair comparison would have needed a retrain on each
+      one's output.
+    - Vosk's word confidence as a refusal: at the lowest threshold tried
+      (0.5), it lost about 5 right actions to save at most 1 wrong one. Not
+      used.
+    - Not done: the ATCOSIM set (its cutting tool needs rebuilding) and the
+      delay with X-Plane running. Neither can change the outcome.
+  - **Owner's decision (2026-11-21): Vosk stays.** "I don't want lag to
+    increase." Every candidate adds delay after key-up, so none is a
+    candidate, and there is no retrain to compare them fairly.
+- [x] **G.6 Two recognizers agree** (approved 2026-11-14; measuring first).
+  Closed 2026-11-21, not built.
   - Vosk plus the best G.5 candidate: act when both give the same command;
     when they differ, ask "Say again".
   - Measured: wrong actions saved against right ones lost, and the extra delay.
+  - Vosk with Whisper small (command prompt): 0 wrong on all three sets, but
+    right falls to 81 of 118 (from 88), 37 of 57 (from 50) and 18 of 22
+    (from 22). It also adds Whisper's 1.4 s. Not built.
 - **Not doing: fine-tuning the recognizer** (owner, 2026-11-14).
   - Vosk is Kaldi, with a training toolchain of its own.
   - There is no licence-clean, many-voice recording of our commands to
@@ -1535,17 +1593,24 @@ so each needs the owner's approval; F.1 to F.3 only observe.
     floated 30 s at 2-4 ft on the runner's throttle hold: the runner now
     takes their throttle to idle at 50 ft, as the jets' already was.
 
-## Phase C: conversational copilot → after F
+## Phase C: conversational copilot → last
 
 The trained model stays the fast path for commands (6–11 ms, offline,
 predictable). What it doesn't take as a command (questions, conversation, low
 confidence) can go to a language model given the phase F context and tools
 mapped to the existing handlers. Every action it proposes goes through the
 same validators, safety rules and read-backs: it never writes to the sim
-itself. Also a better speaking voice and free-speech recognition (Whisper).
-Opt-in. Decisions for the owner: which model (cloud, or local if X-Plane leaves
-GPU room), what is sent (the transcript and flight state only), cost, and the
-latency allowed.
+itself. Also a better speaking voice and free-speech recognition. Opt-in.
+
+**Owner's decisions (2026-11-21):**
+- **A local model only.** There is no cost per use of any kind, so no cloud
+  service.
+- **The last phase of the build.** It is designed once the other features
+  (L.2–L.5, O.5) are done.
+
+Still to decide when it is designed: which local model (it shares the Mac
+with X-Plane), and the delay allowed for free speech. Commands keep Vosk's
+instant path (G.5).
 
 ## Later (L)
 
@@ -1553,6 +1618,21 @@ Designed only after T4: relative commands ("turn left twenty", "climb
 another thousand"; L.1, below), two commands in one breath ("heading two seven
 zero, climb five thousand"), checklists read and verified, profiles for add-on
 aircraft (Zibo 737, ToLiss A3xx: per-aircraft dataref lists), wake word.
+
+The owner chose all of them on 2026-11-21, in this order. Each is designed
+and approved before it is built, and each passes the usual gates. The
+designs come later in this document.
+- [ ] **L.2 Aircraft profiles.** More aircraft flown with the tier
+  checklists.
+  - First the default aircraft not yet profiled (the Cessna 172, Cirrus
+    SR22, Citation X, MD-82 and others).
+  - Then the add-ons, once they are installed: the Zibo 737 (free) and
+    ToLiss A3xx (paid; the owner decides). Neither is installed now.
+- [ ] **L.3 Two commands in one breath:** "heading two seven zero, climb five
+  thousand". Each part is read back and goes through the same rules.
+- [ ] **L.4 Checklists:** read out, and each item checked against the sim.
+- [ ] **L.5 Wake word:** hands-free, offline, a licence-clean model. The two
+  talk keys stay.
 
 ### L.1 Relative commands → v27
 
