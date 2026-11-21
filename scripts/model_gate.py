@@ -120,6 +120,7 @@ def decide(p: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
     from vimaan_nlu.questions import looks_like_question
     from vimaan_nlu.relative import (
         change_said_as_altitude,
+        change_said_as_heading,
         climb_reading,
         compass_conflict,
         turn_reading,
@@ -150,6 +151,8 @@ def decide(p: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
         return no("clipped_number")
     if change_said_as_altitude(intent, p.get("original_text") or ""):
         return no("change_as_altitude")
+    if change_said_as_heading(intent, p.get("original_text") or ""):
+        return no("change_as_heading")
     if intent == "set_autopilot_heading" and heading_too_short(slots.get("degrees")):
         return no("one_digit_heading")
     if lost_digits(intent, slots, p.get("original_text") or ""):

@@ -4238,6 +4238,28 @@ def test_a_change_read_as_an_altitude_is_refused(sim, intents, reply):
     assert xp.datarefs[ALT_BUG] == 12000.0
 
 
+@pytest.mark.parametrize(
+    ("intents", "reply"),
+    [
+        (None, "Say the heading to fly"),  # v26: no turn command
+        ({"set_autopilot_heading", "turn_by"}, "Say it again: the heading, or the turn"),
+    ],
+)
+def test_a_turn_read_as_a_heading_is_refused(sim, intents, reply):
+    # v26 read "forty five degrees to the right" as heading 045 (708 of data
+    # v19's turn phrasings acted so).
+    _, plugin, xp = sim
+    plugin._model_intents = intents
+    xp.datarefs.update({HDG_NOW: 180.0, HDG_BUG: 180.0})
+    slots = {"degrees": "45"}
+    assert say(plugin, "forty five degrees to the right", "set_autopilot_heading", slots) == [reply]
+    assert xp.datarefs[HDG_BUG] == 180.0
+    assert events(plugin, "implausible")[-1]["reason"] == "change_as_heading"
+    # Said as the target, it is the heading.
+    say(plugin, "turn left heading one five zero", "set_autopilot_heading", {"degrees": "150"})
+    assert xp.datarefs[HDG_BUG] == 150.0
+
+
 def test_climb_a_thousand_when_level_is_from_where_we_are(sim):
     _, plugin, xp = sim
     xp.datarefs.update({ALT_NOW: 10012.0, ALT_BUG: 15000.0})  # held, window preset

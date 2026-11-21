@@ -1747,6 +1747,19 @@ Steps:
     - On the 29,849 texts, v26's decisions changed on 2,330, all of them
       altitude-change phrasings: the 1,904 acted on, plus 426 it already
       refused. v27's didn't change.
+  - **A turn read as a heading is refused too** (the owner's OK, the same
+    day).
+    - v26 acted on 708 of data v19's turn phrasings as the heading. "Forty
+      five degrees to the right" set heading 045.
+    - Now a heading command is refused when a word says a change, or when a
+      side is said with "degrees". It is not refused when "heading", or "to"
+      before the number, makes it the target. "Right away" names no side.
+      This is `relative.change_said_as_heading`.
+    - Vimaan says "Say the heading to fly" with v26, and "Say it again: the
+      heading, or the turn" with a model that knows turns.
+    - On the 29,849 texts, v26's decisions changed on 2,404, all of them turn
+      phrasings: the 708 acted on, plus 1,696 already refused, which now get
+      this reply. v27's didn't change.
 - [x] L.1.4 In the sim: `python -m simtest run relative all --text` (turns
   from the heading flown, both questions answered, a climb from the altitude
   held, speed from the bug or the airspeed, Mach refused). Flown 2026-11-20

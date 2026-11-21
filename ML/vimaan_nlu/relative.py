@@ -92,6 +92,35 @@ def change_said_as_altitude(intent: str, text: str) -> bool:
     return not words.isdisjoint({"up", "down"}) and words.isdisjoint(TARGET_WORDS)
 
 
+def _to_a_number(words: list[str]) -> bool:
+    """ "to" right before a number, in digits or in words ("turn left to one
+    five zero")."""
+    return any(
+        w == "to"
+        and words[i + 1 : i + 2]
+        and (words[i + 1].isdigit() or words[i + 1] in _NUMBER_WORDS)
+        for i, w in enumerate(words)
+    )
+
+
+def change_said_as_heading(intent: str, text: str) -> bool:
+    """A heading command whose words say a turn: "forty five degrees to the
+    right", "turn right another one two nine degrees". A model without the
+    turn command (v26) set those as the heading: 708 of data v19's turn
+    phrasings acted so (2026-11-20). Refused, with the owner's OK the same
+    day. A change word, or a side with "degrees"; not when "heading", or "to"
+    before the number, makes it the target ("turn left heading two seven
+    zero", "turn left to one five zero degrees")."""
+    if intent != "set_autopilot_heading":
+        return False
+    words = _words(text)
+    if "heading" in words or _to_a_number(words):
+        return False
+    if not ALWAYS_CHANGE.isdisjoint(words):
+        return True
+    return side_said(text) is not None and not {"degrees", "degree"}.isdisjoint(words)
+
+
 def bare_climb(text: str) -> str | None:
     """ "up" or "down" when a climb or descent is said with no word saying
     whether its number is the altitude or the change ("descend two thousand

@@ -111,6 +111,7 @@ from vimaan_nlu.relative import (  # noqa: E402
     altitude_readings,
     altitude_reference,
     change_said_as_altitude,
+    change_said_as_heading,
     changed,
     climb_reading,
     compass_conflict,
@@ -1418,6 +1419,14 @@ class PythonInterface:
                 )
                 self._say(self._change_as_altitude_reply())
                 return
+            # "forty five degrees to the right" read as the heading 045.
+            if change_said_as_heading(intent_pred, text):
+                outcome = "rejected"
+                self.tel.event(
+                    "implausible", cmd=cmd, reason="change_as_heading", intent=intent_pred
+                )
+                self._say(self._change_as_heading_reply())
+                return
             if intent_pred == "set_autopilot_heading" and heading_too_short(slots.get("degrees")):
                 outcome = "rejected"
                 self.tel.event(
@@ -1569,6 +1578,12 @@ class PythonInterface:
             return "Say it again: the altitude, or the change"
         return "Say the altitude to fly to"
 
+    def _change_as_heading_reply(self):
+        """A turn heard as a heading, as for altitudes."""
+        if "turn_by" in (self._model_intents or ()):
+            return "Say it again: the heading, or the turn"
+        return "Say the heading to fly"
+
     def _usable_to_reading(self, meant):
         """The checks the heard command passed, run on the "to" reading too."""
         intent, slots, text = meant["intent"], meant["slots"], meant["text"]
@@ -1578,6 +1593,7 @@ class PythonInterface:
             and has_command_word(intent, meant.get("normalized") or text)
             and not clipped_number(text, intent)
             and not change_said_as_altitude(intent, text)
+            and not change_said_as_heading(intent, text)
             and not lost_digits(intent, slots, text)
         )
 
