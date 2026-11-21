@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from .scenario import SimCheck, Step, equals, heading_near, levelled_at
-from .tier1 import SETUPS, THOUSANDS, hands_off
+from .scenario import SimCheck, Step, equals, heading_near
+from .tier1 import SETUPS, hands_off
 
 AP = "sim/cockpit2/autopilot/"
 BUG = AP + "heading_dial_deg_mag_pilot"
@@ -22,6 +22,8 @@ ALT_BUG = AP + "altitude_dial_ft"
 SPEED_BUG = AP + "airspeed_dial_kts_mach"
 IS_MACH = AP + "airspeed_is_mach"
 IAS = "sim/cockpit2/gauges/indicators/airspeed_kts_pilot"
+ALT = "sim/cockpit2/gauges/indicators/altitude_ft_pilot"
+VS = "sim/cockpit2/gauges/indicators/vvi_fpm_pilot"
 DONE_OR_SET = ("executed", "no_op")
 # The loaded model must know this to run the checklist.
 NEEDS_INTENT = "turn_by"
@@ -50,6 +52,46 @@ def _turn(name: str, say: str, from_deg: float, by: int) -> list[Step]:
     ]
 
 
+def _alt_bug_from_held(by: int) -> SimCheck:
+    """Level in altitude hold: the bug is the altitude held (to 100 ft) plus
+    the change."""
+
+    def off(r: dict[str, Any]) -> float | None:
+        if r.get(ALT_BUG) is None or r.get(ALT) is None:
+            return None
+        return round(float(r[ALT_BUG]) - (round(float(r[ALT]) / 100) * 100 + by))
+
+    return SimCheck(
+        f"altitude bug the altitude held {by:+d} ft",
+        (ALT_BUG, ALT),
+        lambda d: d is not None and abs(d) <= 100,
+        value=off,
+        expected="within 100 ft (the altitude is rounded to 100)",
+    )
+
+
+def _levelled_at_bug(within_sec: float) -> SimCheck:
+    """Level within 150 ft of the altitude bug, whatever it was set to."""
+
+    def level(r: dict[str, Any]) -> dict[str, int] | None:
+        if any(r.get(k) is None for k in (ALT, VS, ALT_BUG)):
+            return None
+        return {
+            "altitude": round(float(r[ALT])),
+            "bug": round(float(r[ALT_BUG])),
+            "vs": round(float(r[VS])),
+        }
+
+    return SimCheck(
+        "levelled off at the bug",
+        (ALT, VS, ALT_BUG),
+        lambda v: v is not None and abs(v["altitude"] - v["bug"]) <= 150 and abs(v["vs"]) <= 300,
+        value=level,
+        within_sec=within_sec,
+        expected="the bug ± 150 ft, |V/S| ≤ 300",
+    )
+
+
 def _speed_from_airspeed(by: int) -> SimCheck:
     """No autothrottle: the bug is the airspeed now (to 5 kt) plus the change."""
 
@@ -69,8 +111,7 @@ def _speed_from_airspeed(by: int) -> SimCheck:
 
 def steps(aircraft: str) -> list[Step]:
     s = SETUPS[aircraft]
-    alt, up = s.alt_ft, s.alt_ft + 1000
-    down = s.alt_ft - 1000  # in tier1.THOUSANDS for every aircraft
+    alt = s.alt_ft
     out = hands_off(aircraft) + [
         Step(
             "settled on 180",
@@ -97,38 +138,41 @@ def steps(aircraft: str) -> list[Step]:
             say="turn south",
             sim=(_bug(180), heading_near(180, SETTLED_DEG + 3, TURN_SEC)),
         ),
-        # Altitude hold at the start altitude: a change is from where we are.
+        # Level in altitude hold: a change is from the altitude held, to 100
+        # ft. That is where altitude hold caught the aircraft after the air
+        # start, not the start altitude: the first run (2026-11-20) found
+        # them 100-500 ft off it. The bug moves, the aircraft stays: nothing
+        # climbs (the Baron and King Air have no autothrottle, and a V/S climb
+        # with no one on the throttle stalled them both).
         Step(
             "climb another thousand",
             say="climb another thousand",
             reply="Up 1000",
-            sim=(equals(f"altitude bug {up}", ALT_BUG, up, tol=0.5),),
-        ),
-        Step(
-            "climb to it",
-            say="climb at one thousand feet per minute",
-            reply=f"to {up}",
-            sim=(levelled_at(up, within_sec=1000 / 1000 * 60 + 120),),
+            sim=(_alt_bug_from_held(1000),),
         ),
         Step(
             "altitude or change is asked",
             say="descend two thousand feet",
             outcomes=("ambiguous",),
-            reply=f"Altitude 2000 or {down} feet",
+            reply="Altitude 2000 or",
             vimaan_checks=False,
-            sim=(equals("altitude bug unchanged", ALT_BUG, up, tol=0.5),),
+            no_actions=True,
         ),
         Step(
-            f"answered: {down}",
-            say=THOUSANDS[down],
-            sim=(equals(f"altitude bug {down}", ALT_BUG, down, tol=0.5),),
+            "answered: 2000", say="two thousand", sim=(equals("altitude bug 2000", ALT_BUG, 2000),)
         ),
-        # Still level at `up` in altitude hold: from where we are, to 100 ft.
         Step(
             "down five hundred",
             say="down five hundred feet",
             reply="Down 500",
-            sim=(equals(f"altitude bug {up - 500}", ALT_BUG, up - 500, tol=100),),
+            sim=(_alt_bug_from_held(-500),),
+        ),
+        # Flown down to it, as Tier 1's V/S descent: no power needed.
+        Step(
+            "descend to it",
+            say="descend at one thousand five hundred feet per minute",
+            reply="feet per minute, to",
+            sim=(_levelled_at_bug(within_sec=500 / 1500 * 60 + 120),),
         ),
         Step(
             f"back to {alt}",

@@ -302,11 +302,15 @@ target it should give from what the steps before set up:
   zero or …", with nothing set. It is answered "one two zero" (always one of
   the two offered).
 - **Compass:** "turn south".
-- **Climb:** "climb another thousand" sets the start altitude + 1,000. A V/S
-  climb then levels there.
+- **Climb:** "climb another thousand" sets the altitude held + 1,000 (to 100
+  ft). That is where altitude hold caught the aircraft after the air start,
+  often 100–500 ft from the start altitude. The bug moves and the aircraft
+  stays: nothing climbs. The Baron and King Air have no autothrottle, and a
+  V/S climb with no one on the throttle stalled them both (2026-11-20).
 - **Altitude or change:** "descend two thousand feet" must ask "Altitude 2000
-  or <1,000 below the start> feet?". It is answered with that altitude.
-- **Down:** "down five hundred feet", from the altitude held.
+  or …", with nothing written. It is answered "two thousand".
+- **Down:** "down five hundred feet" sets the altitude held − 500. A 1,500
+  fpm V/S descent then levels at the bug, as in Tier 1.
 - **Speed:** on the jets the bug goes 250 → 260 → 240, and a change in Mach is
   refused. On the pistons "speed up ten knots" sets the airspeed + 10, within
   6 kt.

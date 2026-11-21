@@ -1734,11 +1734,37 @@ Steps:
         alternator". 500 ft can't be the altitude, so it is a 500 ft descent.
     - Already on main and not changed here: v26 sets 1,000 ft for "climb
       another one thousand feet". v27 reads it as a change.
-- [ ] L.1.4 In the sim: `python -m simtest run relative all` (turns from the
-  heading flown, both questions answered, a climb from the altitude held,
-  speed from the bug or the airspeed, Mach refused).
-- [ ] L.1.5 Install v27 with the owner's OK (v26 kept as the fallback); the
-  owner's voice check.
+- [x] L.1.4 In the sim: `python -m simtest run relative all --text` (turns
+  from the heading flown, both questions answered, a climb from the altitude
+  held, speed from the bug or the airspeed, Mach refused). Flown 2026-11-20
+  with v27 installed (main dd65881).
+  - **First run: 55/77.** The failures were the checklist's, not Vimaan's:
+    - It expected "climb another thousand" to give the start altitude +
+      1,000. Altitude hold had caught each aircraft 100–500 ft off it, and
+      Vimaan measured from the altitude held, as designed (Baron 6,300 →
+      7,300).
+    - Its 1,000 fpm V/S climb, with no one on the throttle, stalled the
+      Baron (106 → 79 kt, then into the terrain) and the King Air (68 kt).
+      Every step after that ran on the wreck. Vimaan refused "speed up ten
+      knots" there ("Speed 85 is below this aircraft's stall speed").
+  - **The checklist fixed** (#86): targets are from the altitude held, the
+    climb is set but not flown, and the altitude flown is a V/S descent.
+  - **Second run: 76/77.** Baron 16/16, King Air 16/16, 737 22/22, A330
+    22/23.
+  - **The A330 sometimes turns the long way** when its heading bug is
+    written. Its miss was "come right thirty", which went left.
+    - In a test afterwards, 4 of 14 turns of 20–30° went the long way, both
+      left and right.
+    - A direct write of the bug, without Vimaan, did it too. Vimaan writes
+      the bug once, with the right value.
+    - Every heading command on the A330 writes that dataref, absolute ones
+      included, so this isn't new with L.1. The 737, Baron and King Air
+      never did it.
+    - A follow-up: set the A330's bug with its knob commands
+      (`sim/autopilot/heading_up/down`), so it has a direction.
+- [x] L.1.5 Install v27 with the owner's OK (v26 kept as the fallback):
+  installed 2026-11-20 (main dd65881, v27 + q2; backup taken first). The
+  owner's voice check is still to do.
 
 ---
 
