@@ -1718,6 +1718,22 @@ Steps:
       `gate_exception.json` beside it records this decision.
     - No more seeds: picking runs until these clips come out right would
       select on the voice fixture.
+  - **Is v26 still safe?** v26's decisions with main's code and with this
+    code were compared on 29,849 texts (old data, the new phrasings and the
+    voice fixtures).
+    - That check found a bug: "a" and "another" counted as one for any
+      command. v26 reads "climb another thousand" as altitude 1,000, so it
+      would have flown 1,000 ft.
+    - Fixed: they count only for a change command (`clipped_number(text,
+      intent)`). v27's decisions are the same with and without the fix.
+    - After the fix, 42 decisions differ:
+      - 40 now ask instead of acting: a bare turn of 100–179 (33), and a
+        bare climb or descent of 5,000 ft or less (7);
+      - 1 acts the same way, with the whole value ("engine ignite strobes");
+      - 1 now acts where it refused: "descend five hundred feet
+        alternator". 500 ft can't be the altitude, so it is a 500 ft descent.
+    - Already on main and not changed here: v26 sets 1,000 ft for "climb
+      another one thousand feet". v27 reads it as a change.
 - [ ] L.1.4 In the sim: `python -m simtest run relative all` (turns from the
   heading flown, both questions answered, a climb from the altitude held,
   speed from the bug or the airspeed, Mach refused).
