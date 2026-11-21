@@ -123,6 +123,7 @@ def decide(p: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
         change_said_as_heading,
         climb_reading,
         compass_conflict,
+        small_turn_unsaid,
         turn_reading,
     )
     from vimaan_nlu.validators import (
@@ -157,6 +158,8 @@ def decide(p: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
         return no("one_digit_heading")
     if lost_digits(intent, slots, p.get("original_text") or ""):
         return no("lost_digits")
+    if small_turn_unsaid(intent, slots, p.get("original_text") or ""):
+        return no("small_turn_unsaid")
     if two_or_to(intent, p.get("original_text") or ""):
         return no("ambiguous_two")
     # Phase L.1 (the plugin's _relative_reading). Without the aircraft's

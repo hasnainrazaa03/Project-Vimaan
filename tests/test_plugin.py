@@ -4260,6 +4260,20 @@ def test_a_turn_read_as_a_heading_is_refused(sim, intents, reply):
     assert xp.datarefs[HDG_BUG] == 150.0
 
 
+def test_a_small_turn_without_a_turn_word_is_refused(sim):
+    # Speech Commands' "forward" came out "four right" and turned 4 degrees
+    # (2 of 300 clips); the owner chose on 2026-11-21 that a turn under 10
+    # degrees needs "turn", "come" or "degrees".
+    _, plugin, xp = sim
+    xp.datarefs.update({HDG_NOW: 180.0, HDG_BUG: 180.0})
+    turn = {"turn": "right", "turn_degrees": "4"}
+    assert say(plugin, "four right", "turn_by", turn) == ["Say turn right 4"]
+    assert xp.datarefs[HDG_BUG] == 180.0
+    assert events(plugin, "implausible")[-1]["reason"] == "small_turn_unsaid"
+    say(plugin, "turn right four", "turn_by", turn)
+    assert xp.datarefs[HDG_BUG] == 184.0
+
+
 def test_climb_a_thousand_when_level_is_from_where_we_are(sim):
     _, plugin, xp = sim
     xp.datarefs.update({ALT_NOW: 10012.0, ALT_BUG: 15000.0})  # held, window preset

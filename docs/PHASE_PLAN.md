@@ -1824,6 +1824,26 @@ Steps:
     not repeated); the Baron again with the same recordings: 16/16.
   - The checklist's phrases aren't blind (the owner knew them); the blind
     real-voice measures stay in Phase G.
+- [x] L.1.7 A small turn needs a word that says it is a turn (the owner's
+  choice, 2026-11-21).
+  - Speech Commands' lone word "forward" came out "four right" through the
+    command grammar, and v27 turned right 4° (2 of 300 clips).
+  - Now a turn of under 10° with none of "turn", "come" or "degrees" is
+    refused, and Vimaan says "Say turn right 4". "Turn right four", "come
+    left five" and "right four degrees" still turn, and so do 10° and more
+    ("left twenty"). This is `relative.small_turn_unsaid`, in the plugin and
+    the gate. It runs after the lost-digit check, so a turn refused there
+    keeps "Say the whole number".
+  - On the 29,849 decision texts, 28 of v27's decisions changed, all of
+    them from acting to refused, and all of them a small turn with no turn
+    word ("left five", "four right", "could you five left"). v26's didn't
+    change: it has no turn command.
+  - Lone words (Speech Commands, 300 clips of each of 35 words): v27 acted
+    on 13 of 10,500 before and 11 after. Both "four right" turns are gone.
+    The two runs also heard two clips differently ("five" as "ident",
+    "happy" as "heading"), which has nothing to do with the rule.
+  - No retrain, and nothing to fly: none of the checklists says a small
+    turn without a turn word.
 
 ---
 
