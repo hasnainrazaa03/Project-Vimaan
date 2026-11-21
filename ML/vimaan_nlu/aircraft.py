@@ -218,6 +218,12 @@ OVERRIDES: tuple[Override, ...] = (
                 "athr_on_from": 0,
                 "athr_hint": "A/THR stays armed while the thrust levers are at FLX, MCT "
                 "or TOGA. Move them to CL",
+                # A written heading bug can send it the long way round: in the
+                # sim (2026-11-20) 5 of 8 writes of 30° did, either way, and
+                # its xlua doesn't choose the direction. Turned by its knob
+                # (sim/autopilot/heading_up/down), it went the knob's way, 7
+                # of 7. Vimaan clicks the knob, a degree a frame.
+                "heading_by_knob": True,
             }
         ),
     ),

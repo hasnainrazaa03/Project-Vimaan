@@ -4065,6 +4065,90 @@ def test_a_turn_with_heading_mode_off_moves_the_bug_and_says_so(sim):
     assert xp.commands_fired == []  # the mode is never changed unasked
 
 
+HDG_UP, HDG_DOWN = "sim/autopilot/heading_up", "sim/autopilot/heading_down"
+
+
+def a330_heading_knob(plugin, xp, heading, moves=True):
+    """The A330, flying ``heading`` with the bug on it, in heading mode. Its
+    knob moves the bug a degree a click (``moves``)."""
+    aircraft(plugin, xp, commands=A333 + (HDG_UP, HDG_DOWN))
+    assert plugin.profile.settings.get("heading_by_knob")
+    xp.datarefs.update({HDG_NOW: heading, HDG_BUG: heading})
+    xp.datarefs["sim/cockpit2/autopilot/heading_status"] = 2
+    if moves:
+        xp.effects[HDG_UP] = lambda x: x.datarefs.__setitem__(
+            HDG_BUG, (x.datarefs[HDG_BUG] + 1) % 360
+        )
+        xp.effects[HDG_DOWN] = lambda x: x.datarefs.__setitem__(
+            HDG_BUG, (x.datarefs[HDG_BUG] - 1) % 360
+        )
+    xp.commands_fired.clear()
+    xp.writes.clear()
+
+
+def test_the_a330_turns_its_heading_knob_the_way_of_the_turn(sim):
+    # A written bug sent the A330 the long way round (in-sim 2026-11-20);
+    # turned by its knob it goes the knob's way.
+    _, plugin, xp = sim
+    a330_heading_knob(plugin, xp, 180.0)
+    turn = {"turn": "left", "turn_degrees": "20"}
+    assert say(plugin, "turn left twenty", "turn_by", turn) == []  # the knob is turning
+    assert settle(plugin, xp, loops=25) == ["Left 20, Heading one six zero"]
+    assert xp.datarefs[HDG_BUG] == 160.0
+    assert xp.commands_fired == [HDG_DOWN] * 20
+    assert not [w for w in xp.writes if w[0] == HDG_BUG]  # never written
+    assert events(plugin, "heading_step_end")[-1]["ok"] and plugin._heading_step is None
+    assert events(plugin, "speak")[-1]["cmd"] == "c9999"  # the reply is the command's
+    assert not events(plugin, "flight_loop_error")
+
+
+def test_an_a330_heading_goes_the_short_way_from_the_heading_flown(sim):
+    _, plugin, xp = sim
+    a330_heading_knob(plugin, xp, 350.0)
+    say(plugin, "heading zero two zero", "set_autopilot_heading", {"degrees": "020"})
+    assert settle(plugin, xp, loops=35) == ["Heading zero two zero"]
+    assert xp.datarefs[HDG_BUG] == 20.0 and xp.commands_fired == [HDG_UP] * 30
+
+
+def test_an_a330_turn_goes_its_side_from_a_bug_left_behind(sim):
+    # The bug is 15 left of the heading flown (the last turn still rolling
+    # out): "come right ten" is clicked right from the bug, 25 clicks.
+    _, plugin, xp = sim
+    a330_heading_knob(plugin, xp, 100.0)
+    xp.datarefs[HDG_BUG] = 85.0
+    say(plugin, "come right ten", "turn_by", {"turn": "right", "turn_degrees": "10"})
+    assert settle(plugin, xp, loops=30) == ["Right 10, Heading one one zero"]
+    assert xp.commands_fired == [HDG_UP] * 25
+
+
+def test_a_newer_heading_takes_over_from_the_knob_turning(sim):
+    _, plugin, xp = sim
+    a330_heading_knob(plugin, xp, 180.0)
+    say(plugin, "turn left twenty", "turn_by", {"turn": "left", "turn_degrees": "20"})
+    settle(plugin, xp, loops=5)  # part of the way
+    say(plugin, "heading two zero zero", "set_autopilot_heading", {"degrees": "200"})
+    assert settle(plugin, xp, loops=40) == ["Heading two zero zero"]  # the first never read back
+    assert xp.datarefs[HDG_BUG] == 200.0
+    assert [e["why"] for e in events(plugin, "heading_step_end")] == ["replaced", None]
+
+
+def test_an_a330_heading_knob_that_does_nothing_is_reported(sim):
+    _, plugin, xp = sim
+    a330_heading_knob(plugin, xp, 180.0, moves=False)
+    say(plugin, "turn left twenty", "turn_by", {"turn": "left", "turn_degrees": "20"})
+    assert settle(plugin, xp, loops=40) == [
+        "Heading not set: the knob did not move it. It shows one eight zero."
+    ]
+
+
+def test_without_its_knob_commands_the_a330_bug_is_written(sim):
+    _, plugin, xp = sim
+    a330_heading_knob(plugin, xp, 180.0)
+    xp.missing_commands.add(HDG_DOWN)
+    spoken = say(plugin, "turn left twenty", "turn_by", {"turn": "left", "turn_degrees": "20"})
+    assert spoken == ["Left 20, Heading one six zero"] and xp.datarefs[HDG_BUG] == 160.0
+
+
 def test_a_turn_the_autopilot_could_take_the_other_way_is_a_heading(sim):
     _, plugin, xp = sim
     xp.datarefs[HDG_NOW] = 90.0

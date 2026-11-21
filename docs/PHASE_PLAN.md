@@ -1760,8 +1760,21 @@ Steps:
     - Every heading command on the A330 writes that dataref, absolute ones
       included, so this isn't new with L.1. The 737, Baron and King Air
       never did it.
-    - A follow-up: set the A330's bug with its knob commands
-      (`sim/autopilot/heading_up/down`), so it has a direction.
+    - **The knob fix (#87, the owner's go-ahead, 2026-11-20).**
+      - Its xlua (A333.autopilot) only animates the knob on
+        `sim/autopilot/heading_up/down`, so the direction is X-Plane's.
+      - In the sim, the same session alternated direct writes with knob
+        clicks, in the reversal pattern that had failed. Writes went the
+        right way 3 of 8 times, knob clicks 7 of 7, each bug exactly on
+        target. The run stopped when X-Plane's "Missing scenery" dialog
+        paused it.
+      - Now on the A330 (`heading_by_knob`) Vimaan clicks the knob, a
+        degree a frame, the way the aircraft should turn: the side said for
+        a turn, the short way from the heading flown for a heading. It reads
+        back when the knob arrives.
+      - Every heading command goes this way (absolute, compass, turns, the
+        question's answer); the other aircraft still write the bug.
+      - To confirm in the sim after the install.
 - [x] L.1.5 Install v27 with the owner's OK (v26 kept as the fallback):
   installed 2026-11-20 (main dd65881, v27 + q2; backup taken first). The
   owner's voice check is still to do.

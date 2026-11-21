@@ -418,6 +418,9 @@ XPDR_ALREADY_SPOKEN = {
 KNOB_STEP_MAX_PRESSES = 12
 KNOB_STEP_MAX_SEC = 10.0
 KNOB_STUCK_FRAMES = 30  # a click that moves nothing for this many frames
+# The heading knob (heading_by_knob, the A330): a degree a click, a click a frame.
+HEADING_KNOB = ("sim/autopilot/heading_up", "sim/autopilot/heading_down")
+HEADING_STEP_MAX_SEC = 15.0
 DREF_GEAR_HANDLE = "sim/cockpit2/controls/gear_handle_down"
 DREF_GEAR_RETRACTABLE = "sim/aircraft/gear/acf_gear_retract"
 DREF_FLAP_HANDLE = "sim/cockpit2/controls/flap_handle_request_ratio"
@@ -641,6 +644,7 @@ class PythonInterface:
         self._deferred: list[dict[str, Any]] = []  # main-thread actions due later
         self._baro_step: dict[str, Any] | None = None  # altimeter set by knob steps
         self._knob_step: dict[str, Any] | None = None  # selectors turned by clicks
+        self._heading_step: dict[str, Any] | None = None  # the heading knob turned by clicks
         self._capture: dict[str, Any] | None = None  # Vimaan's own altitude capture
         # Option (b): Vimaan captures altitude where the aircraft can't. Off
         # unless VIMAAN_CAPTURE=1, or switched on with its key.
@@ -1145,6 +1149,7 @@ class PythonInterface:
             self._service_deferred()
             self._service_baro_step()
             self._service_knob_step()
+            self._service_heading_step()
             self._service_capture()
             self._service_verifications()
             self._service_follow_ups()
@@ -1170,6 +1175,7 @@ class PythonInterface:
             or self._self_test_pending
             or self._baro_step is not None
             or self._knob_step is not None
+            or self._heading_step is not None
         ):
             return -1.0  # every frame while a reply is due or a knob is stepping
         return QUEUE_POLL_INTERVAL_SEC
@@ -2055,7 +2061,8 @@ class PythonInterface:
         # A command still has work due: read-backs, or a deferred step (the
         # 737's autothrottle engages after its arm switch).
         checking = {v["cmd"] for v in self._verifications} | {d["cmd"] for d in self._deferred}
-        checking |= {j["cmd"] for j in (self._baro_step, self._knob_step) if j is not None}
+        steps = (self._baro_step, self._knob_step, self._heading_step)
+        checking |= {j["cmd"] for j in steps if j is not None}
         for result in self._say_results.finished(now, checking):
             sim_bridge.write_json(outbox / f"{result['id']}.json", result)
         for req in sim_bridge.take_requests(inbox):
@@ -2400,6 +2407,7 @@ class PythonInterface:
         self._capture = None
         self._baro_step = None
         self._knob_step = None
+        self._heading_step = None
         self._athr_scan = (acf_path, None)
         threading.Thread(
             target=self._scan_aircraft_files, args=(acf_path,), daemon=True, name="vimaan-acf-scan"
@@ -2978,19 +2986,133 @@ class PythonInterface:
             return "rejected"
         return self._write_heading(float(value))
 
-    def _write_heading(self, v, lead="", mode_note=False):
+    def _write_heading(self, v, lead="", mode_note=False, side=None):
         """Set the heading bug and read it back. ``mode_note``: a turn
         (phase L.1) moves only the bug, so say when heading mode is off and
-        the aircraft won't follow it (the owner's choice, 2026-11-20)."""
+        the aircraft won't follow it (the owner's choice, 2026-11-20).
+        ``side``: the way a turn goes ("left"/"right"); None for a heading,
+        which the autopilot turns to the short way. An aircraft whose
+        written bug can send it the long way round turns its knob instead
+        (``heading_by_knob``: the A330)."""
+        if self.profile.settings.get("heading_by_knob"):
+            started = self._start_heading_steps(v, lead, mode_note, side)
+            if started is not None:
+                return started
         if not self._write(DREF_HEADING, v):
             self._say("Cannot set heading")
             return "failed"
+        self._heading_set(v, lead, mode_note)
+        return "executed"
+
+    def _heading_set(self, v, lead, mode_note):
+        """The bug is on ``v``: check it stays, and read it back."""
         self._hold_check("Heading", DREF_HEADING, v, modulo=360)
         note = ""
         if mode_note and self._read_int(DREF_HEADING_STATUS) not in (None, 2):
             note = ". Heading mode is off"
         self._say(f"{lead}Heading {spell_digits(f'{int(v):03d}')}{note}")
-        return "executed"
+
+    def _start_heading_steps(self, v, lead, mode_note, side):
+        """Turn the heading knob to ``v``, one click a frame, the way the
+        aircraft should turn. A written bug sent the A330 the long way round
+        (in-sim 2026-11-20: 5 of 8 writes of 30°, both ways, and a direct
+        write without Vimaan too); turned by its knob it went the way the
+        knob went, 7 of 7. None when the knob can't be used: the bug is
+        written instead."""
+        up, down = HEADING_KNOB
+        if not (self._has_command(up) and self._has_command(down)):
+            return None
+        bug = self._read_float(DREF_HEADING)
+        if bug is None:
+            return None
+        target = v % 360
+        if side is None:  # a heading: the short way from the heading flown
+            flown = self._read_float(DREF_HEADING_ACTUAL)
+            side = "right" if (target - (bug if flown is None else flown)) % 360 <= 180 else "left"
+        clicks = (target - bug) % 360 if side == "right" else (bug - target) % 360
+        if clicks > 180:  # the bug is already past the target that way: back, the short way
+            side, clicks = ("left" if side == "right" else "right"), 360 - clicks
+        clicks = int(round(clicks))
+        if self._heading_step is not None:  # a newer heading replaces the one turning
+            self._end_heading_steps(False, replaced=True)
+        if clicks == 0:
+            self._heading_set(v, lead, mode_note)
+            return "executed"
+        self._heading_step = {
+            "cmd": self._current_cmd,
+            "target": v,
+            "lead": lead,
+            "mode_note": mode_note,
+            "command": up if side == "right" else down,
+            "clicks": clicks,
+            "presses": 0,
+            "last": None,  # the bug before the last click, until it moves
+            "stuck": 0,
+            "deadline": time.perf_counter() + HEADING_STEP_MAX_SEC,
+        }
+        self.tel.event(
+            "heading_step_start",
+            cmd=self._current_cmd,
+            target=v,
+            bug=round(bug, 1),
+            side=side,
+            clicks=clicks,
+        )
+        return "pending"
+
+    def _service_heading_step(self):
+        """One click a frame; each must show on the bug before the next."""
+        j = self._heading_step
+        if j is None:
+            return
+        bug = self._read_float(DREF_HEADING)
+        if bug is None:
+            return self._end_heading_steps(False, "cannot read the heading bug")
+        if j["last"] is not None and abs(bug - j["last"]) < 1e-6:
+            j["stuck"] += 1
+            if j["stuck"] >= KNOB_STUCK_FRAMES:
+                return self._end_heading_steps(False, "the knob did not move it")
+            return
+        j["stuck"] = 0
+        if j["presses"] >= j["clicks"]:
+            return self._end_heading_steps(True)
+        if time.perf_counter() > j["deadline"]:
+            return self._end_heading_steps(False, "it took too long")
+        self._fire_command(j["command"])
+        j.update(presses=j["presses"] + 1, last=bug)
+
+    def _end_heading_steps(self, ok, why=None, replaced=False):
+        """Done: read back. Failed: say why and what the bug shows.
+        ``replaced``: a newer heading command took over, and says its own."""
+        j, self._heading_step = self._heading_step, None
+        assert j is not None  # only called while stepping
+        bug = self._read_float(DREF_HEADING)
+        self.tel.event(
+            "heading_step_end",
+            logging.INFO if ok or replaced else logging.WARNING,
+            cmd=j["cmd"],
+            ok=ok,
+            target=j["target"],
+            bug=None if bug is None else round(bug, 1),
+            presses=j["presses"],
+            why="replaced" if replaced else why,
+        )
+        if replaced:
+            return
+        # The reply belongs to the command that started the steps.
+        previous, self._current_cmd = self._current_cmd, j["cmd"]
+        try:
+            if ok:
+                self._heading_set(j["target"], j["lead"], j["mode_note"])
+            else:
+                shown = (
+                    ""
+                    if bug is None
+                    else f" It shows {spell_digits(f'{int(round(bug)) % 360 or 360:03d}')}."
+                )
+                self._say(f"Heading not set: {why}.{shown}")
+        finally:
+            self._current_cmd = previous
 
     # ------------------------------------------------------------------
     # Phase L.1: relative commands (vimaan_nlu.relative)
@@ -3011,7 +3133,7 @@ class PythonInterface:
         degrees = int(value)
         target = turned(heading, side, degrees)
         self.tel.event("relative", reading="turn", side=side, degrees=degrees, heading_now=heading)
-        return self._write_heading(float(target), f"{side.capitalize()} {degrees}, ", True)
+        return self._write_heading(float(target), f"{side.capitalize()} {degrees}, ", True, side)
 
     def _set_compass_heading(self, slots, intent):
         degrees = COMPASS.get(str(slots.get("compass") or ""))

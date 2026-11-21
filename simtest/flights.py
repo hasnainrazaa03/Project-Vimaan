@@ -57,6 +57,9 @@ from typing import Any
 from .scenario import SimCheck, Step, above, below, equals, levelled_at, phase_is
 from .tier1 import DONE_OR_SET
 
+# A heading: the A330 turns its knob over frames ("pending", heading_by_knob).
+HEADING_SET = (*DONE_OR_SET, "pending")
+
 AIRPORT, RUNWAY = "KPDX", "10R"
 FINAL_NM = 8.0
 ILS = "tune nav one to one one zero decimal five"  # IPDX 110.50, ILS CAT III
@@ -275,7 +278,7 @@ def _do(name: str, fn: Callable[[Any], Any]) -> Callable[[Any], Any]:
 
 # If the approach can't go on: back west, level, over the installed scenery.
 TURN_BACK = (
-    Step("turn back west", say="heading two eight three"),
+    Step("turn back west", say="heading two eight three", outcomes=HEADING_SET),
     Step("hold the altitude", say="altitude hold", outcomes=DONE_OR_SET),
 )
 
@@ -357,7 +360,7 @@ def takeoff(aircraft: str, hands: Hands) -> list[Step]:
         ),
         # Set now: after the rotation the autopilot has to climb at once.
         Step(f"altitude {CRUISE_FT}", say="altitude four thousand", outcomes=DONE_OR_SET),
-        Step("heading 103", say=f"heading {COURSE}", outcomes=DONE_OR_SET),
+        Step("heading 103", say=f"heading {COURSE}", outcomes=HEADING_SET),
     ]
     if p.takeoff_flaps:
         out.append(Step(f"takeoff flaps ({p.takeoff_flaps})", say=p.takeoff_flaps))
@@ -495,7 +498,7 @@ def _established(aircraft: str, hands: Hands) -> list[Step]:
         )
     out += [
         Step("altitude hold", say="altitude hold", outcomes=DONE_OR_SET),
-        Step("heading 103", say=f"heading {COURSE}"),
+        Step("heading 103", say=f"heading {COURSE}", outcomes=HEADING_SET),
         Step("heading mode", say="heading mode", outcomes=DONE_OR_SET),
         Step("the ILS", say=ILS),
         Step("course 103", say=f"course {COURSE}"),
