@@ -1774,7 +1774,11 @@ Steps:
         back when the knob arrives.
       - Every heading command goes this way (absolute, compass, turns, the
         question's answer); the other aircraft still write the bug.
-      - To confirm in the sim after the install.
+      - **Confirmed in the sim** (installed 2026-11-20, main 4830ef0, v27 +
+        q2): the A330's relative checklist 23/23 and Tier 1 33/33. Vimaan's
+        heading commands in the reversal pattern that had failed went the
+        right way 10 of 10 (turns of 20–30° and headings, both ways), each
+        bug on target.
 - [x] L.1.5 Install v27 with the owner's OK (v26 kept as the fallback):
   installed 2026-11-20 (main dd65881, v27 + q2; backup taken first). The
   owner's voice check is still to do.
