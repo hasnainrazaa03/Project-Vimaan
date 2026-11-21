@@ -286,6 +286,27 @@ on the King Air, 37 on the 737, 38 on the A330. It needs a question model
 (q1) installed beside the command model. `--text` sends the questions as
 text; without it a generated voice says them through the question grammar.
 
+**Your own voice, recorded once:**
+
+```bash
+python -m simtest record relative all          # Enter starts, Enter stops, per phrase
+python -m simtest run relative all --recordings ~/Vimaan_Logs/recordings/relative-<date>
+```
+
+`record` shows each phrase the checklist says, once each (22 for `relative
+all`), and saves your take as 16 kHz mono WAV through the plugin's own
+recorder and pre-roll. The microphone is the system's input, so choose the one
+you fly with. At the prompt, `r` redoes the one before, `s` skips, `q` stops;
+run it again with `--out <folder>` to go on. A take with nothing in it (under
+0.4 s, or silent) is asked for again. Nothing about how Vimaan hears it is
+shown while you record.
+
+`run --recordings` plays your takes through the bridge in place of generated
+speech, and the report counts how many Vimaan understood. A misheard take is
+then sent as text, so the rest of the checklist still tests the sim. A phrase
+not recorded is sent as text too. The recordings stay in `~/Vimaan_Logs`: they
+measure, nothing is trained on them.
+
 **Relative commands (phase L.1):**
 
 ```bash

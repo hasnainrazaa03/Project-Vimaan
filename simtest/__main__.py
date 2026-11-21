@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 from typing import Any
 
 from . import flights, relative, scenario, tier1, tier2, tier3, tier4, voice, xplane
@@ -81,9 +82,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     rn.add_argument("aircraft", choices=(*tier1.SETUPS, "all"))
     rn.add_argument("--text", action="store_true", help="no generated voice: text to the model")
+    rn.add_argument(
+        "--recordings", help="a folder from 'record': your voice instead of generated speech"
+    )
     rn.add_argument("--voice", default=voice.DEFAULT_VOICE)
     rn.add_argument("--no-fly", action="store_true", help="use the flight already running")
     rn.add_argument("--quit", action="store_true", help="quit X-Plane at the end")
+
+    rec = sub.add_parser("record", help="record your voice for each phrase of a checklist")
+    rec.add_argument("checklist", choices=("tier1", "tier2", "tier3", "tier4", "relative"))
+    rec.add_argument("aircraft", choices=(*tier1.SETUPS, "all"))
+    rec.add_argument(
+        "--out", help="the folder (default ~/Vimaan_Logs/recordings/...); again to resume"
+    )
 
     v = sub.add_parser("voices", help="offline: what Vimaan's recogniser hears in generated speech")
     v.add_argument("phrases", nargs="+")
@@ -96,6 +107,12 @@ def main(argv: list[str] | None = None) -> int:
         return _xplane(args)
     if args.cmd == "run":
         return _run(args)
+    if args.cmd == "record":
+        from . import record
+
+        names = list(tier1.SETUPS) if args.aircraft == "all" else [args.aircraft]
+        folder = Path(args.out).expanduser() if args.out else record.default_folder(args.checklist)
+        return 1 if record.record(args.checklist, names, folder) else 0
 
     br = Bridge(args.log_dir)
     if args.cmd == "bridge":
@@ -225,6 +242,15 @@ def _run(args: argparse.Namespace) -> int:
     br = Bridge(args.log_dir)
     names = list(tier1.SETUPS) if args.aircraft == "all" else [args.aircraft]
     failed = 0
+    recordings = None
+    if args.recordings:
+        if args.text:
+            print("✕ --text and --recordings: choose one", file=sys.stderr)
+            return 2
+        from .record import load_recordings
+
+        recordings = load_recordings(args.recordings)
+        print(f"Your voice: {len(recordings)} recordings from {args.recordings}")
     for name in names:
         setup = tier1.SETUPS[name]
         print(f"\n=== {args.checklist} on {name} ({setup.icao}) ===")
@@ -254,6 +280,12 @@ def _run(args: argparse.Namespace) -> int:
         started = datetime.now().isoformat(timespec="seconds")
         if args.text:
             runner = scenario.Runner(br, voice=None)
+        elif recordings is not None:
+            from . import understand
+
+            runner = scenario.Runner(
+                br, voice=None, recordings=recordings, understood=understand.same
+            )
         else:
             from . import understand
 
@@ -292,7 +324,9 @@ def _run(args: argparse.Namespace) -> int:
                 "icao": setup.icao,
                 "started": started,
                 "session": state.get("session"),
-                "voice": None if args.text else args.voice,
+                "voice": None
+                if args.text
+                else (f"recordings {args.recordings}" if recordings is not None else args.voice),
                 "flap_limits": limits,
                 "summary": total,
                 "steps": results,
