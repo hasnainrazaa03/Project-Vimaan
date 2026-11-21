@@ -116,6 +116,7 @@ from vimaan_nlu.relative import (  # noqa: E402
     climb_reading,
     compass_conflict,
     goes_the_way,
+    small_turn_unsaid,
     speed_reference,
     turn_reading,
     turned,
@@ -1440,6 +1441,15 @@ class PythonInterface:
                 self.tel.event("implausible", cmd=cmd, reason="lost_digits", intent=intent_pred)
                 self._say("Say the whole number")
                 return
+            # "forward" heard as "four right": a small turn needs "turn",
+            # "come" or "degrees" (the owner's choice, 2026-11-21).
+            if small_turn_unsaid(intent_pred, slots, text):
+                outcome = "rejected"
+                self.tel.event(
+                    "implausible", cmd=cmd, reason="small_turn_unsaid", intent=intent_pred
+                )
+                self._say(f"Say turn {slots.get('turn')} {slots.get('turn_degrees')}")
+                return
             # A number impossible as heard that the worker found valid with one
             # "two" read as "to" ("standby two one two two decimal eight" for
             # 122.8, the owner's flight on 2026-11-16): ask, don't refuse.
@@ -1594,6 +1604,7 @@ class PythonInterface:
             and not clipped_number(text, intent)
             and not change_said_as_altitude(intent, text)
             and not change_said_as_heading(intent, text)
+            and not small_turn_unsaid(intent, slots, text)
             and not lost_digits(intent, slots, text)
         )
 

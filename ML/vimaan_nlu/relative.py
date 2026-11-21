@@ -121,6 +121,25 @@ def change_said_as_heading(intent: str, text: str) -> bool:
     return side_said(text) is not None and not {"degrees", "degree"}.isdisjoint(words)
 
 
+# A turn smaller than this needs a word that says it is a turn. Of single
+# words that aren't commands, Speech Commands' "forward" came out "four
+# right" through the command grammar, and v27 turned right 4 degrees (2 of
+# 300 clips, 2026-11-20). The owner chose on 2026-11-21 that a bare side and
+# number of under 10 degrees is refused; "left twenty" still turns.
+SMALL_TURN = 10
+TURN_WORDS = frozenset({"turn", "come", "degrees", "degree"})
+
+
+def small_turn_unsaid(intent: str, slots: Mapping[str, Any], text: str) -> bool:
+    """A turn of under ``SMALL_TURN`` degrees with none of ``TURN_WORDS``
+    ("four right", "left five"). "Turn right four", "come left five" and
+    "right four degrees" still turn."""
+    if intent != "turn_by":
+        return False
+    n = _number(slots.get("turn_degrees"))
+    return n is not None and n < SMALL_TURN and TURN_WORDS.isdisjoint(_words(text))
+
+
 def bare_climb(text: str) -> str | None:
     """ "up" or "down" when a climb or descent is said with no word saying
     whether its number is the altitude or the change ("descend two thousand

@@ -79,6 +79,32 @@ def test_change_said_as_heading(intent, text, refused):
     assert rel.change_said_as_heading(intent, text) is refused
 
 
+@pytest.mark.parametrize(
+    ("slots", "text", "refused"),
+    [
+        # "forward" heard as "four right" (Speech Commands, 2 of 300).
+        ({"turn": "right", "turn_degrees": "4"}, "four right", True),
+        ({"turn": "left", "turn_degrees": "5"}, "left five", True),
+        ({"turn": "left", "turn_degrees": "9"}, "left nine", True),
+        # A word that says it's a turn.
+        ({"turn": "right", "turn_degrees": "4"}, "turn right four", False),
+        ({"turn": "left", "turn_degrees": "5"}, "come left five", False),
+        ({"turn": "right", "turn_degrees": "4"}, "right four degrees", False),
+        ({"turn": "right", "turn_degrees": "1"}, "one degree right", False),
+        # Ten and more turn as before.
+        ({"turn": "left", "turn_degrees": "10"}, "left ten", False),
+        ({"turn": "left", "turn_degrees": "20"}, "left twenty", False),
+    ],
+)
+def test_a_small_turn_needs_a_word_that_says_turn(slots, text, refused):
+    assert rel.small_turn_unsaid("turn_by", slots, text) is refused
+
+
+def test_only_a_turn_is_held_to_the_small_turn_words():
+    assert not rel.small_turn_unsaid("set_autopilot_heading", {"degrees": "4"}, "four right")
+    assert not rel.small_turn_unsaid("turn_by", {"turn": "right"}, "right")
+
+
 def test_altitude_is_measured_from_where_the_autopilot_is_going():
     # Climbing to 11,000: "climb another thousand" is 12,000.
     assert rel.altitude_reference(11000, 10500, 1500, moving=True) == 11000

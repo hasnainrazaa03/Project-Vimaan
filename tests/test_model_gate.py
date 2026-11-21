@@ -94,6 +94,19 @@ def test_gate_counts_a_change_read_as_an_altitude_as_not_acted_on():
     assert model_gate.decision(p)[0] == "act"
 
 
+def test_gate_counts_a_small_bare_turn_as_not_acted_on():
+    p = {
+        "intent": "turn_by",
+        "slots": {"turn": "right", "turn_degrees": "4"},
+        "confidence": 0.99,
+        "normalized_text": "4 right",
+        "original_text": "four right",
+    }
+    assert model_gate.decision(p) == ("small_turn_unsaid", {})
+    p.update(original_text="turn right four", normalized_text="turn right 4")
+    assert model_gate.decision(p)[0] == "act"
+
+
 def test_gate_counts_a_turn_read_as_a_heading_as_not_acted_on():
     p = {
         "intent": "set_autopilot_heading",
