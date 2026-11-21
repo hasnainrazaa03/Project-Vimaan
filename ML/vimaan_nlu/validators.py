@@ -19,7 +19,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from vimaan_nlu import commands as _commands
-from vimaan_nlu.relative import says_change
+from vimaan_nlu.relative import CHANGE_INTENTS, says_change
 from vimaan_nlu.slot_types import AnyOf, Digits, Enum, Range
 
 __all__ = [
@@ -104,7 +104,7 @@ _MULTIPLIERS = frozenset({"thousand", "hundred"})
 _ONE_WORDS = frozenset({"a", "another"})
 
 
-def clipped_number(text: str) -> bool:
+def clipped_number(text: str, intent: str | None = None) -> bool:
     """True if "thousand" or "hundred" has no number before it. Pilots always
     say one ("eight thousand", "fifteen hundred"), so a bare one means the
     number's start went unheard: "altitude thousand" was "altitude eight
@@ -112,10 +112,13 @@ def clipped_number(text: str) -> bool:
     was "descend at one thousand five hundred feet per minute" (and would
     climb). No command phrasing in the training data has one."""
     words = text.lower().split()
-    # Phase L.1: "climb another thousand", "up a thousand feet". Only where a
-    # word makes the number a change: Vosk hears "eight" as "a", and a
-    # relative change is never as large as 8,000.
-    counts = _COUNT_WORDS | (_ONE_WORDS if says_change(text) else frozenset())
+    # Phase L.1: "climb another thousand", "up a thousand feet". Only for a
+    # change command (``intent``) with a word that makes the number a change:
+    # Vosk hears "eight" as "a", and a relative change is never as large as
+    # 8,000. Read as an altitude, "climb another thousand" would fly 1,000 ft
+    # (v26 does), so there it stays clipped.
+    one = intent in CHANGE_INTENTS and says_change(text)
+    counts = _COUNT_WORDS | (_ONE_WORDS if one else frozenset())
     return any(
         w in _MULTIPLIERS and (i == 0 or not (words[i - 1] in counts or words[i - 1].isdigit()))
         for i, w in enumerate(words)

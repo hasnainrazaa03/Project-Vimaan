@@ -57,6 +57,8 @@ CHANGE_WORDS = frozenset(
     }
 )
 SIDES = ("left", "right")
+# The commands whose number is a change ("climb another thousand").
+CHANGE_INTENTS = frozenset({"change_altitude_by", "change_speed_by"})
 
 
 def _words(text: str) -> list[str]:

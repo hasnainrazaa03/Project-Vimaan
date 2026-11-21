@@ -4117,6 +4117,18 @@ def test_climb_another_thousand_on_the_way_up_adds_to_the_target(sim):
     assert spoken[0].startswith("Up 1000. Altitude 12000 feet")
 
 
+def test_another_thousand_read_as_an_altitude_asks_again(sim):
+    _, plugin, xp = sim
+    # v26 reads "climb another thousand" as altitude 1,000. With "a" and
+    # "another" counted as one there, it flew 1,000 ft; it stays clipped.
+    xp.datarefs.update({ALT_NOW: 10500.0, ALT_BUG: 11000.0})
+    slots = {"altitude": "1000"}
+    spoken = say(plugin, "climb another thousand", "set_autopilot_altitude", slots)
+    assert spoken == ["Say the whole number"]
+    assert xp.datarefs[ALT_BUG] == 11000.0
+    assert events(plugin, "implausible")[-1]["reason"] == "clipped_number"
+
+
 def test_climb_a_thousand_when_level_is_from_where_we_are(sim):
     _, plugin, xp = sim
     xp.datarefs.update({ALT_NOW: 10012.0, ALT_BUG: 15000.0})  # held, window preset

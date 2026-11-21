@@ -157,18 +157,36 @@ class TestPlausibility:
             ("flight level two hundred", False),
             ("altitude 4 thousand", False),
             ("heading two seven zero", False),
-            # Phase L.1: "a" and "another" count as one only in a change.
-            ("climb another thousand", False),
-            ("up a thousand feet", False),
-            ("a thousand feet higher", False),
-            ("climb a thousand feet", True),  # "eight" is heard as "a"
-            ("altitude a thousand", True),
         ],
     )
     def test_clipped_number(self, text, clipped):
         from vimaan_nlu.validators import clipped_number
 
         assert clipped_number(text) is clipped
+        assert clipped_number(text, "set_autopilot_altitude") is clipped
+
+    @pytest.mark.parametrize(
+        ("text", "intent", "clipped"),
+        [
+            # Phase L.1: "a" and "another" count as one only in a change
+            # command with a word that makes the number a change.
+            ("climb another thousand", "change_altitude_by", False),
+            ("up a thousand feet", "change_altitude_by", False),
+            ("a thousand feet higher", "change_altitude_by", False),
+            ("climb a thousand feet", "change_altitude_by", True),  # "eight" heard as "a"
+            ("altitude a thousand", "change_altitude_by", True),
+            # Read as an altitude, "another thousand" would fly 1,000 ft (v26
+            # reads it so): it stays clipped for every other command.
+            ("climb another thousand", "set_autopilot_altitude", True),
+            ("descend another thousand feet", "set_autopilot_altitude", True),
+            ("climb another thousand", None, True),
+            ("up a thousand feet", "set_vertical_speed", True),
+        ],
+    )
+    def test_clipped_number_in_a_change(self, text, intent, clipped):
+        from vimaan_nlu.validators import clipped_number
+
+        assert clipped_number(text, intent) is clipped
 
     @pytest.mark.parametrize(
         ("intent", "value", "text", "lost"),

@@ -72,6 +72,12 @@ def test_gate_counts_a_clipped_number_as_not_acted_on():
     assert model_gate.decision(p) == ("clipped_number", {})
     p["original_text"] = "altitude one thousand"
     assert model_gate.decision(p)[0] == "act"
+    # "Another thousand" read as altitude 1,000 (as v26 reads it): clipped;
+    # read as a change (v27): acted on.
+    p.update(original_text="climb another thousand", normalized_text="climb another 1000")
+    assert model_gate.decision(p) == ("clipped_number", {})
+    p.update(intent="change_altitude_by", slots={"direction": "up", "altitude_change": "1000"})
+    assert model_gate.decision(p)[0] == "act"
 
 
 def test_gate_counts_a_lost_digit_as_not_acted_on():

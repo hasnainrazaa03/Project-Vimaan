@@ -1398,7 +1398,7 @@ class PythonInterface:
                 self._say("Please repeat that")
                 return
             # "altitude thousand": the number's start went unheard.
-            if clipped_number(text):
+            if clipped_number(text, intent_pred):
                 outcome = "rejected"
                 self.tel.event("implausible", cmd=cmd, reason="clipped_number", intent=intent_pred)
                 self._say("Say the whole number")
@@ -1554,7 +1554,7 @@ class PythonInterface:
             intent in self.intent_to_command
             and meant.get("confidence", 0.0) >= self.CONFIDENCE_FLOOR
             and has_command_word(intent, meant.get("normalized") or text)
-            and not clipped_number(text)
+            and not clipped_number(text, intent)
             and not lost_digits(intent, slots, text)
         )
 
