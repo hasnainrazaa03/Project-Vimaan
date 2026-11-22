@@ -416,6 +416,24 @@ Two clicks remain until they're switched off once: Steam's launch-option
 question (set a default for X-Plane 12 in Steam), and X-Plane's "Quit the
 simulator?" (tick "Don't ask again").
 
+**When X-Plane misbehaves (learned 2026-11-21/22):**
+- At the main menu X-Plane has no datarefs yet and its `Log.txt` stops at
+  the scenery list. That is normal, not a hang: both fill in when a flight
+  loads.
+- X-Plane 12.4.4 sometimes crashes while loading the first flight of a
+  session, inside its own object reader. The runner recovers by itself: it
+  waits for X-Plane to go, closes only the crash reporter, opens X-Plane
+  again and retries (three tries). Every crash is logged in
+  `~/Vimaan_Logs/test/xplane_crashes.jsonl`, with the crash dump and whether
+  Vimaan was installed.
+- Never force-close X-Plane to "unstick" it. A force-close counts as a crash,
+  and the next start waits on X-Plane's recovery prompt.
+- Quit X-Plane before restarting the Mac. Otherwise macOS reopens it at
+  login before Steam, and it stops at "X-Plane must be restarted through
+  Steam". `simtest launch` reads that from the log and says so.
+- `simtest launch` keeps the display awake while X-Plane runs. A sleeping
+  display, or a window that's off screen, slows X-Plane to a crawl.
+
 A said command answers when it's done and its read-backs are checked: what
 was heard and understood, the outcome, Vimaan's replies, what was sent to
 X-Plane, and the checks. It shows in the overlay and the Flights tab like a

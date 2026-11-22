@@ -368,3 +368,28 @@ def test_alt_and_altitude_mode_mean_altitude_hold(text, tagged):
 )
 def test_other_modes_are_not_taken_for_altitude_hold(text, tagged, mode):
     assert canonicalize_choices({"mode": tagged}, text, "set_autopilot_mode")["mode"] == mode
+
+
+@pytest.mark.parametrize(
+    "text, intent, want",
+    [
+        # Plural or "all", no number: every pump / generator (empty instance).
+        ("fuel pumps on", "toggle_fuel_pump", ""),
+        ("all fuel pumps off", "toggle_fuel_pump", ""),
+        ("boost pumps on", "toggle_fuel_pump", ""),
+        ("generators on", "toggle_electrical", ""),
+        ("all generators off", "toggle_electrical", ""),
+        # A number or "both" wins; a singular with no number stays the first.
+        ("fuel pump two off", "toggle_fuel_pump", "2"),
+        ("both fuel pumps on", "toggle_fuel_pump", "both"),
+        ("fuel pump on", "toggle_fuel_pump", "1"),
+        ("generator off", "toggle_electrical", "1"),
+        ("batteries on", "toggle_electrical", "1"),  # the plugin ignores it for batteries
+        # Engines and autopilots are unchanged: no number is number one.
+        ("start engines", "toggle_engine", "1"),
+    ],
+)
+def test_plural_fuel_pumps_and_generators_mean_all_of_them(text, intent, want):
+    from vimaan_nlu.postprocessor import resolve_instance
+
+    assert resolve_instance({}, text, intent)["instance"] == want

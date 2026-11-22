@@ -390,6 +390,19 @@ manipulators and scripts):
 **Transponder:** the Citation X and SF50 go to TA/RA (mode 7) on X-Plane's
 `transponder_alt`; they report altitude either way.
 
+**Speed brakes on the Citation X** have no armed position. Its
+`CitX_speedbrakes` script sets a negative ratio back to 0 every frame ("CitX
+has not"), although its `.acf` says the spoilers deploy on touchdown
+(`_sbrk_on_td_EQ 1`). Its override leaves out "armed", and Vimaan says "The
+speed brakes can't be armed on this aircraft".
+
+**All the pumps, not the first (found on the Citation X, 2026-11-22).** "Fuel
+pumps on" switched on pump 1 only, on every aircraft. The postprocessor gave
+the command instance "1" whenever no number was said, while the plugin reads
+no number as every pump or generator. Pumps already on after an air start
+hid it. Now plural "pumps" / "generators", or "all", leave the instance
+empty (all); "fuel pump on" with no number is still the first.
+
 **Long-way turns on X-Plane's GFC-700 autopilot (the SR22 and SF50).** In the
 relative checklist the SR22 took "come right thirty" (bug 162 → 192) to the
 left, round through 080 and 253, and the SF50 did the same on its first turn.

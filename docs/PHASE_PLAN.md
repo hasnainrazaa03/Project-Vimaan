@@ -1687,6 +1687,37 @@ designs come later in this document.
     - Tier 3 needs the new switch code installed before it can run.
     - The flights follow in their own step: fixed gear, jets with no
       autothrottle and one engine need the flights checklist reworked.
+    - **#97 installed 2026-11-22 (main 90de770).** By text on the five, with
+      X-Plane not crashing once in 20 loads:
+
+      | Aircraft | Tier 2 | Tier 3 | Tier 4 | Relative |
+      | --- | --- | --- | --- | --- |
+      | C172 | 23/23 | 26/26 | 35/35 | 16/16 |
+      | SR22 | 23/23 | 27/27 | 35/35 | 16/16 |
+      | Citation X | 24/24 | 30/32 | 38/38 | 20/20 |
+      | MD-82 | 25/25 | 34/34 | 39/39 | 22/23 |
+      | SF50 | 24/24 | 27/27 | 38/38 | 20/20 |
+
+      The GFC-700's heading knob held: no long-way turns on the SR22 or SF50.
+      The three misses, fixed next:
+      - **"Fuel pumps on" reached pump 1 only, on every aircraft.** With no
+        number said, the postprocessor filled in "1", where the plugin reads
+        no number as all. The checks missed it before because the pumps were
+        already on after an air start. Plural "pumps" / "generators", or
+        "all", now means every one; a singular with no number is still the
+        first.
+      - The Citation X has no armed speed brake position: its script undoes
+        one every frame. Vimaan now says it can't be armed.
+      - The MD-82's autothrottle held the air start's bug, 161 kt (clean
+        stall 150): it caught the altitude after a V/S descent, then sank
+        2,000 ft. Every checklist now sets the cruise speed right after the
+        autothrottle engages.
+    - **X-Plane crashing on the first flight load** (5 of about 16 first
+      loads on 2026-11-21/22, in X-Plane's own object reader, before Vimaan
+      had loaded an aircraft): not reproduced since, in 27 loads with and
+      without Vimaan, X-Plane in front or behind. The runner now recovers by
+      itself (reopens X-Plane, retries) and logs every crash, and the launcher
+      reports X-Plane's fatal alerts (`docs/IN_SIM_TESTING.md`).
 - [ ] **L.3 Two commands in one breath:** "heading two seven zero, climb five
   thousand". Each part is read back and goes through the same rules.
 - [ ] **L.4 Checklists:** read out, and each item checked against the sim.

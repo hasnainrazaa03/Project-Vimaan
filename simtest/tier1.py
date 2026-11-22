@@ -220,6 +220,18 @@ def _manage_thrust(s: Setup) -> list[Step]:
             note="the 737 arms its A/T switch first if it's off",
         )
     )
+    # The autothrottle flies the bug, and after an air start the bug is
+    # wherever it was left: the MD-82 held 161 kt (its clean stall is 150),
+    # caught the altitude after a V/S descent and then sank 2,000 ft through
+    # it with no thrust to hold it (relative checklist, 2026-11-22).
+    steps.append(
+        Step(
+            f"autothrottle speed {s.speed}",
+            say=f"speed {s.speed_words}",
+            outcomes=DONE_OR_SET,
+            sim=(equals(f"speed bug {s.speed}", DIAL_SPEED, s.speed, tol=1, within_sec=3),),
+        )
+    )
     return steps
 
 

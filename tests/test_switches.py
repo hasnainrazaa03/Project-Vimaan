@@ -917,3 +917,13 @@ def test_the_scan_result_reaches_the_profile(sim):
     ) == ["There is no seat belt sign switch on this aircraft"]
     assert xp.commands_fired == []
     assert events(plugin, "aircraft")[-1]["reason"] == "switches_scanned"
+
+
+def test_citation_x_speed_brakes_have_no_armed_position(sim):
+    # Its script puts a negative ratio back to 0 every frame (CitX_speedbrakes).
+    _, plugin, xp = sim
+    aircraft(plugin, xp, engine_type=JET, commands=CITX_CMDS)
+    assert say(plugin, "speed brake armed", "set_speed_brake", {"speedbrake": "armed"}) == [
+        "The speed brakes can't be armed on this aircraft"
+    ]
+    assert xp.writes == []

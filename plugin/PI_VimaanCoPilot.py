@@ -4720,6 +4720,9 @@ class PythonInterface:
             # The 737's lever stops at the flight detent in the air.
             setting, spoken = air_max, "Speed brake flight detent"
         found, steps = self._plan_steps("speed_brake", setting)
+        if found == "unavailable" and setting == "armed":
+            self._say("The speed brakes can't be armed on this aircraft")
+            return "rejected"
         if found != "ok":
             self._say("Cannot set the speed brake on this aircraft")
             return "rejected"
