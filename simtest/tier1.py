@@ -45,6 +45,15 @@ class Setup:
     # The V/S descent's rate: a light single gains too much speed at 1,500.
     vs_fpm: int = 1500
     vs_words: str = "one thousand five hundred"
+    gear_retractable: bool = True  # fixed gear: "gear up" is refused
+    # Modes its autopilot doesn't have, which Vimaan says aren't available
+    # (vimaan_nlu.aircraft.AUTOPILOT_LACKS): the C172's S-Tec 55 has no
+    # level change.
+    lacks: tuple[str, ...] = ()
+    # Its autopilot arms nav and approach only with a signal (the SR22's and
+    # SF50's Garmin: the HSI starts on GPS with no flight plan). The pilot
+    # tunes NAV 1 to a VOR in range and sets the HSI to it first.
+    nav_source: bool = False
 
 
 SETUPS: dict[str, Setup] = {
@@ -88,6 +97,8 @@ SETUPS: dict[str, Setup] = {
         "none",
         vs_fpm=500,
         vs_words="five hundred",
+        gear_retractable=False,
+        lacks=("level change",),
     ),
     "sr22": Setup(
         "SR22",
@@ -101,10 +112,14 @@ SETUPS: dict[str, Setup] = {
         "none",
         vs_fpm=1000,
         vs_words="one thousand",
+        gear_retractable=False,
+        nav_source=True,
     ),
-    # No autothrottle in its files: the pilot sets the thrust.
+    # No autothrottle in its files: the pilot sets the thrust. Air-started
+    # at 250 kt it came out at 90 kt pitching up at 5,000 fpm (probed); at
+    # 160 kt it starts as asked and its autopilot holds it.
     "citx": Setup(
-        "C750", 10000, 250, 8000, "eight thousand", 250, "two five zero", True, "none", levers=0.7
+        "C750", 10000, 160, 8000, "eight thousand", 200, "two zero zero", True, "none", levers=0.55
     ),
     "md82": Setup(
         "MD82", 10000, 250, 8000, "eight thousand", 250, "two five zero", True, "generic"
@@ -118,9 +133,11 @@ SETUPS: dict[str, Setup] = {
         200,
         "two zero zero",
         True,
-        "generic",
+        "none",  # its only "autothrottle" is a commented-out script line
+        levers=0.6,
         mach=0.45,
         mach_words="point four five",
+        nav_source=True,
     ),
 }
 # The aircraft every checklist passes on: "all" in the runner.
@@ -191,6 +208,27 @@ def _manage_thrust(s: Setup) -> list[Step]:
         )
     )
     return steps
+
+
+NAV1 = "sim/cockpit2/radios/actuators/nav1_frequency_hz"
+HSI = "sim/cockpit2/radios/actuators/HSI_source_select_pilot"
+UBG_HZ = 11740  # Newberg VOR (UBG) 117.40, about 25 nm east of the test area
+
+
+def _nav_source() -> tuple[Step, ...]:
+    """The pilot tunes NAV 1 to a VOR in range and puts the HSI on it."""
+    return (
+        Step(
+            "NAV 1 to Newberg VOR (pilot)",
+            write=(NAV1, UBG_HZ),
+            sim=(equals("NAV 1 117.40", NAV1, UBG_HZ, within_sec=2),),
+        ),
+        Step(
+            "HSI to NAV 1 (pilot)",
+            write=(HSI, 0),
+            sim=(equals("HSI on NAV 1", HSI, 0, within_sec=2),),
+        ),
+    )
 
 
 def _ias_near(kt: float, tol: float, within_sec: float) -> SimCheck:
@@ -314,13 +352,22 @@ def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:
             outcomes=DONE_OR_SET,
             sim=(equals("altitude bug", AP + "altitude_dial_ft", s.descend_to + 1000, tol=1),),
         ),
-        Step("level change", say="level change", outcomes=DONE_OR_SET),
+        Step("level change", say="level change", outcomes=DONE_OR_SET)
+        if "level change" not in s.lacks
+        else Step(
+            "level change not available",
+            say="level change",
+            outcomes=("rejected",),
+            reply="not available",
+            vimaan_checks=False,
+        ),
         Step(
             "altitude hold again",
             say="altitude hold",
             outcomes=DONE_OR_SET,
             sim=(equals("altitude hold on", AP + "altitude_hold_status", 2, within_sec=5),),
         ),
+        *(_nav_source() if s.nav_source else ()),
         Step("nav mode", say="nav mode", outcomes=DONE_OR_SET),
         Step("nav mode off", say="nav mode off", outcomes=DONE_OR_SET),
         Step("approach mode", say="approach mode", outcomes=DONE_OR_SET),
@@ -387,6 +434,14 @@ def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:
             say="landing gear up",
             outcomes=DONE_OR_SET,
             sim=(equals("gear handle up", "sim/cockpit2/controls/gear_handle_down", 0),),
+        )
+        if s.gear_retractable
+        else Step(
+            "gear up refused (fixed gear)",
+            say="landing gear up",
+            outcomes=("rejected",),
+            reply="fixed gear",
+            vimaan_checks=False,
         ),
         # The flap-speed rule follows X-Plane's acf_Vfe for this aircraft:
         # held above it, done below it (then put back up).

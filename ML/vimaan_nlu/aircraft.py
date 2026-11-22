@@ -64,6 +64,14 @@ AUTOPILOT_TYPES: Mapping[int, str] = MappingProxyType(
     }
 )
 
+# Modes an X-Plane preconfigured autopilot doesn't have, by type, as
+# measured: the C172's S-Tec 55 took "level change" and nothing engaged
+# (phase L.2, 2026-11-21). Vimaan says the mode isn't available instead of
+# "on" and then "did not respond". A probe result for the aircraft wins.
+AUTOPILOT_LACKS: Mapping[int, frozenset[str]] = MappingProxyType(
+    {3: frozenset({"mode_level_change"})}
+)
+
 # Layer 1: the standard control for each role. Handlers ask the profile for
 # a role, never for a name, so an override can replace it.
 DEFAULT_COMMANDS: Mapping[str, str | None] = MappingProxyType(
@@ -143,6 +151,8 @@ class Override:
 # present only while it's loaded.
 B738_LIVE = "laminar/B738/autopilot/cmd_a_status"
 A333_LIVE = "laminar/A333/autopilot/ap1_pos"
+MD82_LIVE = "laminar/md82/autopilot/autothrottle_switch"
+CITX_LIVE = "laminar/CitX/autopilot/hdg_mode_on"
 
 # Transponder selectors (positions set by Override.settings["xpdr_knobs"]).
 B738_XPDR = Knob(
@@ -490,6 +500,49 @@ OVERRIDES: tuple[Override, ...] = (
         "masters), X-Plane 12.4.4",
         live=(switches.A333_STROBE,),
     ),
+    # Phase L.2 (probed 2026-11-21, X-Plane 12.4.4).
+    Override(
+        name="md82_autopilot",
+        requires=(
+            "laminar/md82cmd/autopilot/autothrottle_switch",
+            "laminar/md82cmd/autopilot/servos_toggle",
+        ),
+        commands=MappingProxyType(
+            {
+                # Its flight director starts with the copilot's side as
+                # master, and the servos toggle then moved that side: "autopilot
+                # on" left servos_on at 0. X-Plane's servos_on engaged it.
+                "autopilot_engage": "sim/autopilot/servos_on",
+            }
+        ),
+        settings=MappingProxyType(
+            {
+                # Its own A/T switch: while it is off, its script turns the
+                # autothrottle off every frame. On first, then arm and engage.
+                "athr_switch": (
+                    "laminar/md82cmd/autopilot/autothrottle_switch",
+                    MD82_LIVE,
+                ),
+            }
+        ),
+        source="Laminar MD-82 xlua md80_autopilot (autothrottle_switch_funct, after_physics "
+        '"keep autothrottle off if custom switch off"), probed in the sim',
+        live=(MD82_LIVE,),
+    ),
+    Override(
+        name="citx_autopilot",
+        requires=("laminar/CitX/autopilot/cmd_ap_toggle",),
+        commands=MappingProxyType(
+            {
+                # X-Plane's servos_on only turned its flight director on
+                # (flight_director_mode 1); its AP button sets 2, servos on.
+                # A toggle: pressed only when the autopilot reads off.
+                "autopilot_engage": "laminar/CitX/autopilot/cmd_ap_toggle",
+            }
+        ),
+        source="Laminar Citation X xlua CitX_autopilot (cmd_ap_toggle), probed in the sim",
+        live=(CITX_LIVE,),
+    ),
 )
 
 
@@ -617,6 +670,8 @@ class Profile:
         the levers were at FLX. Those are tried and verified (None)."""
         verdict = self.probed.get(role)
         if verdict is None:
+            if role in AUTOPILOT_LACKS.get(self.info.autopilot_type or -1, ()):
+                return False
             return None if self.command(role) else False
         if verdict == "no_change" and role in self.overridden:
             return None
@@ -710,6 +765,8 @@ def resolve(
 AUTOTHROTTLE_NEEDLE = b"autothrottle"
 _SCAN_SUFFIXES = (".acf", ".lua", ".obj")
 _SCAN_MAX_BYTES = 600_000_000
+# A Lua comment: "--" to the end of the line, and "--[[ ... ]]" blocks.
+_LUA_COMMENT = re.compile(rb"--\[(=*)\[.*?\]\1\]|--[^\n]*", re.S)
 
 
 def files_mention(acf_path: str, needle: bytes = AUTOTHROTTLE_NEEDLE) -> bool | None:
@@ -720,7 +777,10 @@ def files_mention(acf_path: str, needle: bytes = AUTOTHROTTLE_NEEDLE) -> bool | 
 
     Checked on X-Plane 12.4.3: the 737 (in its .acf), A330 (.acf) and MD-82
     (cockpit objects, scripts) mention it; the Baron, King Air C90B, C172,
-    SR22 and Citation X mention it nowhere."""
+    SR22 and Citation X mention it nowhere. Comments in scripts don't count:
+    the SF50's only mention is a line commented out in its autopilot script
+    (``--autothrottle_enabled = find_dataref(...)``), and its autothrottle
+    stays hard off (-1) whatever is pressed (phase L.2, 2026-11-21)."""
     folder = os.path.dirname(acf_path)
     if not acf_path or not os.path.isdir(folder):
         return None
@@ -738,8 +798,11 @@ def files_mention(acf_path: str, needle: bytes = AUTOTHROTTLE_NEEDLE) -> bool | 
             if total > _SCAN_MAX_BYTES:
                 return None
             with open(f, "rb") as fh:
-                if needle in fh.read().lower():
-                    return True
+                text = fh.read().lower()
+            if f.lower().endswith(".lua"):
+                text = _LUA_COMMENT.sub(b"", text)
+            if needle in text:
+                return True
     except OSError:
         return None
     return False
@@ -786,8 +849,11 @@ def override_names() -> tuple[str, ...]:
     """Every aircraft-specific command and dataref the overrides use
     (reference checker)."""
     names = {n for o in OVERRIDES for n in (*o.requires, *o.live)}
-    names |= {v for o in OVERRIDES for v in o.commands.values() if v}
+    # X-Plane's own sim/... commands are checked against its lists with the
+    # rest of the source (the MD-82's engage is sim/autopilot/servos_on).
+    names |= {v for o in OVERRIDES for v in o.commands.values() if v and not v.startswith("sim/")}
     for o in OVERRIDES:
+        names |= set(o.settings.get("athr_switch") or ())
         for knobs in (o.settings.get("xpdr_knobs") or {}).values():
             names |= {n for k in knobs for n in (k.position, k.down, k.up)}
         # The aircraft's own switches; X-Plane's sim/... ones are checked

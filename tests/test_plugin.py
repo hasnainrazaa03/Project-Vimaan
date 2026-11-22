@@ -4364,3 +4364,92 @@ def test_a_speed_change_in_mach_is_refused(sim):
         "The speed is set in Mach. Say the Mach number"
     ]
     assert xp.writes == []
+
+
+# ---------------------------------------------------------------------------
+# Phase L.2: the MD-82 and Citation X autopilots (probed 2026-11-21)
+# ---------------------------------------------------------------------------
+MD82_CMDS = (
+    "laminar/md82cmd/autopilot/autothrottle_switch",
+    "laminar/md82cmd/autopilot/servos_toggle",
+)
+MD82_ATHR_SWITCH = "laminar/md82/autopilot/autothrottle_switch"
+CITX_AP = "laminar/CitX/autopilot/cmd_ap_toggle"
+
+
+def test_md82_autopilot_on_presses_servos_on(sim):
+    # Its servos toggle moved the copilot's side (the master at the start).
+    _, plugin, xp = sim
+    assert "md82_autopilot" in load_aircraft(plugin, xp, 7, commands=MD82_CMDS).overrides
+    say(plugin, "autopilot on", "toggle_autopilot", {"state": "on"})
+    assert xp.commands_fired == ["sim/autopilot/servos_on"]
+
+
+def test_md82_autothrottle_turns_its_own_switch_on_first(sim, monkeypatch):
+    # While its A/T switch is off, its script turns the autothrottle off.
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "ATHR_ARM_SETTLE_SEC", 0.0)
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    load_aircraft(plugin, xp, 7, commands=MD82_CMDS)
+    xp.datarefs[ATHR] = -1
+    xp.effects["laminar/md82cmd/autopilot/autothrottle_switch"] = lambda x: x.datarefs.update(
+        {MD82_ATHR_SWITCH: 1 - x.datarefs[MD82_ATHR_SWITCH]}
+    )
+    xp.effects[ARM] = lambda x: x.datarefs.update({ATHR: max(x.datarefs[ATHR], 0)})
+
+    def engage(x):  # only with its switch on and armed
+        if x.datarefs[MD82_ATHR_SWITCH] == 1 and x.datarefs[ATHR] >= 0:
+            x.datarefs[ATHR] = 1
+
+    xp.effects["sim/autopilot/autothrottle_on"] = engage
+    assert say(plugin, "auto throttle on", "toggle_autothrottle", {"state": "on"}) == [
+        "Arming the autothrottle"
+    ]
+    plugin._flight_loop()
+    plugin._flight_loop()
+    assert xp.commands_fired == [
+        "laminar/md82cmd/autopilot/autothrottle_switch",
+        ARM,
+        "sim/autopilot/autothrottle_on",
+    ]
+    assert xp.datarefs[ATHR] == 1 and xp.datarefs[MD82_ATHR_SWITCH] == 1
+    # Off and on again: the switch is already on, so it isn't pressed again.
+    say(plugin, "auto throttle off", "toggle_autothrottle", {"state": "off"})
+    xp.datarefs[ATHR] = 0
+    say(plugin, "auto throttle on", "toggle_autothrottle", {"state": "on"})
+    assert xp.commands_fired.count("laminar/md82cmd/autopilot/autothrottle_switch") == 1
+
+
+def test_citation_x_autopilot_on_presses_its_own_button(sim):
+    # X-Plane's servos_on only turned its flight director on.
+    _, plugin, xp = sim
+    assert "citx_autopilot" in load_aircraft(plugin, xp, 7, commands=(CITX_AP,)).overrides
+    say(plugin, "autopilot on", "toggle_autopilot", {"state": "on"})
+    assert xp.commands_fired == [CITX_AP]
+    # A toggle: never pressed when the autopilot is already on.
+    xp.datarefs["sim/cockpit2/autopilot/servos_on"] = 1
+    assert say(plugin, "autopilot on", "toggle_autopilot", {"state": "on"}) == [
+        "Autopilot 1 already on"
+    ]
+    assert xp.commands_fired == [CITX_AP]
+
+
+def test_nav_mode_that_does_not_arm_says_it_needs_a_signal(sim, monkeypatch):
+    # The SR22's autopilot arms nav only with a signal (HSI on GPS, no plan).
+    module, plugin, xp = sim
+    monkeypatch.setattr(module, "VERIFY_DELAY_SEC", 0.0)
+    xp.datarefs["sim/cockpit2/autopilot/nav_status"] = 0
+    assert say(plugin, "nav mode", "set_autopilot_mode", {"mode": "nav"}) == ["Nav on"]
+    plugin._flight_loop()
+    assert xp.spoken[-1] == "Nav did not engage. It needs a navigation signal."
+
+
+def test_a_mode_its_autopilot_type_lacks_is_not_available(sim):
+    # The C172's S-Tec 55 (type 3) has no level change.
+    _, plugin, xp = sim
+    xp.datarefs["sim/aircraft/autopilot/preconfigured_ap_type"] = 3
+    load_aircraft(plugin, xp, 1)
+    assert say(plugin, "level change", "set_autopilot_mode", {"mode": "level change"}) == [
+        "Level change mode is not available on this aircraft"
+    ]
+    assert xp.commands_fired == []

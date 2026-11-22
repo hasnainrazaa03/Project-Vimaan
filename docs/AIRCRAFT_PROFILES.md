@@ -137,7 +137,7 @@ aircraft folders. `scripts/check_xplane_refs.py` re-checks every name.
   - **"Works", but it's X-Plane, not the aircraft:** the autothrottle and knots/Mach. X-Plane's own autothrottle runs on any aircraft. The C90B has none in its cockpit: its `.acf` references no autothrottle dataref, while the 737's and the A330's do. Whether Vimaan should allow "autothrottle on" here is an open Part B decision.
   - STD was inconclusive: the altimeter was already at 29.92.
 
-**Not yet checked:** the Citation X (`C750`, jet, no override).
+The Citation X and the other default aircraft are in the L.2 findings below.
 
 ## Tier 2 findings: radios and transponder (X-Plane 12.4.3, 2026-11-12)
 
@@ -269,6 +269,41 @@ on every aircraft; the answer uses the unit the cockpit shows:
   (turboprop) or kilograms (jet).
 - Switch states are read the way the Tier 3 commands check a switch before
   acting: the setting whose plan has nothing left to do.
+
+## L.2 findings: the default fleet (X-Plane 12.4.4, 2026-11-21)
+
+Phase L.2 adds five default aircraft. Each was flown through the Tier 1 checklist by text (`python -m simtest run tier1 new --text`), and then probed through X-Plane's web API, outside Vimaan, to see what drives each control. The autopilot type is what X-Plane reports (`preconfigured_ap_type`).
+
+**Cessna 172 SP** (`C172`, piston, fixed gear, S-Tec 55): Tier 1 26/28.
+- The S-Tec 55 has no level change: "level change" engaged nothing, and Vimaan said "Level change mode did not respond".
+- Now `AUTOPILOT_LACKS` marks it, and Vimaan says the mode isn't available. A probe result for an aircraft would win over the table.
+- "Gear up" is refused on fixed gear ("This aircraft has fixed gear"). That's right; the checklist now expects it.
+
+**Cirrus SR22** (`SR22`, piston, fixed gear, GFC-700): Tier 1 25/28.
+- Nav and approach didn't arm. Its HSI starts on GPS (`HSI_source_select_pilot` 2) with no flight plan.
+- With NAV 1 tuned to the Newberg VOR (117.40, in range, DME) and the HSI on NAV 1, `sim/autopilot/NAV` armed nav (1), and approach armed (1).
+- Vimaan now says "Nav did not engage. It needs a navigation signal." when a radio mode doesn't arm. The checklist tunes the VOR first.
+
+**Cessna Citation X** (`C750`, jet ×2, X-Plane custom autopilot, no autothrottle in its files): Tier 1 28/31.
+- `sim/autopilot/servos_on` turns only its flight director on (mode 1). Its own AP button, `laminar/CitX/autopilot/cmd_ap_toggle`, sets mode 2 (servos) and also turns the yaw damper on.
+- Override `citx_autopilot` makes "autopilot on" press that button, and only when the autopilot reads off, since the button is a toggle.
+- **Air start:** asked for 250 kt at 10,000 ft, it came out at about 90 kt, pitching up at 5,000–10,000 fpm, in both runs.
+  - In Tier 1, the autopilot engaged into that and dropped out near the stall (98 kt). The descent then failed, and the rest followed.
+  - Started at 160 kt, it starts as asked, and its AP button holds altitude.
+  - The checklist now starts it at 160 kt.
+
+**McDonnell Douglas MD-82** (`MD82`, jet ×2, airliner autopilot): Tier 1 18/32.
+- Nothing engaged. Its flight director starts with the copilot's side as master (`master_flight_director` 1), and Vimaan's servos toggle left `servos_on` at 0. `sim/autopilot/servos_on` engaged it (servos 1, mode 2), and heading then worked.
+- **Autothrottle:** its own A/T switch (`laminar/md82cmd/autopilot/autothrottle_switch`, state `laminar/md82/autopilot/autothrottle_switch`) has to be on. While it's off, its script turns the autothrottle off every frame. Measured sequence:
+  - arm took it from -1 to 0;
+  - with the switch on, `autothrottle_on` gave 1;
+  - off gave 0, and on again gave 1.
+- Override `md82_autopilot`: "autopilot on" presses `servos_on`, and "autothrottle on" turns the switch on first (`athr_switch`), then arms and engages as on the 737.
+
+**Cirrus Vision SF50** (`SF50`, jet, GFC-700-like): Tier 1 28/32.
+- **No autothrottle:** `autothrottle_enabled` stayed at -1 after arming. Its files' only "autothrottle" is a commented-out line in `sf50_autopilot.lua`.
+- `files_mention` now skips Lua comments. That makes the SF50 an aircraft without one, so Vimaan says "This aircraft has no autothrottle". The original four aircraft read as before.
+- Nav and approach failed as on the SR22, and the checklist tunes the VOR first.
 
 ## Engine start by type
 
