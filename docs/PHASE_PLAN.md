@@ -1661,6 +1661,32 @@ designs come later in this document.
       33/33.
   - [ ] L.2.3 Tiers 2–4, the relative checklist and the flights on the five;
     then they join "all".
+    - First run by text (2026-11-21, #96's code installed), before this
+      step's fixes:
+
+      | Aircraft | Tier 2 | Relative | Tier 4 |
+      | --- | --- | --- | --- |
+      | C172 | 23/23 | 16/16 | 35/35 |
+      | SR22 | 23/23 | 15/16: a long-way turn | 35/35 |
+      | Citation X | 23/24: TA/RA for "transponder alt" | 20/20 | 37/38: fuel in kg |
+      | MD-82 | 24/25: NAV 2 course read back 0 | 23/23 | 38/39: fuel in kg |
+      | SF50 | 23/24: TA/RA | 17/20: one long-way turn | 37/38: fuel in kg |
+
+    - Fixes (`docs/AIRCRAFT_PROFILES.md`, "L.2.3"):
+      - which switches a cockpit has, read from its files for any aircraft;
+      - generators counted on their own;
+      - switch overrides for the Citation X, MD-82, SR22 and SF50;
+      - the MD-82's NAV 2 course is the copilot's;
+      - selector steps read array elements;
+      - fuel units: Citation X and MD-82 pounds, SF50 gallons (its display);
+      - X-Plane's GFC-700 autopilot (SR22, SF50) turns the heading knob, as
+        the A330 does: a written bug went the short way 5 of 8 times on
+        each, the knob 8 of 8 (a probe outside Vimaan);
+      - the checklists: TA/RA reports altitude, one engine, fixed gear, each
+        jet's own Mach, no autothrottle measured from the airspeed.
+    - Tier 3 needs the new switch code installed before it can run.
+    - The flights follow in their own step: fixed gear, jets with no
+      autothrottle and one engine need the flights checklist reworked.
 - [ ] **L.3 Two commands in one breath:** "heading two seven zero, climb five
   thousand". Each part is read back and goes through the same rules.
 - [ ] **L.4 Checklists:** read out, and each item checked against the sim.

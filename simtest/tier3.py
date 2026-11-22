@@ -40,6 +40,14 @@ NEEDS_INTENT = "set_autobrake"
 B738 = "laminar/B738/toggle_switch/"
 A333 = "laminar/A333/"
 C90 = "laminar/c90/"
+CITX = "laminar/CitX/"
+# Phase L.2's default fleet: what each cockpit has (docs/AIRCRAFT_PROFILES.md,
+# "L.2 findings").
+SINGLES = ("c172", "sr22", "sf50")  # one engine (the SR22 and SF50: two generators)
+NO_TAXI_OR_BEACON = ("sr22", "sf50")
+NO_SIGNS = ("baron", "c172", "sr22", "sf50")
+NO_YAW_DAMPER = ("a330", "c172", "sr22")
+NO_AVIONICS = ("737", "a330", "md82", "sf50")
 
 
 def _all(*checks: SimCheck) -> tuple[SimCheck, ...]:
@@ -94,9 +102,17 @@ def _pitot_off_held(*still_on: SimCheck, no_off: bool = False) -> list[Step]:
 
 
 def _lights(aircraft: str) -> list[Step]:
+    one_light = [_is("landing light", SW + "landing_lights_on", 1)]
     landing = {
         "737": [_is(f"landing light {i}", f"{SW}landing_lights_switch[{i}]", 1) for i in range(4)],
         "a330": [_is("LAND", f"{SW}landing_lights_switch[0]", 1)],
+        "c172": one_light,
+        "sr22": one_light,
+        "sf50": one_light,
+        "md82": [
+            _is(f"landing light {s}", f"{SW}landing_lights_switch[{i}]", 1)
+            for s, i in (("L", 1), ("R", 2))
+        ],
     }.get(
         aircraft,
         [_is(f"landing light {i + 1}", f"{SW}landing_lights_switch[{i}]", 1) for i in (0, 1)],
@@ -112,12 +128,18 @@ def _lights(aircraft: str) -> list[Step]:
         "737": _is("taxi switch off", B738 + "taxi_light_brightness_pos", 0),
         "a330": _is("nose light off", f"{SW}landing_lights_switch[1]", 0),
     }.get(aircraft, _is("taxi light off", SW + "taxi_light_on", 0))
+    if aircraft in NO_TAXI_OR_BEACON:
+        beacon = _refused("no beacon", "beacon on", "no beacon")
+        taxi = _refused("no taxi lights", "taxi lights off", "no taxi")
+    else:
+        beacon = _set("beacon on", "beacon on", _is("beacon", SW + "beacon_on", 1))
+        taxi = _set("taxi lights off", "taxi lights off", taxi_off)
     out = [
-        _set("beacon on", "beacon on", _is("beacon", SW + "beacon_on", 1)),
+        beacon,
         _set("landing lights on", "landing lights on", *landing),
         _set("strobes on", "strobes on", strobes),
         _set("nav lights on", "nav lights on", nav),
-        _set("taxi lights off", "taxi lights off", taxi_off),
+        taxi,
     ]
     if aircraft == "a330":
         out.append(
@@ -135,14 +157,52 @@ def _lights(aircraft: str) -> list[Step]:
         )
     elif aircraft == "a330":
         out.append(_set("logo lights on", "logo lights on", nav))
+    elif aircraft in ("citx", "md82"):  # the tail flood lights
+        logo = _is("logo", f"{SW}generic_lights_switch[0]", 1)
+        out.append(_set("logo lights on", "logo lights on", logo))
     else:
         out.append(_refused("no logo lights", "logo lights on", "no logo"))
     return out
 
 
 def _signs(aircraft: str) -> list[Step]:
-    if aircraft == "baron":
+    if aircraft in NO_SIGNS:
         return [_refused("no seat belt sign", "seat belt sign on", "no seat belt")]
+    if aircraft == "citx":  # one switch: SEAT BELT / OFF / PASS SAFETY (both)
+        pos = CITX + "lights/seat_belt_pass_safety_term"
+        return [
+            _set(
+                "seat belt sign on",
+                "seat belt sign on",
+                _is("switch at SEAT BELT", pos, -1),
+                _is("seat belt sign", SW + "fasten_seat_belts", 1),
+            ),
+            _refused("seat belt sign has no auto", "seat belt sign auto", "on or off"),
+            _set(
+                "no smoking sign on",
+                "no smoking sign on",
+                _is("switch at PASS SAFETY", pos, 1),
+                _is("no smoking sign", SW + "no_smoking", 1),
+            ),
+        ]
+    if aircraft == "md82":  # X-Plane's sign datarefs: 0 OFF, 1 AUTO, 2 ON
+        return [
+            _set(
+                "seat belt sign on",
+                "seat belt sign on",
+                _is("seat belts ON", SW + "fasten_seat_belts", 2),
+            ),
+            _set(
+                "seat belt sign auto",
+                "seat belt sign auto",
+                _is("seat belts AUTO", SW + "fasten_seat_belts", 1),
+            ),
+            _set(
+                "no smoking sign auto",
+                "no smoking sign auto",
+                _is("no smoking AUTO", SW + "no_smoking", 1),
+            ),
+        ]
     if aircraft == "kingair":
         pos = C90 + "lighting/switch/no_smoke_fsb_pos"
         return [
@@ -271,6 +331,10 @@ def _anti_ice(aircraft: str) -> list[Step]:
             ),
             _refused("no prop heat", "prop heat on", "no prop"),
         ]
+    if aircraft in ("citx", "md82"):
+        return _jet_anti_ice(aircraft)
+    if aircraft in SINGLES:
+        return _single_anti_ice(aircraft)
     pitot = (
         _is("pitot heat left", ICE + "ice_pitot_heat_on_pilot", 1),
         _is("pitot heat right", ICE + "ice_pitot_heat_on_copilot", 1),
@@ -331,21 +395,111 @@ def _anti_ice(aircraft: str) -> list[Step]:
     ]
 
 
+def _on_off_pair(name: str, say: str, *checks: tuple[str, str]) -> list[Step]:
+    """ "<say> on", then "<say> off", each checked on every (what, dataref)."""
+    return [
+        _set(
+            f"{name} {state}", f"{say} {state}", *(_is(f"{w} {state}", d, want) for w, d in checks)
+        )
+        for state, want in (("on", 1), ("off", 0))
+    ]
+
+
+def _jet_anti_ice(aircraft: str) -> list[Step]:
+    """The Citation X and MD-82: pitot L / R, windshield, wing, two engines."""
+    pitot = (
+        _is("pitot heat left", ICE + "ice_pitot_heat_on_pilot", 1),
+        _is("pitot heat right", ICE + "ice_pitot_heat_on_copilot", 1),
+    )
+    if aircraft == "citx":
+        window = tuple(
+            _is(f"windshield {s} ON", f"{CITX}ice/windshield_{side}_term", 1)
+            for s, side in (("L", "left"), ("R", "right"))
+        )
+        wing = (("slat anti-ice", ICE + "ice_surface_hot_bleed_air_on"),)
+        engines = tuple(
+            (f"engine {i + 1} anti-ice", f"{ICE}cowling_thermal_anti_ice_per_engine[{i}]")
+            for i in (0, 1)
+        )
+    else:
+        window = (_is("windshield heat", ICE + "ice_window_heat_on", 1),)
+        wing = tuple(
+            (f"wing heat {s}", f"{ICE}ice_surfce_heat_{side}_on")
+            for s, side in (("L", "left"), ("R", "right"))
+        )
+        engines = tuple(
+            (f"engine {i + 1} anti-ice", f"{ICE}ice_inlet_heat_on_per_engine[{i}]") for i in (0, 1)
+        )
+    return [
+        _set("probe heat on", "probe heat on", *pitot),
+        *_pitot_off_held(*pitot),
+        _set("window heat on", "window heat on", *window),
+        *_on_off_pair("wing anti ice", "wing anti ice", *wing),
+        *_on_off_pair("engine anti ice", "engine anti ice", *engines),
+        _refused("no prop heat", "prop heat on", "no prop"),
+    ]
+
+
+def _single_anti_ice(aircraft: str) -> list[Step]:
+    """The C172, SR22 and SF50: one pitot heat (the pilot's); the C172 has
+    nothing else, the SR22 window heat and its TKS fluid (the wing anti-ice),
+    the SF50 window, wing and engine inlet heat."""
+    pitot = (_is("pitot heat", ICE + "ice_pitot_heat_on_pilot", 1),)
+    out = [_set("pitot heat on", PITOT_SAY, *pitot), *_pitot_off_held(*pitot)]
+    if aircraft == "c172":
+        return out + [
+            _refused("no window heat", "window heat on", "no window heat"),
+            _refused("no wing anti ice", "wing anti ice on", "no wing anti"),
+            _refused("no engine anti ice", "engine anti ice on", "no engine anti"),
+            _refused("no prop heat", "prop heat on", "no prop"),
+        ]
+    out.append(
+        _set("window heat on", "window heat on", _is("window heat", ICE + "ice_window_heat_on", 1))
+    )
+    if aircraft == "sr22":
+        return out + [
+            *_on_off_pair(
+                "wing anti ice (TKS)",
+                "wing anti ice",
+                ("ice protection", "laminar/sr22/switch/ice_protect"),
+            ),
+            _refused("no engine anti ice", "engine anti ice on", "no engine anti"),
+            _refused("no prop heat", "prop heat on", "no prop"),
+        ]
+    return out + [  # SF50
+        *_on_off_pair("wing anti ice", "wing anti ice", ("wing heat", ICE + "ice_surfce_heat_on")),
+        *_on_off_pair(
+            "engine anti ice",
+            "engine anti ice",
+            ("engine inlet heat", ICE + "ice_inlet_heat_on_per_engine[0]"),
+        ),
+        _refused("no prop heat", "prop heat on", "no prop"),
+    ]
+
+
 def _power_and_fuel(aircraft: str) -> list[Step]:
     out = []
-    if aircraft in ("737", "a330"):
+    if aircraft in NO_AVIONICS:
         out.append(_refused("no avionics switch", "avionics on", "no avionics"))
+    elif aircraft == "citx":
+        out.append(
+            _set(
+                "avionics on", "avionics on", _is("avionics", CITX + "electrical/avionics_term", 1)
+            )
+        )
     else:
         out.append(_set("avionics on", "avionics on", _is("avionics", SW + "avionics_power_on", 1)))
     gen2 = {
         "a330": A333 + "buttons/gen2_pos",
         "kingair": C90 + "electrical/switch/gen2_switch_pos",
+        "citx": CITX + "electrical/generator_right_term",
+        "c172": EL + "generator_on[0]",  # its one alternator
     }.get(aircraft, EL + "generator_on[1]")
     gen2_on = 0 if aircraft == "kingair" else 1  # the King Air's ON is the middle position
     out += [
         Step(
             "generator off is held in flight",
-            say="generator two off",
+            say="generator off" if aircraft == "c172" else "generator two off",
             outcomes=("safety_hold",),
             reply="Confirm power off",
             vimaan_checks=False,
@@ -370,6 +524,22 @@ def _power_and_fuel(aircraft: str) -> list[Step]:
             _is(f"pump {n}", f"{A333}fuel/buttons/{n}_pump_pos", 1)
             for n in ("left1", "left2", "right1", "right2", "center_left", "center_right")
         ]
+    elif aircraft == "md82":  # tank pumps: [0] center, [1] left, [2] right
+        pumps = [
+            _is(f"tank pumps {t}", f"sim/cockpit2/fuel/fuel_tank_pump_on[{i}]", 1)
+            for i, t in ((1, "left"), (0, "center"), (2, "right"))
+        ]
+    elif aircraft == "citx":
+        pumps = [
+            _is(f"boost pump {s} ON", f"{CITX}fuel/boost_{side}_term", 1)
+            for s, side in (("L", "left"), ("R", "right"))
+        ]
+    elif aircraft == "sr22":
+        pumps = [_is("boost pump BOOST", "laminar/sr22/switch/boost_pump", 1)]
+    elif aircraft == "sf50":  # its pump follows the ignition knob
+        return out + [_refused("no fuel pump switch", "fuel pumps on", "no fuel pump")]
+    elif aircraft == "c172":
+        pumps = [_is("fuel pump", "sim/cockpit2/engine/actuators/fuel_pump_on[0]", 1)]
     else:
         pumps = [
             _is(f"boost pump {i + 1}", f"sim/cockpit2/engine/actuators/fuel_pump_on[{i}]", 1)
@@ -398,6 +568,28 @@ def _power_and_fuel(aircraft: str) -> list[Step]:
 
 
 def _jets(aircraft: str) -> list[Step]:
+    if aircraft in ("citx", "md82"):
+        ratio = "sim/cockpit2/controls/speedbrake_ratio"
+        out = [
+            _set(
+                "speed brake armed",
+                "speed brake armed",
+                _is("speed brake armed", ratio, -0.5, tol=0.01),
+            ),
+            _set(
+                "speed brake retract", "stow the speed brakes", _is("retracted", ratio, 0, tol=0.01)
+            ),
+        ]
+        if aircraft == "citx":
+            return out + [_refused("no auto brake", "auto brake two", "no auto brake")]
+        return out + [
+            _set(
+                "auto brake two", "auto brake two", _is("autobrake 2", SW + "auto_brake_level", 3)
+            ),
+            _set(
+                "auto brake off", "auto brake off", _is("autobrake off", SW + "auto_brake_level", 1)
+            ),
+        ]
     if aircraft not in ("737", "a330"):
         return [
             _refused("no speed brakes", "speed brake armed", "no speed brakes"),
@@ -450,7 +642,7 @@ def steps(aircraft: str) -> list[Step]:
     out = hands_off(aircraft)
     out += _lights(aircraft)
     out += _signs(aircraft)
-    if aircraft == "a330":
+    if aircraft in NO_YAW_DAMPER:
         out.append(_refused("no yaw damper switch", "yaw damper on", "no yaw damper"))
     else:
         out.append(

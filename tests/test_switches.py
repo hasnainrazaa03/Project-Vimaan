@@ -34,7 +34,17 @@ def test_every_plan_reaches_a_listed_setting():
     keys = {f"light:{n}" for n in switches.LIGHTS} | {f"sign:{n}" for n in switches.SIGNS}
     keys |= {"yaw_damper", "speed_brake", "autobrake"} | {f"ice:{n}" for n in switches.ICES}
     keys |= {"power:battery", "power:avionics", *switches.ALL_GENERATORS, *switches.ALL_FUEL_PUMPS}
-    for plans in (switches.GENERIC, switches.B58, switches.C90, switches.B738, switches.A333):
+    for plans in (
+        switches.GENERIC,
+        switches.B58,
+        switches.C90,
+        switches.B738,
+        switches.A333,
+        switches.CITX_PLANS,
+        switches.MD82_PLANS,
+        switches.SR22_PLANS,
+        switches.SF50_PLANS,
+    ):
         assert set(plans) <= keys
         for table in plans.values():
             for setting, plan in (table or {}).items():
@@ -761,3 +771,149 @@ def test_a330_batteries_and_generators_are_its_buttons(sim):
         "sim/electrical/generator_1_toggle",
         "sim/electrical/generator_2_toggle",
     ]
+
+
+# --- Phase L.2: the default fleet -------------------------------------------
+CITX_CMDS = (
+    switches.CITX_ANTI_COLL.down,
+    switches.CITX_ANTI_COLL.up,
+    switches.CITX_SIGNS.down,
+    switches.CITX_SIGNS.up,
+)
+MD82_CMDS = (
+    switches.MD82_NAVSTROBE.down,
+    switches.MD82_NAVSTROBE.up,
+    switches.MD82_SEATBELT.down,
+    switches.MD82_SEATBELT.up,
+)
+
+
+def test_generators_are_counted_on_their_own():
+    # The SR22 and SF50 have two alternators on their one engine.
+    gen2 = switches.GENERIC["power:generator2"]["on"]
+    assert switches.for_engines(gen2, 1, 2) == gen2
+    assert switches.for_engines(gen2, 1, 1) == ()
+    assert switches.for_engines(gen2, 1) == ()  # no generator count: the engines'
+    pump2 = switches.GENERIC["fuel:right"]["on"]
+    assert switches.for_engines(pump2, 1, 2) == ()  # a fuel pump is per engine
+
+
+def test_every_shown_key_is_a_switch_vimaan_drives():
+    for key, needles in switches.SHOWN_BY.items():
+        assert switches.GENERIC.get(key) is not None, key
+        assert needles and all(n == n.lower() for n in needles)
+
+
+def test_a_switch_its_files_never_name_is_absent_unless_it_has_its_own():
+    absent = frozenset({"sign:seat belt", "ice:wing", "light:taxi"})
+    plain = resolve(AircraftInfo(engine_types=(PISTON,)), lambda _n: False, absent=absent)
+    assert plain.switch_plan("sign:seat belt", "on") == ("absent", ())
+    assert plain.switch_plan("light:beacon", "on")[0] == "ok"
+    # The SR22's own entry (its TKS) is used whatever the scan says.
+    sr22 = resolve(
+        AircraftInfo(engine_types=(PISTON,)),
+        {switches.SR22_BOOST.down, switches.SR22_BOOST.up}.__contains__,
+        absent=absent,
+    )
+    assert "sr22_switches" in sr22.overrides
+    assert sr22.switch_plan("ice:wing", "on")[0] == "ok"
+    assert sr22.switch_plan("light:taxi", "on") == ("absent", ())
+    assert sr22.summary()["absent_switches"] == sorted(absent)
+
+
+def test_two_alternators_on_one_engine(sim):
+    _, plugin, xp = sim
+    xp.datarefs["sim/aircraft/electrical/num_generators"] = 2
+    xp.datarefs["sim/aircraft/engine/acf_num_engines"] = 1
+    assert aircraft(plugin, xp, engine_type=PISTON).info.num_generators == 2
+    xp.effects["sim/electrical/generator_2_on"] = lambda x: x.datarefs[
+        EL + "generator_on"
+    ].__setitem__(1, 1)
+    xp.datarefs[EL + "generator_on"][1] = 0
+    say(
+        plugin,
+        "generator two on",
+        "toggle_electrical",
+        {"power": "generator", "instance": "2", "switch": "on"},
+    )
+    assert run(plugin, xp) == ["Generator 2 on"]
+
+
+def test_citation_x_strobes_turn_its_anti_collision_switch(sim):
+    # 0 OFF, 1 GND REC (beacons), 2 + ANTI COLL (strobes); strobes off keeps beacons.
+    _, plugin, xp = sim
+    assert "citx_switches" in aircraft(plugin, xp, engine_type=JET, commands=CITX_CMDS).overrides
+    knob = switches.CITX_ANTI_COLL
+    xp.datarefs[knob.position] = 1
+    turn = selector(xp, knob.position, knob.up, knob.down, 0, 2)
+    say(plugin, "strobes on", "toggle_lights", {"light": "strobe", "switch": "on"})
+    assert run(plugin, xp, turn) == ["Strobes on"]
+    assert xp.datarefs[knob.position] == 2 and xp.commands_fired == [knob.up]
+    say(plugin, "strobes off", "toggle_lights", {"light": "strobe", "switch": "off"})
+    assert run(plugin, xp, turn) == ["Strobes off"]
+    assert xp.datarefs[knob.position] == 1
+    # It has no autobrake, and its fuel answers are in pounds.
+    assert plugin.profile.settings["fuel_unit"] == "lb"
+
+
+def test_citation_x_seat_belt_and_no_smoking_share_one_switch(sim):
+    # -1 SEAT BELT, 0 OFF, 1 PASS SAFETY (both); its "up" goes toward -1.
+    _, plugin, xp = sim
+    aircraft(plugin, xp, engine_type=JET, commands=CITX_CMDS)
+    knob = switches.CITX_SIGNS
+    xp.datarefs[knob.position] = 0
+    turn = selector(xp, knob.position, knob.up, knob.down, -1, 1)
+    say(plugin, "seat belt sign on", "toggle_signs", {"sign": "seat belt", "switch": "on"})
+    assert run(plugin, xp, turn) == ["Seat belt sign on"]
+    assert xp.datarefs[knob.position] == -1
+    say(plugin, "no smoking sign on", "toggle_signs", {"sign": "no smoking", "switch": "on"})
+    assert run(plugin, xp, turn) == ["No smoking sign on"]
+    assert xp.datarefs[knob.position] == 1
+    assert say(
+        plugin, "seat belt sign auto", "toggle_signs", {"sign": "seat belt", "switch": "auto"}
+    ) == ["Seat belt sign on or off?"]
+
+
+def test_md82_landing_lights_are_its_three_position_switches(sim):
+    # -1 RETRACT, 0 EXTEND, 1 ON; "landing lights on" turns both to ON.
+    _, plugin, xp = sim
+    assert "md82_switches" in aircraft(plugin, xp, engine_type=JET, commands=MD82_CMDS).overrides
+    lights = xp.datarefs[SW + "landing_lights_switch"]
+    for i, knob in ((1, switches.MD82_LANDING_L), (2, switches.MD82_LANDING_R)):
+        lights[i] = -1
+
+        def click(sign, i=i):
+            return lambda _x: lights.__setitem__(i, max(-1, min(1, lights[i] + sign)))
+
+        xp.custom_commands.setdefault(knob.up, None)
+        xp.custom_commands.setdefault(knob.down, None)
+        xp.effects[knob.up], xp.effects[knob.down] = click(1), click(-1)
+    say(plugin, "landing lights on", "toggle_lights", {"light": "landing", "switch": "on"})
+    assert run(plugin, xp) == ["Landing lights on"]
+    assert xp.datarefs[SW + "landing_lights_switch"][1:3] == [1, 1]
+    assert say(
+        plugin, "avionics on", "toggle_electrical", {"power": "avionics", "switch": "on"}
+    ) == ["This aircraft has no avionics switch"]
+
+
+def test_sf50_has_no_fuel_pump_switch(sim):
+    # Its pump follows the ignition knob: "fuel pumps off" would be the engine's fuel.
+    _, plugin, xp = sim
+    cmds = ("laminar/SF50/ignition_up", "laminar/SF50/ignition_down")
+    assert "sf50_switches" in aircraft(plugin, xp, engine_type=JET, commands=cmds).overrides
+    assert say(plugin, "fuel pumps on", "toggle_fuel_pump", {"switch": "on"}) == [
+        "This aircraft has no fuel pump switch"
+    ]
+    assert xp.commands_fired == [] and plugin.profile.settings["fuel_unit"] == "gal"
+
+
+def test_the_scan_result_reaches_the_profile(sim):
+    _, plugin, xp = sim
+    aircraft(plugin, xp, engine_type=PISTON)
+    plugin._switch_scan = (plugin.profile.info.acf_path, frozenset({"sign:seat belt"}))
+    plugin._apply_switch_scan()
+    assert say(
+        plugin, "seat belt sign on", "toggle_signs", {"sign": "seat belt", "switch": "on"}
+    ) == ["There is no seat belt sign switch on this aircraft"]
+    assert xp.commands_fired == []
+    assert events(plugin, "aircraft")[-1]["reason"] == "switches_scanned"

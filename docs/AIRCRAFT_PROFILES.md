@@ -306,6 +306,108 @@ Phase L.2 adds five default aircraft. Each was flown through the Tier 1 checklis
 - `files_mention` now skips Lua comments. That makes the SF50 an aircraft without one, so Vimaan says "This aircraft has no autothrottle". The original four aircraft read as before.
 - Nav and approach failed as on the SR22, and the checklist tunes the VOR first.
 
+### L.2.3: switches, radios and units on the five (2026-11-21)
+
+**Which switches a cockpit has.** Until now an aircraft without its own
+override got X-Plane's switch for everything, so Vimaan would "set" the
+C172's seat belt sign, a switch that isn't there. A switch is clicked in an
+aircraft's cockpit objects or driven by its scripts, so their files name its
+command or dataref. `aircraft.switches_shown` reads every `.obj` and `.lua`
+(comments skipped, liveries left out, not the `.acf`, which names every
+system in its electrical loads) for the names in `switches.SHOWN_BY`. A
+switch none of them names is absent: "This aircraft has no taxi lights".
+It runs in the background scan with the autothrottle one, and an
+aircraft's own entry (an override) always wins. With no cockpit
+manipulators at all (a 2D panel) it can't tell, and nothing changes.
+
+What it finds missing, X-Plane 12.4.4:
+
+| Aircraft | Missing switches |
+| --- | --- |
+| Baron 58 | signs, engine anti-ice, autobrake (all already in its override) |
+| King Air C90B | autobrake (a turboprop has none anyway) |
+| 737-800 | no smoking sign, prop heat (already in its override) |
+| A330-300 | avionics, prop heat (already in its override) |
+| C172 | signs, yaw damper, window, wing, engine and prop heat, autobrake |
+| SR22 | taxi light, beacon, signs, yaw damper, wing heat (its TKS is an override), engine and prop heat, autobrake |
+| Citation X | wing heat (its slat anti-ice is an override), prop heat, autobrake |
+| MD-82 | prop heat |
+| SF50 | taxi light, beacon, signs, avionics, prop heat, autobrake |
+
+On the four proven aircraft it finds nothing their overrides don't already
+leave out, so nothing changes for them.
+
+**Generators** are counted with X-Plane's `num_generators`, not the engines:
+the SR22 and SF50 have two on their one engine (C172 1, the rest 2).
+
+**Their own switches** (`vimaan_nlu/switches.py`, from each cockpit's
+manipulators and scripts):
+- **Citation X** (`citx_switches`): every switch is its own, and its scripts
+  write X-Plane's datarefs from them every frame, so its commands click
+  them.
+  - Toggles are read on the X-Plane dataref they drive: landing L/R, taxi,
+    nav, tail flood (logo, `generic_lights_switch[0]`), wing inspection light
+    (`[1]`), pitot/static L/R, slats (wing anti-ice,
+    `ice_surface_hot_bleed_air_on`), engine anti-ice L/R
+    (`cowling_thermal_anti_ice_per_engine`), batteries L/R, avionics, and
+    the yaw damper (its autopilot panel's YD button).
+  - Three-position switches are read on their own `_term` datarefs:
+    - `gnd_rec_anti_coll`: 0 OFF, 1 GND REC (beacons), 2 + ANTI COLL
+      (strobes). Strobes off leaves the beacons on.
+    - `seat_belt_pass_safety`: -1 SEAT BELT, 0 OFF, 1 PASS SAFETY (seat belt
+      and no smoking). No smoking alone isn't a position, as on the King Air.
+    - windshield heat L/R: 0 OFF, 1 ON, 2 O'RIDE (sprung back to ON).
+    - generators L/R: -1 RESET (sprung back to OFF), 0 OFF, 1 ON.
+    - fuel boost L/R: -1 NORM, 0 OFF, 1 ON.
+  - Fuel in pounds.
+- **MD-82** (`md82_switches`): its own commands click X-Plane's datarefs one
+  step at a time (xlua `md80_swithces`; its "up" goes to the lower value):
+  - landing lights L/R `landing_lights_switch[1]`/`[2]` (-1 RETRACT, 0
+    EXTEND, 1 ON), and the nose light `taxi_light_on` (0 OFF, 1, 2);
+  - `navstrobe_lights_switch` (0 OFF, 1 POS, 2 POS + STROBE);
+  - signs `fasten_seat_belts` / `no_smoking` (0 OFF, 1 AUTO, 2 ON);
+  - the pitot/stall heat selector `laminar/md82/ice/heatknob` (0 OFF,
+    1-9 heat every probe).
+
+  The rest is X-Plane's: logo `generic_01` (`[0]`), wing and engine lights
+  `generic_04` (`[3]`), wing heat L/R (`wing_heat0/1`), tank pumps `[0]`
+  center, `[1]` left, `[2]` right. It has no avionics master: its
+  electrical script sets avionics power from the buses, as on the 737.
+  Fuel in pounds.
+  - **NAV 2 course:** its autopilot script copies the copilot's NAV 2
+    course over the pilot's every frame, and its course knob is the
+    copilot's. Writing the pilot's read back 0 in Tier 2. "nav two course"
+    now sets `nav2_obs_deg_mag_copilot` (`obs_datarefs`).
+  - Selector steps now read an array element (`landing_lights_switch[1]`).
+- **SR22** (`sr22_switches`): the boost pump is its own three-position switch
+  (-1 PRIME, 0 OFF, 1 BOOST). Its TKS fluid system (wings, tail and prop,
+  `laminar/sr22/switch/ice_protect`) is the wing anti-ice.
+- **SF50** (`sf50_switches`): no fuel pump switch. Its pump follows the
+  ignition knob, so "fuel pumps off" would cut the engine's fuel. Its engine
+  display reads "FUEL QTY GAL" and "FFLOW GPH" (jet fuel), seen in a sim
+  screenshot, so fuel answers are in gallons.
+
+**Transponder:** the Citation X and SF50 go to TA/RA (mode 7) on X-Plane's
+`transponder_alt`; they report altitude either way.
+
+**Long-way turns on X-Plane's GFC-700 autopilot (the SR22 and SF50).** In the
+relative checklist the SR22 took "come right thirty" (bug 162 → 192) to the
+left, round through 080 and 253, and the SF50 did the same on its first turn.
+A probe outside Vimaan (air start heading 180, heading and altitude hold,
+30-degree reversals 160, 190, 160, 190, 220, 190, 160, 190; the bank 3 s
+after each change):
+
+| | Written bug | Knob clicks (`sim/autopilot/heading_up/down`) |
+| --- | --- | --- |
+| SR22 | 5/8 the short way: every right turn after a left one went left | 8/8 |
+| SF50 | 5/8: wrong both ways (190 → 220 went left, 190 → 160 right) | 8/8 |
+
+The same as the A330's in L.1. X-Plane's GFC-700 type (2) now turns the
+knob too (`HEADING_BY_KNOB_TYPES`; `Profile.heading_by_knob`), a degree a
+frame, read back when the bug arrives. The S-Tec 55 (C172) and the Citation
+X's and MD-82's autopilots turned the right way every time in the relative
+checklist.
+
 ## Engine start by type
 
 | Type | Sequence | Limit | Failure message |

@@ -4453,3 +4453,65 @@ def test_a_mode_its_autopilot_type_lacks_is_not_available(sim):
         "Level change mode is not available on this aircraft"
     ]
     assert xp.commands_fired == []
+
+
+def test_md82_nav2_course_is_the_copilots(sim):
+    # Its autopilot script copies the copilot's NAV 2 course over the pilot's.
+    from vimaan_nlu import switches
+
+    _, plugin, xp = sim
+    cmds = (
+        switches.MD82_NAVSTROBE.down,
+        switches.MD82_NAVSTROBE.up,
+        switches.MD82_SEATBELT.down,
+        switches.MD82_SEATBELT.up,
+    )
+    assert "md82_switches" in load_aircraft(plugin, xp, 7, commands=cmds).overrides
+    copilot = "sim/cockpit2/radios/actuators/nav2_obs_deg_mag_copilot"
+    xp.datarefs[copilot] = 0.0
+    slots = {"degrees": "180", "nav_port": "2"}
+    assert say(plugin, "nav two course one eight zero", "set_course", slots) == [
+        "NAV 2 course one eight zero"
+    ]
+    assert xp.datarefs[copilot] == 180.0
+    assert say(plugin, "nav one course zero niner zero", "set_course", {"degrees": "90"}) == [
+        "NAV 1 course zero niner zero"
+    ]
+    assert xp.datarefs["sim/cockpit2/radios/actuators/nav1_obs_deg_mag_pilot"] == 90.0
+
+
+def test_the_file_scan_finds_the_switches_a_cockpit_lacks(sim, tmp_path):
+    _, plugin, xp = sim
+    acf = tmp_path / "Plane" / "plane.acf"
+    acf.parent.mkdir()
+    acf.write_text("x\n")
+    (acf.parent / "cockpit.obj").write_text(
+        "ATTR_manip_command_switch_up_down hand sim/lights/taxi_lights_on sim/lights/taxi_lights_off Taxi\n"
+    )
+    plugin._athr_scan = (str(acf), None)
+    plugin._scan_aircraft_files(str(acf))
+    assert plugin._switch_scan[0] == str(acf)
+    assert "sign:seat belt" in plugin._switch_scan[1] and "light:taxi" not in plugin._switch_scan[1]
+    assert "sign:seat belt" in events(plugin, "aircraft_files")[-1]["absent_switches"]
+
+
+def test_a_gfc700_autopilot_turns_its_heading_knob(sim):
+    # The SR22 by a written bug: 5 of 8 turns the short way (every right turn
+    # after a left one went left); by the knob 8 of 8 (2026-11-21).
+    _, plugin, xp = sim
+    xp.datarefs["sim/aircraft/autopilot/preconfigured_ap_type"] = 2
+    profile = load_aircraft(plugin, xp, 1, commands=(HDG_UP, HDG_DOWN))
+    assert profile.heading_by_knob and profile.summary()["heading_by_knob"]
+    xp.datarefs.update({HDG_NOW: 160.0, HDG_BUG: 160.0})
+    xp.datarefs["sim/cockpit2/autopilot/heading_status"] = 2
+    xp.effects[HDG_UP] = lambda x: x.datarefs.__setitem__(HDG_BUG, (x.datarefs[HDG_BUG] + 1) % 360)
+    xp.commands_fired.clear()
+    xp.writes.clear()
+    turn = {"turn": "right", "turn_degrees": "30"}
+    assert say(plugin, "come right thirty", "turn_by", turn) == []
+    assert settle(plugin, xp, loops=35) == ["Right 30, Heading one niner zero"]
+    assert xp.commands_fired == [HDG_UP] * 30
+    assert not [w for w in xp.writes if w[0] == HDG_BUG]
+    # Another autopilot type writes the bug, as before.
+    xp.datarefs["sim/aircraft/autopilot/preconfigured_ap_type"] = 3
+    assert not load_aircraft(plugin, xp, 7).heading_by_knob

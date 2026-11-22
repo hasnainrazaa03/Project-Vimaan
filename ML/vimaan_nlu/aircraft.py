@@ -72,6 +72,15 @@ AUTOPILOT_LACKS: Mapping[int, frozenset[str]] = MappingProxyType(
     {3: frozenset({"mode_level_change"})}
 )
 
+# Autopilot types whose written heading bug can send the aircraft the long way
+# round, so Vimaan turns the knob (sim/autopilot/heading_up/down) instead, as
+# on the A330: X-Plane's GFC-700 (2). Outside Vimaan on the SR22 (2026-11-21),
+# 30-degree changes of a written bug went the short way 5 of 8 times (each
+# right turn after a left one went left, round 270 degrees); clicked on the
+# knob, 8 of 8. The SF50 (also a GFC-700): written 5 of 8, wrong both ways;
+# knob 8 of 8.
+HEADING_BY_KNOB_TYPES = frozenset({2})
+
 # Layer 1: the standard control for each role. Handlers ask the profile for
 # a role, never for a name, so an override can replace it.
 DEFAULT_COMMANDS: Mapping[str, str | None] = MappingProxyType(
@@ -543,6 +552,63 @@ OVERRIDES: tuple[Override, ...] = (
         source="Laminar Citation X xlua CitX_autopilot (cmd_ap_toggle), probed in the sim",
         live=(CITX_LIVE,),
     ),
+    # Phase L.2.3 switches (vimaan_nlu.switches; findings in AIRCRAFT_PROFILES.md).
+    Override(
+        name="citx_switches",
+        requires=(
+            switches.CITX_ANTI_COLL.down,
+            switches.CITX_ANTI_COLL.up,
+            switches.CITX_SIGNS.down,
+            switches.CITX_SIGNS.up,
+        ),
+        commands=MappingProxyType({}),
+        # Fuel in pounds, as its EICAS and manual.
+        settings=MappingProxyType({"switches": switches.CITX_PLANS, "fuel_unit": "lb"}),
+        source="Laminar Citation X cockpit .obj manipulators and xlua CitX_lights, CitX_ice, "
+        "CitX_electrical, CitX_fuel, CitX_autopilot, X-Plane 12.4.4",
+        live=(switches.CITX_ANTI_COLL.position,),
+    ),
+    Override(
+        name="md82_switches",
+        requires=(
+            switches.MD82_NAVSTROBE.down,
+            switches.MD82_NAVSTROBE.up,
+            switches.MD82_SEATBELT.down,
+            switches.MD82_SEATBELT.up,
+        ),
+        commands=MappingProxyType({}),
+        settings=MappingProxyType(
+            {
+                "switches": switches.MD82_PLANS,
+                "fuel_unit": "lb",
+                # Its autopilot script copies the copilot's NAV 2 course over
+                # the pilot's every frame (md80_autopilot), and its NAV 2
+                # course knob is the copilot's (sim/radios/copilot_obs2_*).
+                "obs_datarefs": {"2": "sim/cockpit2/radios/actuators/nav2_obs_deg_mag_copilot"},
+            }
+        ),
+        source="Laminar MD-82 cockpit .obj manipulators and xlua md80_swithces, md80_ice, "
+        "md80_autopilot, X-Plane 12.4.4",
+        live=(switches.MD82_NAVSTROBE.position,),
+    ),
+    Override(
+        name="sr22_switches",
+        requires=(switches.SR22_BOOST.down, switches.SR22_BOOST.up),
+        commands=MappingProxyType({}),
+        settings=MappingProxyType({"switches": switches.SR22_PLANS}),
+        source="Laminar SR22 cockpit .obj manipulators and xlua SR22.systems, X-Plane 12.4.4",
+        live=(switches.SR22_BOOST.position,),
+    ),
+    Override(
+        name="sf50_switches",
+        requires=("laminar/SF50/ignition_up", "laminar/SF50/ignition_down"),
+        commands=MappingProxyType({}),
+        # Its engine display: "FUEL QTY GAL", "FFLOW GPH" (jet fuel).
+        settings=MappingProxyType({"switches": switches.SF50_PLANS, "fuel_unit": "gal"}),
+        source="Laminar Vision SF50 cockpit .obj manipulators and xlua sf50_ignition, "
+        "X-Plane 12.4.4",
+        live=("laminar/sf50/controls/landing_gear_detents",),
+    ),
 )
 
 
@@ -556,6 +622,7 @@ class AircraftInfo:
     description: str = ""
     acf_path: str = ""
     num_engines: int | None = None
+    num_generators: int | None = None
     engine_types: tuple[int, ...] = ()
     flap_detents: int | None = None
     flap_degrees: tuple[float, ...] = ()
@@ -629,6 +696,8 @@ class Profile:
     settings: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     # Roles whose command is the aircraft's own (from an override).
     overridden: frozenset[str] = frozenset()
+    # Switches its cockpit files never name (switches_shown): "absent".
+    absent: frozenset[str] = frozenset()
 
     def flap_notch(self, label: int) -> int | None:
         """The handle notch for a spoken flap setting ("flaps fifteen"), or None
@@ -652,6 +721,14 @@ class Profile:
         if near:
             return min(near, key=lambda i: abs(angles[i] - label))
         return label if 1 <= label <= detents else None
+
+    @property
+    def heading_by_knob(self) -> bool:
+        """Turn the heading knob, not write the bug: an aircraft's own
+        setting (the A330) or its autopilot type (X-Plane's GFC-700)."""
+        if self.settings.get("heading_by_knob"):
+            return True
+        return self.info.autopilot_type in HEADING_BY_KNOB_TYPES
 
     @property
     def engine_start(self) -> str:
@@ -679,16 +756,19 @@ class Profile:
 
     def switch_plan(self, key: str, setting: str) -> tuple[str, switches.Plan]:
         """How to reach ``setting`` of switch ``key`` here (switches.lookup).
-        Without an aircraft's own autobrake entry, only jets get X-Plane's."""
+        Without an aircraft's own entry, a switch its files never name is
+        absent, and only jets get X-Plane's autobrake."""
         own = self.settings.get("switches") or {}
         kind = self.info.engine_kind
+        if key not in own and key in self.absent:
+            return "absent", ()
         if key == "autobrake" and key not in own and kind != "jet":
             return "absent", ()
         if key == "ice:prop" and key not in own and kind not in ("piston", "turboprop"):
             return "absent", ()
         found, plan = switches.lookup(own, key, setting)
         if found == "ok":
-            plan = switches.for_engines(plan, self.info.num_engines)
+            plan = switches.for_engines(plan, self.info.num_engines, self.info.num_generators)
             if not plan:
                 return "absent", ()
         return found, plan
@@ -709,6 +789,7 @@ class Profile:
             "acf": info.acf_path,
             "key": info.key,
             "engines": info.num_engines,
+            "generators": info.num_generators,
             "engine_kind": info.engine_kind,
             "engine_start": self.engine_start,
             "flap_detents": info.flap_detents,
@@ -726,6 +807,8 @@ class Profile:
                 "mmo": info.mmo,
             },
             "overrides": list(self.overrides),
+            "absent_switches": sorted(self.absent),
+            "heading_by_knob": self.heading_by_knob,
             "probed_steps": len(self.probed),
         }
 
@@ -735,9 +818,11 @@ def resolve(
     has_command: Callable[[str], bool],
     probed: Mapping[str, str] | None = None,
     has_dataref: Callable[[str], bool] = lambda _name: True,
+    absent: frozenset[str] = frozenset(),
 ) -> Profile:
     """Layers 1-4 -> the profile the plugin uses for this aircraft.
-    ``has_dataref``: is a dataref registered now (for ``Override.live``)."""
+    ``has_dataref``: is a dataref registered now (for ``Override.live``);
+    ``absent``: the switches its files never name (switches_shown)."""
     commands: dict[str, str | None] = dict(DEFAULT_COMMANDS)
     settings: dict[str, Any] = {}
     applied = []
@@ -757,6 +842,7 @@ def resolve(
         probed=MappingProxyType(dict(probed or {})),
         settings=MappingProxyType(settings),
         overridden=frozenset(overridden),
+        absent=frozenset(absent),
     )
 
 
@@ -806,6 +892,57 @@ def files_mention(acf_path: str, needle: bytes = AUTOTHROTTLE_NEEDLE) -> bool | 
     except OSError:
         return None
     return False
+
+
+def switches_shown(acf_path: str) -> frozenset[str] | None:
+    """The switches (keys of ``switches.SHOWN_BY``) the aircraft's cockpit
+    objects or scripts name, comments in scripts skipped and liveries left
+    out. None when the folder can't be read, the scan would be too large to
+    be sure, or no object has a cockpit manipulator (a 2D panel's switches
+    are in its .acf, which names every system, so nothing can be told).
+
+    Checked on X-Plane 12.4.4 (2026-11-21) against each cockpit's
+    manipulators: the C172 shows no signs, yaw damper, window, wing, engine
+    or prop heat, or autobrake; the SR22 and SF50 no taxi light, beacon or
+    signs either; the Baron no signs or engine anti-ice."""
+    folder = os.path.dirname(acf_path)
+    if not acf_path or not os.path.isdir(folder):
+        return None
+    shown: set[str] = set()
+    manipulators = False
+    total = 0
+    try:
+        for root, dirs, names in os.walk(folder):
+            dirs[:] = [d for d in dirs if d.lower() != "liveries"]
+            for name in names:
+                low = name.lower()
+                if not low.endswith((".lua", ".obj")):
+                    continue
+                path = os.path.join(root, name)
+                total += os.path.getsize(path)
+                if total > _SCAN_MAX_BYTES:
+                    return None
+                with open(path, "rb") as fh:
+                    text = fh.read().lower()
+                if low.endswith(".lua"):
+                    text = _LUA_COMMENT.sub(b"", text)
+                else:
+                    manipulators = manipulators or b"attr_manip_" in text
+                shown |= {
+                    key
+                    for key, needles in switches.SHOWN_BY.items()
+                    if key not in shown and any(n in text for n in needles)
+                }
+    except OSError:
+        return None
+    return frozenset(shown) if manipulators else None
+
+
+def absent_switches(shown: frozenset[str] | None) -> frozenset[str]:
+    """The switches a scan found no sign of (none when it couldn't tell)."""
+    if shown is None:
+        return frozenset()
+    return frozenset(switches.SHOWN_BY) - shown
 
 
 _FLAP_LIMIT = re.compile(rb"^P acf/(_Vfe1_kts|_Vfem_kts) ([0-9.]+)\s*$", re.M)

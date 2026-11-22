@@ -67,10 +67,12 @@ if _ML_PATH not in sys.path:
 from vimaan_nlu import answers, probe, sim_bridge, switches  # noqa: E402
 from vimaan_nlu.aircraft import (  # noqa: E402
     AircraftInfo,
+    absent_switches,
     acf_flap_limits,
     files_mention,
     flap_limit_kt,
     resolve,
+    switches_shown,
 )
 from vimaan_nlu.ambiguity import (  # noqa: E402
     TARGET_SLOTS,
@@ -421,7 +423,8 @@ XPDR_ALREADY_SPOKEN = {
 KNOB_STEP_MAX_PRESSES = 12
 KNOB_STEP_MAX_SEC = 10.0
 KNOB_STUCK_FRAMES = 30  # a click that moves nothing for this many frames
-# The heading knob (heading_by_knob, the A330): a degree a click, a click a frame.
+# The heading knob (heading_by_knob: the A330, the GFC-700): a degree a click, a
+# click a frame.
 HEADING_KNOB = ("sim/autopilot/heading_up", "sim/autopilot/heading_down")
 HEADING_STEP_MAX_SEC = 15.0
 DREF_GEAR_HANDLE = "sim/cockpit2/controls/gear_handle_down"
@@ -491,6 +494,7 @@ DREF_ENGINE_RUNNING = "sim/flightmodel/engine/ENGN_running"
 DREF_ENGINE_MIXTURE = "sim/flightmodel/engine/ENGN_mixt"
 DREF_IGNITION_KEY = "sim/cockpit2/engine/actuators/ignition_key"
 DREF_NUM_ENGINES = "sim/aircraft/engine/acf_num_engines"
+DREF_NUM_GENERATORS = "sim/aircraft/electrical/num_generators"
 DREF_BATTERY = "sim/cockpit2/electrical/battery_on"
 DREF_PAUSED = "sim/time/paused"
 
@@ -664,6 +668,9 @@ class PythonInterface:
         # The loaded aircraft's flap speed limits from its .acf, read with
         # the scan: (acf path, {"first": kt, "full": kt}).
         self._flap_limits: tuple[str, dict[str, float]] | None = None
+        # The switches its cockpit files never name, from the same scan:
+        # (acf path, frozenset), applied to the profile on the main thread.
+        self._switch_scan: tuple[str, frozenset[str]] | None = None
         # The automated-test bridge (Phase A): off unless its switch file exists.
         self._bridge_on = False
         self._bridge_next = 0.0
@@ -2070,6 +2077,7 @@ class PythonInterface:
             return
         self._next_state_watch = now + STATE_WATCH_SEC
         self._check_aircraft()
+        self._apply_switch_scan()
         state = {key: self._read_int(name) for key, name in AUTOPILOT_STATE.items()}
         previous, self._autopilot_state = self._autopilot_state, state
         if previous is None or previous == state:
@@ -2431,6 +2439,7 @@ class PythonInterface:
             acf_path=acf_path,
             **{key: self._read_string(name) for key, name in AIRCRAFT_STRINGS.items()},
             num_engines=num_engines,
+            num_generators=self._read_int(DREF_NUM_GENERATORS),
             engine_types=tuple(self._read_values(DREF_ENGINE_TYPE, num_engines or 0)),
             flap_detents=detents,
             flap_degrees=tuple(self._read_values(DREF_FLAP_DEGREES, 10, is_float=True)),
@@ -2455,14 +2464,28 @@ class PythonInterface:
         self._knob_step = None
         self._heading_step = None
         self._athr_scan = (acf_path, None)
+        self._switch_scan = None
         threading.Thread(
             target=self._scan_aircraft_files, args=(acf_path,), daemon=True, name="vimaan-acf-scan"
         ).start()
 
     def _resolve(self, info):
+        scan = self._switch_scan
         return resolve(
-            info, self._has_command, self._probe_results(info.key), has_dataref=self._dataref_live
+            info,
+            self._has_command,
+            self._probe_results(info.key),
+            has_dataref=self._dataref_live,
+            absent=scan[1] if scan and scan[0] == info.acf_path else frozenset(),
         )
+
+    def _apply_switch_scan(self):
+        """Main thread: the scan's absent switches into the profile, once."""
+        scan = self._switch_scan
+        if not scan or scan[0] != self.profile.info.acf_path or scan[1] == self.profile.absent:
+            return
+        self.profile = self._resolve(self.profile.info)
+        self.tel.event("aircraft", reason="switches_scanned", **self.profile.summary())
 
     def _recheck_overrides(self, identity):
         """Re-resolve if the aircraft is the same but its overrides changed
@@ -2490,11 +2513,20 @@ class PythonInterface:
             limits = acf_flap_limits(acf_path)
         except Exception:
             limits = {}
+        try:
+            absent = absent_switches(switches_shown(acf_path))
+        except Exception:
+            absent = frozenset()
         if self._athr_scan and self._athr_scan[0] == acf_path:
             self._athr_scan = (acf_path, shown)
             self._flap_limits = (acf_path, limits)
+            self._switch_scan = (acf_path, absent)
             self.tel.event(
-                "aircraft_files", acf=acf_path, autothrottle_shown=shown, flap_limits=limits
+                "aircraft_files",
+                acf=acf_path,
+                autothrottle_shown=shown,
+                flap_limits=limits,
+                absent_switches=sorted(absent),
             )
 
     def _flap_target_notch(self, slots):
@@ -3039,8 +3071,9 @@ class PythonInterface:
         ``side``: the way a turn goes ("left"/"right"); None for a heading,
         which the autopilot turns to the short way. An aircraft whose
         written bug can send it the long way round turns its knob instead
-        (``heading_by_knob``: the A330)."""
-        if self.profile.settings.get("heading_by_knob"):
+        (``heading_by_knob``: the A330, and X-Plane's GFC-700 autopilot on the
+        SR22 and SF50)."""
+        if self.profile.heading_by_knob:
             started = self._start_heading_steps(v, lead, mode_note, side)
             if started is not None:
                 return started
@@ -3928,14 +3961,21 @@ class PythonInterface:
         if port is None:
             return "rejected"
         v = float(value)
-        if not self._write(DREF_OBS[port], v):
+        obs = self._obs_dataref(port)
+        if not self._write(obs, v):
             self._say("Cannot set course")
             return "failed"
-        self._hold_check(f"Course {port}", DREF_OBS[port], v, modulo=360)
+        self._hold_check(f"Course {port}", obs, v, modulo=360)
         # Always name the radio, like the frequency read-backs: speech that
         # loses "nav two" still sets NAV 1, and the pilot must hear that.
         self._say(f"NAV {port} course {spell_digits(f'{int(v):03d}')}")
         return "executed"
+
+    def _obs_dataref(self, port):
+        """Where this aircraft keeps NAV ``port``'s course (the MD-82's NAV 2
+        is the copilot's: its script copies it over the pilot's)."""
+        own = self.profile.settings.get("obs_datarefs") or {}
+        return own.get(port) or DREF_OBS[port]
 
     def _set_transponder_code(self, slots, intent):
         code = slots.get("squawk")
@@ -4118,8 +4158,7 @@ class PythonInterface:
             return f"NAV {port} is not supported. Ask about NAV 1 or 2."
         which = slots.get("which")
         if which == "course":
-            obs = f"sim/cockpit2/radios/actuators/nav{port}_obs_deg_mag_pilot"
-            return answers.course(f"NAV {port}", self._read_float(obs))
+            return answers.course(f"NAV {port}", self._read_float(self._obs_dataref(port)))
         return answers.radio(
             f"NAV {port}",
             self._read_int(DREF_NAV_10KHZ[port]),
@@ -4379,8 +4418,12 @@ class PythonInterface:
     # waiting for the aircraft to show its result before the next ---
 
     def _knob_position(self, knob):
-        value = self._read_float(knob.position)
-        return None if value is None else int(round(value))
+        """Its position, "name[i]" for an array element (the MD-82's landing
+        light switches are X-Plane's landing_lights_switch[1] and [2])."""
+        value = self._read_any(knob.position)
+        if value is None or isinstance(value, list):
+            return None
+        return int(round(float(value)))
 
     def _knob_at(self, knob):
         position = self._knob_position(knob)

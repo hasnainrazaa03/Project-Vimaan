@@ -272,3 +272,67 @@ def test_flap_limit_per_notch():
     assert flap_limit_kt(1, 2, 152.0, None) == 152.0  # no .acf yet: the published one
     assert flap_limit_kt(1, 2, None, 122.0) == 122.0
     assert flap_limit_kt(0, 2, 152.0, 122.0) is None
+
+
+def test_switches_shown_reads_cockpit_objects_and_scripts(tmp_path):
+    # Phase L.2: a switch is named in the cockpit's manipulators or scripts.
+    from vimaan_nlu.aircraft import absent_switches, switches_shown
+
+    def plane(name, files):
+        d = tmp_path / name
+        for rel, text in files.items():
+            f = d / rel
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(text)
+        return str(d / "plane.acf")
+
+    c172 = plane(
+        "c172",
+        {
+            # The .acf names every system (its electrical loads): not read.
+            "plane.acf": "P acf/_esys_amperage/rel_dice_window_heat 0.0\nseatbelt\n",
+            "c172_cockpit.obj": (
+                "ATTR_manip_command_switch_up_down hand sim/lights/taxi_lights_on "
+                "sim/lights/taxi_lights_off Taxi light\n"
+                "ATTR_manip_command_switch_up_down hand sim/ice/pitot_heat0_on "
+                "sim/ice/pitot_heat0_off Pitot heat\n"
+            ),
+            "plugins/xlua/scripts/a/a.lua": "-- yaw_damper_on is not modelled\nx = 1\n",
+            "liveries/red/objects/x.obj": "ATTR_manip_command hand sim/systems/seatbelt_sign_toggle",
+        },
+    )
+    shown = switches_shown(c172)
+    assert shown is not None
+    assert {"light:taxi", "ice:pitot"} <= shown
+    assert {"sign:seat belt", "ice:window", "yaw_damper"} <= absent_switches(shown)
+    # No cockpit manipulators (a 2D panel's switches live in its .acf): unknown.
+    panel = plane("panel", {"plane.acf": "x", "objects/wing.obj": "VT 0 0 0\n"})
+    assert switches_shown(panel) is None and absent_switches(None) == frozenset()
+    assert switches_shown(str(tmp_path / "nowhere" / "x.acf")) is None
+
+
+def test_the_default_fleets_switch_overrides_need_their_own_commands():
+    from vimaan_nlu import switches
+
+    def resolved(*commands):
+        return resolve(AircraftInfo(), set(commands).__contains__)
+
+    citx = resolved(*(switches.CITX_ANTI_COLL.down, switches.CITX_ANTI_COLL.up))
+    assert "citx_switches" not in citx.overrides  # its sign switch's commands too
+    citx = resolved(
+        switches.CITX_ANTI_COLL.down,
+        switches.CITX_ANTI_COLL.up,
+        switches.CITX_SIGNS.down,
+        switches.CITX_SIGNS.up,
+    )
+    assert "citx_switches" in citx.overrides and citx.settings["fuel_unit"] == "lb"
+    md82 = resolved(
+        switches.MD82_NAVSTROBE.down,
+        switches.MD82_NAVSTROBE.up,
+        switches.MD82_SEATBELT.down,
+        switches.MD82_SEATBELT.up,
+    )
+    assert md82.settings["obs_datarefs"]["2"].endswith("nav2_obs_deg_mag_copilot")
+    sf50 = resolved("laminar/SF50/ignition_up", "laminar/SF50/ignition_down")
+    assert sf50.settings["fuel_unit"] == "gal"
+    assert sf50.switch_plan("fuel:left", "on") == ("absent", ())
