@@ -12,10 +12,33 @@ through its web API, and quit. Learned on the first live run (2026-11-12):
 - A ``runway_start`` puts the aircraft on a runway, or on its final approach
   with ``final_distance_in_nautical_miles`` (the key is in X-Plane 12.4's own
   strings; Phase F.3 is its first use).
+
+Learned the night of 2026-11-21/22:
+
+- At the main menu X-Plane has no datarefs (``/datarefs/count`` is 0) and its
+  Log.txt stops at the scenery list. That is normal: both fill in once a
+  flight loads. The web API answering is all ``launch`` waits for.
+- X-Plane 12.4.4 sometimes crashes while loading the first flight of a
+  session, in its own object reader (``OBJ_io_read``, ``build_obs_v8``,
+  ``OBJ_calc_bounds_simple``, on the main thread or a loader thread). 5 of
+  about 16 first loads crashed on 2026-11-21/22, in clusters; then none in
+  the next 27 loads, with Vimaan installed or not, X-Plane in front or
+  behind. Vimaan had loaded no aircraft when it crashed. The cause isn't
+  known: every crash goes in ``CRASH_LOG`` (with the dump and whether Vimaan
+  was installed) so a pattern can show. ``start_flight_recovering`` waits
+  for the crash, closes only the crash reporter, opens X-Plane again and
+  retries. X-Plane itself is never force-closed: a force-close counts as a
+  crash and the next launch can wait on X-Plane's recovery prompt.
+- X-Plane open before Steam (macOS reopening it at login) stops at a fatal
+  alert ("must be restarted through Steam"); ``launch`` reads it from the
+  log and says so.
+- A window that isn't on screen (or a display asleep) slows X-Plane's frames
+  to a crawl. ``launch`` keeps the display awake while X-Plane runs.
 """
 
 from __future__ import annotations
 
+import http.client
 import json
 import subprocess
 import time
@@ -156,23 +179,152 @@ def safe_mode(folder: Path = FOLDER) -> bool:
     return "SAFE MODE" in head
 
 
+def fatal_alert(folder: Path = FOLDER) -> str | None:
+    """X-Plane's fatal alert, if its log shows one (it then waits on a dialog
+    and never answers): opened before Steam (macOS reopening it at login),
+    "X-Plane must be restarted through Steam"."""
+    try:
+        log = (folder / "Log.txt").read_text(errors="replace")
+    except OSError:
+        return None
+    lines = [
+        ln.split("MACIBM_alert:", 1)[1].strip() for ln in log.splitlines() if "MACIBM_alert:" in ln
+    ]
+    said = [ln for ln in lines if ln and ln != "Fatal Error" and not ln.startswith("/")]
+    return " ".join(said) or None
+
+
 def launch(wait_sec: float = 300.0, poll_sec: float = 2.0) -> None:
     """Start X-Plane through Steam and wait for its web API. Steam may ask
     which launch option to use: someone has to pick "X-Plane" once."""
     if running():
+        keep_display_awake()
         return
+    if alive() and (alert := fatal_alert()):
+        raise XPlaneError(
+            f"X-Plane is showing an error: {alert} Click OK on it, then launch again."
+        )
     subprocess.run(["open", f"steam://run/{STEAM_APP_ID}"], check=True)
     deadline = time.monotonic() + wait_sec
     while time.monotonic() < deadline:
+        if alive() and not running() and (alert := fatal_alert()):
+            raise XPlaneError(
+                f"X-Plane is showing an error: {alert} Click OK on it, then launch again."
+            )
         if running():
             time.sleep(poll_sec)  # the log's header is written by now
             if safe_mode():
                 raise XPlaneError(
                     "X-Plane started in Safe Mode (plugins off, so no Vimaan): quit and launch again"
                 )
+            keep_display_awake()
             return
         time.sleep(poll_sec)
     raise XPlaneError("X-Plane didn't come up: is Steam waiting for a launch option to be picked?")
+
+
+# X-Plane's own process, and its crash reporter (a second X-Plane process,
+# started with --report_crash after a crash).
+PROCESS = "MacOS/X-Plane$"
+CRASH_REPORTER = "X-Plane --report_crash"
+
+
+def _pids(pattern: str) -> list[int]:
+    out = subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True).stdout
+    return [int(p) for p in out.split()]
+
+
+def alive() -> bool:
+    """Is X-Plane's process running (whether or not its web API answers)?"""
+    return bool(_pids(PROCESS))
+
+
+def keep_display_awake() -> None:
+    """While X-Plane runs, keep the display awake: frames crawl on a sleeping
+    display. ``caffeinate -w`` ends with X-Plane, so nothing is left behind."""
+    pids = _pids(PROCESS)
+    if not pids:
+        return
+    try:
+        subprocess.Popen(
+            ["caffeinate", "-d", "-i", "-w", str(pids[0])],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:  # not on a Mac: nothing to keep awake
+        pass
+
+
+def close_crash_reporter() -> None:
+    """Close X-Plane's crash reporter, never X-Plane itself."""
+    subprocess.run(["pkill", "-TERM", "-f", CRASH_REPORTER], capture_output=True)
+
+
+# What a request sees when X-Plane goes down under it.
+CONNECTION_LOST = (OSError, http.client.HTTPException)
+# Every crash the runner sees, one JSON line each, to find a pattern later.
+CRASH_LOG = Path.home() / "Vimaan_Logs" / "test" / "xplane_crashes.jsonl"
+
+
+def record_crash(body: dict[str, Any], attempt: int, exc: BaseException) -> None:
+    """One line in CRASH_LOG: when, which flight, the newest crash dump, and
+    whether Vimaan's plugin was installed."""
+    dumps = FOLDER / "Output" / "crash_reports" / "completed"
+    try:
+        newest = max(dumps.glob("*.dmp"), key=lambda p: p.stat().st_mtime).name
+    except (OSError, ValueError):
+        newest = None
+    plugin = FOLDER / "Resources" / "plugins" / "PythonPlugins" / "PI_VimaanCoPilot.py"
+    line = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "aircraft": (body.get("data", {}).get("aircraft") or {}).get("path"),
+        "attempt": attempt,
+        "error": type(exc).__name__,
+        "dump": newest,
+        "vimaan_installed": plugin.exists(),
+    }
+    try:
+        CRASH_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with CRASH_LOG.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(line) + "\n")
+    except OSError:
+        pass
+
+
+def start_flight_recovering(
+    body: dict[str, Any],
+    attempts: int = 3,
+    log: Any = print,
+    settle_sec: float = 25.0,
+    gone_sec: float = 90.0,
+) -> None:
+    """``start_flight``, opening X-Plane again if it crashes during the load
+    (see the module notes). Anything else, or X-Plane still running, is
+    raised as it is."""
+    for attempt in range(1, attempts + 1):
+        try:
+            start_flight(body)
+            return
+        except CONNECTION_LOST as exc:
+            deadline = time.monotonic() + gone_sec
+            while alive() and time.monotonic() < deadline:
+                time.sleep(1)
+            if alive():
+                raise
+            record_crash(body, attempt, exc)
+            if attempt == attempts:
+                raise XPlaneError(
+                    f"X-Plane crashed loading the flight {attempts} times in a row"
+                ) from exc
+            log(
+                f"· X-Plane crashed loading the flight ({type(exc).__name__}); "
+                f"opening it again (try {attempt + 1} of {attempts})"
+            )
+            time.sleep(3)
+            close_crash_reporter()
+            time.sleep(3)
+            launch()
+            time.sleep(settle_sec)
 
 
 def start_flight(body: dict[str, Any], wait_sec: float = 120.0, poll_sec: float = 1.0) -> None:
@@ -187,6 +339,8 @@ def start_flight(body: dict[str, Any], wait_sec: float = 120.0, poll_sec: float 
             lat = float(read("sim/flightmodel/position/latitude"))
             lon = float(read("sim/flightmodel/position/longitude")) if where else 0.0
         except (urllib.error.URLError, OSError, XPlaneError):
+            if not alive():  # it crashed after taking the request
+                raise ConnectionError("X-Plane quit while loading the flight") from None
             continue
         if where is None or (abs(lat - where[0]) < where[2] and abs(lon - where[1]) < where[2]):
             break

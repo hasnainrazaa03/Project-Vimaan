@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Any
 
 from .commands import INSTANCE_WORDS, choice_synonyms, command
@@ -214,19 +216,40 @@ def canonicalize_choices(
 add_implicit_state = canonicalize_choices
 
 
+# Switches where no number, said in the plural or with "all", means every
+# one: "fuel pumps on", "all generators off". The plugin reads an empty
+# instance as all of them (switches.ALL_FUEL_PUMPS / ALL_GENERATORS). Until
+# 2026-11-22 these got "1", so "fuel pumps on" reached only pump 1 (the
+# Citation X's right boost pump stayed at NORM in the L.2.3 run).
+ALL_WHEN_PLURAL: Mapping[str, frozenset[str]] = MappingProxyType(
+    {
+        "toggle_fuel_pump": frozenset({"pumps"}),
+        "toggle_electrical": frozenset({"generators"}),
+    }
+)
+ALL_WORDS = frozenset({"all", "every"})
+
+
 def resolve_instance(
     slots: dict[str, Any], original_text: str, intent: str | None
 ) -> dict[str, Any]:
     """Which engine / autopilot / flight director: the tagged word ("two",
     "second", "both") or, if none was tagged, the first one named in the
-    text; defaults to 1 (captain-side / the only system on most aircraft)."""
+    text; defaults to 1 (captain-side / the only system on most aircraft).
+    Fuel pumps and generators said in the plural, or with "all", with no
+    number: empty, i.e. all of them (``ALL_WHEN_PLURAL``)."""
     cmd = command(intent or "")
     if cmd is None or "instance" not in cmd.slots:
         return slots
     tagged = str(slots.get("instance", "")).lower().split()
     named = [INSTANCE_WORDS[w] for w in tagged if w in INSTANCE_WORDS]
+    words = original_text.lower().split()
     if not named:
-        named = [INSTANCE_WORDS[w] for w in original_text.lower().split() if w in INSTANCE_WORDS]
+        named = [INSTANCE_WORDS[w] for w in words if w in INSTANCE_WORDS]
+    if not named and (plural := ALL_WHEN_PLURAL.get(intent or "")):
+        if plural & set(words) or ALL_WORDS & set(words):
+            slots["instance"] = ""
+            return slots
     slots["instance"] = named[0] if named else "1"
     return slots
 

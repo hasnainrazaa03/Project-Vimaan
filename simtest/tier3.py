@@ -545,8 +545,14 @@ def _power_and_fuel(aircraft: str) -> list[Step]:
             _is(f"boost pump {i + 1}", f"sim/cockpit2/engine/actuators/fuel_pump_on[{i}]", 1)
             for i in (0, 1)
         ]
+    # Every pump, not the first only: the reply names them all ("Fuel
+    # pumps"). Until 2026-11-22 "fuel pumps on" reached pump 1 alone, and
+    # pumps already on at the air start hid it.
+    on = _set("fuel pumps on", "fuel pumps on", *pumps)
+    if len(pumps) > 1:
+        on = dataclasses.replace(on, reply="Fuel pumps")
     out += [
-        _set("fuel pumps on", "fuel pumps on", *pumps),
+        on,
         Step(
             "fuel pumps off is held in flight",
             say="fuel pumps off",
@@ -570,12 +576,18 @@ def _power_and_fuel(aircraft: str) -> list[Step]:
 def _jets(aircraft: str) -> list[Step]:
     if aircraft in ("citx", "md82"):
         ratio = "sim/cockpit2/controls/speedbrake_ratio"
-        out = [
-            _set(
+        if aircraft == "citx":  # no armed position (its script undoes one)
+            armed = _refused(
+                "speed brake can't arm", "speed brake armed", "can't be armed", _is("in", ratio, 0)
+            )
+        else:
+            armed = _set(
                 "speed brake armed",
                 "speed brake armed",
                 _is("speed brake armed", ratio, -0.5, tol=0.01),
-            ),
+            )
+        out = [
+            armed,
             _set(
                 "speed brake retract", "stow the speed brakes", _is("retracted", ratio, 0, tol=0.01)
             ),

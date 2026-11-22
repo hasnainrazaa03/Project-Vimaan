@@ -1430,3 +1430,98 @@ def test_the_runner_plays_the_pilots_recordings(tmp_path):
     assert br.calls == [("wav", str(wav)), ("text", "gear down")]
     assert results[0]["heard_ok"] is True and results[1].get("not_recorded") is True
     assert scenario.summary(results)["said_by_voice"] == 1
+
+
+# ---- X-Plane crashing on the first flight load (2026-11-22) -----------------
+def _crashy(monkeypatch, outcomes, alive=False):
+    """start_flight raising (or not) per ``outcomes``; what the recovery did."""
+    from simtest import xplane
+
+    calls = []
+    it = iter(outcomes)
+
+    def start(body):
+        calls.append("start")
+        exc = next(it)
+        if exc:
+            raise exc
+
+    monkeypatch.setattr(xplane, "start_flight", start)
+    monkeypatch.setattr(xplane, "alive", lambda: alive)
+    monkeypatch.setattr(xplane, "close_crash_reporter", lambda: calls.append("close reporter"))
+    monkeypatch.setattr(xplane, "launch", lambda: calls.append("launch"))
+    monkeypatch.setattr(xplane, "record_crash", lambda *a: calls.append("recorded"))
+    monkeypatch.setattr(xplane.time, "sleep", lambda _s: None)
+    return xplane, calls, None
+
+
+def test_a_crash_while_loading_opens_x_plane_again(monkeypatch):
+    import http.client
+
+    gone = http.client.RemoteDisconnected("Remote end closed connection")
+    xplane, calls, _ = _crashy(monkeypatch, [gone, None])
+    said = []
+    xplane.start_flight_recovering({}, log=said.append)
+    # Only the crash reporter is closed, never X-Plane; then a fresh launch.
+    assert calls == ["start", "recorded", "close reporter", "launch", "start"]
+    assert "try 2 of 3" in said[0]
+
+
+def test_an_error_while_x_plane_still_runs_is_not_a_crash(monkeypatch):
+    import urllib.error
+
+    xplane, calls, _ = _crashy(monkeypatch, [urllib.error.URLError("timed out")], alive=True)
+    monkeypatch.setattr(xplane.time, "monotonic", iter(range(0, 1000, 100)).__next__)
+    with pytest.raises(urllib.error.URLError):
+        xplane.start_flight_recovering({}, log=lambda _m: None)
+    assert calls == ["start"]  # nothing closed, nothing launched
+
+
+def test_three_crashes_in_a_row_give_up_with_a_clear_message(monkeypatch):
+    import http.client
+
+    gone = http.client.RemoteDisconnected("Remote end closed connection")
+    xp, calls, _ = _crashy(monkeypatch, [gone, gone, gone])
+    with pytest.raises(xp.XPlaneError, match="crashed loading the flight 3 times"):
+        xp.start_flight_recovering({}, log=lambda _m: None)
+    assert calls.count("launch") == 2 and calls.count("start") == 3
+
+
+def test_a_crash_is_recorded_with_the_newest_dump(monkeypatch, tmp_path):
+    from simtest import xplane
+
+    dumps = tmp_path / "Output" / "crash_reports" / "completed"
+    dumps.mkdir(parents=True)
+    (dumps / "old.dmp").write_text("x")
+    newest = dumps / "new.dmp"
+    newest.write_text("x")
+    import os
+
+    os.utime(dumps / "old.dmp", (1, 1))
+    monkeypatch.setattr(xplane, "FOLDER", tmp_path)
+    monkeypatch.setattr(xplane, "CRASH_LOG", tmp_path / "crashes.jsonl")
+    body = {"data": {"aircraft": {"path": "Aircraft/x.acf"}}}
+    xplane.record_crash(body, 1, ConnectionError("gone"))
+    line = json.loads((tmp_path / "crashes.jsonl").read_text())
+    assert (line["aircraft"], line["dump"], line["vimaan_installed"]) == (
+        "Aircraft/x.acf",
+        "new.dmp",
+        False,
+    )
+
+
+def test_x_planes_fatal_alert_is_read_from_its_log(tmp_path):
+    from simtest import xplane
+
+    (tmp_path / "Log.txt").write_text(
+        "0:00:00.000 D/HID: HID Bridge Running\n"
+        "0:00:00.000 E/SYS: MACIBM_alert: Fatal Error\n"
+        "0:00:00.000 E/SYS: MACIBM_alert: X-Plane must be restarted through Steam.\n"
+        "0:00:00.000 E/SYS: MACIBM_alert: Steam must be running in order to run X-Plane.\n"
+        "0:00:00.000 E/SYS: MACIBM_alert: /private/var/tmp/builds/hl_init.cpp:1682\n"
+    )
+    assert xplane.fatal_alert(tmp_path) == (
+        "X-Plane must be restarted through Steam. Steam must be running in order to run X-Plane."
+    )
+    (tmp_path / "Log.txt").write_text("0:00:00.000 I/NET: fine\n")
+    assert xplane.fatal_alert(tmp_path) is None

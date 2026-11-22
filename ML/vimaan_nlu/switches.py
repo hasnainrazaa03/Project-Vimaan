@@ -828,6 +828,16 @@ CITX_PLANS: Plans = _frozen(
         "power:generator2": _three_on_off(CITX_GEN_R),
         "fuel:left": _three_on_off(CITX_BOOST_L),
         "fuel:right": _three_on_off(CITX_BOOST_R),
+        # No armed position: its script puts a negative ratio back to 0 every
+        # frame (CitX_speedbrakes: "PREVENT THE ARMED POSITION (CitX has
+        # not)"); its spoilers deploy on touchdown by themselves.
+        "speed_brake": _frozen(
+            {
+                "retract": (Write(SPEEDBRAKE, 0.0),),
+                "half": (Write(SPEEDBRAKE, 0.5),),
+                "extend": (Write(SPEEDBRAKE, 1.0),),
+            }
+        ),
     }
 )
 

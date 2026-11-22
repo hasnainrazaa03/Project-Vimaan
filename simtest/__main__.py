@@ -171,7 +171,7 @@ def _xplane(args: argparse.Namespace) -> int:
             body = xplane.air_start_body(
                 args.aircraft, args.lat, args.lon, args.alt_ft, args.hdg, args.kt
             )
-            xplane.start_flight(body)
+            xplane.start_flight_recovering(body)
             print(f"Flying: {args.aircraft} at {args.alt_ft:.0f} ft, {args.kt:.0f} kt.")
         elif args.cmd == "screenshot":
             print(xplane.screenshot() or "✕ no screenshot appeared")
@@ -271,7 +271,7 @@ def _run(args: argparse.Namespace) -> int:
             if not args.no_fly:
                 if not xplane.running():
                     raise xplane.XPlaneError("X-Plane isn't running: python -m simtest launch")
-                xplane.start_flight(
+                xplane.start_flight_recovering(
                     flights.start_body(args.checklist, name)
                     if flight
                     else xplane.air_start_body(name, *xplane.TEST_AREA, setup.alt_ft, 180, setup.kt)
