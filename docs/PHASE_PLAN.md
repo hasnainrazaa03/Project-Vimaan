@@ -1628,6 +1628,32 @@ designs come later in this document.
     SR22, Citation X, MD-82 and others).
   - Then the add-ons, once they are installed: the Zibo 737 (free) and
     ToLiss A3xx (paid; the owner decides). Neither is installed now.
+  - The owner approved the default list on 2026-11-21: Cessna 172, Cirrus
+    SR22, Citation X, MD-82 and Vision SF50. Free add-ons are installed;
+    paid ones are skipped.
+  - [x] L.2.1 Tier 1 by text on the five (`run tier1 new --text`,
+    2026-11-21):
+
+    | Aircraft | Passed | What failed |
+    | --- | --- | --- |
+    | C172 | 26/28 | level change (its S-Tec 55 has none); gear up on fixed gear (a checklist bug) |
+    | SR22 | 25/28 | nav and approach (no signal); gear up |
+    | Citation X | 28/31 | its autopilot dropped out after a bad air start |
+    | MD-82 | 18/32 | nothing engaged |
+    | SF50 | 28/32 | no autothrottle; nav and approach |
+
+    Findings and probes: `docs/AIRCRAFT_PROFILES.md`, "L.2 findings".
+  - [ ] L.2.2 Fixes, from the probes:
+    - overrides `md82_autopilot` and `citx_autopilot`;
+    - `AUTOPILOT_LACKS` (the S-Tec 55 has no level change);
+    - "needs a navigation signal";
+    - `files_mention` skips Lua comments (the SF50);
+    - the checklist: fixed gear, a VOR before nav mode, the Citation X's
+      start speed.
+
+    Done when merged, installed, and Tier 1 passes on all five.
+  - [ ] L.2.3 Tiers 2–4, the relative checklist and the flights on the five;
+    then they join "all".
 - [ ] **L.3 Two commands in one breath:** "heading two seven zero, climb five
   thousand". Each part is read back and goes through the same rules.
 - [ ] **L.4 Checklists:** read out, and each item checked against the sim.

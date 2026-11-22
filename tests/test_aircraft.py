@@ -163,6 +163,43 @@ def test_airbus_settings_one_two_three():
     assert [profile.flap_notch(n) for n in (1, 2, 3, 5)] == [1, 2, 3, None]
 
 
+def test_an_autopilot_type_without_a_mode_says_so_unless_probed():
+    # The C172's S-Tec 55 (type 3) took "level change" and nothing engaged.
+    stec = resolve(AircraftInfo(icao="C172", autopilot_type=3), lambda _n: True)
+    assert stec.supports("mode_level_change") is False
+    assert stec.supports("mode_heading") is None  # it has heading: try, verify
+    probed = resolve(
+        AircraftInfo(icao="C172", autopilot_type=3),
+        lambda _n: True,
+        probed={"mode_level_change": "works"},
+    )
+    assert probed.supports("mode_level_change") is True  # a probe on the aircraft wins
+    other = resolve(AircraftInfo(icao="SR22", autopilot_type=2), lambda _n: True)
+    assert other.supports("mode_level_change") is None
+
+
+def test_a_commented_out_script_line_is_not_a_mention(tmp_path):
+    # The SF50's only "autothrottle" is a commented-out line in its autopilot
+    # script; its autothrottle stays hard off (-1).
+    from vimaan_nlu.aircraft import files_mention
+
+    def plane(name, lua):
+        d = tmp_path / name
+        (d / "plugins" / "xlua" / "scripts" / "ap").mkdir(parents=True)
+        (d / "plugins" / "xlua" / "scripts" / "ap" / "ap.lua").write_text(lua)
+        (d / "plane.acf").write_text("I\n1200 version\n")
+        return str(d / "plane.acf")
+
+    commented = (
+        '--autothrottle_enabled = find_dataref("sim/cockpit2/autopilot/autothrottle_enabled")\n'
+    )
+    assert files_mention(plane("sf50", "x = 1\n" + commented)) is False
+    block = '--[[ autothrottle = find_dataref("x") ]]\ny = 2  -- autothrottle later\n'
+    assert files_mention(plane("block", block)) is False
+    used = 'at = find_dataref("sim/cockpit2/autopilot/autothrottle_enabled") -- the A/T\n'
+    assert files_mention(plane("md82", used)) is True
+
+
 def test_files_mention_finds_an_autothrottle_in_the_acf_scripts_or_objects(tmp_path):
     from vimaan_nlu.aircraft import files_mention
 

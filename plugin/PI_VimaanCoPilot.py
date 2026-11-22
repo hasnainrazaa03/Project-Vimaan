@@ -481,6 +481,8 @@ MODE_SPOKEN = {"nav": "Nav", "v nav": "V NAV", "l nav": "L NAV"}
 # to capture is what they do.
 ACTIVE_ONLY_MODES = ("altitude hold",)
 FMS_MODES = ("v nav", "l nav")
+# Modes that follow a radio signal (VOR, localizer).
+RADIO_MODES = ("nav", "approach", "back course")
 # cockpit2/controls/parking_brake_ratio is deprecated in 12.4 (X-Plane logs
 # "has been replaced" on every read); this is its replacement.
 DREF_PARKING_BRAKE = "sim/flightmodel/controls/parkbrake"
@@ -3593,13 +3595,18 @@ class PythonInterface:
         fms = mode in FMS_MODES and (
             role in self.profile.overridden or self.profile.info.autopilot_type == 1
         )
+        fail = None
+        if fms and want_on:
+            fail = f"{name} did not engage. It needs a flight plan in the F M C."
+        elif mode in RADIO_MODES and want_on:
+            # The SR22's and SF50's autopilots arm these only with a signal:
+            # with the HSI on GPS and no flight plan, nothing (phase L.2).
+            fail = f"{name} did not engage. It needs a navigation signal."
         self._expect(
             f"{name} mode",
             lambda: None if (r := self._read_int(status_dref)) is None else r >= on_at,
             want_on,
-            fail=f"{name} did not engage. It needs a flight plan in the F M C."
-            if fms and want_on
-            else None,
+            fail=fail,
         )
         self._say(f"{name} {'on' if want_on else 'off'}")
         return "executed"
@@ -3634,6 +3641,13 @@ class PythonInterface:
                 self._say("Cannot read autothrottle state")
                 return "failed"
             command = self.profile.command("autothrottle_toggle")
+        switch = self.profile.settings.get("athr_switch")
+        if want_on and switch and self._read_int(switch[1]) == 0:
+            # The aircraft's own A/T switch (the MD-82's): while it is off,
+            # its script turns the autothrottle straight back off.
+            if not self._fire_command(switch[0]):
+                self._say("Cannot switch the autothrottle on")
+                return "failed"
         arm = self.profile.command("autothrottle_arm")
         hard_off = raw is not None and raw < 0 and on_from >= 1  # (the A330 arms at 0)
         if want_on and hard_off and self._has_command(arm):

@@ -820,7 +820,7 @@ def test_the_n1_step_catches_an_engine_reading_the_plugin_doesnt_know(monkeypatc
 
 
 def test_every_question_family_is_asked_on_every_aircraft():
-    for aircraft in tier4.SETUPS:
+    for aircraft in FLEET:  # L.2 aircraft have no Tier 4 setup yet
         steps = tier4.steps(aircraft)
         names = {s.name for s in steps}
         for family, asked in tier4.FAMILIES.items():
@@ -1208,6 +1208,7 @@ def test_a_rule_check_not_said_has_no_cancel():
 # --- Phase L.1: relative commands --------------------------------------------
 
 from simtest import relative  # noqa: E402
+from simtest.tier1 import FLEET  # noqa: E402
 from simtest.tier1 import SETUPS as AIR_STARTS  # noqa: E402
 
 # How the model reads each phrase of the checklist (v27's labels).
@@ -1294,7 +1295,7 @@ def test_the_relative_checklist_passes_on_the_fake_baron(monkeypatch, tmp_path):
 
 
 def test_the_relative_checklist_asks_both_questions_on_every_aircraft():
-    for aircraft in AIR_STARTS:
+    for aircraft in FLEET:
         steps = relative.steps(aircraft)
         asked = [s for s in steps if s.outcomes == ("ambiguous",)]
         assert [s.say for s in asked] == ["turn right one two zero", "descend two thousand feet"]
@@ -1307,7 +1308,7 @@ def test_every_heading_step_lets_the_a330_turn_its_knob():
     from simtest import flights, tier1
 
     words = ("heading one", "heading two", "turn left", "turn south", "come right", "one two zero")
-    for aircraft in AIR_STARTS:
+    for aircraft in FLEET:
         steps = [*relative.steps(aircraft), *tier1.steps(aircraft), *flights.TURN_BACK]
         for step in steps:
             if step.say and step.say.startswith(words) and "executed" in step.outcomes:
@@ -1329,7 +1330,7 @@ from simtest import record  # noqa: E402
 
 
 def test_record_lists_each_phrase_of_a_checklist_once():
-    said = record.phrases("relative", list(AIR_STARTS))
+    said = record.phrases("relative", list(FLEET))
     words = [p for p, _ in said]
     assert len(words) == len(set(words)) == 22
     assert words[:4] == ["autopilot on", "heading mode", "altitude hold", "heading one eight zero"]
