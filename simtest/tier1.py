@@ -39,6 +39,12 @@ class Setup:
     # _fadec_tla 0.53; A/THR stays armed at FLX/MCT 0.76 and TOGA 1.0).
     levers: float | None = None
     athr_on_from: int = 1  # autothrottle_enabled from this counts as on (A330: armed, 0)
+    # The Mach the dial is set to, within the jet's limit (the SF50's Mmo is .53).
+    mach: float = 0.78
+    mach_words: str = "point seven eight"
+    # The V/S descent's rate: a light single gains too much speed at 1,500.
+    vs_fpm: int = 1500
+    vs_words: str = "one thousand five hundred"
 
 
 SETUPS: dict[str, Setup] = {
@@ -68,7 +74,59 @@ SETUPS: dict[str, Setup] = {
         levers=0.53,
         athr_on_from=0,
     ),
+    # Phase L.2: the default aircraft not yet profiled. Not in FLEET ("all")
+    # until their checklists pass.
+    "c172": Setup(
+        "C172",
+        6000,
+        100,
+        4000,
+        "four thousand",
+        110,
+        "one one zero",
+        False,
+        "none",
+        vs_fpm=500,
+        vs_words="five hundred",
+    ),
+    "sr22": Setup(
+        "SR22",
+        8000,
+        150,
+        6000,
+        "six thousand",
+        160,
+        "one six zero",
+        False,
+        "none",
+        vs_fpm=1000,
+        vs_words="one thousand",
+    ),
+    # No autothrottle in its files: the pilot sets the thrust.
+    "citx": Setup(
+        "C750", 10000, 250, 8000, "eight thousand", 250, "two five zero", True, "none", levers=0.7
+    ),
+    "md82": Setup(
+        "MD82", 10000, 250, 8000, "eight thousand", 250, "two five zero", True, "generic"
+    ),
+    "sf50": Setup(
+        "SF50",
+        10000,
+        200,
+        8000,
+        "eight thousand",
+        200,
+        "two zero zero",
+        True,
+        "generic",
+        mach=0.45,
+        mach_words="point four five",
+    ),
 }
+# The aircraft every checklist passes on: "all" in the runner.
+FLEET = ("baron", "kingair", "737", "a330")
+# Phase L.2's aircraft, "new" in the runner.
+NEW = ("c172", "sr22", "citx", "md82", "sf50")
 
 
 def _faster_than_vfe(want: bool, vfe_full: float | None) -> SimCheck:
@@ -120,6 +178,8 @@ def _manage_thrust(s: Setup) -> list[Step]:
                 sim=(equals("levers at CL", THROTTLE, s.levers, tol=0.02, within_sec=2),),
             )
         )
+    if s.autothrottle == "none":
+        return steps  # the pilot's levers hold the speed
     sim = [_athr(s, True)]
     steps.append(
         Step(
@@ -203,18 +263,18 @@ def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:
             outcomes=DONE_OR_SET,
             sim=(equals(f"speed bug {s.speed}", DIAL_SPEED, s.speed, tol=1),)
             # With the autothrottle on, the aircraft has to get there.
-            + ((_ias_near(s.speed, 20, 120),) if s.jet else ()),
+            + ((_ias_near(s.speed, 20, 120),) if s.jet and s.autothrottle != "none" else ()),
         ),
     ]
     if s.jet:
         out += [
             Step(
-                "mach .78",
-                say="mach point seven eight",
+                f"mach {s.mach:.2f}".replace("0.", "."),
+                say=f"mach {s.mach_words}",
                 outcomes=DONE_OR_SET,
                 sim=(
                     equals("dial in Mach", IS_MACH, 1, within_sec=3),
-                    equals("Mach .78", DIAL_SPEED, 0.78, tol=0.005, within_sec=3),
+                    equals(f"Mach {s.mach}", DIAL_SPEED, s.mach, tol=0.005, within_sec=3),
                 ),
             ),
             Step(
@@ -227,7 +287,7 @@ def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:
                 ),
             ),
         ]
-    climb_sec = abs(s.alt_ft - s.descend_to) / 1500 * 60 + 120
+    climb_sec = abs(s.alt_ft - s.descend_to) / s.vs_fpm * 60 + 120
     out += [
         Step(
             f"altitude {s.descend_to}",
@@ -241,7 +301,7 @@ def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:
         ),
         Step(
             "V/S descent and level-off",
-            say="descend at one thousand five hundred feet per minute",
+            say=f"descend at {s.vs_words} feet per minute",
             reply=f"to {s.descend_to}",
             sim=(levelled_at(s.descend_to, within_sec=climb_sec),),
             note="the main Tier 1 check: the aircraft levels off by itself",

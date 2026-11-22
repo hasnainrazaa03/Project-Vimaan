@@ -80,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
         "checklist",
         choices=("tier1", "tier2", "tier3", "tier4", "relative", *flights.FLIGHTS),
     )
-    rn.add_argument("aircraft", choices=(*tier1.SETUPS, "all"))
+    rn.add_argument("aircraft", choices=(*tier1.SETUPS, "all", "new"))
     rn.add_argument("--text", action="store_true", help="no generated voice: text to the model")
     rn.add_argument(
         "--recordings", help="a folder from 'record': your voice instead of generated speech"
@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
 
     rec = sub.add_parser("record", help="record your voice for each phrase of a checklist")
     rec.add_argument("checklist", choices=("tier1", "tier2", "tier3", "tier4", "relative"))
-    rec.add_argument("aircraft", choices=(*tier1.SETUPS, "all"))
+    rec.add_argument("aircraft", choices=(*tier1.SETUPS, "all", "new"))
     rec.add_argument(
         "--out", help="the folder (default ~/Vimaan_Logs/recordings/...); again to resume"
     )
@@ -110,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "record":
         from . import record
 
-        names = list(tier1.SETUPS) if args.aircraft == "all" else [args.aircraft]
+        names = _aircraft(args.aircraft)
         folder = Path(args.out).expanduser() if args.out else record.default_folder(args.checklist)
         return 1 if record.record(args.checklist, names, folder) else 0
 
@@ -236,11 +236,20 @@ def _model_lacks(checklist: str, state: dict) -> str | None:
     return f"the loaded model predates {tier} (install {version} or later first)"
 
 
+def _aircraft(name: str) -> list[str]:
+    """ "all": the fleet every checklist passes on; "new": phase L.2's."""
+    if name == "all":
+        return list(tier1.FLEET)
+    if name == "new":
+        return list(tier1.NEW)
+    return [name]
+
+
 def _run(args: argparse.Namespace) -> int:
     from datetime import datetime
 
     br = Bridge(args.log_dir)
-    names = list(tier1.SETUPS) if args.aircraft == "all" else [args.aircraft]
+    names = _aircraft(args.aircraft)
     failed = 0
     recordings = None
     if args.recordings:

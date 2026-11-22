@@ -239,15 +239,27 @@ def test_tier1_scenarios_are_complete(aircraft):
     assert len(names) == len(set(names)), "step names are unique (the report keys on them)"
     assert all(sum(map(bool, (s.say, s.command, s.write))) == 1 for s in steps)
     said = " | ".join(s.say for s in steps if s.say)
+    setup = tier1.SETUPS[aircraft]
     for must in (
         "autopilot on",
-        "descend at one thousand five hundred feet per minute",
+        f"descend at {setup.vs_words} feet per minute",
         "frequency one three three decimal one on com two",
         "altimeter standard",
         "flaps full",
     ):
         assert must in said
-    assert ("mach point seven eight" in said) == tier1.SETUPS[aircraft].jet
+    assert (f"mach {setup.mach_words}" in said) == setup.jet
+    # Without an autothrottle, "auto throttle on" is only said to be refused.
+    if setup.autothrottle == "none":
+        assert [s.outcomes for s in steps if s.say == "auto throttle on"] == [("rejected",)]
+
+
+def test_the_fleet_and_the_new_aircraft_are_all_set_up():
+    assert set(tier1.FLEET) | set(tier1.NEW) == set(tier1.SETUPS)
+    assert not set(tier1.FLEET) & set(tier1.NEW)
+    from simtest import xplane
+
+    assert set(tier1.SETUPS) <= set(xplane.AIRCRAFT)
 
 
 def test_steps_can_depend_on_the_sim_and_on_each_other(tmp_path, fake_voice):

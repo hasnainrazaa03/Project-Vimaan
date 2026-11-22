@@ -38,12 +38,18 @@ KNOT = 0.514444
 # a reference point, so a runner can tell the new flight has loaded.
 AIRPORTS = {"KPDX": (45.5887, -122.5975)}
 NEAR_DEG = 0.2  # a runway start is within this of its airport (a 5 nm final too)
-# The four Tier 1 aircraft, relative to the X-Plane folder.
+# The test aircraft, relative to the X-Plane folder.
 AIRCRAFT = {
     "baron": "Aircraft/Laminar Research/Beechcraft Baron 58/Baron_58.acf",
     "kingair": "Aircraft/Laminar Research/Beechcraft King Air C90B/C90B.acf",
     "737": "Aircraft/Laminar Research/Boeing 737-800/b738.acf",
     "a330": "Aircraft/Laminar Research/Airbus A330-300/A330.acf",
+    # Phase L.2
+    "c172": "Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP.acf",
+    "sr22": "Aircraft/Laminar Research/Cirrus SR22/Cirrus SR22.acf",
+    "citx": "Aircraft/Laminar Research/Cessna Citation X/Cessna_CitationX.acf",
+    "md82": "Aircraft/Laminar Research/McDonnell Douglas MD-82/MD80.acf",
+    "sf50": "Aircraft/Laminar Research/Cirrus Vision SF50/CirrusSF50.acf",
 }
 
 
