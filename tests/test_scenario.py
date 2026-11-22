@@ -237,7 +237,7 @@ def test_tier1_scenarios_are_complete(aircraft):
     steps = tier1.steps(aircraft)
     names = [s.name for s in steps]
     assert len(names) == len(set(names)), "step names are unique (the report keys on them)"
-    assert all(sum(map(bool, (s.say, s.command, s.write))) == 1 for s in steps)
+    assert all(sum(map(bool, (s.say, s.command, s.write, s.pilot))) == 1 for s in steps)
     said = " | ".join(s.say for s in steps if s.say)
     setup = tier1.SETUPS[aircraft]
     for must in (

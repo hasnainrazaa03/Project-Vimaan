@@ -54,6 +54,10 @@ class Setup:
     # SF50's Garmin: the HSI starts on GPS with no flight plan). The pilot
     # tunes NAV 1 to a VOR in range and sets the HSI to it first.
     nav_source: bool = False
+    # Seconds to let the air start settle before the first command. The
+    # MD-82 pitched up after its air start and took no "autopilot on" 9 s
+    # after loading; ~20 s after, servos_on engaged it (phase L.2).
+    settle_first_sec: float = 0.0
 
 
 SETUPS: dict[str, Setup] = {
@@ -122,7 +126,16 @@ SETUPS: dict[str, Setup] = {
         "C750", 10000, 160, 8000, "eight thousand", 200, "two zero zero", True, "none", levers=0.55
     ),
     "md82": Setup(
-        "MD82", 10000, 250, 8000, "eight thousand", 250, "two five zero", True, "generic"
+        "MD82",
+        10000,
+        250,
+        8000,
+        "eight thousand",
+        250,
+        "two five zero",
+        True,
+        "generic",
+        settle_first_sec=15.0,
     ),
     "sf50": Setup(
         "SF50",
@@ -278,7 +291,20 @@ def hands_off(aircraft: str) -> list[Step]:
     ]
     if s.jet:
         out[1:1] = _manage_thrust(s)  # straight after "autopilot on"
+    if s.settle_first_sec:
+        out.insert(
+            0,
+            Step(
+                "air start settles (pilot)",
+                pilot=_air_start_settles,
+                settle_sec=s.settle_first_sec,
+            ),
+        )
     return out
+
+
+def _air_start_settles(bridge: object) -> None:
+    """Hands off for a moment: the wait is the step's settle_sec."""
 
 
 def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:

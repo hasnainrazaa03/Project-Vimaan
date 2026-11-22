@@ -299,6 +299,7 @@ Phase L.2 adds five default aircraft. Each was flown through the Tier 1 checklis
   - with the switch on, `autothrottle_on` gave 1;
   - off gave 0, and on again gave 1.
 - Override `md82_autopilot`: "autopilot on" presses `servos_on`, and "autothrottle on" turns the switch on first (`athr_switch`), then arms and engages as on the 737.
+- After an air start, its autopilot took no "autopilot on" for the first ~10 s, while the aircraft was still pitching up. By ~20 s, `servos_on` engaged it. The Tier 1 checklist waits 15 s first (`settle_first_sec`). With #95 installed, Tier 1 passes 33/33.
 
 **Cirrus Vision SF50** (`SF50`, jet, GFC-700-like): Tier 1 28/32.
 - **No autothrottle:** `autothrottle_enabled` stayed at -1 after arming. Its files' only "autothrottle" is a commented-out line in `sf50_autopilot.lua`.
