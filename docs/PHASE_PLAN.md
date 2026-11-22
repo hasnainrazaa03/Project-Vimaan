@@ -1643,7 +1643,7 @@ designs come later in this document.
     | SF50 | 28/32 | no autothrottle; nav and approach |
 
     Findings and probes: `docs/AIRCRAFT_PROFILES.md`, "L.2 findings".
-  - [ ] L.2.2 Fixes, from the probes:
+  - [x] L.2.2 Fixes, from the probes:
     - overrides `md82_autopilot` and `citx_autopilot`;
     - `AUTOPILOT_LACKS` (the S-Tec 55 has no level change);
     - "needs a navigation signal";
@@ -1652,6 +1652,13 @@ designs come later in this document.
       start speed.
 
     Done when merged, installed, and Tier 1 passes on all five.
+    - Installed 2026-11-21 (#95, main 33645ad).
+    - Tier 1 by text: C172 26/26, SR22 30/30, Citation X 31/31, SF50 33/33.
+    - MD-82 28/32 at first. Its autopilot took no "autopilot on" 9 s after
+      the air start, while it was still pitching up. Every later step
+      passed, its own A/T switch included.
+    - With 15 s for the air start to settle before the first command: MD-82
+      33/33.
   - [ ] L.2.3 Tiers 2–4, the relative checklist and the flights on the five;
     then they join "all".
 - [ ] **L.3 Two commands in one breath:** "heading two seven zero, climb five
