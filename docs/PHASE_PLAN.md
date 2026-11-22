@@ -1718,6 +1718,19 @@ designs come later in this document.
       without Vimaan, X-Plane in front or behind. The runner now recovers by
       itself (reopens X-Plane, retries) and logs every crash, and the launcher
       reports X-Plane's fatal alerts (`docs/IN_SIM_TESTING.md`).
+    - **The phase tracker held a balloon as a go-around to touchdown**
+      (flying the five's landings, 2026-11-22). The MD-82's flaps 28 at
+      172 kt pitched it up at +1,100 fpm at 926 ft on the glideslope; it
+      dived back to the runway at up to 1,700 fpm and floated along it at
+      40 ft. Below 1,000 ft a go-around held until 1,000 ft, so the phase
+      stayed go-around for three minutes, to touchdown, while the approach
+      rules were off ("gear up" would not have been held). Now, below
+      1,000 ft, a go-around that is configured (gear or flaps out) and
+      coming down (300 fpm or more, for the 3 s dwell) is the approach
+      again, or the landing below 100 ft. A real go-around climbs, and a
+      sink shorter than the dwell keeps it. The flight is a replay fixture
+      (`tests/fixtures/flights/md82_balloon_on_the_glideslope.jsonl`); the
+      other 14 replay as before. Owner's OK 2026-11-22.
 - [ ] **L.3 Two commands in one breath:** "heading two seven zero, climb five
   thousand". Each part is read back and goes through the same rules.
 - [ ] **L.4 Checklists:** read out, and each item checked against the sim.

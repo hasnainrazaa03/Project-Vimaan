@@ -2,8 +2,9 @@
 12.4 by the plugin, once a second, replayed through today's tracker.
 
 The flights are simtest's (``python -m simtest run takeoff|landing|go-around
-<aircraft>``) and the probes flown while building them, on 2026-11-19, at
-Portland (KPDX 10R), plus a Tier 1 air start west of Portland. Each fixture
+<aircraft>``) and the probes flown while building them, on 2026-11-19 (and
+an MD-82 landing on 2026-11-22), at Portland (KPDX 10R), plus a Tier 1 air
+start west of Portland. Each fixture
 is one flight from a load on: the tracker's fields only, the first 5 samples
 dropped (the plugin skips them after a load: the airspeed reads 0 for a
 couple of seconds), cut 20 samples after the last change.
@@ -103,6 +104,25 @@ PHASES = {
         "cruise",
     ],
     "b738_go_around": ["approach", "climb", "approach", "go_around", "climb", "cruise"],
+    # Phase L.2.3 (2026-11-22): an MD-82 air start 14 nm out sank to 330 ft
+    # over the hills and climbed back (a go-around below 1,000 ft), levelled,
+    # then ballooned on the glideslope as flaps 28 came out (+1,100 fpm at
+    # 926 ft) and dived back to the runway. Configured and descending, the
+    # balloon is the approach again, then the landing; it floated at 40 ft
+    # along the runway, touched, and lifted off again.
+    "md82_balloon_on_the_glideslope": [
+        "descent",
+        "approach",
+        "go_around",
+        "cruise",
+        "descent",
+        "approach",
+        "go_around",
+        "approach",
+        "landing",
+        "rollout",
+        "initial_climb",
+    ],
     # A fixed throttle on the approach: slowed to 81 kt (Vs 84), the autopilot
     # let go, and it flew into the ground short of the runway.
     "be58_approach_slowed_to_the_stall": [
@@ -158,6 +178,17 @@ def test_a_go_around_starts_low_and_ends_at_a_thousand_feet():
         last = max(t for t in at if t <= end)
         assert at[first].agl_ft is not None and at[first].agl_ft < 600, name  # from 500 ft
         assert at[last].agl_ft is not None and at[last].agl_ft >= 900, name  # to ~1,000 ft
+
+
+def test_a_balloon_on_the_glideslope_is_the_approach_again():
+    samples = _flight("md82_balloon_on_the_glideslope")
+    changes = replay(samples)
+    balloon = next(t for t, p in changes if p == "go_around" and t > 100)
+    back, phase = next((t, p) for t, p in changes if t > balloon)
+    assert phase == "approach" and back - balloon < 15  # seconds, not minutes to touchdown
+    landing = next(t for t, p in changes if p == "landing")
+    at = next(s for s in samples if s.t >= landing)
+    assert at.agl_ft is not None and at.agl_ft < 100
 
 
 def test_the_landing_phase_is_the_last_hundred_feet():
