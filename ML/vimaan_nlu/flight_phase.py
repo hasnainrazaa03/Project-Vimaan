@@ -17,7 +17,9 @@ not after a landing), ``rollout`` (fast, after a landing). In the air:
 or low and still coming down from a descent), ``landing`` (the last 100 ft,
 after an approach),
 ``go_around`` (climbing away from an approach or a landing below 1,000 ft
-above the ground, until 1,000 ft; higher up it is a climb). ``unknown`` when neither on-ground nor height can be read.
+above the ground, until 1,000 ft; higher up it is a climb; configured and
+coming down again below 1,000 ft, it was a balloon: back to the approach, or
+the landing below 100 ft). ``unknown`` when neither on-ground nor height can be read.
 
 A new phase must hold for a few seconds before it is taken (vertical speed
 wanders around a level-off), except the ground/air change, which takes one
@@ -115,7 +117,16 @@ def candidate(s: FlightSample, previous: str | None) -> str:
         return "rollout"  # a bounce, not a touch-and-go
     if previous in GROUND_PHASES:  # just lifted off (or a touch-and-go)
         return "initial_climb"
-    if previous in ("initial_climb", "go_around") and (agl is None or agl < INITIAL_CLIMB_AGL_FT):
+    if previous == "go_around" and (agl is None or agl < INITIAL_CLIMB_AGL_FT):
+        # A go-around climbs. Gear or flaps out and coming down again, it was
+        # a balloon on the approach: the MD-82's flaps 28 at 172 kt pitched it
+        # up at +1,100 fpm at 926 ft, then it dived back to the runway, and
+        # the go-around held to touchdown, three minutes, while the approach
+        # rules ("gear up" held) were off (L.2.3 flights, 2026-11-22).
+        if agl is not None and vs <= -LEVEL_FPM and _configured(s):
+            return "landing" if agl < LANDING_AGL_FT else "approach"
+        return previous
+    if previous == "initial_climb" and (agl is None or agl < INITIAL_CLIMB_AGL_FT):
         return previous
     # Below 1,000 ft only: higher up, a climb from an approach is a climb (the
     # go-around ends at 1,000 ft anyway). X-Plane's final-approach start at

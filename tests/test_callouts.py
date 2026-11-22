@@ -81,6 +81,7 @@ LIMITS = {
     "be9l": Limits(100, 90, 190, 150, 2, 185, 169, 226, 0.46, True),
     "b738": Limits(139, 114, 250, 162, 8, 270, 280, 340, 0.82, True),
     "a333": Limits(175, 125, 215, 180, 4, 250, 330, 330, 0.86, True),
+    "md82": Limits(150, 115, 280, 195, 5, 999, 340, 340, 0.95, True),  # 2026-11-22
 }
 # What would have been said: only where something was wrong.
 SAID_ON = {
@@ -91,6 +92,9 @@ SAID_ON = {
     "a333_takeoff": {"flap_speed"},
     # Full throttle after the go-around: over Vne levelling off.
     "be9l_go_around": {"overspeed"},
+    # The air start 14 nm out sank to 222 ft over the hills, gear up, on the
+    # approach: "Gear" (2026-11-22).
+    "md82_balloon_on_the_glideslope": {"gear"},
 }
 
 

@@ -97,6 +97,24 @@ def test_a_go_around_from_the_approach_climbs_away():
     assert f.phases() == ["approach", "go_around", "climb"]
 
 
+def test_a_balloon_on_short_final_returns_to_the_approach_and_lands():
+    f = Flight(on_ground=False, agl_ft=1500.0, gs_kt=150.0, flaps=0.8, gear=1.0)
+    f.ramp(40, agl_to=900)  # on the glideslope
+    f.ramp(10, agl_to=1000)  # flaps out: it balloons at +600 fpm
+    f.ramp(60, agl_to=60)  # and dives back to the runway
+    f.ramp(5, agl_to=10)
+    assert f.phases() == ["approach", "go_around", "approach", "landing"]
+
+
+def test_a_real_go_around_keeps_climbing_through_a_sink_shorter_than_the_dwell():
+    f = Flight(on_ground=False, agl_ft=2000.0, gs_kt=120.0, flaps=0.5, gear=1.0)
+    f.ramp(60, agl_to=300)  # approach
+    f.ramp(20, agl_to=700)  # go around
+    f.ramp(2, agl_to=680)  # a moment's sink (2 s, under the 3 s dwell)
+    f.ramp(60, agl_to=1500)  # climbing away
+    assert f.phases() == ["approach", "go_around", "climb"]
+
+
 def test_a_touch_and_go_lifts_off_into_an_initial_climb():
     f = Flight(on_ground=False, agl_ft=1500.0, gs_kt=90.0, flaps=0.5)
     f.ramp(60, agl_to=50)
@@ -192,6 +210,17 @@ def test_reset_starts_a_new_flight():
         # levelling off a final-approach start at 1,500 ft).
         (dict(on_ground=False, agl_ft=1500.0, vs_fpm=700.0), "approach", "climb"),
         (dict(on_ground=False, agl_ft=800.0, vs_fpm=0.0), "initial_climb", "initial_climb"),
+        # Below 1,000 ft a go-around climbs; configured and coming down, it was
+        # a balloon on the approach (the MD-82, 2026-11-22).
+        (dict(on_ground=False, agl_ft=600.0, vs_fpm=-800.0, gear=1.0), "go_around", "approach"),
+        (dict(on_ground=False, agl_ft=80.0, vs_fpm=-800.0, flaps=0.8), "go_around", "landing"),
+        (dict(on_ground=False, agl_ft=600.0, vs_fpm=-800.0), "go_around", "go_around"),  # clean
+        (dict(on_ground=False, agl_ft=600.0, vs_fpm=-200.0, gear=1.0), "go_around", "go_around"),
+        (
+            dict(on_ground=False, agl_ft=600.0, vs_fpm=-800.0, gear=1.0),
+            "initial_climb",
+            "initial_climb",
+        ),
     ],
 )
 def test_candidate(sample, previous, want):
