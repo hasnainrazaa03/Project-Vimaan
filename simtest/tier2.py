@@ -9,6 +9,8 @@ enum is the answer on the Baron and King Air. The 737's selector is checked by
 its position, because X-Plane reads mode 2 for every position from ALT RPTG
 OFF to TA/RA. The A330's script sets X-Plane's mode from its three selectors:
 with altitude reporting on in flight that is TA (6) or TA/RA (7), never 3.
+The jets with TCAS (Citation X, SF50) go to TA/RA (7) on X-Plane's
+transponder_alt: altitude is reported either way (L.2, 2026-11-21).
 """
 
 from __future__ import annotations
@@ -25,6 +27,8 @@ B738_SELECTOR = "laminar/B738/knob/transponder_pos"
 SET_OR_TURNING = (*DONE_OR_SET, "pending")
 # X-Plane's modes that reply: on (A), alt (C), ground, TA, TA/RA.
 REPLYING = (2, 3, 5, 6, 7)
+# The modes that report altitude: alt (C), TA, TA/RA.
+ALTITUDE_REPORTED = (3, 6, 7)
 # The intent a model must know for this checklist.
 NEEDS_INTENT = "set_transponder_code"
 
@@ -50,7 +54,7 @@ def _altitude_reporting(aircraft: str) -> SimCheck:
         )
     if aircraft == "a330":
         return _mode_in("TA or TA/RA (altitude reported)", (6, 7))
-    return _mode_in("mode C", (3,))
+    return _mode_in("mode C, TA or TA/RA (altitude reported)", ALTITUDE_REPORTED)
 
 
 def _transponder(aircraft: str) -> list[Step]:

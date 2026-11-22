@@ -25,7 +25,8 @@ IAS = "sim/cockpit2/gauges/indicators/airspeed_kts_pilot"
 ALT = "sim/cockpit2/gauges/indicators/altitude_ft_pilot"
 VS = "sim/cockpit2/gauges/indicators/vvi_fpm_pilot"
 DONE_OR_SET = ("executed", "no_op")
-# "pending": the A330 turns its heading knob over frames (heading_by_knob).
+# "pending": the A330 and the GFC-700 aircraft turn their heading knob over
+# frames (heading_by_knob).
 SET_OR_TURNING = (*DONE_OR_SET, "pending")
 # The loaded model must know this to run the checklist.
 NEEDS_INTENT = "turn_by"
@@ -190,7 +191,7 @@ def steps(aircraft: str) -> list[Step]:
             sim=(equals(f"altitude bug {alt}", ALT_BUG, alt, tol=0.5),),
         ),
     ]
-    if s.jet:  # the autothrottle flies the bug: a change is from the bug
+    if s.jet and s.autothrottle != "none":  # it flies the bug: a change is from the bug
         out += [
             Step(
                 f"speed {s.speed}",
@@ -210,9 +211,21 @@ def steps(aircraft: str) -> list[Step]:
                 reply="20 knots slower",
                 sim=(equals(f"speed bug {s.speed - 10}", SPEED_BUG, s.speed - 10, tol=1),),
             ),
+        ]
+    else:  # no autothrottle (the Citation X and SF50 too): from the airspeed
+        out += [
             Step(
-                "mach .78",
-                say="mach point seven eight",
+                "speed up ten",
+                say="speed up ten knots",
+                reply="10 knots faster",
+                sim=(_speed_from_airspeed(10),),
+            ),
+        ]
+    if s.jet:
+        out += [
+            Step(
+                f"mach {s.mach:.2f}".replace("0.", "."),
+                say=f"mach {s.mach_words}",
                 outcomes=DONE_OR_SET,
                 sim=(equals("dial in Mach", IS_MACH, 1, within_sec=3),),
             ),
@@ -229,15 +242,6 @@ def steps(aircraft: str) -> list[Step]:
                 say=f"speed {s.speed_words}",
                 outcomes=DONE_OR_SET,
                 sim=(equals("dial in knots", IS_MACH, 0, within_sec=3),),
-            ),
-        ]
-    else:
-        out += [
-            Step(
-                "speed up ten",
-                say="speed up ten knots",
-                reply="10 knots faster",
-                sim=(_speed_from_airspeed(10),),
             ),
         ]
     return out

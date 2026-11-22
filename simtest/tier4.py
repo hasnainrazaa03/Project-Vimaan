@@ -68,7 +68,6 @@ WPT_NM = "sim/cockpit2/radios/indicators/gps_dme_distance_nm"
 WPT_MIN = "sim/cockpit2/radios/indicators/gps_dme_time_min"
 DEST = "sim/cockpit/gps/destination_index"
 ZULU = "sim/time/zulu_time_sec"
-ENGINES = 2  # every checklist aircraft is a twin
 # The question model's intent the runner looks for before it starts.
 NEEDS_QUESTION_INTENT = "ask_flight_data"
 # X-Plane's transponder_mode as the plugin answers it (the Baron and King Air;
@@ -93,6 +92,8 @@ class Cockpit:
     engine: str  # piston / turboprop / jet
     baro_hpa: tuple[str, float] | None  # the selector dataref and its hPa value
     xpdr_from_xplane: bool  # the mode word comes from X-Plane's transponder_mode
+    engines: int = 2
+    retractable_gear: bool = True
 
 
 COCKPITS: dict[str, Cockpit] = {
@@ -108,6 +109,20 @@ COCKPITS: dict[str, Cockpit] = {
     "a330": Cockpit(
         "kilograms", 1.0, "jet", ("laminar/A333/barometer/capt_inHg_hPa_pos", 1.0), False
     ),
+    # Phase L.2 (X-Plane 12.4.4): the C172's fuel gauges read gallons (its
+    # manual), the SR22's display gallons; the Citation X's EICAS and the
+    # MD-82's fuel panel pounds (their manuals); the SF50's engine display
+    # "FUEL QTY GAL" and "FFLOW GPH" of jet fuel (a sim screenshot,
+    # 2026-11-21). Every altimeter is in inches; every transponder is X-Plane's.
+    "c172": Cockpit(
+        "gallons", 6.0 * answers.KG_PER_LB, "piston", None, True, 1, retractable_gear=False
+    ),
+    "sr22": Cockpit(
+        "gallons", 6.0 * answers.KG_PER_LB, "piston", None, True, 1, retractable_gear=False
+    ),
+    "citx": Cockpit("pounds", answers.KG_PER_LB, "jet", None, True),
+    "md82": Cockpit("pounds", answers.KG_PER_LB, "jet", None, True),
+    "sf50": Cockpit("gallons", answers.KG_PER_GALLON["jet"], "jet", None, True, 1),
 }
 
 # ---------------------------------------------------------------------------
@@ -339,21 +354,21 @@ def fuel_answer(cockpit: Cockpit) -> Answer:
     )
 
 
-def _flows() -> tuple[str, ...]:
-    return tuple(f"{FUEL_FLOW}[{i}]" for i in range(ENGINES))
+def _flows(engines: int = 2) -> tuple[str, ...]:
+    return tuple(f"{FUEL_FLOW}[{i}]" for i in range(engines))
 
 
-def _minutes_left(r: dict[str, Any]) -> float | None:
+def _minutes_left(r: dict[str, Any], engines: int = 2) -> float | None:
     kg = _num(r.get(FUEL))
-    flow = sum(_num(r.get(name)) or 0.0 for name in _flows())
+    flow = sum(_num(r.get(name)) or 0.0 for name in _flows(engines))
     return None if kg is None or flow <= 1e-6 else kg / flow / 60
 
 
-def endurance_answer() -> Answer:
+def endurance_answer(engines: int = 2) -> Answer:
     """At the present fuel flow, which moves: 2 minutes and 10%."""
 
     def ok(reply: str, r: dict[str, Any]) -> bool:
-        left = _minutes_left(r)
+        left = _minutes_left(r, engines)
         if reply.startswith("No fuel flow"):
             return left is None
         g = _match(r"About (?:(\d+) hours? )?(\d+) minutes of fuel at this fuel flow", reply)
@@ -364,9 +379,9 @@ def endurance_answer() -> Answer:
 
     return Answer(
         "fuel endurance",
-        (FUEL, *_flows()),
+        (FUEL, *_flows(engines)),
         ok,
-        lambda r: f"{_show(_minutes_left(r))} minutes at this fuel flow ± 10%",
+        lambda r: f"{_show(_minutes_left(r, engines))} minutes at this fuel flow ± 10%",
     )
 
 
@@ -376,11 +391,13 @@ def engine_answer(
     unit: str,
     tol: float,
     convert: Callable[[float], float] = lambda v: v,
+    engines: int = 2,
 ) -> Answer:
     """ "Oil pressure 60 P S I on both engines", or engine by engine
-    ("Engine 1 N1 85 percent, engine 2 N1 86 percent")."""
+    ("Engine 1 N1 85 percent, engine 2 N1 86 percent"); one engine: "Oil
+    pressure 60 P S I"."""
     name = answers.READING_NAMES[reading]
-    refs = tuple(f"{dataref}[{i}]" for i in range(ENGINES))
+    refs = tuple(f"{dataref}[{i}]" for i in range(engines))
 
     def values(r: dict[str, Any]) -> list[float] | None:
         got = [_num(r.get(x)) for x in refs]
@@ -392,6 +409,8 @@ def engine_answer(
         if want is None or not text.lower().startswith((name.lower(), "engine 1")):
             return False
         said = [float(x) for x in re.findall(rf"(\d+(?:\.\d+)?) {unit}", text)]
+        if len(want) == 1:
+            return len(said) == 1 and abs(said[0] - want[0]) <= tol and "engine" not in text
         if len(said) == 1 and text.endswith("on both engines"):
             return all(abs(said[0] - w) <= tol for w in want)
         return len(said) == len(want) and all(abs(s - w) <= tol for s, w in zip(said, want))
@@ -512,7 +531,7 @@ def heading_bug_answer() -> Answer:
 
 
 def _gear_words(r: dict[str, Any]) -> str:
-    """As the plugin says it (every checklist aircraft's gear retracts)."""
+    """As the plugin says it, for gear that retracts."""
     ratios = [v for v in (_num(r.get(f"{GEAR}[{i}]")) for i in range(3)) if v is not None]
     if ratios and all(x >= 0.99 for x in ratios):
         return "Gear down"
@@ -521,7 +540,9 @@ def _gear_words(r: dict[str, Any]) -> str:
     return "Gear moving down" if _num(r.get(GEAR_HANDLE)) == 1 else "Gear moving up"
 
 
-def gear_answer() -> Answer:
+def gear_answer(retractable: bool = True) -> Answer:
+    if not retractable:
+        return _exact("gear", (GEAR_HANDLE,), lambda _r: "The gear is fixed down")
     return _exact("gear", (*(f"{GEAR}[{i}]" for i in range(3)), GEAR_HANDLE), _gear_words)
 
 
@@ -643,19 +664,19 @@ N1_NOTE = (
 )
 
 
-def _engine_steps(kind: str) -> list[Step]:
+def _engine_steps(kind: str, engines: int = 2) -> list[Step]:
     """Oil pressure on every aircraft, and what its engine kind shows."""
     out = [
         _ask(
             "oil pressure",
             "what's the oil pressure",
-            engine_answer("oil pressure", ENG + "oil_pressure_psi", "P S I", 3.0),
+            engine_answer("oil pressure", ENG + "oil_pressure_psi", "P S I", 3.0, engines=engines),
         )
     ]
     n1 = _ask(
         "N1",
         "what's the n one",
-        engine_answer("n one", ENG + "N1_percent", "percent", 1.5),
+        engine_answer("n one", ENG + "N1_percent", "percent", 1.5, engines=engines),
         note=N1_NOTE,
     )
     if kind == "piston":
@@ -663,7 +684,9 @@ def _engine_steps(kind: str) -> list[Step]:
             _ask(
                 "manifold pressure",
                 "what's the manifold pressure",
-                engine_answer("manifold pressure", ENG + "MPR_in_hg", "inches", 0.5),
+                engine_answer(
+                    "manifold pressure", ENG + "MPR_in_hg", "inches", 0.5, engines=engines
+                ),
             )
         )
     elif kind == "turboprop":
@@ -677,6 +700,7 @@ def _engine_steps(kind: str) -> list[Step]:
                     "foot pounds",
                     40.0,
                     lambda v: v * answers.NM_PER_FT,
+                    engines=engines,
                 ),
             ),
             n1,
@@ -686,15 +710,17 @@ def _engine_steps(kind: str) -> list[Step]:
             _ask(
                 "E G T",
                 "what's the e g t",
-                engine_answer("e g t", ENG + "EGT_deg_C", "degrees", 10.0),
+                engine_answer("e g t", ENG + "EGT_deg_C", "degrees", 10.0, engines=engines),
             ),
             n1,
         ]
     return out
 
 
-def gear_still() -> SimCheck:
-    """The gear stays where it is in cruise: the handle up."""
+def gear_still(retractable: bool = True) -> SimCheck:
+    """The gear stays where it is in cruise: the handle up (fixed gear: down)."""
+    if not retractable:
+        return equals("gear handle still down (fixed)", GEAR_HANDLE, 1)
     return equals("gear handle still up", GEAR_HANDLE, 0)
 
 
@@ -725,8 +751,8 @@ def steps(aircraft: str) -> list[Step]:
         out.append(_ask("mach", "what's our mach number", mach_answer()))
     out += [
         _ask("fuel", "how much fuel do we have", fuel_answer(c)),
-        _ask("fuel endurance", "how long will our fuel last", endurance_answer()),
-        *_engine_steps(c.engine),
+        _ask("fuel endurance", "how long will our fuel last", endurance_answer(c.engines)),
+        *_engine_steps(c.engine, c.engines),
         _ask("COM 1", "what's com one", com1_answer()),
         _ask("COM 1 standby", "what's com one standby", com1_answer("standby")),
         _ask("NAV 1", "what's nav one", nav1_answer()),
@@ -735,7 +761,7 @@ def steps(aircraft: str) -> list[Step]:
         _ask("altitude set", "what altitude is set", altitude_set_answer()),
         _ask("heading bug", "what's the heading bug", heading_bug_answer()),
         _ask("landing lights", "are the landing lights on", reply="Landing lights on"),
-        _ask("gear", "is the gear down", gear_answer()),
+        _ask("gear", "is the gear down", gear_answer(c.retractable_gear)),
         _ask("flaps", "where are the flaps", flaps_answer()),
         _ask("next waypoint", "how far to the next waypoint", waypoint_answer()),
         _ask("time", "what time is it", time_answer()),
@@ -749,7 +775,7 @@ def steps(aircraft: str) -> list[Step]:
             reply=REFUSED,
             no_actions=True,
             vimaan_checks=False,
-            sim=(gear_still(),),
+            sim=(gear_still(c.retractable_gear),),
         ),
         Step(
             "autopilot off on the question key is refused",

@@ -57,7 +57,8 @@ from typing import Any
 from .scenario import SimCheck, Step, above, below, equals, levelled_at, phase_is
 from .tier1 import DONE_OR_SET
 
-# A heading: the A330 turns its knob over frames ("pending", heading_by_knob).
+# A heading: the A330 and the GFC-700 aircraft turn the knob over frames
+# ("pending", heading_by_knob).
 HEADING_SET = (*DONE_OR_SET, "pending")
 
 AIRPORT, RUNWAY = "KPDX", "10R"

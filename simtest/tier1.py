@@ -315,7 +315,7 @@ def steps(aircraft: str, vfe_full: float | None = None) -> list[Step]:
         Step(
             "heading 270",
             say="heading two seven zero",
-            outcomes=(*DONE_OR_SET, "pending"),  # "pending": the A330 turns its knob
+            outcomes=(*DONE_OR_SET, "pending"),  # "pending": a heading knob turning
             sim=(
                 equals("heading bug 270", AP + "heading_dial_deg_mag_pilot", 270, tol=0.5),
                 heading_near(270, tol=15, within_sec=100),

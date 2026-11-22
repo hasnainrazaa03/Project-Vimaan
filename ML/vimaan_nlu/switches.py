@@ -698,6 +698,266 @@ A333_AUTOBRAKE_OFF: Mapping[int, str] = _frozen(
     }
 )
 
+# --- Cessna Citation X (phase L.2) -------------------------------------------
+# Every switch is its own (xlua CitX_lights, CitX_ice, CitX_electrical,
+# CitX_fuel, CitX_autopilot), and its scripts write X-Plane's datarefs from
+# them every frame, so its commands click them. A toggle is read on the
+# X-Plane dataref it drives; a three-position switch on its own position
+# dataref (the "_term" one; the other animates toward it).
+CITX = "laminar/CitX/"
+CITX_ANTI_COLL = Knob(  # 0 OFF, 1 GND REC (beacons), 2 GND REC + ANTI COLL (strobes)
+    CITX + "lights/gnd_rec_anti_coll_term",
+    CITX + "lights/cmd_gnd_rec_anti_coll_dwn",
+    CITX + "lights/cmd_gnd_rec_anti_coll_up",
+    0,
+    2,
+)
+# -1 SEAT BELT, 0 OFF, 1 PASS SAFETY (seat belt and no smoking); its "up"
+# command turns it toward -1.
+CITX_SIGNS = Knob(
+    CITX + "lights/seat_belt_pass_safety_term",
+    CITX + "lights/cmd_seat_belt_pass_safety_up",
+    CITX + "lights/cmd_seat_belt_pass_safety_dwn",
+    -1,
+    1,
+)
+
+
+def _citx_three(name: str, down: str, up: str, low: int, high: int) -> Knob:
+    return Knob(f"{CITX}{name}_term", f"{CITX}{down}", f"{CITX}{up}", low, high)
+
+
+# Windshield heat 0 OFF, 1 ON, 2 O'RIDE (sprung back to ON).
+CITX_WINDSHIELD_L = _citx_three(
+    "ice/windshield_left", "ice/cmd_windshield_left_dwn", "ice/cmd_windshield_left_up", 0, 2
+)
+CITX_WINDSHIELD_R = _citx_three(
+    "ice/windshield_right", "ice/cmd_windshield_right_dwn", "ice/cmd_windshield_right_up", 0, 2
+)
+# Generators -1 RESET (sprung back to OFF), 0 OFF, 1 ON.
+CITX_GEN_L = _citx_three(
+    "electrical/generator_left",
+    "electrical/cmd_generator_left_dwn",
+    "electrical/cmd_generator_left_up",
+    -1,
+    1,
+)
+CITX_GEN_R = _citx_three(
+    "electrical/generator_right",
+    "electrical/cmd_generator_right_dwn",
+    "electrical/cmd_generator_right_up",
+    -1,
+    1,
+)
+# Fuel boost pumps -1 NORM, 0 OFF, 1 ON.
+CITX_BOOST_L = _citx_three(
+    "fuel/boost_left", "fuel/cmd_boost_left_dwn", "fuel/cmd_boost_left_up", -1, 1
+)
+CITX_BOOST_R = _citx_three(
+    "fuel/boost_right", "fuel/cmd_boost_right_dwn", "fuel/cmd_boost_right_up", -1, 1
+)
+
+
+def _toggled_pair(left: tuple[str, str], right: tuple[str, str]) -> Mapping[str, Plan]:
+    """Two toggles (state, command) set together, left then right."""
+    return _frozen(
+        {
+            setting: (Button(left[0], left[1], want), Button(right[0], right[1], want))
+            for setting, want in (("on", 1), ("off", 0))
+        }
+    )
+
+
+def _three_on_off(*knobs: Knob, on: int = 1, off: int = 0) -> Mapping[str, Plan]:
+    return _frozen({"on": tuple(k.at(on) for k in knobs), "off": tuple(k.at(off) for k in knobs)})
+
+
+CITX_PLANS: Plans = _frozen(
+    {
+        "light:landing": _toggled_pair(
+            (SW + "landing_lights_switch[0]", CITX + "lights/cmd_landing_left_toggle"),
+            (SW + "landing_lights_switch[1]", CITX + "lights/cmd_landing_right_toggle"),
+        ),
+        "light:taxi": _toggled(SW + "taxi_light_on", CITX + "lights/cmd_taxi_toggle"),
+        "light:nav": _toggled(SW + "navigation_lights_on", CITX + "lights/cmd_navigation_toggle"),
+        "light:beacon": _frozen({"on": (CITX_ANTI_COLL.at(1, 2),), "off": (CITX_ANTI_COLL.at(0),)}),
+        # Strobes off leaves the beacons (GND REC) on.
+        "light:strobe": _frozen({"on": (CITX_ANTI_COLL.at(2),), "off": (CITX_ANTI_COLL.at(0, 1),)}),
+        "light:logo": _toggled(
+            SW + "generic_lights_switch[0]", CITX + "lights/cmd_tail_flood_toggle"
+        ),
+        "light:wing": _toggled(SW + "generic_lights_switch[1]", CITX + "ice/cmd_wing_light_toggle"),
+        "sign:seat belt": _frozen(
+            {
+                "on": (Check(SW + "fasten_seat_belts", 1), CITX_SIGNS.at(-1)),
+                "off": (CITX_SIGNS.at(0),),
+            }
+        ),
+        # No smoking alone isn't a position: off leaves the seat belt sign.
+        "sign:no smoking": _frozen(
+            {
+                "on": (CITX_SIGNS.at(1),),
+                "off": (Check(SW + "no_smoking", 0), CITX_SIGNS.at(-1)),
+            }
+        ),
+        "yaw_damper": _toggled(SW + "yaw_damper_on", CITX + "autopilot/cmd_yd_toggle"),
+        # Pitot and static L / R (each also heats its static port and AoA vane).
+        "ice:pitot": _toggled_pair(
+            (ICE + "ice_pitot_heat_on_pilot", CITX + "ice/cmd_pitot_static_left_toggle"),
+            (ICE + "ice_pitot_heat_on_copilot", CITX + "ice/cmd_pitot_static_right_toggle"),
+        ),
+        "ice:window": _three_on_off(CITX_WINDSHIELD_L, CITX_WINDSHIELD_R),
+        # Wing anti-ice is its slat bleed air.
+        "ice:wing": _toggled(ICE + "ice_surface_hot_bleed_air_on", CITX + "ice/cmd_slat_toggle"),
+        "ice:engine": _toggled_pair(
+            (ICE + "cowling_thermal_anti_ice_per_engine[0]", CITX + "ice/cmd_engine_left_toggle"),
+            (
+                ICE + "cowling_thermal_anti_ice_per_engine[1]",
+                CITX + "ice/cmd_engine_right_toggle",
+            ),
+        ),
+        "ice:prop": None,
+        "power:battery": _toggled_pair(
+            (CITX + "electrical/battery_left_term", CITX + "electrical/cmd_battery_left_toggle"),
+            (CITX + "electrical/battery_right_term", CITX + "electrical/cmd_battery_right_toggle"),
+        ),
+        "power:avionics": _toggled(
+            CITX + "electrical/avionics_term", CITX + "electrical/cmd_avionics_toggle"
+        ),
+        "power:generator1": _three_on_off(CITX_GEN_L),
+        "power:generator2": _three_on_off(CITX_GEN_R),
+        "fuel:left": _three_on_off(CITX_BOOST_L),
+        "fuel:right": _three_on_off(CITX_BOOST_R),
+    }
+)
+
+# --- McDonnell Douglas MD-82 (phase L.2) -------------------------------------
+# Its own commands move X-Plane's datarefs one click at a time (xlua
+# md80_swithces, md80_ice); the rest of its cockpit clicks X-Plane's commands.
+MD82_CMD = "laminar/md82cmd/switches/"
+
+
+def _md82(state: str, name: str, low: int, high: int) -> Knob:
+    """Its "up" command turns the switch toward the lower value."""
+    return Knob(state, f"{MD82_CMD}{name}_up", f"{MD82_CMD}{name}_dwn", low, high)
+
+
+# Landing lights L / R: -1 RETRACT, 0 EXTEND (off), 1 ON.
+MD82_LANDING_L = _md82(SW + "landing_lights_switch[1]", "landing_lights_switch_L", -1, 1)
+MD82_LANDING_R = _md82(SW + "landing_lights_switch[2]", "landing_lights_switch_R", -1, 1)
+MD82_NOSE = _md82(SW + "taxi_light_on", "landing_lights_switch_nose", 0, 2)  # 0 OFF, 1, 2
+MD82_NAVSTROBE = _md82(  # 0 OFF, 1 POS, 2 POS + STROBE
+    "laminar/md82/switches/navstrobe_lights_switch", "navstrobe_lights_switch", 0, 2
+)
+MD82_SEATBELT = _md82(SW + "fasten_seat_belts", "seatbelts_switch", 0, 2)  # 0 OFF, 1 AUTO, 2 ON
+MD82_NO_SMOKING = _md82(SW + "no_smoking", "nosmoke_switch", 0, 2)  # 0 OFF, 1 AUTO, 2 ON
+# The pitot / stall heat selector: 0 OFF, 1-9 heat every probe (the position
+# picks the probe its meter shows); it wraps from 9 to 0.
+MD82_PITOT = Knob(
+    "laminar/md82/ice/heatknob",
+    "laminar/md82cmd/ice/selheatknob_dwn",
+    "laminar/md82cmd/ice/selheatknob_up",
+    0,
+    9,
+)
+MD82_PLANS: Plans = _frozen(
+    {
+        "light:landing": _frozen(
+            {
+                "on": (MD82_LANDING_L.at(1), MD82_LANDING_R.at(1)),
+                "off": (MD82_LANDING_L.at(-1, 0), MD82_LANDING_R.at(-1, 0)),
+            }
+        ),
+        "light:taxi": _frozen({"on": (MD82_NOSE.at(1, 2),), "off": (MD82_NOSE.at(0),)}),
+        "light:nav": _frozen({"on": (MD82_NAVSTROBE.at(1, 2),), "off": (MD82_NAVSTROBE.at(0),)}),
+        # Strobes off leaves the position lights on.
+        "light:strobe": _frozen({"on": (MD82_NAVSTROBE.at(2),), "off": (MD82_NAVSTROBE.at(0, 1),)}),
+        "light:logo": _toggled(SW + "generic_lights_switch[0]", "sim/lights/generic_01_light_tog"),
+        "light:wing": _toggled(SW + "generic_lights_switch[3]", "sim/lights/generic_04_light_tog"),
+        "sign:seat belt": _three(MD82_SEATBELT),
+        "sign:no smoking": _three(MD82_NO_SMOKING),
+        "ice:pitot": _frozen({"on": (MD82_PITOT.at(1, 9),), "off": (MD82_PITOT.at(0),)}),
+        # Left and right wing heat are separate switches.
+        "ice:wing": _frozen(
+            {
+                setting: (
+                    Button(f"{ICE}ice_surfce_heat_left_on", f"sim/ice/wing_heat0_{setting}", want),
+                    Button(f"{ICE}ice_surfce_heat_right_on", f"sim/ice/wing_heat1_{setting}", want),
+                )
+                for setting, want in (("on", 1), ("off", 0))
+            }
+        ),
+        # No avionics master: its electrical script sets avionics power from
+        # the buses (md80_electrical), as on the 737.
+        "power:avionics": None,
+        # Tank pumps: [0] center, [1] left, [2] right (its cockpit's labels).
+        "fuel:left": _on_off(
+            TANK_PUMPS + "[1]", "sim/fuel/fuel_tank_pump_2_on", "sim/fuel/fuel_tank_pump_2_off"
+        ),
+        "fuel:center": _on_off(
+            TANK_PUMPS + "[0]", "sim/fuel/fuel_tank_pump_1_on", "sim/fuel/fuel_tank_pump_1_off"
+        ),
+        "fuel:right": _on_off(
+            TANK_PUMPS + "[2]", "sim/fuel/fuel_tank_pump_3_on", "sim/fuel/fuel_tank_pump_3_off"
+        ),
+    }
+)
+
+# --- Cirrus SR22 and Vision SF50 (phase L.2) --------------------------------
+# The SR22's boost pump: -1 PRIME, 0 OFF, 1 BOOST (xlua SR22.systems).
+SR22_BOOST = Knob(
+    "laminar/sr22/switch/boost_pump",
+    "laminar/sr22/switch/boost_pump_dn",
+    "laminar/sr22/switch/boost_pump_up",
+    -1,
+    1,
+)
+SR22_PLANS: Plans = _frozen(
+    {
+        "fuel:left": _frozen({"on": (SR22_BOOST.at(1),), "off": (SR22_BOOST.at(0),)}),
+        # Its TKS fluid system (wings, tail and prop) is the wing anti-ice.
+        "ice:wing": _on_off(
+            "laminar/sr22/switch/ice_protect",
+            "laminar/sr22/switch/ice_protect_on",
+            "laminar/sr22/switch/ice_protect_off",
+        ),
+    }
+)
+# The SF50 has no fuel pump switch: its pump follows the ignition knob
+# (xlua sf50_ignition), so "fuel pumps off" would be the engine's fuel.
+SF50_PLANS: Plans = _frozen({"fuel:left": None, "fuel:right": None})
+
+# --- What an aircraft's cockpit shows (phase L.2) ---------------------------
+# A switch is clicked in an aircraft's cockpit objects or driven by its
+# scripts, so their .obj and .lua files name its command or dataref. Where no
+# such file names any of these, the aircraft has no such switch: Vimaan says
+# so instead of setting X-Plane's value for a switch that isn't there (the
+# C172's seat belt sign, the SR22's taxi light). Checked against the Tier 3
+# findings (X-Plane 12.4.4, 2026-11-21): on the four proven aircraft the
+# switches this finds missing are the ones their overrides already leave out.
+# The .acf isn't read: it names every system (its electrical loads).
+SHOWN_BY: Mapping[str, tuple[bytes, ...]] = _frozen(
+    {
+        "light:landing": (b"landing_light", b"landing_0"),
+        "light:taxi": (b"taxi_light",),
+        "light:beacon": (b"beacon_light", b"beacon_on"),
+        "light:strobe": (b"strobe_light",),
+        "light:nav": (b"nav_light", b"navigation_light"),
+        "sign:seat belt": (b"seatbelt", b"seat_belt"),
+        "sign:no smoking": (b"no_smoking",),
+        "yaw_damper": (b"yaw_damp",),
+        "ice:pitot": (b"pitot_heat",),
+        "ice:window": (b"window_heat",),
+        "ice:wing": (b"wing_heat", b"surfce_heat", b"wing_boot", b"surface_boot"),
+        "ice:engine": (b"inlet_heat", b"anti_ice_engine"),
+        "ice:prop": (b"prop_heat",),
+        "power:avionics": (b"avionics_on", b"avionics_off", b"avionics_power", b"avionics_tog"),
+        "fuel:left": (b"fuel_pump",),
+        "fuel:right": (b"fuel_pump",),
+        "autobrake": (b"auto_brake", b"autobrake", b"brakes_up_auto"),
+    }
+)
+
 
 def settings_of(overrides: Plans, key: str) -> tuple[str, ...]:
     """The settings switch ``key`` has here, in a stable order."""
@@ -706,20 +966,20 @@ def settings_of(overrides: Plans, key: str) -> tuple[str, ...]:
     return tuple(s for s in order if table and s in table)
 
 
-# Per-engine (or per-generator) datarefs, "name[i]": a step for engine i is
-# dropped on an aircraft with fewer engines.
+# Per-engine and per-generator datarefs, "name[i]": a step for engine (or
+# generator) i is dropped on an aircraft with fewer. Generators are counted on
+# their own: the SR22 and SF50 have two on their one engine.
 _ENGINE_INDEXED = re.compile(r"(per_engine|fuel_pump_on|generator_on)\[(\d+)\]$")
 
 
-def for_engines(plan: Plan, engines: int | None) -> Plan:
-    if not engines:
-        return plan
+def for_engines(plan: Plan, engines: int | None, generators: int | None = None) -> Plan:
     out = []
     for step in plan:
         m = next(
             (_ENGINE_INDEXED.search(n) for n in names(step) if _ENGINE_INDEXED.search(n)), None
         )
-        if m is None or int(m.group(2)) < engines:
+        count = (generators or engines) if m and m.group(1) == "generator_on" else engines
+        if m is None or not count or int(m.group(2)) < count:
             out.append(step)
     return tuple(out)
 
