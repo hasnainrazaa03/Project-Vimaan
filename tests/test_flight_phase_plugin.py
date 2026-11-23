@@ -189,3 +189,30 @@ def test_the_report_lists_the_callouts_said(sim):
     plugin.XPluginStop()
     text = test_plugin._report_module().report(plugin.tel.events_path)
     assert "callouts: Speed 2x (first t=" in text
+
+
+def test_fixed_gear_is_recorded_as_no_gear_so_level_flight_is_not_an_approach(sim):
+    # The C172 and SR22 (fixed gear) read as on an approach in level flight
+    # below 2,500 ft: the gear, always down, counted as set up to land (L.2.3).
+    _, plugin, xp, clock = sim
+    xp.datarefs["sim/aircraft/gear/acf_gear_retract"] = 0
+    test_plugin.load_aircraft(plugin, xp, 1)  # a piston single
+    plugin.samples_at_start = len(events(plugin, "flight"))
+    flying(xp, 1300.0)
+    seconds(plugin, clock, 6)
+    flight = samples(plugin)
+    assert flight[-1]["gear"] is None and flight[-1]["phase"] == "cruise"
+    xp.datarefs["sim/cockpit2/controls/flap_handle_request_ratio"] = 0.33  # flaps still count
+    seconds(plugin, clock, 5)
+    assert samples(plugin)[-1]["phase"] == "approach"
+
+
+def test_retractable_gear_down_still_counts_as_set_up_to_land(sim):
+    _, plugin, xp, clock = sim
+    xp.datarefs["sim/aircraft/gear/acf_gear_retract"] = 1
+    test_plugin.load_aircraft(plugin, xp, 1)
+    plugin.samples_at_start = len(events(plugin, "flight"))
+    flying(xp, 1300.0)
+    seconds(plugin, clock, 6)
+    flight = samples(plugin)
+    assert flight[-1]["gear"] == 1.0 and flight[-1]["phase"] == "approach"

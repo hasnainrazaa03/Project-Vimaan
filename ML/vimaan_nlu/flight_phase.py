@@ -14,7 +14,7 @@ On the ground: ``parked`` (not moving), ``taxi``, ``takeoff_roll`` (fast,
 not after a landing), ``rollout`` (fast, after a landing). In the air:
 ``initial_climb`` (from liftoff to 1,000 ft above the ground), ``climb``,
 ``cruise`` (level), ``descent``, ``approach`` (low with gear or flaps out,
-or low and still coming down from a descent), ``landing`` (the last 100 ft,
+or low and still coming down from a descent; fixed gear doesn't count), ``landing`` (the last 100 ft,
 after an approach),
 ``go_around`` (climbing away from an approach or a landing below 1,000 ft
 above the ground, until 1,000 ft; higher up it is a climb; configured and
@@ -75,7 +75,9 @@ class FlightSample:
     gs_kt: float | None = None  # ground speed
     ias_kt: float | None = None
     vs_fpm: float | None = None  # + is up
-    gear: float | None = None  # deploy ratio, 0 up .. 1 down (fixed gear: 1)
+    # Deploy ratio, 0 up .. 1 down. Fixed gear: None (always down, it doesn't
+    # say the aircraft is set up to land; the plugin records it so).
+    gear: float | None = None
     flaps: float | None = None  # flap handle ratio, 0 up .. 1 full
     altitude_ft: float | None = None  # indicated, for the log only
 
