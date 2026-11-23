@@ -172,6 +172,17 @@ SLOT_VALIDATORS: Mapping[str, Range | Enum | AnyOf | Digits] = MappingProxyType(
         "altitude_change": Range(100, 5000, step=100),
         "speed_change": Range(1, 50, exact=True),
         "compass": Enum(("north", "east", "south", "west")),
+        # Phase L.4: the checklists.
+        "checklist": Enum(
+            (
+                "before takeoff",
+                "after takeoff",
+                "approach",
+                "before landing",
+                "after landing",
+                "shutdown",
+            )
+        ),
     }
 )
 
@@ -587,6 +598,66 @@ COMMANDS: tuple[Command, ...] = (
         bindings=(
             "sim/cockpit2/autopilot/heading_dial_deg_mag_pilot",
             "sim/cockpit2/autopilot/heading_status",
+        ),
+    ),
+    # Phase L.4: a checklist, read and checked against the sim (the plugin's
+    # _run_checklist). Its phrasings use only words the grammar has, plus the
+    # four L.4.2 measured: checklist, before, after, takeoff ("run", "do" and
+    # "read" are not in the grammar; "do" is left out on purpose).
+    Command(
+        intent="run_checklist",
+        display="Checklist",
+        templates=(
+            "{checklist} checklist",
+            "{checklist} checklist please",
+            "{checklist} checklist now",
+            "start the {checklist} checklist",
+            "start {checklist} checklist",
+            "start the {checklist} checklist please",
+            "please start the {checklist} checklist",
+            "the {checklist} checklist",
+            "the {checklist} checklist please",
+            "give me the {checklist} checklist",
+            "give me {checklist} checklist",
+            "can we start the {checklist} checklist",
+            "can we have the {checklist} checklist",
+            "time for the {checklist} checklist",
+            "time for {checklist} checklist",
+            "checklist {checklist}",
+            "checklist {checklist} please",
+            "now the {checklist} checklist",
+            "get the {checklist} checklist",
+            "set up the {checklist} checklist",
+        ),
+        slots=_frozen(
+            {
+                "checklist": _choice(
+                    {
+                        "before takeoff": (),
+                        "after takeoff": (),
+                        "approach": (),
+                        "before landing": (),
+                        "after landing": (),
+                        "shutdown": (),
+                    }
+                )
+            }
+        ),
+        required=("checklist",),
+        # "checklist" is in no other command: without it, nothing to run.
+        command_words=frozenset({"checklist"}),
+        handler="_run_checklist",
+        self_test="before landing checklist",
+        # What its items read (and offer to set, through these commands).
+        bindings=(
+            "sim/cockpit2/controls/gear_handle_down",
+            "sim/cockpit2/controls/flap_handle_request_ratio",
+            "sim/cockpit2/switches/landing_lights_on",
+            "sim/cockpit2/switches/strobe_lights_on",
+            "sim/cockpit2/switches/auto_brake_level",
+            "sim/cockpit2/controls/speedbrake_ratio",
+            "sim/flightmodel/controls/parkbrake",
+            "sim/cockpit2/radios/actuators/transponder_mode",
         ),
     ),
     Command(

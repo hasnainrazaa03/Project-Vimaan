@@ -231,7 +231,26 @@ GOLD_L1 = [
     ("descend and maintain four thousand", "set_autopilot_altitude", {"altitude": "4000"}),
     ("speed up to two five zero knots", "set_autopilot_speed", {"speed": "250"}),
 ]
-GOLD = GOLD + GOLD_TIER1 + GOLD_TIER2 + GOLD_TIER3 + GOLD_L1
+# Phase L.4: the checklists. Written 2026-11-22, before any v28 result.
+# "approach checklist" is the one v27 acted on wrongly (approach mode).
+GOLD_L4 = [
+    ("before takeoff checklist", "run_checklist", {"checklist": "before takeoff"}),
+    ("after takeoff checklist", "run_checklist", {"checklist": "after takeoff"}),
+    ("approach checklist", "run_checklist", {"checklist": "approach"}),
+    ("before landing checklist please", "run_checklist", {"checklist": "before landing"}),
+    ("after landing checklist", "run_checklist", {"checklist": "after landing"}),
+    ("shutdown checklist", "run_checklist", {"checklist": "shutdown"}),
+    ("start the approach checklist", "run_checklist", {"checklist": "approach"}),
+    ("give me the before landing checklist", "run_checklist", {"checklist": "before landing"}),
+    ("time for the shutdown checklist", "run_checklist", {"checklist": "shutdown"}),
+    ("checklist after takeoff", "run_checklist", {"checklist": "after takeoff"}),
+    ("can we have the after landing checklist", "run_checklist", {"checklist": "after landing"}),
+    ("before takeoff checklist now", "run_checklist", {"checklist": "before takeoff"}),
+    # Still what they were.
+    ("approach mode on", "set_autopilot_mode", {"mode": "approach", "state": "on"}),
+    ("parking brake off", "toggle_parking_brake", {"state": "off"}),
+]
+GOLD = GOLD + GOLD_TIER1 + GOLD_TIER2 + GOLD_TIER3 + GOLD_L1 + GOLD_L4
 
 # Bare numbers and fragments must never be acted on (scripts/model_gate.py
 # checks these through the plugin's decision rules).
@@ -251,6 +270,12 @@ MUST_NOT_ACT = [
     "left",
     "another thousand",
     "more",
+    # Phase L.4: a checklist word or name alone names nothing to run.
+    "checklist",
+    "before landing",
+    "after takeoff",
+    "takeoff",
+    "before",
 ]
 
 
@@ -281,6 +306,8 @@ def test_gold_intent_and_slots(gold_model, text, intent, slots):
         pytest.skip("the installed model predates Tier 3")
     if (text, intent, slots) in GOLD_L1 and "turn_by" not in known:
         pytest.skip("the installed model predates relative commands (phase L.1)")
+    if (text, intent, slots) in GOLD_L4 and "run_checklist" not in known:
+        pytest.skip("the installed model predates checklists (phase L.4)")
 
     r = predict(
         text,

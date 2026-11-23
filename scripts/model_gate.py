@@ -152,6 +152,9 @@ def decide(p: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
         return no("question")  # checked before the model's answer, as in the plugin
     if p.get("two_commands"):
         return no("two_commands")  # the plugin's L.3.1 refusal: neither is done
+    words = (p.get("original_text") or "").lower().split()
+    if "checklist" in words and intent != "run_checklist":
+        return no("checklist_misread")  # the plugin's L.4 guard
     if p["confidence"] < CONFIDENCE_FLOOR:
         return no("low_confidence")
     if cmd is None or not cmd.actionable:

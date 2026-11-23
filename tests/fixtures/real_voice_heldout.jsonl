@@ -46,7 +46,7 @@
 {"clip": "20261116_205022_c0059.wav", "said": "okay seatbelt sign off", "heard": "seatbelt sign off", "intent": "toggle_signs", "slots": {"sign": "seat belt", "switch": "off"}}
 {"clip": "20261116_205022_c0060.wav", "said": "can you turn on the logo lights", "heard": "can you turn on the logo lights", "intent": "toggle_lights", "slots": {"light": "logo", "switch": "on"}}
 {"clip": "20261116_205022_c0061.wav", "said": "turn off the logo lights", "heard": "turn off the logo lights", "intent": "toggle_lights", "slots": {"light": "logo", "switch": "off"}}
-{"clip": "20261116_205022_c0062.wav", "said": "ah let's just try to set the auto brake to three", "heard": "are lights status strobe two set the auto brake two three", "intent": "set_autobrake", "slots": {"autobrake_level": "3"}}
+{"clip": "20261116_205022_c0062.wav", "said": "ah let's just try to set the auto brake to three", "heard": "r lights status strobe two set the auto brake two three", "intent": "set_autobrake", "slots": {"autobrake_level": "3"}}
 {"clip": "20261116_205022_c0063.wav", "said": "can you please arm the speed brakes", "heard": "can you please armed speed brakes", "intent": "set_speed_brake", "slots": {"speedbrake": "armed"}}
 {"clip": "20261116_205022_c0064.wav", "said": "let's just take care of the taxi lights taxi lights on please", "heard": "have the taxi lights taxi lights on please", "intent": "toggle_lights", "slots": {"light": "taxi", "switch": "on"}}
 {"clip": "20261116_205022_c0065.wav", "said": "okay set com one standby to one two two decimal eight", "heard": "set com one standby two one two two decimal eight", "intent": "set_com_standby", "slots": {"com_port": "1", "frequency": "122.8"}}

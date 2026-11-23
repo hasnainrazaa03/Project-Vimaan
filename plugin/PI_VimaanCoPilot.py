@@ -1405,6 +1405,22 @@ class PythonInterface:
                 self._say(TWO_COMMANDS_REPLY)
                 return
 
+            # Phase L.4: "checklist" is in no other command. Read as another
+            # one, it is refused: v27 armed approach mode on "approach
+            # checklist" (it predates checklists).
+            if "checklist" in text.lower().split() and intent_pred != "run_checklist":
+                outcome = "rejected"
+                self.tel.event(
+                    "implausible", cmd=cmd, reason="checklist_misread", intent=intent_pred
+                )
+                known = self._model_intents
+                self._say(
+                    "Checklists need a newer model"
+                    if known is not None and "run_checklist" not in known
+                    else "Which checklist?"
+                )
+                return
+
             # A number on its own ("one thousand") names no command: it can
             # only be the answer to an open "to or two?" question.
             if bare_number(text) is not None:
@@ -3716,6 +3732,12 @@ class PythonInterface:
         )
         self._say(f"{name} {'on' if want_on else 'off'}")
         return "executed"
+
+    def _run_checklist(self, slots, intent):
+        """Phase L.4: a checklist read and checked against the sim. The
+        engine comes in L.4.5; until then the command is known and refused."""
+        self._say("Checklists aren't ready yet")
+        return "rejected"
 
     def _toggle_autothrottle(self, slots, intent):
         state = slots.get("state")

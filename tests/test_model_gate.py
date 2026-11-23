@@ -270,3 +270,11 @@ def test_gate_counts_two_commands_as_refused():
     assert model_gate.decide(p)[0] == "two_commands"
     p["two_commands"] = None
     assert model_gate.decide(p)[0] == "act"
+
+
+def test_gate_refuses_a_checklist_read_as_another_command():
+    # Phase L.4: as the plugin ("approach checklist" read as approach mode).
+    p = _p("set_autopilot_mode", {"mode": "approach"}, "approach checklist")
+    assert model_gate.decide(p)[0] == "checklist_misread"
+    p = _p("run_checklist", {"checklist": "approach"}, "approach checklist")
+    assert model_gate.decide(p)[0] == "act"
