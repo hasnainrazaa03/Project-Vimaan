@@ -1017,11 +1017,10 @@ def test_jets_use_their_autothrottle_and_pistons_the_runners_throttle(aircraft):
 
 def test_every_aircraft_flies_every_flight():
     # 2026-11-19: igniters (King Air), the APU first (jets), FADEC (A330).
-    # Phase L.2: the three new jets' engine starts aren't profiled yet.
+    # Phase L.2: the three new jets' starts profiled (2026-11-22).
     for flight in flights.FLIGHTS:
         for a in flights.PLANES:
-            blocked = flight == "restart" and a in ("citx", "md82", "sf50")
-            assert (flights.cannot_fly(flight, a) != "") is blocked, (flight, a)
+            assert flights.cannot_fly(flight, a) == "", (flight, a)
 
 
 def test_the_restart_shuts_down_starts_and_takes_off():

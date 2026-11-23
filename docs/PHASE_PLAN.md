@@ -1627,7 +1627,12 @@ designs come later in this document.
   - First the default aircraft not yet profiled (the Cessna 172, Cirrus
     SR22, Citation X, MD-82 and others).
   - Then the add-ons, once they are installed: the Zibo 737 (free) and
-    ToLiss A3xx (paid; the owner decides). Neither is installed now.
+    ToLiss A3xx (paid; the owner decides). The Zibo was started on
+    2026-11-22 and parked by the owner until the existing aircraft are
+    production ready (branch `feat/zibo`, `docs/ZIBO_NOTES.md` there).
+  - Engine starts on the Citation X, MD-82 and SF50 (2026-11-22): their
+    restart flight was blocked as not profiled. Each start was found by hand
+    and profiled (`docs/AIRCRAFT_PROFILES.md`, "Per-aircraft start steps").
   - The owner approved the default list on 2026-11-21: Cessna 172, Cirrus
     SR22, Citation X, MD-82 and Vision SF50. Free add-ons are installed;
     paid ones are skipped.

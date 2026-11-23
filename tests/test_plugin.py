@@ -3938,6 +3938,143 @@ def test_a_jet_with_no_starting_air_starts_its_apu_first(sim):
     assert [e["result"] for e in events(plugin, "apu_start_end")] == ["running"]
 
 
+# L.2 jet starts (flown by hand 2026-11-22).
+CITX_APU = (
+    "laminar/CitX/APU/master_switch_toggle",
+    "laminar/CitX/APU/starter_switch_up",
+    "laminar/CitX/APU/bleed_switch_up",
+)
+CITX_MASTER = "laminar/CitX/APU/master_switch_term"
+
+
+@pytest.mark.parametrize(("master", "pressed"), [(1.0, False), (0.0, True)])
+def test_the_citation_x_starts_its_apu_master_only_when_off(sim, master, pressed):
+    # A running start leaves its APU master on, and a press turns it off.
+    _, plugin, xp = sim
+    load_aircraft(plugin, xp, 7, commands=CITX_APU)
+    assert "citx_engines" in plugin.profile.overrides
+    _air(xp, 0.17)
+    xp.datarefs.update({APU_N1: 0.0, APU_RUNNING: 0, CITX_MASTER: master})
+    xp.datarefs["laminar/CitX/APU/bleed_air_switch_term"] = 0
+    say(plugin, "start both engines", "toggle_engine", {"state": "on", "instance": "both"})
+    for _ in range(3):
+        plugin._flight_loop()
+    assert (CITX_APU[0] in xp.commands_fired) is pressed
+    assert CITX_APU[1] in xp.held  # its starter switch, held until the APU runs
+    xp.datarefs[APU_RUNNING] = 1
+    plugin._flight_loop()
+    assert CITX_APU[1] not in xp.held
+    xp.datarefs[APU_N1] = 100.0
+    plugin._flight_loop()
+    plugin._flight_loop()
+    assert CITX_APU[2] in xp.commands_fired  # its bleed switch up
+    _air(xp, 1.5)
+    plugin._flight_loop()
+    assert STARTER_1 in xp.held  # then Vimaan's usual start, on the APU's air
+
+
+MD82_ENGINES = (
+    "laminar/md82cmd/bleedair/APU_dwn",
+    "laminar/md82cmd/electrical/cross_tie_APU_L",
+    "laminar/md82cmd/electrical/cross_tie_APU_R",
+)
+
+
+def test_the_md82_powers_its_buses_from_the_apu_before_its_starters(sim, monkeypatch):
+    # Without the APU's bus ties its starter had no power and turned nothing.
+    module, plugin, xp = sim
+    clock = [100.0]
+    monkeypatch.setattr(module.time, "perf_counter", lambda: clock[0])
+    load_aircraft(plugin, xp, 7, commands=MD82_ENGINES)
+    assert "md82_engines" in plugin.profile.overrides
+    _air(xp, 0.0)
+    xp.datarefs.update({APU_N1: 0.0, APU_RUNNING: 0})
+    xp.datarefs["laminar/md82/electrical/cross_tie_APU_L"] = 0
+    xp.datarefs["laminar/md82/electrical/cross_tie_APU_R"] = 1  # already tied
+    say(plugin, "start both engines", "toggle_engine", {"state": "on", "instance": "both"})
+    plugin._flight_loop()
+    assert "sim/fuel/fuel_pump_1_on" in xp.held  # its APU starts only with the pump spinning
+    clock[0] += 2.0
+    plugin._flight_loop()
+    plugin._flight_loop()
+    assert "sim/electrical/APU_start" in xp.held
+    xp.datarefs[APU_N1] = 80.0
+    plugin._flight_loop()
+    assert "sim/electrical/APU_start" in xp.held  # held to 95 %
+    xp.datarefs[APU_N1] = 96.0
+    for _ in range(3):
+        plugin._flight_loop()
+    assert "sim/electrical/APU_start" not in xp.held
+    assert MD82_ENGINES[1] in xp.commands_fired  # the left tie, off: pressed
+    assert MD82_ENGINES[2] not in xp.commands_fired  # the right, already on
+    plugin._flight_loop()
+    assert MD82_ENGINES[0] in xp.commands_fired  # its APU bleed
+
+
+SF50 = (
+    "laminar/SF50/ignition_up",
+    "laminar/SF50/ignition_down",
+    "laminar/SF50/eng_start_stop_toggle",
+)
+
+
+@pytest.fixture
+def sf50(sim, monkeypatch):
+    module, plugin, xp = sim
+    clock = [100.0]
+    monkeypatch.setattr(module.time, "perf_counter", lambda: clock[0])
+    load_aircraft(plugin, xp, 7, commands=SF50)
+    xp.datarefs["sim/aircraft/engine/acf_num_engines"] = 1
+    assert "sf50_engine" in plugin.profile.overrides
+    return plugin, xp, clock
+
+
+def test_the_sf50_shuts_down_with_its_own_knob_and_button(sf50):
+    # Its script restarted the engine X-Plane shut down (still 56 % N2).
+    plugin, xp, _ = sf50
+    xp.datarefs[RUNNING][0] = 1
+    assert say(plugin, "engine off", "toggle_engine", {"state": "off"}) == [
+        "Engine 1 shutting down"
+    ]
+    assert xp.commands_fired == [SF50[1], SF50[2]]  # knob down, then START/STOP
+
+
+def test_the_sf50_starts_once_it_has_wound_down(sf50):
+    plugin, xp, clock = sf50
+    xp.datarefs[RUNNING][0] = 0
+    xp.datarefs[N2][0] = 20.0  # still winding down: its START waits for 9 %
+    spoken = say(plugin, "engine on", "toggle_engine", {"state": "on"})
+    assert spoken == ["Starting engine 1 once it has wound down"]
+    assert say(plugin, "engine on", "toggle_engine", {"state": "on"}) == [
+        "Engine 1 already starting"
+    ]
+    clock[0] += 1.0
+    plugin._flight_loop()
+    assert xp.commands_fired == []
+    xp.datarefs[N2][0] = 8.0
+    clock[0] += 1.0
+    plugin._flight_loop()
+    assert xp.commands_fired == [SF50[0], SF50[2]]  # knob up, then START/STOP
+    assert xp.spoken[-1] == "Starting engine 1"
+    xp.datarefs[N2][0], xp.datarefs[RUNNING][0] = 56.0, 1
+    for _ in range(3):
+        clock[0] += 1.0
+        plugin._flight_loop()
+    assert xp.spoken[-1] == "Engine 1 running" and xp.held == set()
+
+
+def test_an_sf50_that_never_winds_down_is_said(sf50):
+    plugin, xp, clock = sf50
+    xp.datarefs[RUNNING][0] = 0
+    xp.datarefs[N2][0] = 30.0
+    say(plugin, "engine on", "toggle_engine", {"state": "on"})
+    for _ in range(62):
+        clock[0] += 1.0
+        plugin._flight_loop()
+    assert xp.spoken[-1] == "Engine 1 is still winding down. Try again shortly."
+    assert xp.commands_fired == [] and not plugin._winding
+
+
 def test_an_apu_that_never_starts_is_said_and_let_go(sim, monkeypatch):
     module, plugin, xp = sim
     load_aircraft(plugin, xp, 7, commands=(APU_SWITCH,))

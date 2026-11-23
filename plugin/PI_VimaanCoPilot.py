@@ -159,6 +159,9 @@ STARTER_MAX_CRANK_SEC = 20.0
 TURBINE_MAX_CRANK_SEC = 60.0
 FUEL_ON_AT_PCT = {"jet": 20.0, "turboprop": 13.0}
 STARTER_CUTOUT_PCT = 50.0
+# An engine whose START works only once its core has wound down (the SF50's,
+# below 9 % N2: about 20 s after a shutdown) is waited for this long.
+WIND_DOWN_MAX_SEC = 60.0
 CORE_SPEED = {
     "jet": "sim/cockpit2/engine/indicators/N2_percent",
     "turboprop": "sim/cockpit2/engine/indicators/N1_percent",
@@ -654,6 +657,7 @@ class PythonInterface:
         # Deferred main-thread work: dataref read-backs and starter cranks.
         self._verifications: list[dict[str, Any]] = []
         self._cranks: dict[str, dict[str, Any]] = {}
+        self._winding: set[str] = set()  # engines waiting to wind down to start
         self._apu: dict[str, Any] | None = None  # an APU start for a jet's engines
         self._crossfeed_restore: list[str] = []  # commands to put back once the engines run
         self._follow_ups: list[dict[str, Any]] = []
@@ -5027,6 +5031,21 @@ class PythonInterface:
             if running == 0:
                 self._say(f"{label} already off")
                 return "no_op"
+            stop = self._engine_steps(eng, "stop")
+            if stop:
+                # The aircraft's own buttons (the SF50's ignition knob and
+                # START/STOP: its script restarted an engine X-Plane shut down).
+                if not all(self._fire_command(c) for c in stop):
+                    self._say(f"Cannot shut down {label}")
+                    return "failed"
+                self._expect(
+                    label,
+                    lambda: self._read_array(DREF_ENGINE_RUNNING, eng["index"]),
+                    0,
+                    delay=5.0,
+                )
+                self._say(f"{label} shutting down")
+                return "executed"
             # The aircraft's own fuel cutoff when it has one (the 737's
             # condition levers: X-Plane's shut-down command left it running).
             role_cmd = self.profile.command(f"fuel_off_{eng['index'] + 1}")
@@ -5046,7 +5065,7 @@ class PythonInterface:
         if running == 1:
             self._say(f"{label} already running")
             return "no_op"
-        if label in self._cranks:
+        if label in self._cranks or label in self._winding:
             self._say(f"{label} already starting")
             return "no_op"
         kind = self.profile.engine_start
@@ -5059,6 +5078,8 @@ class PythonInterface:
             # nothing with its battery off).
             self._say(f"No electrical power to start {label.lower()}. Battery on first.")
             return "rejected"
+        if self._engine_steps(eng, "start"):
+            return self._stepped_start(eng)
         if self._apu is not None:  # an APU start is under way: this engine waits for it
             if eng not in self._apu["engines"]:
                 self._apu["engines"].append(eng)
@@ -5192,6 +5213,14 @@ class PythonInterface:
             if step[0] == "once":
                 self._fire_command(step[1])
                 return
+            if step[0] == "once_unless":
+                # A toggle pressed only when not on already: the Citation X's
+                # APU master is on at a running start, and a press turns it off.
+                _, state, value, command = step
+                current = self._read_number(state)
+                if current is None or current < value:
+                    self._fire_command(command)
+                return
             ref = xp.findCommand(step[1])
             if not ref:
                 self._end_apu("command_not_found")
@@ -5235,6 +5264,53 @@ class PythonInterface:
             sec=round(time.perf_counter() - a["started"], 1),
             apu_n1=self._read_float(DREF_APU_N1),
         )
+
+    def _engine_steps(self, eng, kind):
+        """The aircraft's own commands to start or stop this engine (Override
+        setting "engine_steps": {"1": {"start": (...), "stop": (...)}}), or ()."""
+        steps = self.profile.settings.get("engine_steps") or {}
+        return tuple((steps.get(str(eng["index"] + 1)) or {}).get(kind) or ())
+
+    def _stepped_start(self, eng, deadline=None):
+        """Start with the aircraft's own buttons, then watch the core as its
+        engine control starts it (the SF50: ignition up, then START/STOP).
+        Its START works only once the core is below "start_below_pct" (9 %
+        on the SF50): until then this waits, once a second."""
+        label = eng["label"]
+        below = self.profile.settings.get("start_below_pct")
+        core = self._read_array(CORE_SPEED["jet"], eng["index"], True)
+        now = time.perf_counter()
+        if below is not None and core is not None and core >= below:
+            first = deadline is None
+            deadline = deadline if deadline is not None else now + WIND_DOWN_MAX_SEC
+            if now > deadline:
+                self._winding.discard(label)
+                self._say(f"{label} is still winding down. Try again shortly.")
+                return "failed"
+            self._winding.add(label)
+            self._later(1.0, lambda: self._stepped_start(eng, deadline))
+            if first:
+                self._say(f"Starting {label.lower()} once it has wound down")
+            return "pending"
+        self._winding.discard(label)
+        if not all(self._fire_command(c) for c in self._engine_steps(eng, "start")):
+            self._say(f"Cannot start {label}")
+            return "failed"
+        self._cranks[label] = {
+            "cmd": self._current_cmd,
+            "ref": None,
+            "fadec": True,
+            "started": now,
+            "kind": "jet",
+            "max_sec": FADEC_MAX_SEC,
+            "fuel_on": True,  # its engine control adds the fuel
+            "peak_pct": 0.0,
+            **eng,
+        }
+        self._cranks[label]["start_pct"] = core or 0.0
+        self.tel.event("crank_begin", cmd=self._current_cmd, engine=label, start_type="steps")
+        self._say(f"Starting {label.lower()}")
+        return "pending"
 
     def _fadec_start(self, eng):
         """The A330: the engine mode selector to IGN/START, the engine's

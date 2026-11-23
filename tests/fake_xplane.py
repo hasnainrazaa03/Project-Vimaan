@@ -284,6 +284,10 @@ KNOWN_COMMANDS = {
     "sim/bleed_air/apu_toggle",
     "sim/electrical/battery_1_on",
     "sim/electrical/battery_2_on",
+    # The MD-82's APU start (its script replaces it) and fuel pump 1: both
+    # real X-Plane 12.4 commands (looked up in the running sim, 2026-11-22).
+    "sim/electrical/APU_start",
+    "sim/fuel/fuel_pump_1_on",
     "sim/starters/shut_down_1",
     "sim/starters/shut_down_2",
     # Autopilot modes and the rest of the probe's standard controls.
