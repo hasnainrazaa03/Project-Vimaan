@@ -65,7 +65,7 @@ if _ML_PATH not in sys.path:
 
 # Only light, stdlib-backed modules load into X-Plane; the heavy ones live in
 # the worker process.
-from vimaan_nlu import answers, probe, sim_bridge, switches  # noqa: E402
+from vimaan_nlu import answers, checklists, probe, sim_bridge, switches  # noqa: E402
 from vimaan_nlu.aircraft import (  # noqa: E402
     AircraftInfo,
     absent_switches,
@@ -262,6 +262,11 @@ AUTOBRAKE_AIRBUS = {
 }
 # Delay before reading back a dataref a command or write should have changed.
 VERIFY_DELAY_SEC = 1.0
+# Phase L.4: a checklist item set on "confirm" is done once its switch steps
+# and read-backs are, waited for at most this long.
+CHECKLIST_SETTLE_MAX_SEC = 10.0
+# A checklist suggested while Vimaan is speaking waits at most this long.
+SUGGEST_WAIT_SEC = 10.0
 # After a target or radio is set, record the aircraft this many seconds later:
 # a changed target is not the same as an aircraft that followed it.
 FOLLOW_UP_SEC = (0.0, 10.0, 30.0)
@@ -686,6 +691,17 @@ class PythonInterface:
         # VIMAAN_CALLOUTS=1 or switched on with vimaan/toggle_callouts.
         self._callouts_enabled = os.environ.get("VIMAAN_CALLOUTS") == "1"
         self.callouts = Callouts()
+        # Phase L.4 checklists: the one being read (vimaan_nlu.checklists), and
+        # the suggestion at a phase change, opt-in like the callouts: off
+        # unless VIMAAN_CHECKLISTS=1 or switched on with its command.
+        self._checklist: dict[str, Any] | None = None
+        self._suggested: dict[str, Any] | None = None  # {"name", "expires"}
+        self._suggest_due: dict[str, Any] | None = None  # to say once Vimaan is quiet
+        # When what Vimaan said should be over (a guess from its length): a
+        # checklist never talks over a read-back, an answer or a callout.
+        self._speaking_until = 0.0
+        self._suggest_checklists = os.environ.get("VIMAAN_CHECKLISTS") == "1"
+        self.suggestions = checklists.Suggestions()
         # Whether the loaded aircraft's own files use an autothrottle:
         # (acf path, True/False/None), scanned off the main thread.
         self._athr_scan: tuple[str, bool | None] | None = None
@@ -860,6 +876,11 @@ class PythonInterface:
             "vimaan/toggle_callouts",
             "Vimaan: callouts on/off (speed, limit speeds, gear)",
             self._on_callouts_cmd,
+        )
+        self._register_command(
+            "vimaan/toggle_checklist_suggestions",
+            "Vimaan: checklists suggested at phase changes on/off",
+            self._on_checklist_suggestions_cmd,
         )
         self._hook_off_commands()
         self._start_overlay()
@@ -1183,6 +1204,7 @@ class PythonInterface:
             self._service_cranks()
             self._service_apu()
             self._service_deferred()
+            self._service_checklist()
             self._service_baro_step()
             self._service_knob_step()
             self._service_heading_step()
@@ -1784,6 +1806,11 @@ class PythonInterface:
         held = self._held if self._confirm_gate.pending_token() else None
         if reply == "override":
             if held is None:
+                # L.4: "confirm" to a checklist's offer or suggestion. A hold
+                # is always the newer question: an offer waits while one is.
+                outcome = self._checklist_confirm(cmd)
+                if outcome is not None:
+                    return outcome
                 self.tel.event("override_ignored", cmd=cmd, reason="nothing_held")
                 self._say("Nothing to override")
                 return "rejected"
@@ -1810,6 +1837,20 @@ class PythonInterface:
             self._end_capture(False, "cancelled", speak=False)
         if self._question is not None and time.perf_counter() < self._question["expires"]:
             dropped.append(self._question["intent"])
+        # L.4: with nothing held, "cancel" declines the checklist's offer (the
+        # item is left open and the checklist goes on) or stops the checklist.
+        stop = False
+        run = self._checklist
+        if held is None and run is not None:
+            if run["offer"] is not None and not run["offer"]["answered"]:
+                run["offer"]["answered"] = True
+                dropped.append("checklist offer")
+            else:
+                stop = True
+                dropped.append("checklist")
+        if self._suggested is not None:
+            dropped.append("checklist suggestion")
+            self._suggested = None
         self._confirm_gate.clear()
         self._held = None
         self._question = None
@@ -1817,6 +1858,10 @@ class PythonInterface:
             self._say("Nothing to cancel")
             return "no_op"
         self.tel.event("cancelled", cmd=cmd, dropped=dropped)
+        if stop:
+            self._end_checklist("cancelled", speak=False)
+            self._say("Checklist cancelled")
+            return "cancelled"
         self._say("Cancelled")
         return "cancelled"
 
@@ -1955,6 +2000,8 @@ class PythonInterface:
         of the overlay's view of the last voice command."""
         extra = {"origin": origin} if origin else {}
         self.tel.event("speak", logging.DEBUG, cmd=self._current_cmd, text=text, **extra)
+        now = time.perf_counter()
+        self._speaking_until = max(self._speaking_until, now) + checklists.speaking_sec(text)
         xp.speakString(text)
 
     @staticmethod
@@ -2172,11 +2219,7 @@ class PythonInterface:
             self._say("Test bridge on" if on else "Test bridge off")
         if not on:
             return
-        # A command still has work due: read-backs, or a deferred step (the
-        # 737's autothrottle engages after its arm switch).
-        checking = {v["cmd"] for v in self._verifications} | {d["cmd"] for d in self._deferred}
-        steps = (self._baro_step, self._knob_step, self._heading_step)
-        checking |= {j["cmd"] for j in steps if j is not None}
+        checking = self._commands_working()
         for result in self._say_results.finished(now, checking):
             sim_bridge.write_json(outbox / f"{result['id']}.json", result)
         for req in sim_bridge.take_requests(inbox):
@@ -2252,6 +2295,14 @@ class PythonInterface:
             xp.scheduleFlightLoop(self._flight_loop_id, -1.0, 1)
         return None
 
+    def _commands_working(self):
+        """The commands with work still due: read-backs, a deferred step (the
+        737's autothrottle engages after its arm switch), a knob or switch
+        being stepped."""
+        working = {v["cmd"] for v in self._verifications} | {d["cmd"] for d in self._deferred}
+        steps = (self._baro_step, self._knob_step, self._heading_step)
+        return working | {j["cmd"] for j in steps if j is not None}
+
     def _bridge_command(self, name, phase):
         """A command from the bridge counts as the pilot's, not Vimaan's."""
         ref = xp.findCommand(name)
@@ -2267,6 +2318,10 @@ class PythonInterface:
         Recorded, so a replay starts again at the same point."""
         self.phase.reset()
         self.callouts.reset()
+        self.suggestions.reset()
+        self._suggested = None
+        if self._checklist is not None:
+            self._end_checklist("new_flight", speak=False)
         self._flight_settle = FLIGHT_SETTLE_SAMPLES
         self.tel.record("flight_reset")
 
@@ -2318,6 +2373,7 @@ class PythonInterface:
                     margins=fields["margins"],
                 )
                 self._say(SAID[key])
+        self._suggest_checklist(sample)  # L.4: said only when switched on
 
     def _limits(self):
         """The loaded aircraft's speed limits (vimaan_nlu.envelope). The
@@ -3647,6 +3703,14 @@ class PythonInterface:
             self._say(f"Vimaan callouts {'on' if self._callouts_enabled else 'off'}")
         return 1
 
+    def _on_checklist_suggestions_cmd(self, cmd_ref, phase, refcon):
+        if phase == xp.CommandBegin:
+            self._suggest_checklists = not self._suggest_checklists
+            self._suggested = None
+            self.tel.event("checklist_suggestions_setting", enabled=self._suggest_checklists)
+            self._say(f"Checklist suggestions {'on' if self._suggest_checklists else 'off'}")
+        return 1
+
     def _later(self, delay, action):
         self._deferred.append(
             {"due": time.perf_counter() + delay, "action": action, "cmd": self._current_cmd}
@@ -3733,11 +3797,340 @@ class PythonInterface:
         self._say(f"{name} {'on' if want_on else 'off'}")
         return "executed"
 
+    # ------------------------------------------------------------------
+    # Phase L.4: checklists (vimaan_nlu.checklists)
+    # ------------------------------------------------------------------
     def _run_checklist(self, slots, intent):
-        """Phase L.4: a checklist read and checked against the sim. The
-        engine comes in L.4.5; until then the command is known and refused."""
-        self._say("Checklists aren't ready yet")
-        return "rejected"
+        """A checklist read out and checked against the sim, item by item
+        (_service_checklist). Asked again, or another one, starts afresh."""
+        name = slots.get("checklist")
+        if name not in checklists.CHECKLISTS:
+            self._say("Which checklist?")
+            return "rejected"
+        if self._checklist is not None:
+            self._end_checklist("replaced", speak=False)
+        items: list[checklists.Item] = []
+        skipped: list[checklists.Item] = []
+        for item in checklists.CHECKLISTS[name]:
+            if self._checklist_for_kind(item):
+                (items if self._checklist_has(item) else skipped).append(item)
+        self._suggested = None
+        self.suggestions.ran(name)
+        words = checklists.title(name)
+        now = time.perf_counter()
+        self._checklist = {
+            "name": name,
+            "cmd": self._current_cmd,
+            "items": items,
+            "i": 0,
+            "open": [],
+            "offer": None,
+            "next_at": now + checklists.speaking_sec(words),
+        }
+        self.tel.event(
+            "checklist_start",
+            cmd=self._current_cmd,
+            checklist=name,
+            items=[i.name for i in items],
+            skipped=[i.name for i in skipped],
+        )
+        self._say(words)
+        return "executed"
+
+    def _checklist_for_kind(self, item):
+        """Whether ``item`` is for this kind of aircraft (jet or prop)."""
+        jet = self.profile.info.engine_kind == "jet"
+        return not item.only or item.only == ("jet" if jet else "prop")
+
+    def _checklist_has(self, item):
+        """Whether the aircraft has what ``item`` checks. Skipped where its
+        command would say "This aircraft has no ...": fixed gear, no auto
+        brake, no speed brakes (or none that arm), no such switch."""
+        reads = item.reads
+        if reads == "gear":
+            return self._read_int(DREF_GEAR_RETRACTABLE) != 0
+        if reads == "switch":
+            return self._switch_now(item.keys) != "absent"
+        if reads == "auto_brake":
+            return (
+                bool(self.profile.settings.get("autobrake_off"))
+                or self.profile.switch_plan("autobrake", "off")[0] != "absent"
+            )
+        if reads == "speed_brake":
+            if self._read_int(switches.HAS_SPEEDBRAKE) == 0:
+                return False
+            return all(self.profile.switch_plan("speed_brake", s)[0] == "ok" for s in item.want)
+        return True
+
+    def _engines_running(self):
+        """Each engine's running flag (None where it can't be read)."""
+        return [
+            None if (r := self._read_array(DREF_ENGINE_RUNNING, i)) is None else bool(r)
+            for i in range(self._engine_count())
+        ]
+
+    def _checklist_read(self, item):
+        """(state, words): the item's state as vimaan_nlu.checklists.READS
+        names it (None when it can't be read), and as said ("Gear down")."""
+        reads = item.reads
+        if reads == "flaps":
+            detents = self.profile.info.flap_detents
+            ratio = self._read_float(DREF_FLAP_HANDLE)
+            if not detents or ratio is None:
+                return None, ""
+            notch = int(round(ratio * detents))
+            return ("up", "first", "out")[min(notch, 2)], self._flap_words()
+        if reads == "gear":
+            words = self._gear_words()
+            return {"Gear down": "down", "Gear up": "up"}.get(words, "moving"), words
+        if reads == "switch":
+            now = self._switch_now(item.keys)
+            if now in (None, "absent"):
+                return None, ""
+            return now, self._switch_words(item.label, item.keys)
+        if reads == "transponder":
+            mode = self._transponder_mode()
+            if mode is None:
+                return None, ""
+            return {"altitude": "alt"}.get(mode, mode), f"Transponder {mode}"
+        if reads == "auto_brake":
+            setting = AUTOBRAKE_LEVELS.get(self._read_int(switches.AUTOBRAKE))
+            if setting is None:
+                return None, ""
+            airbus = self.profile.settings.get("autobrake_off")
+            return (
+                setting,
+                f"Auto brake {(AUTOBRAKE_AIRBUS if airbus else AUTOBRAKE_SPOKEN)[setting]}",
+            )
+        if reads == "speed_brake":
+            now = self._switch_now(["speed_brake"])
+            if now not in SPEEDBRAKE_SPOKEN:
+                return None, ""
+            return now, SPEEDBRAKE_SPOKEN[now].replace("Speed brake", "Speed brakes")
+        if reads == "autopilot":
+            on = self._read_int(AUTOPILOT_STATE["servos_on"])
+            if on is None:
+                return None, ""
+            return ("on", "Autopilot on") if on else ("off", "Autopilot off")
+        if reads == "parking_brake":
+            ratio = self._read_float(DREF_PARKING_BRAKE)
+            if ratio is None:
+                return None, ""
+            return (
+                ("set", "Parking brake set")
+                if ratio > 0.5
+                else ("released", "Parking brake released")
+            )
+        if reads == "engines":
+            running = self._engines_running()
+            if None in running:
+                return None, ""
+            if len(running) == 1:
+                words = "Engine running" if running[0] else "Engine off"
+            else:
+                words = (
+                    "Engines off" if not any(running) else answers.engines_running(running, None)
+                )
+            return ("running" if any(running) else "off"), words
+        return None, ""
+
+    def _checklist_offer(self, item):
+        """The command that sets a wrong item on this aircraft, as (intent,
+        slots, the offer as asked), or None when it can't take it here."""
+        intent, slots, ask = item.offer[0], dict(item.offer[1]), item.ask
+        if intent == "set_autobrake":
+            setting = self._autobrake_setting(slots)
+            airbus = self.profile.settings.get("autobrake_off")
+            if not (setting == "off" and airbus):
+                if self.profile.switch_plan("autobrake", setting)[0] != "ok":
+                    return None  # a jet's auto brake without RTO, or without "1"
+            ask = f"Set auto brake {(AUTOBRAKE_AIRBUS if airbus else AUTOBRAKE_SPOKEN)[setting]}"
+        elif intent == "toggle_engine" and self._engine_count() < 2:
+            slots.pop("instance", None)
+            ask = "Shut down the engine"
+        return intent, slots, ask
+
+    def _service_checklist(self):
+        """The next item of the running checklist once the last one is said.
+        Never over the pilot or a safety hold; an offer waits for its answer."""
+        now = time.perf_counter()
+        suggested = self._suggested
+        if suggested is not None and self._active is None and now >= suggested["expires"]:
+            self._suggested = None
+            self.tel.event("checklist_suggestion_expired", checklist=suggested["name"])
+        quiet = now >= self._speaking_until
+        due = self._suggest_due
+        if due is not None and (quiet or now >= due["by"]):
+            self._suggest_due = None
+            if quiet and self._checklist is None and self._active is None:
+                self._say_suggestion(due["name"])
+        run = self._checklist
+        if run is None:
+            return
+        if self._active is not None or self._confirm_gate.pending_token() is not None:
+            return  # the pilot talking, or a hold waiting for its answer
+        previous, self._current_cmd = self._current_cmd, run["cmd"]
+        try:
+            if run["offer"] is not None and not self._offer_resolved(run, now):
+                return
+            if now < run["next_at"] or now < self._speaking_until:
+                return  # its last item, or anything else Vimaan is saying
+            if run["i"] >= len(run["items"]):
+                self._end_checklist("done")
+                return
+            item = run["items"][run["i"]]
+            run["i"] += 1
+            self._check_item(run, item, now)
+        except Exception as exc:  # a bad read must not leave it running
+            self.tel.error("checklist_error", exc, cmd=run["cmd"], checklist=run["name"])
+            self._end_checklist("error", speak=False)
+        finally:
+            self._current_cmd = previous
+
+    def _check_item(self, run, item, now):
+        state, words = self._checklist_read(item)
+        engines = item.after_engines and any(r is not False for r in self._engines_running())
+        result = checklists.check(item, state, words, engines_running=engines)
+        offer = self._checklist_offer(item) if result.offer is not None else None
+        said = result.said
+        if offer is not None:
+            said = checklists.offer_words(words, offer[2])
+        elif result.offer is not None:
+            said = words  # wrong, and this aircraft can't take the offer
+        self.tel.event(
+            "checklist_item",
+            checklist=run["name"],
+            item=item.name,
+            state=state,
+            result="checked" if result.ok else ("offered" if offer else "open"),
+            said=said,
+        )
+        self._say(said)
+        run["next_at"] = now + checklists.speaking_sec(said)
+        if offer is not None:
+            run["offer"] = {
+                "item": item,
+                "intent": offer[0],
+                "slots": offer[1],
+                "t": now,
+                "expires": run["next_at"] + checklists.OFFER_WAIT_SEC,
+                "answered": False,
+                "outcome": None,
+            }
+        elif not result.ok:
+            run["open"].append(item.name)
+
+    def _offer_resolved(self, run, now):
+        """Whether the open offer is settled: set ("confirm", or the pilot
+        said the command), or left open (cancelled, another command ran, or
+        no answer in time). A hold on the offered command is waited out."""
+        offer = run["offer"]
+        last = self._last_action or {}
+        acted = bool(last) and last["t"] >= offer["t"]
+        if (acted and last["intent"] == offer["intent"]) or offer["outcome"] in (
+            "executed",
+            "pending",
+            "no_op",
+        ):
+            result = "set"
+            # Its own switch steps and read-back first ("Landing lights on").
+            by = last["cmd"] if acted else offer.get("cmd")
+            offer.setdefault("t_set", now)
+            if by in self._commands_working() and now < offer["t_set"] + CHECKLIST_SETTLE_MAX_SEC:
+                return False
+        elif acted or offer["answered"] or now >= offer["expires"]:
+            result = "open"
+        else:
+            return False
+        run["offer"] = None
+        if result == "open":
+            run["open"].append(offer["item"].name)
+        self.tel.event(
+            "checklist_offer",
+            checklist=run["name"],
+            item=offer["item"].name,
+            result=result,
+            answered=offer["answered"],
+            outcome=offer["outcome"],
+        )
+        return True
+
+    def _checklist_confirm(self, cmd):
+        """ "Confirm" to the checklist's open offer (its command through
+        _dispatch: the aircraft check and the safety rules too) or to a
+        suggested checklist. None when neither is open."""
+        run = self._checklist
+        offer = run["offer"] if run is not None else None
+        if run is not None and offer is not None and not offer["answered"]:
+            offer["answered"] = True
+            self.tel.event(
+                "checklist_confirmed",
+                cmd=cmd,
+                checklist=run["name"],
+                item=offer["item"].name,
+                intent=offer["intent"],
+                slots=dict(offer["slots"]),
+            )
+            offer["cmd"] = cmd
+            outcome = self._dispatch(cmd, offer["intent"], dict(offer["slots"]))
+            offer["outcome"] = outcome
+            return outcome
+        suggested, self._suggested = self._suggested, None
+        if suggested is not None:
+            self.tel.event("checklist_suggestion_taken", cmd=cmd, checklist=suggested["name"])
+            return self._dispatch(cmd, "run_checklist", {"checklist": suggested["name"]})
+        return None
+
+    def _end_checklist(self, reason, speak=True):
+        run, self._checklist = self._checklist, None
+        if run is None:
+            return
+        left = list(run["open"])
+        if run["offer"] is not None:
+            left.append(run["offer"]["item"].name)
+        self.tel.event(
+            "checklist_end",
+            cmd=run["cmd"],
+            checklist=run["name"],
+            reason=reason,
+            open=left,
+            read=run["i"],
+            items=len(run["items"]),
+        )
+        if speak:
+            self._say(checklists.summary(run["name"], left))
+
+    def _suggest_checklist(self, sample):
+        """A checklist due at this phase change (vimaan_nlu.checklists
+        .Suggestions), tracked always and said only when switched on."""
+        running = self._engines_running()
+        engines = None if None in running else any(running)
+        name = self.suggestions.update(self.phase.phase, engines, sample.gear)
+        if name is None or not self._suggest_checklists:
+            return
+        busy = (
+            self._checklist is not None
+            or self._active is not None
+            or self._confirm_gate.pending_token() is not None
+        )
+        self.tel.event("checklist_suggested", checklist=name, phase=self.phase.phase, said=not busy)
+        if busy:
+            return
+        now = time.perf_counter()
+        if now < self._speaking_until:  # a callout first: said once it is over
+            self._suggest_due = {"name": name, "by": now + SUGGEST_WAIT_SEC}
+            return
+        self._say_suggestion(name)
+
+    def _say_suggestion(self, name):
+        words = checklists.suggestion_words(name)
+        self._suggested = {
+            "name": name,
+            "expires": time.perf_counter()
+            + checklists.speaking_sec(words)
+            + checklists.OFFER_WAIT_SEC,
+        }
+        self._say(words)
 
     def _toggle_autothrottle(self, slots, intent):
         state = slots.get("state")
@@ -4284,10 +4677,11 @@ class PythonInterface:
             which if which in ("active", "standby") else None,
         )
 
-    def _answer_transponder(self, slots, text):
+    def _transponder_mode(self):
+        """The transponder's mode as said ("altitude"), or None."""
         knobs = self.profile.settings.get("xpdr_knobs")
         if knobs:  # the 737's and A330's own selectors
-            mode = next(
+            return next(
                 (
                     XPDR_SPOKEN[value]
                     for value, steps in knobs.items()
@@ -4295,9 +4689,10 @@ class PythonInterface:
                 ),
                 None,
             )
-        else:
-            mode = XPDR_MODE_SPOKEN.get(self._read_int(DREF_XPDR_MODE))
-        return answers.transponder(self._read_int(DREF_XPDR_CODE), mode)
+        return XPDR_MODE_SPOKEN.get(self._read_int(DREF_XPDR_MODE))
+
+    def _answer_transponder(self, slots, text):
+        return answers.transponder(self._read_int(DREF_XPDR_CODE), self._transponder_mode())
 
     def _answer_autopilot(self, slots, text):
         ap = "sim/cockpit2/autopilot/"

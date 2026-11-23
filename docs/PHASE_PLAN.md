@@ -1772,7 +1772,8 @@ designs come later in this document.
     together with v28.
   - [x] L.4.3 The checklist command, data v20, gold (2026-11-22).
   - [ ] L.4.4 v28 (v27's recipe), gated once against v27; the gates unchanged.
-  - [ ] L.4.5 The plugin: the checklist engine, offers, opt-in suggestions.
+  - [x] L.4.5 The plugin: the checklist engine, offers, opt-in suggestions
+    (2026-11-22). Installed only together with v28.
   - [ ] L.4.6 Checklists in the sim on the nine aircraft.
 - [ ] **L.5 Wake word:** hands-free, offline, a licence-clean model. The two
   talk keys stay.
@@ -1850,6 +1851,52 @@ the engine (L.4.5), says "Checklists aren't ready yet".
   were ("approach mode on", "parking brake off"), and 5 fragments that must
   not act ("checklist", "before landing", "after takeoff", "takeoff",
   "before").
+
+**L.4.5 The checklist engine (2026-11-22).** The lists, the check of each
+item, its words and the suggestions are `vimaan_nlu/checklists.py` (pure
+Python); the plugin reads the sim and dispatches the offers.
+
+- **Read item by item:** each one once the last is said, and never over the
+  pilot talking, a safety hold waiting for its answer, or anything else
+  Vimaan is saying (a read-back, an answer, a callout: each line's length is
+  guessed at 0.42 s a word plus 0.9 s, since X-Plane does not say when it is
+  done). "Gear down, checked"; "Flaps up. Not set for landing" (checked
+  only); "I can't read the autopilot" (left open); then "Before landing
+  checklist complete", or "... done, 2 items open: flaps and landing lights".
+- **Offers:** "Landing lights off. Set landing lights on? Say confirm, or
+  cancel." "Confirm" sends the command through the usual dispatch, so the
+  aircraft check and the safety rules apply: "Raise the gear?" confirmed on
+  the ground gets the gear-up hold, and the checklist waits for "override"
+  or "cancel". The next item waits for the command's own switch steps and
+  read-back (at most 10 s). The pilot saying the command themselves sets it
+  too; another command, "cancel" or no answer within 12 s leaves it open.
+- **"Cancel"** with an offer open declines it (the item stays open, the
+  checklist goes on); between items it stops the checklist ("Checklist
+  cancelled"). A hold is always the newer question: "confirm" and "cancel"
+  answer it first.
+- **Skipped** where the item's own command would say "This aircraft has no
+  ...": fixed gear, no auto brake (props), no speed brakes, speed brakes that
+  don't arm, a switch the aircraft lacks (the A330's yaw damper).
+- **Words the table left open:** jets' takeoff flaps offer the first notch
+  ("flaps down" from up); the approach auto brake offers "one" (the A330's
+  "low"); RTO before takeoff is offered where the aircraft has it, and any
+  setting passes; fuel pumps on "auto" count as on; the beacon on with the
+  engines running is "on, until the engines are off" (open, not offered).
+- **Suggestions (opt-in, `vimaan/toggle_checklist_suggestions` or
+  `VIMAAN_CHECKLISTS=1`):** at the phase changes in the table, "Before
+  takeoff checklist? Say confirm, or cancel."; "confirm" starts it. Each once
+  until the flight comes round to it again (a takeoff or go-around for the
+  ones after it, a landing or an engine start for before takeoff); never
+  after the pilot ran it, over a running checklist, or on the first phase
+  seen after a load or air start (no "approach" on an air start on final).
+  One due while Vimaan speaks waits for it, at most 10 s. Fixed gear has no
+  gear coming down, so no "before landing" suggestion (asked for, it runs).
+- **Tests:** `tests/test_checklists.py` (the lists against the approved
+  table, every offer a command the plugin takes, the words, the suggestions
+  over whole flights with a go-around) and `tests/test_checklists_plugin.py`
+  (the fake sim: confirm, cancel, no answer, a hold waited out, an
+  override, the 737's first notch and RTO, the A330's "low", skips,
+  shutdown with the engines running, suggestions).
 
 ### L.3 Two commands in one breath
 
