@@ -87,8 +87,8 @@ SETUPS: dict[str, Setup] = {
         levers=0.53,
         athr_on_from=0,
     ),
-    # Phase L.2: the default aircraft not yet profiled. Not in FLEET ("all")
-    # until their checklists pass.
+    # Phase L.2: the five default aircraft profiled after the first four
+    # (NEW), in FLEET since their checklists passed (L.2.3).
     "c172": Setup(
         "C172",
         6000,
@@ -153,10 +153,11 @@ SETUPS: dict[str, Setup] = {
         nav_source=True,
     ),
 }
-# The aircraft every checklist passes on: "all" in the runner.
-FLEET = ("baron", "kingair", "737", "a330")
-# Phase L.2's aircraft, "new" in the runner.
+# Phase L.2's aircraft, "new" in the runner: every checklist and flight
+# passed on them by 2026-11-22 (L.2.3).
 NEW = ("c172", "sr22", "citx", "md82", "sf50")
+# The aircraft every checklist passes on: "all" in the runner.
+FLEET = ("baron", "kingair", "737", "a330", *NEW)
 
 
 def _faster_than_vfe(want: bool, vfe_full: float | None) -> SimCheck:

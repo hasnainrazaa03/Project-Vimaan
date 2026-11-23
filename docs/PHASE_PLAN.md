@@ -1659,8 +1659,8 @@ designs come later in this document.
       passed, its own A/T switch included.
     - With 15 s for the air start to settle before the first command: MD-82
       33/33.
-  - [ ] L.2.3 Tiers 2–4, the relative checklist and the flights on the five;
-    then they join "all".
+  - [x] L.2.3 Tiers 2–4, the relative checklist and the flights on the five;
+    then they join "all". **Done 2026-11-22: the five are in "all".**
     - First run by text (2026-11-21, #96's code installed), before this
       step's fixes:
 
@@ -1731,6 +1731,26 @@ designs come later in this document.
       sink shorter than the dwell keeps it. The flight is a replay fixture
       (`tests/fixtures/flights/md82_balloon_on_the_glideslope.jsonl`); the
       other 14 replay as before. Owner's OK 2026-11-22.
+    - **The flights on the five** (2026-11-22, #98 and #99 installed, by
+      text), the last run of each:
+
+      | Aircraft | Takeoff | Landing | Go-around | Restart |
+      | --- | --- | --- | --- | --- |
+      | C172 | 25/25 | 24/24 | 26/26 | 29/29 |
+      | SR22 | 25/25 | 25/25 | 27/27 | 29/29 |
+      | Citation X | 32/32 | 30/30 | 33/33 | not yet (engine start) |
+      | MD-82 | 33/33 | 32/32 | 33/33 | not yet |
+      | SF50 | 30/30 | 18/20: crashed | 31/31 | not yet |
+
+      The SF50's landing passed 28/28 earlier the same day; in the last run
+      it porpoised on the glideslope (the runner's throttle hold against its
+      autopilot) and hit short. Most of the day's failures were the runner
+      learning to fly these aircraft (`docs/IN_SIM_TESTING.md`, "The five L.2
+      aircraft"): the rudder on the takeoff roll, climb rates, approach
+      starts, flap settings. Found in Vimaan: the phase tracker's balloon
+      (#99); still open, for the owner: fixed gear counts as configured (low
+      level flight in a C172 reads as an approach), and an "approach" said
+      right after tuning the ILS never arms the C172's glideslope, unsaid.
 - [ ] **L.3 Two commands in one breath:** "heading two seven zero, climb five
   thousand". Each part is read back and goes through the same rules.
 - [ ] **L.4 Checklists:** read out, and each item checked against the sim.

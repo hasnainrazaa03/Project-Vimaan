@@ -122,6 +122,28 @@ def read(name: str) -> Any:
     return _get(f"/datarefs/{_id('datarefs', name)}/value")["data"]
 
 
+def dataref_id(name: str) -> int:
+    """A dataref's id in this X-Plane session (ids change when it restarts)."""
+    return _id("datarefs", name)
+
+
+def read_id(ref: int) -> Any:
+    """A dataref's value by its id: no lookup, for a fast loop."""
+    return _get(f"/datarefs/{ref}/value")["data"]
+
+
+def write_id(ref: int, value: Any) -> None:
+    """Set a dataref by its id, straight through X-Plane's web API (not
+    Vimaan's bridge): the runner's own controls, in a fast loop."""
+    req = urllib.request.Request(
+        f"{API}/datarefs/{ref}/value",
+        data=json.dumps({"data": value}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="PATCH",
+    )
+    urllib.request.urlopen(req, timeout=5).close()
+
+
 def air_start_body(
     aircraft: str, lat: float, lon: float, alt_ft: float, hdg_true: float, kt: float
 ) -> dict[str, Any]:
