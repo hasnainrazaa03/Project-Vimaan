@@ -1765,8 +1765,63 @@ designs come later in this document.
   - [ ] L.3.2 Both done, each read back and through its own rules, on the
     same detector (owner: later).
 - [ ] **L.4 Checklists:** read out, and each item checked against the sim.
+  Design and results: "L.4 Checklists", below.
+  - [x] L.4.1 Design, the owner's decisions and the checklists, approved
+    (2026-11-22).
+  - [x] L.4.2 Grammar: four new words, measured (2026-11-22). Installed only
+    together with v28.
+  - [ ] L.4.3 The checklist command, data v20, gold.
+  - [ ] L.4.4 v28 (v27's recipe), gated once against v27; the gates unchanged.
+  - [ ] L.4.5 The plugin: the checklist engine, offers, opt-in suggestions.
+  - [ ] L.4.6 Checklists in the sim on the nine aircraft.
 - [ ] **L.5 Wake word:** hands-free, offline, a licence-clean model. The two
   talk keys stay.
+
+### L.4 Checklists
+
+Started 2026-11-22. **Owner decisions (2026-11-22):**
+
+1. Vimaan reads each item, checks it in the sim and says the result ("Gear
+   down, checked"), moving on by itself, then sums up what is open.
+2. A wrong item: Vimaan offers to set it ("Set landing lights on? Say confirm
+   or cancel"), and on "confirm" sets it through the usual handler and safety
+   rules.
+3. A checklist starts when the pilot asks; also suggested at phase changes,
+   opt-in like the callouts.
+4. The model learns the checklist commands (data v20, v28), not a word rule.
+
+**The checklists (approved 2026-11-22).** Vimaan's own wording, generic,
+only items it can read; an item an aircraft lacks is skipped (fixed gear, no
+autobrake, one engine). "Offers" = sets it on "confirm".
+
+| Checklist | Items: checked (offered if wrong) | Suggested at (opt-in) |
+| --- | --- | --- |
+| Before takeoff | flaps set for takeoff (jets: out, offers the first notch; props: up or first notch, check only); transponder altitude reporting; landing lights on; strobes on; autobrake RTO or set (jets with one); speed brakes retracted; fuel pumps on; seat belt signs on; yaw damper on (if fitted); autopilot off | starting to taxi after an engine start |
+| After takeoff | gear up (retractable); flaps up (the "flaps up when slow" hold still applies); autobrake off | climbing through 1,000 ft |
+| Approach | seat belt signs on; landing lights on; autobrake set for landing (jets; offers its lowest setting) | entering the approach phase |
+| Before landing | gear down; flaps out for landing (check only); speed brakes armed (jets that can arm); landing lights on | gear down on the approach |
+| After landing | speed brakes retracted; flaps up; autobrake off; strobes off; landing lights off; taxi lights on | slowing to taxi speed after landing |
+| Shutdown | parking brake set; engines off; beacon off (once the engines are off); fuel pumps off; seat belt signs off; taxi and landing lights off | parked after landing, engines running |
+
+"Cancel" stops a running checklist. Offers use the words Vimaan already
+hears ("confirm", "cancel"); "yes" is not in the grammar.
+
+**L.4.2 The grammar grows by four words** (checklist, before, after,
+takeoff; "landing", "approach", "shutdown" and "taxi" are in it already).
+Measured as for L.1 (`~/Vimaan_Logs/measuring/l4`):
+
+| Check | Result |
+| --- | --- |
+| Speech Commands (CC BY 4.0), 300 clips of each of its 35 words | command words heard exactly 4,974 before, 4,971 after; a new word heard 5 times in 10,500 ("four" as "before" once, "backward" as "after" once, "visual" as "before" 3 times); "off" never as "takeoff" |
+| The owner's 118 clips, re-heard | 5 differently: "autopilot new on" now "autopilot two on" (right); two "parking brake off" clips that already failed ("parking the more" or nothing, "parking brake request") now "parking takeoff", and Vimaan asks on or off; two garbled ones still garbled. The one heard right stays right: no right lost |
+| The 57 held-out clips | 1 garbled clip garbled differently |
+| The names as joined lines ("before takeoff checklist") instead of four words | no better: "parking takeoff" still heard (the words are heard alone by backoff) |
+
+**v27 must not hear these words.** Typed, "approach checklist" arms approach
+mode with v27 (the rest are no command). So the grammar is installed only
+together with v28, which knows the checklist commands. The real-voice
+fixtures are re-heard with the new grammar in L.4.3, and gate 4 compares v27
+and v28 on those.
 
 ### L.3 Two commands in one breath
 
