@@ -47,6 +47,7 @@ from typing import Any
 from vimaan_nlu.ambiguity import to_reading
 from vimaan_nlu.audio_health import is_silent, rms_from_pcm16
 from vimaan_nlu.commands import command
+from vimaan_nlu.multi import two_commands
 from vimaan_nlu.questions import looks_like_question
 from vimaan_nlu.usage import USAGE_SEC, UsageSampler
 
@@ -511,6 +512,14 @@ class VoiceWorker:
         except Exception as exc:
             meant = None
             self.send({"type": "log", "msg": f"to_reading failed: {type(exc).__name__}: {exc}"})
+        # Two commands in one breath (phase L.3.1, vimaan_nlu.multi): the
+        # plugin refuses them. A second look only: if it fails, the command
+        # goes as heard.
+        try:
+            two = two_commands(text, self.predict_text, whole_reading=p)
+        except Exception as exc:
+            two = None
+            self.send({"type": "log", "msg": f"two_commands failed: {type(exc).__name__}: {exc}"})
         question = None
         if self.predict_question is not None:
             # A second look only: if it fails, the command model's reading stands.
@@ -538,6 +547,7 @@ class VoiceWorker:
                 "confidence": p["confidence"],
                 "slots": p["slots"],
                 "to_reading": meant,
+                "two_commands": two,
                 "ask": ask,
                 # What the command grammar heard, when the question grammar's
                 # transcript replaced it.

@@ -140,10 +140,13 @@ def sim(monkeypatch, tmp_path):
     plugin.XPluginStop()
 
 
-def say(plugin, text, intent=None, slots=None, conf=0.99, to_reading=None, ask=False):
+def say(
+    plugin, text, intent=None, slots=None, conf=0.99, to_reading=None, ask=False, two_commands=None
+):
     """Dispatch a prediction as if the worker had just returned it.
     ``to_reading``: what the worker found with one "two" read as "to";
-    ``ask``: said on the question key."""
+    ``ask``: said on the question key; ``two_commands``: the two parts the
+    worker found (phase L.3.1)."""
     if intent is not None:
         NLU[text] = (intent, slots or {}, conf)
     xp_spoken_before = len(sys.modules["XPPython3"].xp.spoken)
@@ -153,7 +156,13 @@ def say(plugin, text, intent=None, slots=None, conf=0.99, to_reading=None, ask=F
         {
             "cmd": "c9999",
             "text": text,
-            "prediction": {**p, "nlu_ms": 5.0, "normalized": text, "to_reading": to_reading},
+            "prediction": {
+                **p,
+                "nlu_ms": 5.0,
+                "normalized": text,
+                "to_reading": to_reading,
+                "two_commands": two_commands,
+            },
             "t_press": now,
             "t_release": now,
             "ask": ask,
@@ -4745,3 +4754,34 @@ def test_a_gfc700_autopilot_turns_its_heading_knob(sim):
     # Another autopilot type writes the bug, as before.
     xp.datarefs["sim/aircraft/autopilot/preconfigured_ap_type"] = 3
     assert not load_aircraft(plugin, xp, 7).heading_by_knob
+
+
+# ---------------------------------------------------------------------------
+# Phase L.3.1: two commands in one breath are refused
+# ---------------------------------------------------------------------------
+def test_two_commands_in_one_breath_do_neither(sim):
+    # v27 read "gear down flaps fifteen" as flaps 15 alone: the gear stayed up.
+    _, plugin, xp = sim
+    parts = [
+        {"text": "gear down", "intent": "toggle_landing_gear", "slots": {"state": "down"}},
+        {"text": "flaps fifteen", "intent": "set_flaps", "slots": {"flap_setting": "15"}},
+    ]
+    spoken = say(
+        plugin,
+        "gear down flaps fifteen",
+        "set_flaps",
+        {"position": "down", "flap_setting": "15"},
+        two_commands=parts,
+    )
+    assert spoken == ["One command at a time"]
+    assert xp.commands_fired == [] and xp.writes == []
+    e = [r for r in events(plugin, "implausible") if r["reason"] == "two_commands"][-1]
+    assert [p["intent"] for p in e["parts"]] == ["toggle_landing_gear", "set_flaps"]
+
+
+def test_one_command_is_unchanged(sim):
+    _, plugin, xp = sim
+    # The fake sim's gear is down already: the usual answer, not a refusal.
+    assert say(plugin, "gear down", "toggle_landing_gear", {"state": "down"}) == [
+        "Gear already down"
+    ]

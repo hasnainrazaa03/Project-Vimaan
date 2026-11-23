@@ -261,3 +261,12 @@ def test_gate_scores_a_relative_command():
     )
     north = _p("set_compass_heading", {"compass": "west"}, "turn west twenty")
     assert model_gate.decision(north) == ("compass_conflict", {})
+
+
+def test_gate_counts_two_commands_as_refused():
+    # Phase L.3.1: as the plugin, neither part is acted on.
+    p = _p("set_flaps", {"flap_setting": "15"}, "gear down flaps fifteen")
+    p["two_commands"] = [{"text": "gear down"}, {"text": "flaps fifteen"}]
+    assert model_gate.decide(p)[0] == "two_commands"
+    p["two_commands"] = None
+    assert model_gate.decide(p)[0] == "act"
