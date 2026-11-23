@@ -820,12 +820,14 @@ def test_the_n1_step_catches_an_engine_reading_the_plugin_doesnt_know(monkeypatc
 
 
 def test_every_question_family_is_asked_on_every_aircraft():
-    for aircraft in FLEET:  # L.2 aircraft have no Tier 4 setup yet
+    from simtest.tier1 import SETUPS
+
+    for aircraft in FLEET:
         steps = tier4.steps(aircraft)
         names = {s.name for s in steps}
         for family, asked in tier4.FAMILIES.items():
             assert names & set(asked), (aircraft, family)
-        assert ("mach" in names) == (aircraft in ("737", "a330"))
+        assert ("mach" in names) == SETUPS[aircraft].jet
         for s in steps:
             if s.outcomes == ("answered",):
                 assert s.no_actions and (s.answer is not None or s.reply), s.name
@@ -994,14 +996,16 @@ def test_each_flight_checks_its_phases_in_order(aircraft):
 
 @pytest.mark.parametrize("aircraft", list(flights.PLANES))
 def test_jets_use_their_autothrottle_and_pistons_the_runners_throttle(aircraft):
-    jet = flights.PLANES[aircraft].jet
+    # An autothrottle flies the speed (737, A330, MD-82); otherwise the
+    # runner's throttle hold (the pistons, the Citation X and SF50).
+    jet = flights.PLANES[aircraft].autothrottle
     steps = flights.landing(aircraft, flights.new_hands(aircraft))
     said = [s.say for s in steps if s.say]
     held = [s.pilot.__name__ for s in steps if s.pilot is not None]
     assert ("auto throttle on" in said) is jet
     assert ("auto throttle off" in said) is jet  # before touchdown: thrust off
     assert any(h.startswith("speed hold") for h in held) is not jet
-    assert "idle and brakes" in held
+    assert "idle, brakes and rudder" in held
     # Thrust off from 50 ft on every aircraft: a speed held into the flare
     # floats it along the runway (the 737 at 145 kt, the Baron 30 s at 3 ft).
     names = [s.name for s in steps]
@@ -1013,8 +1017,11 @@ def test_jets_use_their_autothrottle_and_pistons_the_runners_throttle(aircraft):
 
 def test_every_aircraft_flies_every_flight():
     # 2026-11-19: igniters (King Air), the APU first (jets), FADEC (A330).
+    # Phase L.2: the three new jets' engine starts aren't profiled yet.
     for flight in flights.FLIGHTS:
-        assert all(flights.cannot_fly(flight, a) == "" for a in flights.PLANES)
+        for a in flights.PLANES:
+            blocked = flight == "restart" and a in ("citx", "md82", "sf50")
+            assert (flights.cannot_fly(flight, a) != "") is blocked, (flight, a)
 
 
 def test_the_restart_shuts_down_starts_and_takes_off():
@@ -1127,7 +1134,7 @@ def test_the_speed_brake_is_held_on_the_takeoff_roll_then_cancelled(aircraft):
     steps = flights.takeoff(aircraft, flights.new_hands(aircraft))
     names = [s.name for s in steps]
     held = "speed brake on the takeoff roll is held"
-    assert (held in names) is flights.PLANES[aircraft].jet  # the pistons have none
+    assert (held in names) is flights.PLANES[aircraft].speed_brakes
     if held not in names:
         return
     vr = next(n for n in names if n.startswith("accelerate to Vr"))
@@ -1146,6 +1153,9 @@ def test_gear_up_on_the_approach_is_held_then_cancelled(flight, aircraft):
     steps = flight(aircraft, flights.new_hands(aircraft))
     names = [s.name for s in steps]
     held = "gear up on approach is held"
+    if not flights.PLANES[aircraft].retractable_gear:
+        assert held not in names and "gear down" not in names  # fixed gear
+        return
     assert names.index("approach") < names.index(held)  # in the phase first
     assert _named(steps, held).reply == "Confirm gear up, on approach"
     cancel = steps[names.index(held) + 1]
@@ -1161,9 +1171,10 @@ def test_flaps_up_when_slow_is_flown_where_the_final_is_slow_enough(aircraft):
     steps = flights.landing(aircraft, flights.new_hands(aircraft))
     names = [s.name for s in steps]
     held = "flaps up when slow is held"
-    # The jets fly their finals within 10 kt of the clean stall speed in
-    # their files (737 145 / 139, A330 150 / 175); the pistons' are faster.
-    assert (held in names) is (aircraft in ("737", "a330"))
+    # The airliners fly their finals within 10 kt of the clean stall speed in
+    # their files (737 145 / 139, A330 150 / 175, MD-82 145 / 150, Citation X
+    # 140 / 135); the others' are faster.
+    assert (held in names) is (aircraft in ("737", "a330", "md82", "citx"))
     if held not in names:
         return
     step = _named(steps, held)
@@ -1332,9 +1343,11 @@ from simtest import record  # noqa: E402
 def test_record_lists_each_phrase_of_a_checklist_once():
     said = record.phrases("relative", list(FLEET))
     words = [p for p, _ in said]
-    assert len(words) == len(set(words)) == 22
+    assert len(words) == len(set(words)) == 24
     assert words[:4] == ["autopilot on", "heading mode", "altitude hold", "heading one eight zero"]
     assert {"one two zero", "two thousand", "mach point seven eight"} <= set(words)  # answers, jets
+    # The L.2 jets add the SF50's Mach and the Citation X's speed.
+    assert {"mach point four five", "speed two zero zero"} <= set(words)
     assert not any(ask for _, ask in said)
     assert any(ask for _, ask in record.phrases("tier4", ["baron"]))  # the question key
 
@@ -1525,3 +1538,238 @@ def test_x_planes_fatal_alert_is_read_from_its_log(tmp_path):
     )
     (tmp_path / "Log.txt").write_text("0:00:00.000 I/NET: fine\n")
     assert xplane.fatal_alert(tmp_path) is None
+
+
+@pytest.mark.parametrize("aircraft", ["c172", "sr22"])
+def test_fixed_gear_is_refused_and_never_moved(aircraft):
+    steps = flights.takeoff(aircraft, flights.new_hands(aircraft))
+    first = _named(steps, "gear up refused (fixed gear)")
+    assert (first.say, first.outcomes, first.reply) == ("gear up", ("rejected",), "fixed gear")
+    assert "gear up with a positive rate" not in [s.name for s in steps]
+    go = flights.go_around(aircraft, flights.new_hands(aircraft))
+    assert "gear up" not in [s.name for s in go]
+
+
+def test_one_engine_restarts_the_engine():
+    steps = flights.restart("c172", flights.new_hands("c172"))
+    said = [s.say for s in steps if s.say]
+    assert said[:2] == ["shut down the engine", "start the engine"]
+    assert steps[1].sim[0].datarefs == (f"{flights.RUNNING}[0]",)
+
+
+def test_the_glideslope_wait_grows_for_slow_approaches():
+    assert flights._to_glideslope_sec(flights.PLANES["baron"]) == 150
+    assert flights._to_glideslope_sec(flights.PLANES["c172"]) == 203
+
+
+@pytest.mark.parametrize("aircraft", sorted(flights.PLANES))
+def test_each_aircraft_climbs_at_a_rate_it_can_hold(aircraft):
+    from vimaan_nlu.normalization import normalize_aviation_input
+
+    p = flights.PLANES[aircraft]
+    said = f"climb at {p.climb_words} feet per minute"
+    assert normalize_aviation_input(said) == f"climb at {p.climb_fpm} feet per minute"
+    steps = flights.takeoff(aircraft, flights.new_hands(aircraft))
+    assert _named(steps, "climb on the autopilot").say == said
+    go = flights.go_around(aircraft, flights.new_hands(aircraft))
+    assert _named(go, "climb away").say == said
+
+
+def test_the_light_singles_climb_slower_than_1500():
+    # At 1,500 fpm the C172 stalled off the autopilot at 650 ft (2026-11-22).
+    assert flights.PLANES["c172"].climb_fpm == 500
+    assert flights.PLANES["sr22"].climb_fpm <= 700
+
+
+def test_the_level_off_waits_for_a_slow_climb():
+    p = flights.PLANES
+    assert flights._climb_sec(p["737"], flights.CRUISE_FT, 300) == 300  # as flown
+    assert flights._climb_sec(p["c172"], flights.CRUISE_FT, 300) == 780
+    steps = flights.takeoff("c172", flights.new_hands("c172"))
+    assert _named(steps, "level at 4000").sim[0].within_sec == 780
+
+
+# ---- the runner's feet on the runway (2026-11-22) ---------------------------
+def _feet(values, origin=(45.588, -122.597)):
+    hold = flights.RunwayHold()
+    writes = []
+    hold.read = lambda ref: values[ref]
+    hold.write = lambda ref, v: writes.append((ref, v))
+    hold._ids = {
+        n: n for n in (flights.PSI, flights.LAT, flights.LON, flights.ON_GROUND, flights.RUDDER)
+    }
+    hold.heading, hold._origin = flights.RUNWAY_TRUE_DEG, origin
+    return hold, writes
+
+
+def test_the_rudder_holds_right_when_the_nose_swings_left():
+    lat0, lon0 = 45.588, -122.597
+    values = {flights.PSI: 110.0, flights.LAT: lat0, flights.LON: lon0, flights.ON_GROUND: 1}
+    hold, writes = _feet(values)
+    assert hold.tick(0.0) > 0  # right rudder for a nose left of the runway
+    values[flights.PSI] = 125.0
+    assert hold.tick(0.1) < 0
+    assert writes[-1][0] == flights.RUDDER
+    assert hold.worst_deg == pytest.approx(8.8)
+
+
+def test_the_distance_off_the_centreline():
+    hold, _ = _feet({})
+    lat0, lon0 = hold._origin
+    h = math.radians(flights.RUNWAY_TRUE_DEG)
+    along = 300.0  # metres down the runway
+    lat = lat0 + along * math.cos(h) / 111_320.0
+    lon = lon0 + along * math.sin(h) / (111_320.0 * math.cos(math.radians(lat0)))
+    assert hold.right_of_line_m(lat, lon) == pytest.approx(0.0, abs=0.01)
+    # 10 m north of a runway heading east-south-east is left of it.
+    assert hold.right_of_line_m(lat0 + 10 / 111_320.0, lon0) < -8
+
+
+def test_the_takeoff_hold_lets_go_a_second_after_liftoff():
+    lat0, lon0 = 45.588, -122.597
+    values = {flights.PSI: 118.8, flights.LAT: lat0, flights.LON: lon0, flights.ON_GROUND: 0}
+    hold, _ = _feet(values)
+    assert hold.tick(10.0) is not None
+    assert hold.tick(11.0) is None
+    hold._origin = None  # the rollout holds until it is stopped
+    assert hold.tick(20.0) is not None and hold.tick(30.0) is not None
+
+
+def test_the_takeoff_is_steered_and_checked_on_the_runway():
+    hands = flights.new_hands("c172")
+    steps = flights.takeoff("c172", hands)
+    names = [s.name for s in steps]
+    thrust = _named(steps, "rudder and takeoff thrust (pilot)")
+    assert thrust.write is None and thrust.pilot is not None
+    assert names.index("stayed on the runway") == names.index("airborne") + 1
+    check = _named(steps, "stayed on the runway").sim[0]
+    hands.steer.worst_m = 9.6  # the C172 steered, measured
+    assert check.ok(check.value({}))
+    hands.steer.worst_m = 42.3  # hands off, measured
+    assert not check.ok(check.value({}))
+    hands.steer.worst_m = None  # never measured: not a pass
+    assert not check.ok(check.value({}))
+
+
+def test_the_landing_is_steered_on_the_rollout():
+    hands = flights.new_hands("c172")
+    steps = flights.landing("c172", hands)
+    assert steps[-1].name == "rolled out straight"
+    check = steps[-1].sim[0]
+    hands.steer.worst_deg = 3.0
+    assert check.ok(check.value({}))
+
+
+# The full-flap limits in each aircraft's .acf (simtest.aircraft_file.flap_limits,
+# X-Plane 12.4.4, read 2026-11-22).
+FULL_FLAPS_KT = {
+    "baron": 122,
+    "kingair": 150,
+    "c172": 85,
+    "sr22": 110,
+    "citx": 250,
+    "md82": 195,
+    "sf50": 190,
+}
+
+
+@pytest.mark.parametrize("aircraft", sorted(FULL_FLAPS_KT))
+def test_the_approach_is_flown_under_the_full_flap_limit(aircraft):
+    # At 90 kt the C172's "flaps full" (85 kt) was rightly held. The singles
+    # fly one notch (the SR22's limit 150 kt).
+    p = flights.PLANES[aircraft]
+    if any("full" in f for f in p.landing_flaps):
+        assert p.approach_kt < FULL_FLAPS_KT[aircraft]
+    assert p.final_kt < FULL_FLAPS_KT[aircraft]
+
+
+def test_the_needles_settle_before_the_approach_is_armed():
+    for aircraft in flights.PLANES:
+        steps = flights.landing(aircraft, flights.new_hands(aircraft))
+        names = [s.name for s in steps]
+        assert _named(steps, "course 103").settle_sec >= 5
+        assert names.index("course 103") < names.index("approach mode")
+
+
+@pytest.mark.parametrize("aircraft", ["sr22", "sf50"])
+def test_the_garmins_hsi_goes_to_nav_1_before_the_approach(aircraft):
+    steps = flights.landing(aircraft, flights.new_hands(aircraft))
+    names = [s.name for s in steps]
+    hsi = _named(steps, "HSI to NAV 1 (pilot)")
+    assert hsi.write == (flights.HSI, 0)
+    assert (
+        names.index("course 103")
+        < names.index("HSI to NAV 1 (pilot)")
+        < names.index("approach mode")
+    )
+    assert "HSI to NAV 1 (pilot)" not in [
+        s.name for s in flights.landing("c172", flights.new_hands("c172"))
+    ]
+
+
+def test_the_md82_final_settles_before_the_autopilot():
+    steps = flights.go_around("md82", flights.new_hands("md82"))
+    assert steps[0].name == "the start settles (pilot)" and steps[0].settle_sec == 15
+    assert steps[1].name == "autopilot on"
+    assert flights.landing("citx", flights.new_hands("citx"))[0].name == "autopilot on"
+
+
+def test_the_new_aircraft_start_the_approach_in_the_air_on_the_centreline():
+    from simtest import xplane
+
+    lat, lon = flights.final_point()
+    lat0, lon0 = flights.THRESHOLD_10R
+    north = (lat0 - lat) * 111_320.0
+    east = (lon0 - lon) * 111_320.0 * math.cos(math.radians(lat0))
+    assert math.hypot(north, east) == pytest.approx(8 * 1852, rel=1e-6)
+    assert math.degrees(math.atan2(east, north)) % 360 == pytest.approx(flights.RUNWAY_TRUE_DEG)
+    body = flights.start_body("landing", "sr22")
+    air = body["data"]["lle_air_start"]
+    assert air["heading_true"] == flights.RUNWAY_TRUE_DEG
+    assert air["speed_in_meters_per_second"] == round(120 * xplane.KNOT, 2)
+    assert air["elevation_in_meters"] == round(2531 * xplane.FEET, 1)  # it dives at first
+    c172 = flights.start_body("landing", "c172")["data"]["lle_air_start"]
+    assert c172["elevation_in_meters"] == round(1531 * xplane.FEET, 1)
+    # The first four keep X-Plane's own final start, as flown; takeoffs the runway.
+    assert "runway_start" in flights.start_body("landing", "737")["data"]
+    assert "runway_start" in flights.start_body("takeoff", "sr22")["data"]
+
+
+def test_the_approach_waits_for_level_and_aborts_when_it_fails():
+    steps = flights.landing("citx", flights.new_hands("citx"))
+    names = [s.name for s in steps]
+    level = _named(steps, "level")
+    assert names.index("altitude hold") < names.index("level") < names.index("the ILS")
+    assert level.abort == flights.TURN_BACK
+    assert level.sim[0].ok(-250) and not level.sim[0].ok(1500)
+    assert _named(steps, "approach").abort == flights.TURN_BACK
+    assert _named(steps, "landing").abort == flights.TURN_BACK
+
+
+@pytest.mark.parametrize("aircraft", ["c172", "sr22"])
+def test_the_light_singles_fly_the_coupled_approach_with_one_notch(aircraft):
+    assert flights.PLANES[aircraft].landing_flaps == ("flaps down",)
+
+
+def test_the_jets_that_climb_out_of_the_air_start_start_farther_out():
+    lat, lon = flights.final_point(14.0)
+    body = flights.start_body("landing", "md82")["data"]["lle_air_start"]
+    assert (body["latitude"], body["longitude"]) == (lat, lon)
+    assert flights.PLANES["c172"].final_nm == 8.0
+    # The glideslope wait covers the longer final: 9.3 nm at 170 kt, plus 45 s.
+    assert flights._to_glideslope_sec(flights.PLANES["md82"]) == 242
+    assert flights._to_glideslope_sec(flights.PLANES["737"]) == 150  # as flown
+
+
+def test_the_md82_lands_on_flaps_28():
+    assert flights.PLANES["md82"].landing_flaps == ("flaps twenty eight",)
+
+
+def test_the_md82_is_configured_before_the_glideslope():
+    names = [s.name for s in flights.landing("md82", flights.new_hands("md82"))]
+    level, ils = names.index("level"), names.index("the ILS")
+    for step in ("gear down", "landing flaps (flaps twenty eight)", "speed 145"):
+        assert level < names.index(step) < ils
+    # The others configure on the glideslope, as flown.
+    names = [s.name for s in flights.landing("citx", flights.new_hands("citx"))]
+    assert names.index("on the glideslope") < names.index("gear down")

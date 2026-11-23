@@ -48,14 +48,15 @@ Learned flying them (2026-11-19):
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from .scenario import SimCheck, Step, above, below, equals, levelled_at, phase_is
-from .tier1 import DONE_OR_SET
+from .tier1 import DONE_OR_SET, HSI, SETUPS, _air_start_settles
 
 # A heading: the A330 and the GFC-700 aircraft turn the knob over frames
 # ("pending", heading_by_knob).
@@ -73,6 +74,14 @@ IAS = "sim/cockpit2/gauges/indicators/airspeed_kts_pilot"
 VS = "sim/flightmodel/position/vh_ind_fpm"
 AGL_M = "sim/flightmodel/position/y_agl"
 ON_GROUND = "sim/flightmodel/failures/onground_any"
+RUDDER = "sim/joystick/yoke_heading_ratio"  # the pedals: + is right
+PSI = "sim/flightmodel/position/psi"  # true heading
+LAT = "sim/flightmodel/position/latitude"
+LON = "sim/flightmodel/position/longitude"
+RUNWAY_TRUE_DEG = 118.8  # KPDX 10R as X-Plane lines an aircraft up on it (measured)
+THRESHOLD_10R = (45.5951448, -122.6214766)  # X-Plane's apt.dat
+FIELD_FT = 31  # KPDX
+CENTRELINE_M = 15.0  # the takeoff roll stays this close: 10R is 45 m wide
 GEAR = "sim/flightmodel2/gear/deploy_ratio[0]"
 PARK = "sim/flightmodel/controls/parkbrake"
 SPEEDBRAKE = "sim/cockpit2/controls/speedbrake_ratio"  # armed: below 0
@@ -83,6 +92,11 @@ ROLLOUT_BRAKE = 0.4  # the parking brake lever, partly on: brakes after touchdow
 CRUISE_FT = 4000  # where the takeoff levels off
 GO_AROUND_AT_FT = 500  # above the ground
 GO_AROUND_TO_FT = 3000
+
+
+# Their engine starts (the APU or starting air, the SF50's ignition knob)
+# aren't profiled yet, so the restart flight isn't flown on them.
+JET_START_NOT_PROFILED = "its engine start isn't profiled yet (phase L.2)"
 
 
 @dataclass(frozen=True)
@@ -113,6 +127,35 @@ class Plane:
     # session events showed it, X-Plane 12.4.4): "flaps up" below this + 10 kt
     # is held. 0: not known, nothing to check.
     vs_clean_kt: float = 0.0
+    # Phase L.2: what flies the speed and what the aircraft has.
+    autothrottle: bool = False  # flies the speed bug; else the runner's throttle hold
+    speed_brakes: bool = False
+    retractable_gear: bool = True
+    engines: int = 2
+    # The autopilot's climb (takeoff and go-around): one the aircraft holds at
+    # climb_kt on full power. At 1,500 fpm the C172 (about 700 fpm at most)
+    # bled from 75 to 48 kt on full throttle; its autopilot let go at the
+    # stall, 650 ft up, and it spun in (2026-11-22).
+    climb_fpm: int = 1500
+    climb_words: str = "one thousand five hundred"
+    # The approach starts in the air on the extended centreline at the
+    # approach speed (final_air_start), not X-Plane's own final-approach
+    # start: that left the SR22 diving at 4,700 fpm to 400 ft (twice, once
+    # into the ground) and the Citation X climbing at 1,500 fpm through the
+    # glideslope (2026-11-22). The first four flew X-Plane's start well.
+    air_final: bool = False
+    final_agl_ft: float = 1500  # the air start's height above the field
+    # How far out the air start is. The Citation X and MD-82 come out of it
+    # climbing at 1,800-2,800 fpm and level near 3,000 ft above the field a
+    # minute later: from 8 nm that was above the glideslope, which can only be
+    # captured from below (both armed, neither captured, 2026-11-22). From 14
+    # nm they level under it (about 3,500 ft at 11 nm).
+    final_nm: float = 8.0
+    # Gear, landing flaps and the final speed while level, before the
+    # glideslope. The MD-82 ballooned when its flaps came out on the
+    # glideslope (+1,100 fpm, 28 at 172 kt), and dived after it to 10 ft
+    # over the runway (2026-11-22).
+    configure_early: bool = False
 
 
 PLANES: dict[str, Plane] = {
@@ -154,6 +197,8 @@ PLANES: dict[str, Plane] = {
         go_around_flaps="flaps fifteen",
         pull=0.4,
         vs_clean_kt=139,
+        autothrottle=True,
+        speed_brakes=True,
     ),
     "a330": Plane(
         "A333",
@@ -173,9 +218,124 @@ PLANES: dict[str, Plane] = {
         pull=0.4,
         autopilot_from_ft=100,
         vs_clean_kt=175,
+        autothrottle=True,
+        speed_brakes=True,
         # The A330's NAV 1 and 2 (its ILS receivers) start off: Vimaan now
         # switches the radio on when it tunes it (flown 2026-11-19: LOC and
         # G/S captured, it flared itself and landed).
+    ),
+    # The SR22 dives at any start low and slow (3,400 fpm one second after an
+    # air start at 100 kt, 800 ft lost in 6 s): it starts 1,000 ft higher. Its
+    # autopilot held the altitude at 120 kt but not at 100: the throttle hold
+    # then took the power off to keep 100 kt and it sank into the ground
+    # (2026-11-22). With one notch its limit is 150 kt.
+    # The MD-82 lands on flaps 28 (the MD-80s' usual landing flaps; 40 is for
+    # short runways): flaps 40 ballooned it twice, at 172 and 145 kt, and its
+    # autopilot dropped the approach modes (2026-11-22).
+    # The light singles fly the coupled ILS with one notch, as pilots do: with
+    # full flaps at 70 kt the C172's S-Tec 55 couldn't follow the glideslope
+    # down and climbed for five minutes on the throttle hold (2026-11-22).
+    # Phase L.2 (speeds from each aircraft's manual, flaps and stall speeds
+    # from its .acf as Vimaan reads it, X-Plane 12.4.4). The approach speed is
+    # under the full-flap limit (its .acf): at 90 kt the C172's "flaps full"
+    # (85 kt) was rightly held; the SR22's is 110 kt (2026-11-22). The Citation X and
+    # SF50 have no autothrottle: the runner holds the speed on the throttle,
+    # as on the Baron.
+    "c172": Plane(
+        "C172",
+        False,
+        55,
+        7,
+        75,
+        75,
+        70,
+        ("flaps down",),
+        throttle_from=0.6,
+        vs_clean_kt=48,
+        retractable_gear=False,
+        engines=1,
+        climb_fpm=500,
+        climb_words="five hundred",
+        air_final=True,
+    ),
+    "sr22": Plane(
+        "SR22",
+        False,
+        73,
+        7,
+        105,
+        120,
+        100,
+        ("flaps down",),
+        throttle_from=0.6,
+        vs_clean_kt=74,
+        retractable_gear=False,
+        engines=1,
+        climb_fpm=700,
+        climb_words="seven hundred",
+        air_final=True,
+        final_agl_ft=2500,
+    ),
+    "citx": Plane(
+        "C750",
+        True,
+        145,
+        8,
+        200,
+        170,
+        140,
+        ("flaps fifteen", "flaps full"),
+        takeoff_flaps="flaps five",
+        flaps_up_kt=180,
+        go_around_flaps="flaps fifteen",
+        throttle_from=0.6,
+        pull=0.4,
+        vs_clean_kt=135,
+        speed_brakes=True,
+        no_restart=JET_START_NOT_PROFILED,
+        air_final=True,
+        final_nm=14.0,
+    ),
+    "md82": Plane(
+        "MD82",
+        True,
+        140,
+        8,
+        210,
+        170,
+        145,
+        ("flaps twenty eight",),
+        takeoff_flaps="flaps eleven",
+        flaps_up_kt=190,
+        go_around_flaps="flaps fifteen",
+        pull=0.4,
+        vs_clean_kt=150,
+        autothrottle=True,
+        speed_brakes=True,
+        no_restart=JET_START_NOT_PROFILED,
+        air_final=True,
+        final_nm=14.0,
+        configure_early=True,
+    ),
+    "sf50": Plane(
+        "SF50",
+        True,
+        90,
+        8,
+        150,
+        130,
+        100,
+        ("flaps full",),
+        takeoff_flaps="flaps ten",
+        flaps_up_kt=130,
+        go_around_flaps="flaps ten",
+        throttle_from=0.6,
+        vs_clean_kt=75,
+        engines=1,
+        no_restart=JET_START_NOT_PROFILED,
+        climb_fpm=1000,
+        climb_words="one thousand",
+        air_final=True,
     ),
 }
 
@@ -256,16 +416,131 @@ class SpeedHold:
         return throttle
 
 
+class RunwayHold:
+    """The runner's feet: the rudder on the runway, in a thread.
+
+    With no one on the rudder, the C172 at full power swung 55° left in 6 s
+    and left the runway before 20 kt (no wind; the SR22 the same): a single
+    propeller's torque and slipstream, which a pilot holds with right rudder.
+    The Citation X ran straight (3 m by 100 kt). Proportional on the heading
+    error and the distance off the centreline, it held the C172 within 9.6 m
+    to 50 kt (2026-11-22, ~/Vimaan_Logs/measuring/l2/takeoff_roll_probe.py).
+
+    Straight through X-Plane's web API, not Vimaan's bridge: a bridge tick
+    is about 0.85 s, and the C172 swung 18° in 2 s.
+
+    ``start()`` on the takeoff roll holds the line it starts on (X-Plane
+    lines the aircraft up on the centreline) and lets go 1 s after the
+    wheels leave the ground. ``start(centreline=False)`` on the rollout
+    holds the runway's heading until stopped."""
+
+    period_sec = 0.1
+    gain = 0.1  # rudder per degree off the heading
+    metres_as_degrees = 0.5  # a metre off the centreline counts as this much heading
+
+    def __init__(self) -> None:
+        from . import xplane
+
+        self.lookup: Callable[[str], int] = xplane.dataref_id
+        self.read: Callable[[int], Any] = xplane.read_id
+        self.write: Callable[[int, Any], None] = xplane.write_id
+        self.worst_m: float | None = None  # farthest off the centreline, on the ground
+        self.worst_deg: float | None = None  # farthest off the heading, on the ground
+        self.heading = RUNWAY_TRUE_DEG
+        self._origin: tuple[float, float] | None = None
+        self._ids: dict[str, int] = {}
+        self._airborne_since: float | None = None
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self, centreline: bool = True) -> None:
+        self.stop()
+        self._ids = {n: self.lookup(n) for n in (PSI, LAT, LON, ON_GROUND, RUDDER)}
+        self.worst_m = self.worst_deg = None
+        self._airborne_since = None
+        if centreline:
+            self.heading = float(self.read(self._ids[PSI]))
+            self._origin = (float(self.read(self._ids[LAT])), float(self.read(self._ids[LON])))
+        else:
+            self.heading, self._origin = RUNWAY_TRUE_DEG, None
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=3)
+            self._thread = None
+            self._centre()
+
+    @property
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def _centre(self) -> None:
+        try:
+            self.write(self._ids[RUDDER], 0.0)
+        except Exception:  # noqa: BLE001 - X-Plane gone: nothing to centre
+            pass
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            try:
+                if self.tick(time.monotonic()) is None:
+                    self._centre()
+                    return
+            except Exception:  # noqa: BLE001 - a missed tick; the next one tries again
+                pass
+            self._stop.wait(self.period_sec)
+
+    def right_of_line_m(self, lat: float, lon: float) -> float:
+        """Metres right (+) of the line from the start along the heading."""
+        assert self._origin is not None
+        lat0, lon0 = self._origin
+        north = (lat - lat0) * 111_320.0
+        east = (lon - lon0) * 111_320.0 * math.cos(math.radians(lat0))
+        h = math.radians(self.heading)
+        return -north * math.sin(h) + east * math.cos(h)
+
+    def tick(self, now: float) -> float | None:
+        """One step: the rudder written, or None once the takeoff is flying."""
+        on_ground = bool(self.read(self._ids[ON_GROUND]))
+        if self._origin is not None and not on_ground:
+            self._airborne_since = self._airborne_since or now
+            if now - self._airborne_since >= 1.0:
+                return None
+        else:
+            self._airborne_since = None
+        psi = float(self.read(self._ids[PSI]))
+        off_deg = ((psi - self.heading + 180) % 360) - 180  # + is right of the heading
+        off_m = 0.0
+        if self._origin is not None:
+            lat, lon = self.read(self._ids[LAT]), self.read(self._ids[LON])
+            off_m = self.right_of_line_m(float(lat), float(lon))
+        if on_ground:
+            self.worst_deg = max(self.worst_deg or 0.0, abs(off_deg))
+            if self._origin is not None:
+                self.worst_m = max(self.worst_m or 0.0, abs(off_m))
+        rudder = round(
+            max(-1.0, min(1.0, -self.gain * (off_deg + self.metres_as_degrees * off_m))), 3
+        )
+        self.write(self._ids[RUDDER], rudder)
+        return rudder
+
+
 @dataclass
 class Hands:
-    """The runner's hands for one flight."""
+    """The runner's hands (and feet) for one flight."""
 
     speed: SpeedHold
+    steer: RunwayHold = field(default_factory=RunwayHold)
 
     def release(self, bridge: Any) -> None:
         """At the end of a flight, or when it stops: the controls given back
-        (the throttle hold stopped, the stick in the middle)."""
+        (the throttle hold and the rudder stopped, the stick in the middle)."""
         self.speed.stop()
+        self.steer.stop()
         try:
             bridge.write(YOKE, 0.0)
         except Exception:  # noqa: BLE001 - X-Plane gone: nothing to give back
@@ -285,6 +560,16 @@ TURN_BACK = (
 
 
 # ---- checks -----------------------------------------------------------------
+def _level(within_sec: float, fpm: float = 300) -> SimCheck:
+    return SimCheck(
+        "level",
+        (VS,),
+        lambda v: v is not None and abs(float(v)) <= fpm,
+        within_sec=within_sec,
+        expected=f"|V/S| ≤ {fpm:.0f} fpm",
+    )
+
+
 def _agl_below(ft: float, within_sec: float) -> SimCheck:
     return SimCheck(
         f"below {ft:.0f} ft",
@@ -311,7 +596,58 @@ def _speed_words(kt: int) -> str:
     return SPOKEN[kt]
 
 
+def _fixed_gear(name: str) -> Step:
+    """Fixed gear: "gear up" is refused before any safety rule."""
+    return Step(
+        name, say="gear up", outcomes=("rejected",), reply="fixed gear", vimaan_checks=False
+    )
+
+
+def _to_glideslope_sec(p: Plane) -> float:
+    """Time to wait for the glideslope: from the 8 nm start to about 4.7 nm
+    at the approach speed, plus 45 s, and never less than the 150 s the first
+    four flew with (the C172 at 75 kt needs 203 s). Not much longer: an
+    aircraft that misses it flies on, level, out of the installed scenery."""
+    final_nm = p.final_nm if p.air_final else FINAL_NM
+    return max(150, round((final_nm - 4.7) / p.approach_kt * 3600 + 45))
+
+
 # ---- flights ----------------------------------------------------------------
+def _climb_sec(p: Plane, climb_ft: float, floor: float) -> float:
+    """How long the level-off check waits: the climb at the plane's rate, half
+    again for the slow start and the capture, and a minute (at least ``floor``,
+    the wait the 1,500 fpm aircraft were flown with). The C172 at 500 fpm was
+    at 3,601 ft when a fixed 300 s ran out (2026-11-22)."""
+    return max(floor, climb_ft / p.climb_fpm * 60 * 1.5 + 60)
+
+
+def _takeoff_thrust(hands: Hands, bridge: Any) -> None:
+    hands.steer.start()  # the rudder first: full power swings a single left at once
+    bridge.write(THROTTLE, 1.0)
+
+
+def _on_the_runway(hands: Hands) -> SimCheck:
+    """The takeoff roll kept within CENTRELINE_M of the centreline."""
+    return SimCheck(
+        "the farthest off the centreline on the roll",
+        (),
+        lambda m: m is not None and m <= CENTRELINE_M,
+        value=lambda _r: None if hands.steer.worst_m is None else round(hands.steer.worst_m, 1),
+        expected=f"≤ {CENTRELINE_M:.0f} m",
+    )
+
+
+def _straight_rollout(hands: Hands) -> SimCheck:
+    """The rollout kept within 10° of the runway's heading."""
+    return SimCheck(
+        "the farthest off the runway heading on the rollout",
+        (),
+        lambda d: d is not None and d <= 10,
+        value=lambda _r: None if hands.steer.worst_deg is None else round(hands.steer.worst_deg, 1),
+        expected="≤ 10°",
+    )
+
+
 def _held(name: str, say: str, reply: str, still: SimCheck, **kw: Any) -> list[Step]:
     """A phrase a safety rule holds ("Confirm …"), then "cancel": nothing
     changed. ``kw`` (only_if) is for the first step; the cancel runs only
@@ -343,28 +679,37 @@ def takeoff(aircraft: str, hands: Hands) -> list[Step]:
     level off at 4,000 ft. Phases: parked, taxi (the first 40 kt), takeoff
     roll, initial climb, climb, cruise."""
     p = PLANES[aircraft]
-    out = [
-        Step("parked on the runway", sim=(phase_is("parked", within_sec=20),)),
-        Step(
-            "gear up on the ground is held",
-            say="gear up",
-            outcomes=("safety_hold",),
-            reply="Confirm gear up",
-            vimaan_checks=False,
-        ),
-        Step(
-            "cancel the gear",
-            say="cancel",
-            outcomes=("cancelled",),
-            vimaan_checks=False,
-            sim=(equals("gear still down", GEAR, 1, tol=0.01, within_sec=2),),
-        ),
+    out = [Step("parked on the runway", sim=(phase_is("parked", within_sec=20),))]
+    if p.retractable_gear:
+        out += [
+            Step(
+                "gear up on the ground is held",
+                say="gear up",
+                outcomes=("safety_hold",),
+                reply="Confirm gear up",
+                vimaan_checks=False,
+            ),
+            Step(
+                "cancel the gear",
+                say="cancel",
+                outcomes=("cancelled",),
+                vimaan_checks=False,
+                sim=(equals("gear still down", GEAR, 1, tol=0.01, within_sec=2),),
+            ),
+        ]
+    else:
+        out.append(_fixed_gear("gear up refused (fixed gear)"))
+    out += [
         # Set now: after the rotation the autopilot has to climb at once.
         Step(f"altitude {CRUISE_FT}", say="altitude four thousand", outcomes=DONE_OR_SET),
         Step("heading 103", say=f"heading {COURSE}", outcomes=HEADING_SET),
     ]
     if p.takeoff_flaps:
-        out.append(Step(f"takeoff flaps ({p.takeoff_flaps})", say=p.takeoff_flaps))
+        # X-Plane's runway start sets the Citation X's flaps 5 itself: "Flaps 5
+        # already set" (2026-11-22).
+        out.append(
+            Step(f"takeoff flaps ({p.takeoff_flaps})", say=p.takeoff_flaps, outcomes=DONE_OR_SET)
+        )
     out += [
         Step(
             "parking brake off",
@@ -373,8 +718,8 @@ def takeoff(aircraft: str, hands: Hands) -> list[Step]:
             sim=(below("brake off", PARK, 0.1, within_sec=3),),
         ),
         Step(
-            "takeoff thrust (pilot)",
-            write=(THROTTLE, 1.0),
+            "rudder and takeoff thrust (pilot)",
+            pilot=_do("rudder on, takeoff thrust", lambda br: _takeoff_thrust(hands, br)),
             sim=(phase_is("taxi", "takeoff_roll", within_sec=20),),
             note="the first 40 kt are a taxi",
         ),
@@ -394,7 +739,7 @@ def takeoff(aircraft: str, hands: Hands) -> list[Step]:
             sim=(below("brake still off", PARK, 0.1, within_sec=2),),
         ),
     ]
-    if p.jet:  # the Baron and King Air have none
+    if p.speed_brakes:  # the pistons and the SF50 have none
         out += _held(
             "speed brake on the takeoff roll",
             "extend the speed brakes",
@@ -418,7 +763,7 @@ def takeoff(aircraft: str, hands: Hands) -> list[Step]:
         Step("autopilot on", say="autopilot on", outcomes=DONE_OR_SET),
         Step(
             "climb on the autopilot",
-            say="climb at one thousand five hundred feet per minute",
+            say=f"climb at {p.climb_words} feet per minute",
             reply="to 4000",
         ),
     ]
@@ -426,7 +771,7 @@ def takeoff(aircraft: str, hands: Hands) -> list[Step]:
     # ft, the A330 went through its flaps-1 limit (215 kt) to 242 kt; after
     # the gear came up, still 16 kt through it. The King Air on full throttle
     # levelled off 22 kt over Vne (both recorded by the speed margins).
-    if p.jet:
+    if p.autothrottle:
         if p.climb_levers is not None:
             out.append(Step("thrust levers to CL (pilot)", write=(THROTTLE, p.climb_levers)))
         out += [
@@ -435,20 +780,19 @@ def takeoff(aircraft: str, hands: Hands) -> list[Step]:
         ]
     out += [
         Step("airborne", sim=(equals("off the ground", ON_GROUND, 0, within_sec=20),)),
+        Step("stayed on the runway", sim=(_on_the_runway(hands),)),
         Step("initial climb", sim=(phase_is("initial_climb", within_sec=10),)),
         Step("200 ft", sim=(_agl_above(200, within_sec=60),)),
-        Step(
-            "gear up with a positive rate",
-            say="gear up",
-            sim=(below("gear up", GEAR, 0.01, within_sec=20),),
-        ),
     ]
-    if p.jet:  # flaps up as soon as the speed allows
-        out += [
-            Step(f"flap speed {p.flaps_up_kt:.0f}", sim=(above("speed", IAS, p.flaps_up_kt, 90),)),
-            Step("flaps up", say="flaps up"),
-        ]
-    else:
+    if p.retractable_gear:
+        out.append(
+            Step(
+                "gear up with a positive rate",
+                say="gear up",
+                sim=(below("gear up", GEAR, 0.01, within_sec=20),),
+            )
+        )
+    if not p.autothrottle:  # the runner's hand on the throttle from here
         out.append(
             Step(
                 f"throttle held on {p.climb_kt} kt (pilot)",
@@ -457,12 +801,20 @@ def takeoff(aircraft: str, hands: Hands) -> list[Step]:
                 ),
             )
         )
+    if p.flaps_up_kt:  # the jets: flaps up as soon as the speed allows
+        out += [
+            Step(f"flap speed {p.flaps_up_kt:.0f}", sim=(above("speed", IAS, p.flaps_up_kt, 90),)),
+            Step("flaps up", say="flaps up"),
+        ]
     out += [
         Step("heading mode", say="heading mode", outcomes=DONE_OR_SET),
         Step("climb", sim=(phase_is("climb", within_sec=120),)),
     ]
     out += [
-        Step(f"level at {CRUISE_FT}", sim=(levelled_at(CRUISE_FT, within_sec=300),)),
+        Step(
+            f"level at {CRUISE_FT}",
+            sim=(levelled_at(CRUISE_FT, within_sec=_climb_sec(p, CRUISE_FT, 300)),),
+        ),
         Step("cruise", sim=(phase_is("cruise", within_sec=20),)),
         # Left flying east after the run, the A330 reached the end of the
         # installed scenery and X-Plane paused under its dialog (2026-11-19).
@@ -481,8 +833,18 @@ def _established(aircraft: str, hands: Hands) -> list[Step]:
     """From the final-approach start to the glideslope with the landing
     configuration: autopilot, the ILS, approach mode, gear and flaps."""
     p = PLANES[aircraft]
-    out = [Step("autopilot on", say="autopilot on", outcomes=DONE_OR_SET)]
-    if p.jet:
+    setup = SETUPS[aircraft]
+    out: list[Step] = []
+    if setup.settle_first_sec:  # the MD-82 takes no "autopilot on" straight after loading
+        out.append(
+            Step(
+                "the start settles (pilot)",
+                pilot=_air_start_settles,
+                settle_sec=setup.settle_first_sec,
+            )
+        )
+    out.append(Step("autopilot on", say="autopilot on", outcomes=DONE_OR_SET))
+    if p.autothrottle:
         out += [
             Step("autothrottle on", say="auto throttle on", outcomes=DONE_OR_SET),
             Step(f"speed {p.approach_kt}", say=f"speed {_speed_words(p.approach_kt)}"),
@@ -501,43 +863,58 @@ def _established(aircraft: str, hands: Hands) -> list[Step]:
         Step("altitude hold", say="altitude hold", outcomes=DONE_OR_SET),
         Step("heading 103", say=f"heading {COURSE}", outcomes=HEADING_SET),
         Step("heading mode", say="heading mode", outcomes=DONE_OR_SET),
+        # Level before the approach is armed: still climbing at 1,500 fpm, the
+        # Citation X went up through the glideslope, captured it climbing and
+        # ballooned with full flaps to 20,000 ft (2026-11-22).
+        Step("level", sim=(_level(within_sec=60),), abort=TURN_BACK),
+    ]
+    if p.configure_early:
+        out += _landing_configuration(p, hands)
+    out += [
         Step("the ILS", say=ILS),
-        Step("course 103", say=f"course {COURSE}"),
+        # The pilot waits for the needles before arming the approach. The
+        # C172's S-Tec 55 armed only the localizer, never the glideslope,
+        # when "approach" came 0.3 s after the tuning (4 of 4; the needle
+        # still near the middle reads as on the glideslope), and once at
+        # 3.3 s; 5 s after, it armed every time (2026-11-22).
+        Step("course 103", say=f"course {COURSE}", settle_sec=5),
+    ]
+    if setup.nav_source:  # the Garmin's HSI starts on GPS: "approach" armed a GPS approach
+        out.append(
+            Step(
+                "HSI to NAV 1 (pilot)",
+                write=(HSI, 0),
+                sim=(equals("HSI on NAV 1", HSI, 0, within_sec=2),),
+            )
+        )
+    out += [
         Step("approach mode", say="approach mode", outcomes=DONE_OR_SET),
         Step(
             "on the glideslope",
             # Captured near 4.7 nm from the 8 nm start: 105 s at 115 kt. Not
             # much longer: an aircraft that misses it flies on, level, out of
             # the installed scenery (X-Plane then pauses under a dialog).
-            sim=(equals("glideslope captured", GLIDESLOPE, 2, within_sec=150),),
+            sim=(equals("glideslope captured", GLIDESLOPE, 2, within_sec=_to_glideslope_sec(p)),),
             abort=TURN_BACK,
         ),
-        Step("gear down", say="gear down", sim=(equals("gear down", GEAR, 1, within_sec=20),)),
     ]
-    out += [Step(f"landing flaps ({f})", say=f, settle_sec=3) for f in p.landing_flaps]
-    if p.jet:
-        out.append(Step(f"speed {p.final_kt}", say=f"speed {_speed_words(p.final_kt)}"))
-    else:
-        out.append(
-            Step(
-                f"throttle held on {p.final_kt} kt (pilot)",
-                pilot=_do(
-                    f"speed hold {p.final_kt}", lambda br: _hold_speed(hands, br, p.final_kt)
-                ),
-            )
-        )
-    out.append(Step("approach", sim=(phase_is("approach", within_sec=30),)))
+    if not p.configure_early:
+        out += _landing_configuration(p, hands)
+    # A failed approach turns back west, level: the Citation X flew on,
+    # climbing, out of the installed scenery.
+    out.append(Step("approach", sim=(phase_is("approach", within_sec=30),), abort=TURN_BACK))
     # Phase F.4's rules, on the approach (owner's OK 2026-11-19).
-    out += _held(
-        "gear up on approach",
-        "gear up",
-        "Confirm gear up, on approach",
-        equals("gear still down", GEAR, 1, tol=0.01, within_sec=2),
-    )
+    if p.retractable_gear:
+        out += _held(
+            "gear up on approach",
+            "gear up",
+            "Confirm gear up, on approach",
+            equals("gear still down", GEAR, 1, tol=0.01, within_sec=2),
+        )
     from vimaan_nlu.safety import FLAPS_UP_MIN_MARGIN_KT  # ML/ is on the path by now
 
     slow_below = p.vs_clean_kt + FLAPS_UP_MIN_MARGIN_KT
-    if p.final_kt < slow_below:  # the jets; the pistons' finals are faster
+    if p.final_kt < slow_below:  # the airliners; the others' finals are faster
         out += _held(
             "flaps up when slow",
             "flaps up",
@@ -550,14 +927,36 @@ def _established(aircraft: str, hands: Hands) -> list[Step]:
     return out
 
 
+def _landing_configuration(p: Plane, hands: Hands) -> list[Step]:
+    """Gear down, the landing flaps, the final speed."""
+    out: list[Step] = []
+    if p.retractable_gear:
+        out.append(
+            Step("gear down", say="gear down", sim=(equals("gear down", GEAR, 1, within_sec=20),))
+        )
+    out += [Step(f"landing flaps ({f})", say=f, settle_sec=3) for f in p.landing_flaps]
+    if p.autothrottle:
+        out.append(Step(f"speed {p.final_kt}", say=f"speed {_speed_words(p.final_kt)}"))
+    else:
+        out.append(
+            Step(
+                f"throttle held on {p.final_kt} kt (pilot)",
+                pilot=_do(
+                    f"speed hold {p.final_kt}", lambda br: _hold_speed(hands, br, p.final_kt)
+                ),
+            )
+        )
+    return out
+
+
 def landing(aircraft: str, hands: Hands) -> list[Step]:
     """From an 8 nm final: an ILS approach on the autopilot, thrust off before
     touchdown, brakes, stopped. Phases: approach, landing (the last 100 ft),
     rollout, taxi (below 40 kt), parked."""
     p = PLANES[aircraft]
     out = _established(aircraft, hands)
-    out.append(Step("landing", sim=(phase_is("landing", within_sec=300),)))
-    if p.jet:  # on its autothrottle the 737 held 145 kt along the runway at 2 ft
+    out.append(Step("landing", sim=(phase_is("landing", within_sec=300),), abort=TURN_BACK))
+    if p.autothrottle:  # on its autothrottle the 737 held 145 kt along the runway at 2 ft
         out += [
             Step("50 ft", sim=(_agl_below(50, within_sec=30),)),
             Step("autothrottle off", say="auto throttle off", outcomes=DONE_OR_SET),
@@ -571,8 +970,8 @@ def landing(aircraft: str, hands: Hands) -> list[Step]:
     out += [
         Step("touchdown", sim=(equals("on the ground", ON_GROUND, 1, within_sec=40),)),
         Step(
-            "thrust idle and brakes (pilot)",
-            pilot=_do("idle and brakes", lambda br: _idle_and_brake(hands, br)),
+            "thrust idle, brakes and rudder (pilot)",
+            pilot=_do("idle, brakes and rudder", lambda br: _idle_and_brake(hands, br)),
         ),
         Step("autopilot off", say="autopilot off", outcomes=DONE_OR_SET),
         Step("rollout", sim=(phase_is("rollout", within_sec=10),)),
@@ -581,6 +980,7 @@ def landing(aircraft: str, hands: Hands) -> list[Step]:
         Step("taxi speed", sim=(phase_is("taxi", "parked", within_sec=90),)),
         Step("stopped", sim=(phase_is("parked", within_sec=90),)),
         Step("parking brake (pilot)", write=(PARK, 1.0)),
+        Step("rolled out straight", sim=(_straight_rollout(hands),)),
     ]
     return out
 
@@ -593,6 +993,7 @@ def _idle(hands: Hands, bridge: Any) -> None:
 def _idle_and_brake(hands: Hands, bridge: Any) -> None:
     _idle(hands, bridge)
     bridge.write(PARK, ROLLOUT_BRAKE)
+    hands.steer.start(centreline=False)  # the runway's heading to the stop
 
 
 def go_around(aircraft: str, hands: Hands) -> list[Step]:
@@ -610,15 +1011,18 @@ def go_around(aircraft: str, hands: Hands) -> list[Step]:
         Step(f"altitude {GO_AROUND_TO_FT}", say="altitude three thousand", outcomes=DONE_OR_SET),
         Step(
             "climb away",
-            say="climb at one thousand five hundred feet per minute",
+            say=f"climb at {p.climb_words} feet per minute",
             reply="to 3000",
         ),
         Step("go-around", sim=(phase_is("go_around", within_sec=20),)),
         Step("positive rate", sim=(above("climbing", VS, 300, within_sec=15),)),
-        Step("gear up", say="gear up", sim=(below("gear up", GEAR, 0.01, within_sec=20),)),
-        Step(f"flaps ({p.go_around_flaps})", say=p.go_around_flaps),
     ]
-    if not p.jet:  # left at full throttle the King Air levelled off 24 kt over Vne
+    if p.retractable_gear:
+        out.append(
+            Step("gear up", say="gear up", sim=(below("gear up", GEAR, 0.01, within_sec=20),))
+        )
+    out.append(Step(f"flaps ({p.go_around_flaps})", say=p.go_around_flaps))
+    if not p.autothrottle:  # left at full throttle the King Air levelled off 24 kt over Vne
         out.append(
             Step(
                 f"throttle held on {p.climb_kt} kt (pilot)",
@@ -629,7 +1033,15 @@ def go_around(aircraft: str, hands: Hands) -> list[Step]:
         )
     out += [
         Step("climb", sim=(phase_is("climb", within_sec=120),)),
-        Step(f"level at {GO_AROUND_TO_FT}", sim=(levelled_at(GO_AROUND_TO_FT, within_sec=240),)),
+        Step(
+            f"level at {GO_AROUND_TO_FT}",
+            sim=(
+                levelled_at(
+                    GO_AROUND_TO_FT,
+                    within_sec=_climb_sec(p, GO_AROUND_TO_FT - GO_AROUND_AT_FT, 240),
+                ),
+            ),
+        ),
         Step("cruise", sim=(phase_is("cruise", within_sec=20),)),
         *TURN_BACK,  # back over the installed scenery
     ]
@@ -644,38 +1056,44 @@ def _full_thrust(hands: Hands, bridge: Any) -> None:
 RUNNING = "sim/flightmodel/engine/ENGN_running"
 
 
-def _engines(what: str, value: int, within_sec: float) -> SimCheck:
+def _engines(what: str, value: int, within_sec: float, engines: int = 2) -> SimCheck:
+    refs = tuple(f"{RUNNING}[{i}]" for i in range(engines))
     return SimCheck(
         what,
-        (f"{RUNNING}[0]", f"{RUNNING}[1]"),
-        lambda v: v == (value, value),
-        value=lambda r: (r.get(f"{RUNNING}[0]"), r.get(f"{RUNNING}[1]")),
+        refs,
+        lambda v: v == (value,) * engines,
+        value=lambda r: tuple(r.get(x) for x in refs),
         within_sec=within_sec,
-        expected=f"both {'running' if value else 'stopped'}",
+        expected=f"{'both' if engines == 2 else 'all'} {'running' if value else 'stopped'}",
     )
 
 
 def restart(aircraft: str, hands: Hands) -> list[Step]:
     """On the runway: "shut down both engines", "start both engines", then
     the takeoff (A3, the engines-off start: a cold aircraft's switches are
-    its own procedure, so the engines are started warm)."""
+    its own procedure, so the engines are started warm). One engine: "shut
+    down the engine", "start the engine"."""
+    p = PLANES[aircraft]
+    which = "both engines" if p.engines == 2 else "the engine"
     return [
         Step("parked on the runway", sim=(phase_is("parked", within_sec=20),)),
         Step(
-            "shut down both engines",
-            say="shut down both engines",
-            sim=(_engines("engines stopped", 0, within_sec=30),),
+            f"shut down {which}",
+            say=f"shut down {which}",
+            sim=(_engines("engines stopped", 0, within_sec=30, engines=p.engines),),
         ),
         # As a pilot would: let them wind down before starting again.
         Step("engines winding down", settle_sec=20),
         Step(
-            "start both engines",
-            say="start both engines",
+            f"start {which}",
+            say=f"start {which}",
             outcomes=("pending",),
             vimaan_checks=False,
             # A jet with no starting air starts its APU first (about a minute),
             # then the engines (the A330's FADEC took 35 s to idle).
-            sim=(_engines("engines running", 1, within_sec=240 if PLANES[aircraft].jet else 60),),
+            sim=(
+                _engines("engines running", 1, within_sec=240 if p.jet else 60, engines=p.engines),
+            ),
         ),
         *takeoff(aircraft, hands),
     ]
@@ -699,7 +1117,36 @@ def start_body(flight: str, aircraft: str) -> dict[str, Any]:
     from . import xplane
 
     final = None if flight in ("takeoff", "restart") else FINAL_NM
+    if final is not None and PLANES[aircraft].air_final:
+        return final_air_start(aircraft)
     return xplane.runway_start_body(aircraft, AIRPORT, RUNWAY, final_nm=final)
+
+
+def final_point(nm: float = FINAL_NM) -> tuple[float, float]:
+    """The extended centreline ``nm`` before the 10R threshold."""
+    lat0, lon0 = THRESHOLD_10R
+    d = nm * 1852.0
+    h = math.radians(RUNWAY_TRUE_DEG)
+    lat = lat0 - d * math.cos(h) / 111_320.0
+    lon = lon0 - d * math.sin(h) / (111_320.0 * math.cos(math.radians(lat0)))
+    return lat, lon
+
+
+def final_air_start(aircraft: str) -> dict[str, Any]:
+    """In the air on the centreline (8 nm out, the Citation X and MD-82 14),
+    1,500 ft above the field (the SR22 2,500), heading down the runway at
+    the approach speed."""
+    from . import xplane
+
+    lat, lon = final_point(PLANES[aircraft].final_nm)
+    return xplane.air_start_body(
+        aircraft,
+        lat,
+        lon,
+        FIELD_FT + PLANES[aircraft].final_agl_ft,
+        RUNWAY_TRUE_DEG,
+        PLANES[aircraft].approach_kt,
+    )
 
 
 def new_hands(aircraft: str) -> Hands:

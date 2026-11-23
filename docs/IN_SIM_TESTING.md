@@ -344,7 +344,7 @@ It needs a command model that knows relative commands (v27).
 **Flights: takeoff, landing, go-around (Phase F.3):**
 
 ```bash
-python -m simtest run takeoff baron --text     # or kingair, 737, a330, all
+python -m simtest run takeoff baron --text     # any aircraft, all, or new (the L.2 five)
 python -m simtest run landing baron --text
 python -m simtest run go-around baron --text
 python -m simtest run restart baron --text     # shut down both, start both, take off
@@ -382,6 +382,45 @@ What the runner does as the pilot: the thrust levers, the stick for the
 rotation, the throttle on the Baron and King Air (held on an airspeed, as
 they have no autothrottle) and the brakes. At the end of a flight, or if it
 stops, the throttle hold stops and the stick is centred.
+
+**The five L.2 aircraft (C172, SR22, Citation X, MD-82, SF50; 2026-11-22).**
+What flying them added to the runner:
+
+- **The rudder.** With no one on it, the C172 at full power swung 55° left in
+  6 s and left the runway before 20 kt (no wind; a single's torque and
+  slipstream). The runner now holds the centreline with the rudder from
+  takeoff thrust to a second after liftoff, and the runway heading on the
+  rollout, straight through X-Plane's web API about ten times a second
+  (Vimaan's bridge is too slow). Checks: the takeoff roll within 15 m of the
+  centreline (worst 9.6 m, the C172), the rollout within 10° of the heading.
+- **Climb rates each aircraft can hold:** C172 500 fpm, SR22 700, SF50 1,000,
+  the rest 1,500 (at 1,500 the C172 stalled off its autopilot at 650 ft).
+  The level-off waits scale with the rate.
+- **The approach starts in the air** on the extended centreline at the
+  approach speed: 8 nm out, 1,500 ft above the field (SR22 2,500 ft, as it
+  dives at any low slow start; Citation X and MD-82 14 nm out, as they climb
+  out of the start and must level under the glideslope). X-Plane's own final
+  start left the SR22 diving at 4,700 fpm and the Citation X climbing at
+  1,500 fpm. The first four keep X-Plane's start.
+- **Before "approach mode":** level; 5 s after tuning the ILS for the needles
+  (the C172's S-Tec 55 never armed the glideslope when "approach" came right
+  after the tuning); the SR22's and SF50's Garmin HSI switched to NAV 1 (it
+  starts on GPS); the MD-82 waits 15 s after loading and sets its gear, flaps
+  28 and 145 kt before the glideslope (flaps out on the glideslope ballooned
+  it).
+- **Landing flaps:** the C172 and SR22 fly the coupled ILS with one notch;
+  the MD-82 lands on flaps 28 (40 ballooned it twice). Approach speeds are
+  under the full-flap limit in each .acf.
+- **A failed approach or landing turns back west, level,** so a runaway can't
+  fly out of the installed scenery (the Citation X once climbed to 20,000 ft
+  and X-Plane paused under "Missing scenery").
+
+Known limits: the SF50's landing on the runner's throttle hold can porpoise
+on the glideslope (it passed once and crashed once on the swings); the
+MD-82's autopilot swings after an air start; 14 nm out the jets start about
+470 ft above the West Hills (the MD-82 once sank to 222 ft above them).
+The restart flight runs on the C172 and SR22; the jets' engine starts aren't
+profiled yet.
 
 **The A330's ILS receivers start switched off.** Its NAV 1 and 2 are its
 ILS receivers (its VOR displays read NAV 3 and 4) and an air or final start
