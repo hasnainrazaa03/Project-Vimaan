@@ -404,7 +404,10 @@ What flying them added to the runner:
   1,500 fpm. The first four keep X-Plane's start.
 - **Before "approach mode":** level; 5 s after tuning the ILS for the needles
   (the C172's S-Tec 55 never armed the glideslope when "approach" came right
-  after the tuning); the SR22's and SF50's Garmin HSI switched to NAV 1 (it
+  after the tuning; Vimaan itself now waits too: "approach" within 5 s of an
+  ILS frequency being tuned, by Vimaan or by hand, says "Arming approach in
+  N seconds" and presses it then, unless it came on meanwhile; a VOR has no
+  glideslope and doesn't wait); the SR22's and SF50's Garmin HSI switched to NAV 1 (it
   starts on GPS); the MD-82 waits 15 s after loading and sets its gear, flaps
   28 and 145 kt before the glideslope (flaps out on the glideslope ballooned
   it).

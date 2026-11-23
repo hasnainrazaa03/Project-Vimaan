@@ -3372,6 +3372,99 @@ def test_approach_armed_still_counts_as_on(sim):
     ]
 
 
+# Approach right after the ILS is tuned: the C172's S-Tec 55 armed only the
+# localizer, never the glideslope, until the needle had settled (L.2.3).
+NAV1_HZ = "sim/cockpit2/radios/actuators/nav1_frequency_hz"
+APPROACH = {"mode": "approach"}
+TUNE_ILS = {"nav_port": "1", "nav_frequency": "110.5"}
+
+
+@pytest.fixture
+def clock(sim, monkeypatch):
+    module, _, _ = sim
+    now = [100.0]
+    monkeypatch.setattr(module.time, "perf_counter", lambda: now[0])
+    return now
+
+
+def test_approach_right_after_tuning_the_ils_waits_for_the_needles(sim, clock):
+    _, plugin, xp = sim
+    say(plugin, "tune nav 1 to 110.5", "set_nav_frequency", TUNE_ILS)
+    clock[0] += 1.0
+    assert say(plugin, "approach", "set_autopilot_mode", APPROACH) == [
+        "Arming approach in 4 seconds"
+    ]
+    assert "sim/autopilot/approach" not in xp.commands_fired
+    clock[0] += 3.9
+    plugin._flight_loop()
+    assert "sim/autopilot/approach" not in xp.commands_fired  # not yet
+    clock[0] += 0.1
+    plugin._flight_loop()
+    assert xp.commands_fired[-1] == "sim/autopilot/approach"
+    assert xp.spoken[-1] == "Approach on"
+
+
+def test_approach_after_the_needles_have_settled_is_pressed_at_once(sim, clock):
+    _, plugin, xp = sim
+    say(plugin, "tune nav 1 to 110.5", "set_nav_frequency", TUNE_ILS)
+    clock[0] += 5.0
+    assert say(plugin, "approach", "set_autopilot_mode", APPROACH) == ["Approach on"]
+    assert xp.commands_fired[-1] == "sim/autopilot/approach"
+
+
+def test_approach_after_tuning_by_hand_waits_too(sim, clock):
+    _, plugin, xp = sim
+    plugin._flight_next = 0.0
+    plugin._service_flight()  # the frequency as it is
+    xp.datarefs[NAV1_HZ] = 11050  # the pilot turns the knob
+    clock[0] += 1.0
+    plugin._flight_next = 0.0
+    plugin._service_flight()  # seen once a second
+    clock[0] += 2.0
+    assert say(plugin, "approach", "set_autopilot_mode", APPROACH) == [
+        "Arming approach in 3 seconds"
+    ]
+
+
+def test_the_waiting_approach_is_not_pressed_if_it_came_on_meanwhile(sim, clock):
+    _, plugin, xp = sim  # the button toggles: pressing it now would turn it off
+    say(plugin, "tune nav 1 to 110.5", "set_nav_frequency", TUNE_ILS)
+    assert say(plugin, "approach", "set_autopilot_mode", APPROACH) == [
+        "Arming approach in 5 seconds"
+    ]
+    xp.datarefs[AP + "approach_status"] = 1
+    clock[0] += 5.0
+    plugin._flight_loop()
+    assert "sim/autopilot/approach" not in xp.commands_fired
+    assert events(plugin, "mode_press_skipped")[-1]["mode"] == "approach"
+
+
+def test_a_vor_has_no_glideslope_to_wait_for(sim, clock):
+    _, plugin, xp = sim  # Tier 1 tunes the Newberg VOR (117.40) just before
+    say(
+        plugin,
+        "tune nav 1 to 117.4",
+        "set_nav_frequency",
+        {"nav_port": "1", "nav_frequency": "117.4"},
+    )
+    assert say(plugin, "approach", "set_autopilot_mode", APPROACH) == ["Approach on"]
+
+
+@pytest.mark.parametrize(
+    ("units", "ils"),
+    [(11050, True), (10810, True), (11195, True), (10800, False), (11180, False), (11740, False)],
+)
+def test_ils_frequencies_have_an_odd_tenth(sim, units, ils):
+    module, _, _ = sim
+    assert bool(module.is_ils(units)) == ils
+
+
+def test_only_approach_waits_for_the_needles(sim, clock):
+    _, plugin, xp = sim  # nav follows the localizer or VOR: no glideslope
+    say(plugin, "tune nav 1 to 110.5", "set_nav_frequency", TUNE_ILS)
+    assert say(plugin, "nav", "set_autopilot_mode", {"mode": "nav"}) == ["Nav on"]
+
+
 # ---------------------------------------------------------------------------
 # Tier 2: radios and transponder
 # ---------------------------------------------------------------------------

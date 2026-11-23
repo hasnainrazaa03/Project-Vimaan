@@ -34,6 +34,7 @@ own output goes to ``vimaan_<ts>.worker.log``. See
 ``ML/vimaan_nlu/telemetry.py`` and ``scripts/vimaan_log_report.py``.
 """
 
+import math
 import time
 
 _IMPORT_T0 = time.perf_counter()
@@ -486,6 +487,21 @@ ACTIVE_ONLY_MODES = ("altitude hold",)
 FMS_MODES = ("v nav", "l nav")
 # Modes that follow a radio signal (VOR, localizer).
 RADIO_MODES = ("nav", "approach", "back course")
+# Approach waits this long after a NAV frequency changes. The C172's S-Tec
+# 55 armed the localizer but never the glideslope when "approach" came 0.3 s
+# after the ILS was tuned (4 of 4, a probe outside Vimaan) and once at 3.3 s
+# (a flight); 5 s after, every time. The needle takes about 2.5 s to swing
+# to full scale, and still near the middle it reads as on the glideslope
+# (L.2.3, 2026-11-22).
+NAV_SETTLE_SEC = 5.0
+
+
+def is_ils(units_10khz):
+    """An ILS localizer frequency (10 kHz units): 108.10-111.95 MHz with an
+    odd tenth. Only an ILS has a glideslope to wait for (a VOR has none)."""
+    return units_10khz is not None and 10800 <= units_10khz < 11200 and (units_10khz // 10) % 2
+
+
 # cockpit2/controls/parking_brake_ratio is deprecated in 12.4 (X-Plane logs
 # "has been replaced" on every read); this is its replacement.
 DREF_PARKING_BRAKE = "sim/flightmodel/controls/parkbrake"
@@ -651,6 +667,9 @@ class PythonInterface:
         self._held: dict[str, Any] | None = None  # the command a safety rule is holding
         self._probe: dict[str, Any] | None = None  # a running aircraft probe
         self._deferred: list[dict[str, Any]] = []  # main-thread actions due later
+        # NAV frequencies as last seen, and when each last changed (perf_counter).
+        self._nav_seen: dict[str, int | None] = {}
+        self._nav_changed_at: dict[str, float] = {}
         self._baro_step: dict[str, Any] | None = None  # altimeter set by knob steps
         self._knob_step: dict[str, Any] | None = None  # selectors turned by clicks
         self._heading_step: dict[str, Any] | None = None  # the heading knob turned by clicks
@@ -2217,6 +2236,7 @@ class PythonInterface:
         if now < self._flight_next:
             return
         self._flight_next = now + FLIGHT_SAMPLE_SEC
+        self._watch_nav_tuning(now)
         if self._read_int(DREF_PAUSED) == 1:
             return
         if self._flight_settle > 0:  # the instruments are still coming alive
@@ -3627,10 +3647,30 @@ class PythonInterface:
         if status is not None and (status >= on_at) == (state == "on"):
             self._say(f"{name} already {state}")
             return "no_op"
+        wait = self._nav_settling_sec() if mode == "approach" and state == "on" else 0.0
+        if wait > 0:
+            # Pressed now it would arm the localizer only (NAV_SETTLE_SEC).
+            self._later(wait, lambda: self._press_mode_later(mode, role, status_dref, on_at))
+            sec = math.ceil(wait)
+            self._say(f"Arming approach in {sec} second{'s' if sec != 1 else ''}")
+            return "pending"
+        return self._press_mode(mode, role, status_dref, on_at, state == "on")
+
+    def _press_mode_later(self, mode, role, status_dref, on_at):
+        """The deferred press: never if it came on meanwhile (the button
+        toggles), and only if it can still be selected."""
+        status = self._read_int(status_dref)
+        if status is not None and status >= on_at:
+            self.tel.event("mode_press_skipped", cmd=self._current_cmd, mode=mode, status=status)
+            return
+        self._press_mode(mode, role, status_dref, on_at, True)
+
+    def _press_mode(self, mode, role, status_dref, on_at, want_on):
+        name = MODE_SPOKEN.get(mode, mode.capitalize())
+        command = self.profile.command(role)
         if not self._fire_command(command):
             self._say(f"Cannot select {name}")
             return "failed"
-        want_on = state == "on"
         # The FMS modes engage only with a flight plan: the 737's LNAV and
         # VNAV buttons did nothing in the probe without one.
         fms = mode in FMS_MODES and (
@@ -3894,7 +3934,29 @@ class PythonInterface:
         if port is None:
             return "rejected"
         spoken = f"NAV {port} on, set to" if self._nav_power_on(port) else f"NAV {port} set to"
-        return self._tune(f"NAV {port}", DREF_NAV_10KHZ[port], fval, 100, spoken)
+        outcome = self._tune(f"NAV {port}", DREF_NAV_10KHZ[port], fval, 100, spoken)
+        if outcome == "executed":
+            value = self._read_int(DREF_NAV_10KHZ[port])
+            if is_ils(value):
+                self._nav_changed_at[port] = time.perf_counter()
+            self._nav_seen[port] = value
+        return outcome
+
+    def _watch_nav_tuning(self, now):
+        """Note when a NAV radio is tuned to an ILS, by hand or a flip from
+        standby."""
+        for port, name in DREF_NAV_10KHZ.items():
+            value = self._read_int(name)
+            if port in self._nav_seen and value != self._nav_seen[port] and is_ils(value):
+                self._nav_changed_at[port] = now
+            self._nav_seen[port] = value
+
+    def _nav_settling_sec(self):
+        """Seconds until the needles have settled after an ILS was tuned."""
+        if not self._nav_changed_at:
+            return 0.0
+        since = time.perf_counter() - max(self._nav_changed_at.values())
+        return max(0.0, NAV_SETTLE_SEC - since)
 
     def _nav_power_on(self, port):
         """Switch NAV ``port`` on when it's off, to tune it: True if it was
