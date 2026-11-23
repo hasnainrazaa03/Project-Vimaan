@@ -609,6 +609,113 @@ OVERRIDES: tuple[Override, ...] = (
         "X-Plane 12.4.4",
         live=("laminar/sf50/controls/landing_gear_detents",),
     ),
+    # Engine starts (L.2, flown by hand 2026-11-22: ~/Vimaan_Logs/measuring/l2,
+    # start_steps_probe.py). Each jet needs its APU's air first, or its own
+    # buttons; then Vimaan's held starter and fuel at 20 % N2 do the rest.
+    Override(
+        name="citx_engines",
+        requires=("laminar/CitX/APU/master_switch_toggle", "laminar/CitX/APU/starter_switch_up"),
+        commands=MappingProxyType({}),
+        settings=MappingProxyType(
+            {
+                # Its starter turned nothing without air (11.9 % N2 for 60 s).
+                # With the APU master on (already on at a running start: a
+                # press turns it off), its starter switch held until the APU
+                # runs and its bleed switch up, one engine went 2.5 to 64 %
+                # N2; its own script runs the starter to 40 %. Ignition stays
+                # NORM (auto igniters).
+                "apu_start": (
+                    (
+                        "once_unless",
+                        "laminar/CitX/APU/master_switch_term",
+                        1.0,
+                        "laminar/CitX/APU/master_switch_toggle",
+                    ),
+                    (
+                        "hold_until",
+                        "laminar/CitX/APU/starter_switch_up",
+                        "sim/cockpit2/electrical/APU_running",
+                        1.0,
+                    ),
+                ),
+                "apu_bleed": (
+                    "laminar/CitX/APU/bleed_switch_up",
+                    "laminar/CitX/APU/bleed_air_switch_term",
+                ),
+            }
+        ),
+        source="Laminar Citation X xlua CitX_APU, CitX_engine, X-Plane 12.4.4",
+        live=("laminar/CitX/APU/master_switch_term",),
+    ),
+    Override(
+        name="md82_engines",
+        requires=(
+            "laminar/md82cmd/bleedair/APU_dwn",
+            "laminar/md82cmd/electrical/cross_tie_APU_L",
+            "laminar/md82cmd/electrical/cross_tie_APU_R",
+        ),
+        commands=MappingProxyType({}),
+        settings=MappingProxyType(
+            {
+                # As its own autostart (md80_auto_board_start): its APU starts
+                # only with fuel pump 1 spinning; its START is held to 95 % N1;
+                # then the APU's power goes onto both buses. Without the bus
+                # ties its starter had no power (two of three buses at 0 V) and
+                # the core stayed at 0 % with the APU's air on.
+                "apu_start": (
+                    ("hold_for", "sim/fuel/fuel_pump_1_on", 2.0),
+                    (
+                        "hold_until",
+                        "sim/electrical/APU_start",
+                        "sim/cockpit2/electrical/APU_N1_percent",
+                        95.0,
+                    ),
+                    (
+                        "once_unless",
+                        "laminar/md82/electrical/cross_tie_APU_L",
+                        1.0,
+                        "laminar/md82cmd/electrical/cross_tie_APU_L",
+                    ),
+                    (
+                        "once_unless",
+                        "laminar/md82/electrical/cross_tie_APU_R",
+                        1.0,
+                        "laminar/md82cmd/electrical/cross_tie_APU_R",
+                    ),
+                ),
+                "apu_bleed": ("laminar/md82cmd/bleedair/APU_dwn", "laminar/md82/bleedair/APU_on"),
+            }
+        ),
+        source="Laminar MD-82 xlua md80_apu, md80_bleedair, md80_electrical, md80_ignition, "
+        "md80_auto_board_start, X-Plane 12.4.4",
+        live=("laminar/md82/bleedair/APU_on",),
+    ),
+    Override(
+        name="sf50_engine",
+        requires=("laminar/SF50/ignition_up", "laminar/SF50/eng_start_stop_toggle"),
+        commands=MappingProxyType({}),
+        settings=MappingProxyType(
+            {
+                # Its script restarts the engine while START/STOP says run
+                # (X-Plane's shut-down left it running at 56 % N2). Stop: the
+                # knob down, then START/STOP; start: the knob up, then
+                # START/STOP, which it takes only below 9 % N2; its engine
+                # control does the rest (0 to 56 % N2 in 40 s).
+                "engine_steps": {
+                    "1": {
+                        "start": ("laminar/SF50/ignition_up", "laminar/SF50/eng_start_stop_toggle"),
+                        "stop": (
+                            "laminar/SF50/ignition_down",
+                            "laminar/SF50/eng_start_stop_toggle",
+                        ),
+                    }
+                },
+                "start_below_pct": 9.0,
+            }
+        ),
+        source="Laminar Vision SF50 xlua sf50_ignition, X-Plane 12.4.4",
+        live=("laminar/SF50/ignition_position",),
+    ),
 )
 
 

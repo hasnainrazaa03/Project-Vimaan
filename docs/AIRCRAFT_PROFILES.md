@@ -433,6 +433,20 @@ checklist.
 Every step is logged: `crank_begin` (start type, fuel lever, core speed),
 `fuel_on` (how it was opened), and `crank_end` (peak core speed, fuel on, result).
 
+### Per-aircraft start steps (L.2, 2026-11-22)
+
+Before the usual jet start, an aircraft can need its APU's air (Override
+settings `apu_start`, `apu_bleed`) or its own buttons (`engine_steps`). Each
+was found by hand on the runway (`~/Vimaan_Logs/measuring/l2/start_steps_probe.py`).
+APU steps: `once`, `hold_for` (seconds), `hold_until` (a dataref reaches a
+value), and `once_unless` (press a toggle only when its state is below a value).
+
+| Aircraft | Before the start | Found |
+| --- | --- | --- |
+| Citation X (`citx_engines`) | APU master on (`once_unless`: a running start leaves it on, and a press turns it off); APU starter switch held until the APU runs; APU bleed switch up. Ignition stays NORM. | Without air its starter turned nothing (11.9 % N2 for 60 s); with it, 2.5 to 64 % N2 |
+| MD-82 (`md82_engines`) | Fuel pump 1 held 2 s (its APU starts only with the pump spinning); APU start held to 95 % N1; the APU onto both buses (`once_unless` each); APU bleed on. Its ignition knob is cosmetic. | With air but no bus ties, two of three buses read 0 V and the core stayed at 0 %; tied, both engines to 52.8 % N2 |
+| SF50 (`sf50_engine`) | `engine_steps`. Stop: ignition knob down, then START/STOP. Start: knob up, then START/STOP, taken only below 9 % N2 (`start_below_pct`; Vimaan waits, up to 60 s); its engine control does the rest. | X-Plane's shut-down left it running (its script restarts it); with its buttons, off, then 0 to 56 % N2 in 40 s |
+
 ## Override and cancel
 
 After a safety hold ("Confirm gear up, low altitude. Say override, or repeat

@@ -94,11 +94,6 @@ GO_AROUND_AT_FT = 500  # above the ground
 GO_AROUND_TO_FT = 3000
 
 
-# Their engine starts (the APU or starting air, the SF50's ignition knob)
-# aren't profiled yet, so the restart flight isn't flown on them.
-JET_START_NOT_PROFILED = "its engine start isn't profiled yet (phase L.2)"
-
-
 @dataclass(frozen=True)
 class Plane:
     """How each aircraft is flown (numbers from the .acf and from flying it)."""
@@ -292,7 +287,6 @@ PLANES: dict[str, Plane] = {
         pull=0.4,
         vs_clean_kt=135,
         speed_brakes=True,
-        no_restart=JET_START_NOT_PROFILED,
         air_final=True,
         final_nm=14.0,
     ),
@@ -312,7 +306,6 @@ PLANES: dict[str, Plane] = {
         vs_clean_kt=150,
         autothrottle=True,
         speed_brakes=True,
-        no_restart=JET_START_NOT_PROFILED,
         air_final=True,
         final_nm=14.0,
         configure_early=True,
@@ -332,7 +325,6 @@ PLANES: dict[str, Plane] = {
         throttle_from=0.6,
         vs_clean_kt=75,
         engines=1,
-        no_restart=JET_START_NOT_PROFILED,
         climb_fpm=1000,
         climb_words="one thousand",
         air_final=True,
