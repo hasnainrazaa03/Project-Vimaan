@@ -4785,3 +4785,27 @@ def test_one_command_is_unchanged(sim):
     assert say(plugin, "gear down", "toggle_landing_gear", {"state": "down"}) == [
         "Gear already down"
     ]
+
+
+# ---------------------------------------------------------------------------
+# Phase L.4: checklists (the command; the engine comes in L.4.5)
+# ---------------------------------------------------------------------------
+def test_a_checklist_read_as_another_command_is_refused(sim):
+    # v27 armed approach mode on "approach checklist": it predates checklists.
+    _, plugin, xp = sim
+    plugin._model_intents = {"set_autopilot_mode", "toggle_lights"}
+    spoken = say(plugin, "approach checklist", "set_autopilot_mode", {"mode": "approach"})
+    assert spoken == ["Checklists need a newer model"]
+    assert xp.commands_fired == []
+    plugin._model_intents = {"set_autopilot_mode", "run_checklist"}
+    spoken = say(plugin, "approach checklist", "set_autopilot_mode", {"mode": "approach"})
+    assert spoken == ["Which checklist?"] and xp.commands_fired == []
+
+
+def test_the_checklist_command_is_known_and_not_ready_yet(sim):
+    _, plugin, xp = sim
+    spoken = say(
+        plugin, "before landing checklist", "run_checklist", {"checklist": "before landing"}
+    )
+    assert spoken == ["Checklists aren't ready yet"]
+    assert xp.commands_fired == [] and xp.writes == []

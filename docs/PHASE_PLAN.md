@@ -1770,7 +1770,7 @@ designs come later in this document.
     (2026-11-22).
   - [x] L.4.2 Grammar: four new words, measured (2026-11-22). Installed only
     together with v28.
-  - [ ] L.4.3 The checklist command, data v20, gold.
+  - [x] L.4.3 The checklist command, data v20, gold (2026-11-22).
   - [ ] L.4.4 v28 (v27's recipe), gated once against v27; the gates unchanged.
   - [ ] L.4.5 The plugin: the checklist engine, offers, opt-in suggestions.
   - [ ] L.4.6 Checklists in the sim on the nine aircraft.
@@ -1822,6 +1822,34 @@ mode with v27 (the rest are no command). So the grammar is installed only
 together with v28, which knows the checklist commands. The real-voice
 fixtures are re-heard with the new grammar in L.4.3, and gate 4 compares v27
 and v28 on those.
+
+**L.4.3 The checklist command (2026-11-22).** `run_checklist` with one
+slot, `checklist` (before takeoff, after takeoff, approach, before landing,
+after landing, shutdown), its command word "checklist". Its 20 phrasings use
+only words the grammar had plus the four L.4.2 measured, so the generated
+grammar gained exactly those four. The plugin knows the command and, until
+the engine (L.4.5), says "Checklists aren't ready yet".
+
+- **A guard for any install in between:** "checklist" is in no other
+  command, so a phrase with it read as another command is refused ("Which
+  checklist?", or "Checklists need a newer model" when the model predates
+  them). With v27, "approach checklist" is now refused, not approach mode.
+  The gate mirrors it (`checklist_misread`).
+- **The real-voice fixtures re-heard** with the new grammar: 3 of 118 clips
+  and 1 of 57 differently (the two "parking brake off" clips that already
+  failed now "parking takeoff"; garbled ones still garbled).
+- **Data v20 = data v19 byte for byte + 4,400 rows** (`generate_v2.py
+  --extend ... --intents run_checklist --per-intent 4000`): 4,000 checklist
+  rows and 400 negatives; v19's sha256 `d43a77c8…` is a prefix of v20's
+  (`375c4f1a…`); 159,720 rows. New rows: 3,481 train, 237 dev, 682 test; none
+  dropped. Held-out phrasings: "checklist {checklist} please", "now the
+  {checklist} checklist", "start the {checklist} checklist please"; dev: "get
+  the {checklist} checklist".
+- **Gold (written before any v28 result):** 12 checklist rows (among them
+  "approach checklist", the one v27 acted on wrongly), 2 that stay what they
+  were ("approach mode on", "parking brake off"), and 5 fragments that must
+  not act ("checklist", "before landing", "after takeoff", "takeoff",
+  "before").
 
 ### L.3 Two commands in one breath
 

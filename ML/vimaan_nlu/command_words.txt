@@ -4,6 +4,7 @@ abort
 activate
 affirm
 affirmative
+after
 ahead
 airspeed
 all
@@ -34,6 +35,7 @@ batteries
 battery
 beacon
 beautiful
+before
 belt
 belts
 boost
@@ -48,6 +50,7 @@ can
 cancel
 change
 charlie
+checklist
 city
 climb
 co
@@ -266,6 +269,7 @@ sunset
 swap
 switch
 t
+takeoff
 taxi
 tell
 ten
