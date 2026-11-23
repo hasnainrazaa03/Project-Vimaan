@@ -79,7 +79,9 @@ def load(version: str):
     loader = ModelLoader(torch.device("cpu"))
     loader.load_all(model_path=str(MODELS / version), quantize=True)
 
-    def run(text: str) -> dict[str, Any]:
+    from vimaan_nlu.multi import two_commands
+
+    def read(text: str) -> dict[str, Any]:
         return predict(
             text,
             loader.model,
@@ -88,6 +90,12 @@ def load(version: str):
             loader.intent_map_rev,
             loader.slot_map_rev,
         )
+
+    def run(text: str) -> dict[str, Any]:
+        # As the worker: the reading, and two commands if it holds two (L.3.1).
+        p = read(text)
+        p["two_commands"] = two_commands(text, read, whole_reading=p)
+        return p
 
     return run
 
@@ -142,6 +150,8 @@ def decide(p: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
     cmd = command(intent)
     if looks_like_question(p.get("original_text") or ""):
         return no("question")  # checked before the model's answer, as in the plugin
+    if p.get("two_commands"):
+        return no("two_commands")  # the plugin's L.3.1 refusal: neither is done
     if p["confidence"] < CONFIDENCE_FLOOR:
         return no("low_confidence")
     if cmd is None or not cmd.actionable:

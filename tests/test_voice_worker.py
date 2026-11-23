@@ -656,3 +656,41 @@ def test_usage_reports_come_from_their_own_thread():
     thread = voice_worker.start_usage_reports(send, 0.01, Sampler())
     assert thread.daemon and got.wait(2)
     assert sent[0] == {"type": "usage", "every_sec": 0.01, "worker_rss_mb": 900}
+
+
+def test_two_commands_come_with_the_result():
+    # Phase L.3.1: the worker finds them; the plugin refuses them.
+    table = {
+        "gear down flaps fifteen": ("set_flaps", {"position": "down", "flap_setting": "15"}),
+        "gear down": ("toggle_landing_gear", {"state": "down"}),
+        "flaps fifteen": ("set_flaps", {"flap_setting": "15"}),
+    }
+
+    def predict(text):
+        intent, slots = table.get(text, ("None", {}))
+        return {"intent": intent, "slots": slots, "confidence": 1.0, "normalized_text": text}
+
+    out: list[dict] = []
+    w = VoiceWorker(out.append, None, lambda r, s: "", predict)
+    w.handle({"op": "text", "cmd": "c1", "text": "gear down flaps fifteen"})
+    assert [p["text"] for p in out[-1]["two_commands"]] == ["gear down", "flaps fifteen"]
+    w.handle({"op": "text", "cmd": "c2", "text": "gear down"})
+    assert out[-1]["two_commands"] is None
+
+
+def test_a_failing_two_command_look_still_sends_the_command(monkeypatch):
+    import vimaan_nlu.voice_worker as vw
+
+    def broken(*a, **k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(vw, "two_commands", broken)
+
+    def predict(text):
+        return {"intent": "toggle_landing_gear", "slots": {"state": "down"}, "confidence": 1.0}
+
+    out: list[dict] = []
+    w = VoiceWorker(out.append, None, lambda r, s: "", predict)
+    w.handle({"op": "text", "cmd": "c1", "text": "gear down"})
+    assert out[-1]["type"] == "result" and out[-1]["two_commands"] is None
+    assert any("two_commands failed" in m.get("msg", "") for m in out if m["type"] == "log")

@@ -98,6 +98,7 @@ from vimaan_nlu.disconnect import (  # noqa: E402
 )
 from vimaan_nlu.envelope import Limits, margins  # noqa: E402
 from vimaan_nlu.flight_phase import SAMPLE_FIELDS, FlightSample, PhaseTracker  # noqa: E402
+from vimaan_nlu.multi import REPLY as TWO_COMMANDS_REPLY  # noqa: E402
 from vimaan_nlu.overlay import Overlay  # noqa: E402
 from vimaan_nlu.overlay_state import OverlayState  # noqa: E402
 from vimaan_nlu.pilot_replies import override_prefix, pilot_reply  # noqa: E402
@@ -1382,6 +1383,26 @@ class PythonInterface:
                     ask=bool(job.get("ask")),
                 )
                 self._say(QUESTION_REPLY)
+                return
+
+            # Phase L.3.1: two commands in one breath ("gear down flaps
+            # fifteen"). The model reads one and drops the other: v27 set flaps
+            # 15 and never lowered the gear. Neither is done; the pilot says
+            # them one at a time (vimaan_nlu.multi, found by the worker).
+            two = result.get("two_commands")
+            if two:
+                outcome = "rejected"
+                self.tel.event(
+                    "implausible",
+                    cmd=cmd,
+                    reason="two_commands",
+                    intent=intent_pred,
+                    parts=[
+                        {"text": p.get("text"), "intent": p.get("intent"), "slots": p.get("slots")}
+                        for p in two
+                    ],
+                )
+                self._say(TWO_COMMANDS_REPLY)
                 return
 
             # A number on its own ("one thousand") names no command: it can

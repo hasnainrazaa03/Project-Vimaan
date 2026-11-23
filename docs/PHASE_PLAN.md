@@ -1759,9 +1759,84 @@ designs come later in this document.
       ILS never arms the C172's glideslope, unsaid.
 - [ ] **L.3 Two commands in one breath:** "heading two seven zero, climb five
   thousand". Each part is read back and goes through the same rules.
+  - [x] L.3.1 Two commands are found and refused ("One command at a time"),
+    neither done (2026-11-22). Design and results: "L.3 Two commands in one
+    breath", below.
+  - [ ] L.3.2 Both done, each read back and through its own rules, on the
+    same detector (owner: later).
 - [ ] **L.4 Checklists:** read out, and each item checked against the sim.
 - [ ] **L.5 Wake word:** hands-free, offline, a licence-clean model. The two
   talk keys stay.
+
+### L.3 Two commands in one breath
+
+Started 2026-11-22. **What v27 did with two commands said together (typed,
+2026-11-22): 19 of 20 acted on one and dropped the other, silently.** "Gear
+down flaps fifteen" set flaps 15 and never lowered the gear; "gear up and
+flaps up" raised the flaps only; "climb five thousand speed two two zero" set
+the speed only; in some the second command's words leaked into the first
+("parking brake off and taxi lights on" came out as the parking brake with
+both "on" and "off"). One was refused, by the clipped-number rule.
+
+**Owner decisions (2026-11-22):**
+
+1. A safety refusal first (L.3.1): Vimaan finds two commands and says "One
+   command at a time", doing neither. Both done comes later (L.3.2) on the
+   same detector.
+2. When one part is refused, held or needs an answer: do neither, and say
+   why (L.3.2).
+3. At most two commands in one breath.
+4. Any two actions; questions stay one at a time.
+
+**The detector (`vimaan_nlu.multi`, run by the worker; the gate mirrors it).**
+Words alone can't tell: of the 29,849 single-command decision texts, 2,760
+have "and" ("go ahead and arm the speed brakes") and 4,199 have two or more
+command words ("auto brake", "parking brake", "flight level"). So the
+utterance is split where a second command can begin, at "and" or between two
+words, and the model reads each part. It is two commands only if each part is
+a whole command by itself: confident, an action, its own command word said,
+every slot it needs there and valid, and an on / off or up / down said (or a
+number: "flaps fifteen"), unless its name says on ("heading mode"). And it is
+one command when:
+
+- a split falls inside a number, or between two words side by side in any
+  command's own phrasing ("nav standby", "auto brake", "on nav");
+- the whole utterance reads as a third kind of command ("set vertical speed
+  | climb two thousand" is a vertical speed; a turn and a heading are one
+  kind, as L.1 flies a turn as a heading);
+- the whole reads as one part's kind, holds only that command's settings,
+  and the other part's own command words are that command's too ("set
+  heading | go ninety degrees" is a heading of 090);
+- both parts are the same command with the same settings ("set parking |
+  brake on").
+
+Two names sharing one verb at an "and" are two ("landing and taxi lights
+on", "gear and flaps up"): the second part is whole, and the first names a
+command but not its on / off or up / down, or names another value of the
+second's own setting (another light), with nothing else said ("beacon ahead
+and ..." was "go ahead and ...").
+
+**Measured (v27):**
+
+| Check | Result |
+| --- | --- |
+| Gold, written before any detector code (`tests/fixtures/two_commands.json`) | 40/40 pairs and 4/4 shared-verb pairs found; 0/40 tricky single commands split |
+| Fresh set, written once the rules were frozen (`two_commands_fresh.json`) | 30/30 pairs found; 0/40 single commands split |
+| The 29,849 single-command decision texts | 4 changed, act to refused: turns with a stray number in front ("eighty right turn sixty degrees", which acted as a 60° turn) |
+| The owner's clips (118) and held-out clips (57), re-heard | none changed |
+| Lone words | none can change: one command word, no "and" |
+| Time added (the worker passes its reading of the whole) | no extra model run for 60 % of utterances; p95 14-15 ms, p99 22-34 ms (a model run is 5-7 ms) |
+
+The rules were refined while measuring: on the gold's misses (flaps with a
+number, two lights, shared verbs) and on the decision texts' wrong splits
+(811, then 241, 97, 5). The fresh set was then written and measured once (30
+pairs, 0 singles split). Two later fixes followed: the leftover part's own
+command words only, and a whole reading holding another command's setting
+(the transponder code with a mode). The first was found on a decision text
+and on one owner clip that the detector had wrongly refused ("set heading to
+ninety degrees", heard "set heading go ninety degrees", which v27 flew
+right). The fresh set and the clips were re-run after both, with the results
+in the table. No data or model changed.
 
 ### L.1 Relative commands → v27
 
