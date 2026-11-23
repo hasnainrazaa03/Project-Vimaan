@@ -1748,9 +1748,10 @@ designs come later in this document.
       learning to fly these aircraft (`docs/IN_SIM_TESTING.md`, "The five L.2
       aircraft"): the rudder on the takeoff roll, climb rates, approach
       starts, flap settings. Found in Vimaan: the phase tracker's balloon
-      (#99); still open, for the owner: fixed gear counts as configured (low
-      level flight in a C172 reads as an approach), and an "approach" said
-      right after tuning the ILS never arms the C172's glideslope, unsaid.
+      (#99); fixed gear counted as configured (low level flight in a C172
+      read as an approach): now recorded as no gear, so only flaps count
+      (owner's OK 2026-11-22); and an "approach" said right after tuning the
+      ILS never arms the C172's glideslope, unsaid.
 - [ ] **L.3 Two commands in one breath:** "heading two seven zero, climb five
   thousand". Each part is read back and goes through the same rules.
 - [ ] **L.4 Checklists:** read out, and each item checked against the sim.

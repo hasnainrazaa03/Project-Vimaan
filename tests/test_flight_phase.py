@@ -201,6 +201,8 @@ def test_reset_starts_a_new_flight():
         (dict(on_ground=False, agl_ft=1800.0, vs_fpm=-700.0), "descent", "approach"),
         (dict(on_ground=False, agl_ft=1800.0, vs_fpm=0.0, flaps=0.3), "cruise", "approach"),
         (dict(on_ground=False, agl_ft=1800.0, vs_fpm=0.0), "cruise", "cruise"),  # low, clean, level
+        # Fixed gear is recorded as None: a C172 level and clean is cruising.
+        (dict(on_ground=False, agl_ft=1300.0, vs_fpm=0.0, gear=None), "cruise", "cruise"),
         # Clean and dipping from level flight (over hills): a descent first.
         (dict(on_ground=False, agl_ft=2380.0, vs_fpm=-311.0), "cruise", "descent"),
         (dict(on_ground=False, agl_ft=2380.0, vs_fpm=-311.0), None, "descent"),  # an air start

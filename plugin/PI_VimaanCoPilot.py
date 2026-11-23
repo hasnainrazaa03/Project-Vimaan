@@ -2290,10 +2290,18 @@ class PythonInterface:
             gs_kt=_round(None if gs_ms is None else gs_ms / MPS_PER_KNOT, 1),
             ias_kt=_round(self._read_float("sim/cockpit2/gauges/indicators/airspeed_kts_pilot"), 1),
             vs_fpm=_round(self._read_float(DREF_VERTICAL_SPEED_FPM), 0),
-            gear=_round(self._read_array(DREF_GEAR_DEPLOY, 0, is_float=True), 2),
+            gear=self._gear_for_phase(),
             flaps=_round(self._read_float(DREF_FLAP_HANDLE), 2),
             altitude_ft=_round(self._read_float(DREF_ALTITUDE_ACTUAL), 0),
         )
+
+    def _gear_for_phase(self):
+        """The gear deploy ratio, or None on fixed gear: always down, it
+        doesn't say the aircraft is set up to land. The C172's and SR22's
+        level flight below 2,500 ft read as an approach (L.2.3, 2026-11-22)."""
+        if self.profile.info.gear_retractable is False:
+            return None
+        return _round(self._read_array(DREF_GEAR_DEPLOY, 0, is_float=True), 2)
 
     def _bridge_state(self):
         info = self.profile.info
