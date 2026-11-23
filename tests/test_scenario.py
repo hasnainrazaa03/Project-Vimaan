@@ -256,7 +256,8 @@ def test_tier1_scenarios_are_complete(aircraft):
 
 def test_the_fleet_and_the_new_aircraft_are_all_set_up():
     # Phase L.2's five joined the fleet ("all") once their checklists passed.
-    assert set(tier1.FLEET) == set(tier1.SETUPS)
+    assert set(tier1.FLEET) | set(tier1.ADDONS) == set(tier1.SETUPS)
+    assert not set(tier1.FLEET) & set(tier1.ADDONS)
     assert set(tier1.NEW) < set(tier1.FLEET)
     from simtest import xplane
 

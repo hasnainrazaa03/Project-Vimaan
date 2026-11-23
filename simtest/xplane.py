@@ -73,6 +73,8 @@ AIRCRAFT = {
     "citx": "Aircraft/Laminar Research/Cessna Citation X/Cessna_CitationX.acf",
     "md82": "Aircraft/Laminar Research/McDonnell Douglas MD-82/MD80.acf",
     "sf50": "Aircraft/Laminar Research/Cirrus Vision SF50/CirrusSF50.acf",
+    # A free add-on: the Zibo mod's 737-800 (v4.05.33), installed by hand.
+    "zibo": "Aircraft/B737-800X/b738.acf",
 }
 
 

@@ -74,6 +74,19 @@ SETUPS: dict[str, Setup] = {
         True,
         "generic",
     ),
+    # The Zibo mod's 737-800: Laminar's 737 rebuilt, its own scripts and
+    # plugin (phase L.2, profiling).
+    "zibo": Setup(
+        "B738",
+        10000,
+        250,
+        8000,
+        "eight thousand",
+        250,
+        "two five zero",
+        True,
+        "generic",
+    ),
     "a330": Setup(
         "A333",
         10000,
@@ -158,6 +171,8 @@ SETUPS: dict[str, Setup] = {
 NEW = ("c172", "sr22", "citx", "md82", "sf50")
 # The aircraft every checklist passes on: "all" in the runner.
 FLEET = ("baron", "kingair", "737", "a330", *NEW)
+# Free add-ons being profiled, not yet in FLEET.
+ADDONS = ("zibo",)
 
 
 def _faster_than_vfe(want: bool, vfe_full: float | None) -> SimCheck:
