@@ -226,6 +226,19 @@ down"** on an approach below 500 ft. They're off by default: bind **Vimaan: call
 (`vimaan/toggle_callouts`) to a key, or set `VIMAAN_CALLOUTS=1` before launch. The stall speeds
 are the aircraft file's, for one weight, so "Speed" is a guide.
 
+### Checklists
+
+Say **"before takeoff checklist"** (or after takeoff, approach, before landing, after landing,
+shutdown). Vimaan reads each item, checks it in the sim and says what it found ("Gear down,
+checked"), then sums up what is left open. A wrong item is offered: "Landing lights off. Set
+landing lights on? Say confirm, or cancel." **Confirm** sets it through the same command and
+safety rules as saying it yourself; **cancel** leaves it open and the checklist goes on; cancel
+between items stops the checklist. An item the aircraft lacks (fixed gear, no auto brake) is
+skipped. The lists are in [docs/PHASE_PLAN.md](docs/PHASE_PLAN.md) ("L.4 Checklists").
+Suggestions at phase changes ("Before takeoff checklist? Say confirm, or cancel." when taxiing
+after an engine start) are off by default: bind **Vimaan: checklists suggested at phase changes
+on/off** (`vimaan/toggle_checklist_suggestions`) to a key, or set `VIMAAN_CHECKLISTS=1`.
+
 ---
 
 ## Prerequisites
