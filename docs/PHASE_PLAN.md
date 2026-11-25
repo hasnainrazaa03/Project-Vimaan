@@ -1771,7 +1771,9 @@ designs come later in this document.
   - [x] L.4.2 Grammar: four new words, measured (2026-11-22). Installed only
     together with v28.
   - [x] L.4.3 The checklist command, data v20, gold (2026-11-22).
-  - [ ] L.4.4 v28 (v27's recipe), gated once against v27; the gates unchanged.
+  - [x] L.4.4 v28 (v27's recipe), gated against v27; the gates unchanged
+    (2026-11-24): the equal average of eight runs passes all six. Not
+    installed: it goes in with the grammar and the engine.
   - [x] L.4.5 The plugin: the checklist engine, offers, opt-in suggestions
     (2026-11-22). Installed only together with v28.
   - [ ] L.4.6 Checklists in the sim on the nine aircraft.
@@ -1851,6 +1853,64 @@ the engine (L.4.5), says "Checklists aren't ready yet".
   were ("approach mode on", "parking brake off"), and 5 fragments that must
   not act ("checklist", "before landing", "after takeoff", "takeoff",
   "before").
+
+**L.4.4 v28 (2026-11-22 to 2026-11-24).** v27's recipe (#58) on data v20,
+eight seeds fixed before training (v28-a to v28-h, seeds 1–8), a greedy soup
+on dev, one gate against v27. All eight trained (best checkpoints at epochs
+1–4).
+
+- **First candidate, v28-soup1 (the greedy soup): failed gate 2 only.** The
+  greedy soup kept one run, v28-b (dev 7,717 / 342 / 0; adding any other run
+  scored 1–8 points lower), so the candidate was a single run, not an
+  average. Gate 2: 24,333 / 876 / 5 against v27's 24,341 / 871 / 2, the
+  right rate within the bar but three more wrong:
+  - "twenty eight degrees right away" (heading 028) turned right 28°;
+  - "alt brake off", twice (parking brake off, "parking" garbled by noise),
+    set the auto brake off.
+
+  Gates 1 and 3–6 passed.
+- **The two texts, run by run** (for diagnosis; nothing was picked from it):
+
+  | Text | v27's runs (e–l) | v28's runs (a–h) | v28-b |
+  | --- | --- | --- | --- |
+  | "twenty eight degrees right away" | 6 right, 1 refused, 1 wrong | 5 right, 3 wrong | wrong |
+  | "alt brake off" | 6 right, 2 wrong | 4 right, 1 refused, 3 wrong | wrong |
+
+  Single runs of both models split on these. v27-e makes v28-b's two
+  mistakes, and v27's average gets both right; v28-b is the worst of the
+  eight here. Mostly one run's luck, as with q1's second attempt, though
+  v28's runs act wrong on them a little more often (6 of 16 against 3).
+- **Owner's decision (2026-11-24):** a variance re-roll, the equal average of
+  all eight runs, gated once. The rule picks no runs, so the table above plays
+  no part in it.
+- **Second candidate, v28-soup2 (the equal average of v28-a to v28-h): all
+  six gates pass.** v28 = v28-soup2.
+
+  | Gate | v28 | v27 |
+  | --- | --- | --- |
+  | 1 New phrasings | intent 0.9997, slot F1 0.9999 (the checklist command 1.000) | 0.9784 / 0.9786 (it has no checklist command) |
+  | 2 Old data, right / refused / wrong | 24,340 / 872 / 2 (96.53 %) | 24,341 / 871 / 2 (96.54 %) |
+  | 3 Gold | 127 / 127; 19 / 19 fragments not acted on | |
+  | 4 Real voice | 89 / 29 / 0 | 88 / 28 / 2 |
+  | 5 Negatives refused | 2,239 / 2,240 | 2,239 / 2,240 |
+  | 6 Latency, p95 | 21.8 ms | |
+
+  - Gate 2's two wrong are the two v27 gets wrong too ("radial brake off
+    please", "please turn left forty eight if you would"). No row v27 gets
+    right is wrong; three are now refused ("a put the transponder in alt",
+    "confirm put the transponder in alt strobes", "thirty degrees for
+    parking").
+  - Gate 4: of v27's two wrong clips, "flaps down ident" now lowers the
+    flaps and the "tune com two" clip heard as "fuel current auto one ..." is
+    refused.
+  - The held-out voice set (measured, deciding nothing): 48 / 9 / 0, the same
+    as v27.
+  - Gate 6: v27 and v28 measure the same, about 20 ms each, timed in turn on
+    today's code. The rise from v27's 6.3 ms at its own gate is the code
+    since then (the two-command detector, L.3.1, reads the parts too), not
+    the model; it leaves about 5 ms under the 25 ms bar.
+- **Not installed.** v28 goes in together with the grammar (L.4.2) and the
+  engine (L.4.5): with v27, "approach checklist" would be refused at best.
 
 **L.4.5 The checklist engine (2026-11-22).** The lists, the check of each
 item, its words and the suggestions are `vimaan_nlu/checklists.py` (pure
