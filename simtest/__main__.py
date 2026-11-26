@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import flights, relative, scenario, tier1, tier2, tier3, tier4, voice, xplane
+from . import checklists, flights, relative, scenario, tier1, tier2, tier3, tier4, voice, xplane
 from .bridge import Bridge, NoAnswer
 
 
@@ -78,7 +78,15 @@ def main(argv: list[str] | None = None) -> int:
     rn = sub.add_parser("run", help="run a checklist scenario, unattended, and write a report")
     rn.add_argument(
         "checklist",
-        choices=("tier1", "tier2", "tier3", "tier4", "relative", *flights.FLIGHTS),
+        choices=(
+            "tier1",
+            "tier2",
+            "tier3",
+            "tier4",
+            "relative",
+            "checklists-air",
+            *flights.FLIGHTS,
+        ),
     )
     rn.add_argument("aircraft", choices=(*tier1.SETUPS, "all", "new"))
     rn.add_argument("--text", action="store_true", help="no generated voice: text to the model")
@@ -227,6 +235,8 @@ def _model_lacks(checklist: str, state: dict) -> str | None:
         "tier2": (tier2.NEEDS_INTENT, "Tier 2", "v20"),
         "tier3": (tier3.NEEDS_INTENT, "Tier 3", "v26"),
         "relative": (relative.NEEDS_INTENT, "relative commands", "v27"),
+        "checklists-air": (checklists.NEEDS_INTENT, "checklists", "v28"),
+        "checklists-ground": (checklists.NEEDS_INTENT, "checklists", "v28"),
     }
     if checklist not in needs or known is None:
         return None
@@ -278,7 +288,7 @@ def _run(args: argparse.Namespace) -> int:
                 )
             br.enable()
             state = _wait_ready(
-                br, setup.icao, airborne=args.checklist not in ("takeoff", "restart")
+                br, setup.icao, airborne=args.checklist not in flights.ON_THE_RUNWAY
             )
         except (xplane.XPlaneError, NoAnswer) as exc:
             print(f"✕ {exc}", file=sys.stderr)
@@ -322,6 +332,8 @@ def _run(args: argparse.Namespace) -> int:
             results = runner.run(tier4.steps(name))
         elif args.checklist == "relative":
             results = runner.run(relative.steps(name))
+        elif args.checklist == "checklists-air":
+            results = runner.run(checklists.air(name))
         else:
             results = runner.run(tier1.steps(name, vfe_full=limits.get("full")))
         total = scenario.summary(results)

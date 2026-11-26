@@ -1091,12 +1091,22 @@ def restart(aircraft: str, hands: Hands) -> list[Step]:
     ]
 
 
+def checklists_on_the_runway(aircraft: str, hands: Hands) -> list[Step]:
+    """Phase L.4.6: the checklists on the runway (simtest.checklists)."""
+    from .checklists import ground
+
+    return ground(aircraft, hands)
+
+
 FLIGHTS: dict[str, Callable[[str, Hands], list[Step]]] = {
     "takeoff": takeoff,
     "restart": restart,
     "landing": landing,
     "go-around": go_around,
+    "checklists-ground": checklists_on_the_runway,
 }
+# Flights that start on the runway; the rest on a final.
+ON_THE_RUNWAY = ("takeoff", "restart", "checklists-ground")
 
 
 def cannot_fly(flight: str, aircraft: str) -> str:
@@ -1108,7 +1118,7 @@ def start_body(flight: str, aircraft: str) -> dict[str, Any]:
     """Where each flight starts: on the runway, or on an 8 nm final."""
     from . import xplane
 
-    final = None if flight in ("takeoff", "restart") else FINAL_NM
+    final = None if flight in ON_THE_RUNWAY else FINAL_NM
     if final is not None and PLANES[aircraft].air_final:
         return final_air_start(aircraft)
     return xplane.runway_start_body(aircraft, AIRPORT, RUNWAY, final_nm=final)
