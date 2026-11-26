@@ -1776,7 +1776,9 @@ designs come later in this document.
     installed: it goes in with the grammar and the engine.
   - [x] L.4.5 The plugin: the checklist engine, offers, opt-in suggestions
     (2026-11-22). Installed only together with v28.
-  - [ ] L.4.6 Checklists in the sim on the nine aircraft.
+  - [x] L.4.6 Checklists in the sim on the nine aircraft (2026-11-26): after
+    four readings were fixed (#109), 90 of 90 on the runway and 91 of 91 in
+    the air. Open: the owner's voice on "after".
 - [ ] **L.5 Wake word:** hands-free, offline, a licence-clean model. The two
   talk keys stay.
 
@@ -1971,7 +1973,8 @@ and how it was answered, not from a list per aircraft. Run with v28, main
 | In the air | 91 of 91: the gear down where 10 kt under its limit speed (Baron, King Air, 737, MD-82, SF50; declined on the A330 and Citation X), speed brakes armed (737, A330, MD-82) |
 
 **What the runs found: four readings the checklist got wrong.** Each one is
-fixed and tested on the fake sim. They need an install, then the rerun.
+fixed and tested on the fake sim (#109), then installed (main 2bb9e07) and
+run again on all nine (below).
 
 - **The 737's and A330's transponder** read "on" while reporting altitude.
   Both modes' selector positions hold there, and "on" came first. So
@@ -1999,6 +2002,25 @@ phrase was heard right: "confirm" 116 of 116, "cancel" 31 of 31, and the
 other four checklist names 90 of 90. L.4.2 measured
 the new words on Speech Commands, which has no "after", so the owner's
 voice is not measured yet.
+
+**The rerun, with the fixes installed (2026-11-26): every step passes.**
+
+| Run | First run | Rerun |
+| --- | --- | --- |
+| On the runway | 87 of 90 | 90 of 90 |
+| In the air | 91 of 91 | 91 of 91 |
+
+- **737:** the transponder was set to altitude, then read as "Transponder
+  altitude, checked" when asked again. The A330 read altitude from the start.
+- **A330 taxi lights:** read as "Taxi lights on, checked" at T.O, and turned
+  off in the shutdown.
+- **King Air:** "Seat belt sign off" was read back in the shutdown, and
+  checked when asked again.
+- **Citation X fuel pumps:** read as "Fuel pumps auto, checked" before
+  takeoff, then set off in the shutdown.
+- **The voice:** the same as the first run. "After ... checklist" was heard 0
+  of 45 times; "confirm" 115 of 115, "cancel" 31 of 31, and the other four
+  names 90 of 90.
 
 ### L.3 Two commands in one breath
 
