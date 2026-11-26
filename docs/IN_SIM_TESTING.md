@@ -318,8 +318,12 @@ so these recordings show whether a real voice is heard better.
 
 ```bash
 python -m simtest record checklists-ground all
-python -m simtest run checklists-ground all --recordings ~/Vimaan_Logs/recordings/checklists-ground-<date>
+python -m simtest run checklists-ground all --recordings latest --launch --quit
 ```
+
+`--recordings latest` takes your newest recordings for that checklist (any
+`--out` folder). `--launch` starts X-Plane first if it isn't up (Steam may
+still ask for the launch option), and `--quit` closes it at the end.
 
 **Relative commands (phase L.1):**
 

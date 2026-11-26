@@ -90,6 +90,25 @@ def load_manifest(folder: Path) -> dict[str, Any]:
     return json.loads(path.read_text())
 
 
+def latest_folder(checklist: str, root: Path | None = None) -> Path:
+    """Your newest recordings for ``checklist`` (``run --recordings latest``):
+    the folder whose manifest is this checklist's and was saved last."""
+    root = root or default_log_dir() / "recordings"
+    found = []
+    for path in root.glob(f"*/{MANIFEST}"):
+        try:
+            manifest = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if manifest.get("checklist") == checklist and manifest.get("recordings"):
+            found.append((path.stat().st_mtime, path.parent))
+    if not found:
+        raise FileNotFoundError(
+            f"no recordings for {checklist} in {root} yet: python -m simtest record {checklist} all"
+        )
+    return max(found)[1]
+
+
 def load_recordings(folder: str | os.PathLike[str]) -> dict[str, Path]:
     """phrase -> its recording, for the runner. Only files that exist."""
     folder = Path(folder).expanduser()

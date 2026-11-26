@@ -91,11 +91,14 @@ def main(argv: list[str] | None = None) -> int:
     rn.add_argument("aircraft", choices=(*tier1.SETUPS, "all", "new"))
     rn.add_argument("--text", action="store_true", help="no generated voice: text to the model")
     rn.add_argument(
-        "--recordings", help="a folder from 'record': your voice instead of generated speech"
+        "--recordings",
+        help="a folder from 'record', or 'latest' (your newest for this checklist): "
+        "your voice instead of generated speech",
     )
     rn.add_argument("--voice", default=voice.DEFAULT_VOICE)
     rn.add_argument("--no-fly", action="store_true", help="use the flight already running")
     rn.add_argument("--quit", action="store_true", help="quit X-Plane at the end")
+    rn.add_argument("--launch", action="store_true", help="start X-Plane first if it isn't up")
 
     rec = sub.add_parser("record", help="record your voice for each phrase of a checklist")
     rec.add_argument(
@@ -277,10 +280,23 @@ def _run(args: argparse.Namespace) -> int:
         if args.text:
             print("✕ --text and --recordings: choose one", file=sys.stderr)
             return 2
-        from .record import load_recordings
+        from .record import latest_folder, load_recordings
 
+        if args.recordings == "latest":
+            try:
+                args.recordings = str(latest_folder(args.checklist))
+            except FileNotFoundError as exc:
+                print(f"✕ {exc}", file=sys.stderr)
+                return 2
         recordings = load_recordings(args.recordings)
         print(f"Your voice: {len(recordings)} recordings from {args.recordings}")
+    if args.launch and not args.no_fly and not xplane.running():
+        print("Starting X-Plane through Steam (pick “X-Plane” if Steam asks)...")
+        try:
+            xplane.launch()
+        except xplane.XPlaneError as exc:
+            print(f"✕ {exc}", file=sys.stderr)
+            return 2
     for name in names:
         setup = tier1.SETUPS[name]
         print(f"\n=== {args.checklist} on {name} ({setup.icao}) ===")
