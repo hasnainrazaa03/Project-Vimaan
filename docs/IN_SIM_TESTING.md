@@ -446,6 +446,48 @@ to …"); with them on, the A330 captured both, flared itself and landed.
   left flying east, it leaves the installed scenery and X-Plane pauses under
   a dialog only a click closes.
 
+**Checklists (Phase L.4.6):**
+
+```bash
+python -m simtest run checklists-ground all    # on the runway, engines running
+python -m simtest run checklists-air all       # Tier 1's air start, hands off
+```
+
+The runner says the checklist's name, then follows it in Vimaan's events
+(`checklist_item`, `checklist_offer`, `checklist_end`) and answers each
+offer as a pilot would: "confirm", "cancel", or nothing (the offer runs out
+after 12 s). Then it checks:
+
+- each offer settled as it was answered (confirmed: set; else open);
+- what is left open is exactly the wrong items it couldn't offer and the
+  offers not set, and Vimaan says that summary ("... complete", or "...
+  done, 2 items open: ...");
+- the gear, flaps, parking brake, speed brakes and engines it set, read
+  from the sim itself;
+- asked again, every item it set last time reads right ("checked").
+
+Nothing is listed aircraft by aircraft: what each run must show follows
+from what Vimaan offered and how it was answered.
+
+- **On the runway:**
+  - before takeoff and then after landing (which undoes it), each with
+    every offer confirmed and asked again;
+  - the approach, with the landing lights declined and the auto brake not
+    answered;
+  - after takeoff, where "Raise the gear?" confirmed is held by the gear-up
+    rule, the hold cancelled and the gear checked still down;
+  - before landing, stopped by "cancel" said straight after its name;
+  - the shutdown, engines and all, then asked again (the beacon is offered
+    once the engines are off).
+- **In the air:**
+  - after takeoff, the approach and before landing, every offer confirmed;
+    the last two asked again;
+  - the gear comes down only 10 kt or more below its limit speed (the
+    .acf's Vle), else its offer is declined;
+  - after takeoff stopped by "cancel".
+
+It needs a command model that knows the checklists (v28).
+
 A flight that misses the glideslope turns back west and holds its altitude,
 and the rest of it isn't run: flying on east, it leaves the installed
 scenery (east of about 122° W), where X-Plane pauses under a "Missing

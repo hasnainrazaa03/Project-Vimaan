@@ -14,7 +14,9 @@ Then it checks:
   several, must hold, possibly within a deadline (the aircraft has to turn
   or level off first); ``PHASE`` in its datarefs is Vimaan's phase of
   flight (Phase F), from the bridge state;
-- optionally a callout Vimaan should (or shouldn't) make.
+- optionally a callout Vimaan should (or shouldn't) make;
+- for a checklist (Phase L.4, ``Follow``), each item as Vimaan reads it, in
+  its events: every offer answered as the pilot would, then how it ended.
 
 Recognition and function are scored separately: when the voice is misheard,
 the step is recorded as a recognition miss and repeated as text, so a slip of
@@ -26,6 +28,8 @@ be flown twice): the sim checks judge what the voice did.
 from __future__ import annotations
 
 import json
+import os
+import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -146,6 +150,38 @@ class Answer:
     expected: Callable[[dict[str, Any]], str] = lambda r: ""
 
 
+ANSWERS = ("confirm", "cancel", "wait")
+# A confirmed offer's command went ahead ("pending": a knob still turning).
+GONE_AHEAD = ("executed", "pending", "no_op")
+
+
+@dataclass(frozen=True)
+class Follow:
+    """A checklist the step's phrase started, followed in Vimaan's events
+    (``checklist_item``, ``checklist_offer``, ``checklist_end``).
+
+    Each offer is answered "confirm", "cancel" or "wait" (no answer: it runs
+    out), by ``answers`` for its item, which may be a function of the bridge
+    that picks one (the gear: only below its limit speed), else ``default``.
+    Then: every offer settled as answered; what is left open is exactly the
+    wrong items not offered and the offers left open; Vimaan says the
+    summary for those; and each item set passes its ``sets`` check, read
+    from the sim, not from Vimaan."""
+
+    name: str
+    answers: Mapping[str, str | Callable[[Any], str]] = field(default_factory=dict)
+    default: str = "confirm"
+    # Confirmed offers a safety rule holds (gear up on the ground): the hold
+    # is cancelled, and the item is left open.
+    held: tuple[str, ...] = ()
+    # "cancel" said straight after the start, between items: it stops.
+    stop: bool = False
+    # Asked again: every item the last run of this checklist set reads right.
+    again: bool = False
+    sets: Mapping[str, SimCheck] = field(default_factory=dict)
+    within_sec: float = 300.0
+
+
 @dataclass(frozen=True)
 class Step:
     name: str
@@ -173,6 +209,34 @@ class Step:
     # If this step fails, the rest isn't run: these are, instead (a flight
     # that missed the glideslope turns back west, into the installed scenery).
     abort: tuple[Step, ...] | None = None
+    follow: Follow | None = None  # the checklist ``say`` starts (Phase L.4)
+
+
+class Tail:
+    """New events from a telemetry file, from ``offset`` on; a line not yet
+    written to its end waits for the next read."""
+
+    def __init__(self, path: Path, offset: int) -> None:
+        self.path, self.offset, self._rest = path, offset, b""
+
+    def read(self) -> list[dict[str, Any]]:
+        try:
+            with open(self.path, "rb") as fh:
+                fh.seek(self.offset)
+                data = fh.read()
+        except OSError:
+            return []
+        self.offset += len(data)
+        *lines, self._rest = (self._rest + data).split(b"\n")
+        out = []
+        for raw in lines:
+            try:
+                ev = json.loads(raw.decode("utf-8", errors="replace"))
+            except json.JSONDecodeError:
+                continue
+            if isinstance(ev, dict):
+                out.append(ev)
+        return out
 
 
 @dataclass
@@ -189,6 +253,10 @@ class Runner:
     callout_wait_sec: float = 4.0
     log: Callable[[str], None] = print
     results: list[dict[str, Any]] = field(default_factory=list)
+    # The last run of each checklist followed (Follow.again), by name.
+    checklist_runs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    follow_poll_sec: float = 0.25
+    summary_wait_sec: float = 6.0  # the summary is said just after the end
 
     def run(self, steps: Sequence[Step]) -> list[dict[str, Any]]:
         ran: set[str] = set()
@@ -245,6 +313,8 @@ class Runner:
             # can leave tolerance between the answer and the read after it, so
             # the sim is read just before the question too.
             before = self._read(step.answer.datarefs) if step.answer is not None else None
+            # A checklist's items come after its command's result: from here.
+            tail = self._tail() if step.follow is not None else None
             said = self._say(step.say, r, ask=step.ask)
             r.update(
                 {
@@ -281,6 +351,11 @@ class Runner:
                         f"{step.answer.what}: said {got['replies']}, sim shows {got['expected']}"
                         f" (just before the question: {got['expected_before']})"
                     )
+            if step.follow is not None and tail is not None:
+                if said.get("outcome") == "executed":
+                    r["checklist"] = self._follow(step.follow, tail, problems)
+                else:
+                    problems.append("the checklist didn't start")
         elif step.command:
             done = self.bridge.command(step.command)
             if not done.get("ok"):
@@ -389,6 +464,160 @@ class Runner:
                 out.append(ev["text"])
         return out
 
+    # ------------------------------------------------------------------
+    # Checklists (Phase L.4): Follow
+    # ------------------------------------------------------------------
+    def _tail(self) -> Tail:
+        """Vimaan's events from now on."""
+        path = Path(self.bridge.state()["events"])
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            size = 0
+        return Tail(path, size)
+
+    def _follow(self, f: Follow, tail: Tail, problems: list[str]) -> dict[str, Any]:
+        """The checklist ``f`` from its start to its spoken summary."""
+        rec: dict[str, Any] = {
+            "name": f.name,
+            "skipped": [],
+            "items": [],
+            "answers": [],
+            "offers": {},
+            "end": None,
+            "summary": None,
+        }
+        if f.stop:  # at once: the first item isn't read yet
+            rec["answers"].append(self._reply(f, None, "cancel", problems))
+        deadline = time.monotonic() + f.within_sec
+        summary_words: str | None = None
+        while True:
+            for ev in tail.read():
+                kind = ev.get("kind")
+                if kind == "speak":
+                    if summary_words is not None and ev.get("text") == summary_words:
+                        rec["summary"] = summary_words
+                    continue
+                if ev.get("checklist") != f.name or rec["end"] is not None:
+                    continue
+                if kind == "checklist_start":
+                    rec["skipped"] = list(ev.get("skipped") or [])
+                elif kind == "checklist_item":
+                    item = {k: ev.get(k) for k in ("item", "state", "result", "said")}
+                    rec["items"].append(item)
+                    # Stopping: an offer read before the "cancel" isn't answered.
+                    if item["result"] == "offered" and not f.stop:
+                        how = self._pick(f, str(item["item"]))
+                        rec["answers"].append(self._reply(f, str(item["item"]), how, problems))
+                elif kind == "checklist_offer":
+                    rec["offers"][ev.get("item")] = ev.get("result")
+                elif kind == "checklist_end":
+                    rec["end"] = {k: ev.get(k) for k in ("reason", "open", "read", "items")}
+                    if ev.get("reason") == "done":
+                        summary_words = _checklist_words().summary(
+                            f.name, list(ev.get("open") or [])
+                        )
+                        deadline = min(deadline, time.monotonic() + self.summary_wait_sec)
+            if rec["end"] is not None and (summary_words is None or rec["summary"] is not None):
+                break
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(self.follow_poll_sec)
+        self._judge(f, rec, summary_words, problems)
+        self.checklist_runs[f.name] = rec
+        return rec
+
+    def _pick(self, f: Follow, item: str) -> str:
+        how = f.answers.get(item, f.default)
+        answer = how(self.bridge) if callable(how) else how
+        if answer not in ANSWERS:
+            raise ValueError(f"{item}: answer {answer!r}, not one of {ANSWERS}")
+        return answer
+
+    def _reply(
+        self, f: Follow, item: str | None, answer: str, problems: list[str]
+    ) -> dict[str, Any]:
+        """An offer answered (``item``), or the checklist cancelled (None)."""
+        a: dict[str, Any] = {"item": item, "answer": answer}
+        if answer == "wait":
+            return a
+        said = self._say(answer, a)
+        outcome, replies = said.get("outcome"), list(said.get("replies") or [])
+        a.update(outcome=outcome, replies=replies)
+        if answer == "cancel":
+            want = "Cancelled" if item is not None else "Checklist cancelled"
+            if outcome != "cancelled" or want not in replies:
+                what = item or "the checklist"
+                problems.append(f"{what}: “cancel” → {outcome} {replies}, wanted “{want}”")
+            return a
+        if outcome == "safety_hold":
+            if item not in f.held:
+                problems.append(f"{item}: held by a safety rule: {replies[-1:]}")
+            undo = self._say("cancel", {})  # the hold, not the checklist
+            a["hold"] = {"outcome": undo.get("outcome"), "replies": undo.get("replies")}
+            if undo.get("outcome") != "cancelled":
+                problems.append(f"{item}: the hold wasn't cancelled: {undo.get('replies')}")
+        elif item in f.held:
+            problems.append(f"{item}: “confirm” → {outcome} {replies}, wanted a safety hold")
+        elif outcome not in GONE_AHEAD:
+            problems.append(f"{item}: “confirm” → {outcome} {replies}")
+        return a
+
+    def _judge(
+        self, f: Follow, rec: dict[str, Any], summary_words: str | None, problems: list[str]
+    ) -> None:
+        end = rec["end"]
+        if end is None:
+            problems.append(f"the {f.name} checklist didn't end within {f.within_sec:.0f} s")
+            return
+        want = "cancelled" if f.stop else "done"
+        if end["reason"] != want:
+            problems.append(f"it ended {end['reason']}, wanted {want}")
+        if f.stop:
+            return
+        if summary_words is not None and rec["summary"] is None:
+            problems.append(f"Vimaan didn't say “{summary_words}”")
+        for a in rec["answers"]:
+            item = a["item"]
+            gone = a["answer"] == "confirm" and a.get("outcome") in GONE_AHEAD
+            want_offer = "set" if gone else "open"
+            got = rec["offers"].get(item)
+            if got != want_offer:
+                problems.append(
+                    f"{item}: the offer ended {got or 'unsettled'}, wanted {want_offer}"
+                )
+        # Left open: the wrong items it couldn't offer, and the offers not set.
+        left = [i["item"] for i in rec["items"] if i["result"] == "open"]
+        left += [item for item, result in rec["offers"].items() if result == "open"]
+        if sorted(end["open"] or []) != sorted(left):
+            problems.append(f"open {end['open']}, wanted {left}")
+        rec["sim"] = []
+        for item, check in f.sets.items():
+            if rec["offers"].get(item) == "set":
+                got = self._check(check)
+                rec["sim"].append(got)
+                if not got["ok"]:
+                    problems.append(f"{check.what}: got {got['actual']}, wanted {check.expected}")
+        if f.again:
+            last = self.checklist_runs.get(f.name)
+            if last is None:
+                problems.append(f"asked again, but the {f.name} checklist hadn't run")
+                return
+            now = {i["item"]: i["result"] for i in rec["items"]}
+            for item, result in last["offers"].items():
+                if result == "set" and now.get(item) != "checked":
+                    problems.append(f"{item}: set last time, now {now.get(item) or 'not read'}")
+
+
+def _checklist_words() -> Any:
+    """vimaan_nlu.checklists (pure Python): what Vimaan says at a checklist's end."""
+    ml = str(Path(__file__).resolve().parents[1] / "ML")
+    if ml not in sys.path:
+        sys.path.insert(0, ml)
+    from vimaan_nlu import checklists
+
+    return checklists
+
 
 # Outcomes after which Vimaan has changed the sim, or is changing it (the
 # A330's heading knob is "pending" while it clicks).
@@ -413,11 +642,25 @@ def line(r: dict[str, Any]) -> str:
     elif r.get("heard_ok") is False:
         heard = f"  [heard “{r.get('heard')}”, same meaning]"
     detail = "; ".join(r["problems"]) if r["problems"] else " / ".join(r.get("replies") or [])
+    run = r.get("checklist")
+    if run and not r["problems"]:
+        answered = ", ".join(f"{a['item']} {a['answer']}" for a in run["answers"] if a["item"])
+        detail = run.get("summary") or f"ended {(run.get('end') or {}).get('reason')}"
+        detail += f" ({answered})" if answered else ""
     return f"{mark} {r['step']}: {detail}{heard}"
 
 
+def _said(results: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Everything said by voice: each step's phrase, and a checklist's answers."""
+    out = []
+    for r in results:
+        out.append(r)
+        out += (r.get("checklist") or {}).get("answers", [])
+    return [s for s in out if s.get("heard_ok") is not None]
+
+
 def summary(results: Sequence[dict[str, Any]]) -> dict[str, Any]:
-    said = [r for r in results if r.get("heard_ok") is not None]
+    said = _said(results)
     ran = [r for r in results if not r.get("skipped")]
     return {
         "steps": len(ran),

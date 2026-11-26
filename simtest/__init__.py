@@ -15,6 +15,7 @@ on (``python -m simtest bridge on``), and the plugin says when it is.
     python -m simtest run tier1 all                 # a checklist, unattended, with a report
     python -m simtest run tier2 737                 # radios and transponder (v20 or later)
     python -m simtest run tier4 all --text          # questions on Shift+Z (needs q1 installed)
+    python -m simtest run checklists-ground all     # the six checklists on the runway (v28)
     python -m simtest quit
 
 Development tool only: never shipped into X-Plane.
