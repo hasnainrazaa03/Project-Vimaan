@@ -199,3 +199,45 @@ def test_the_report_counts_the_spoken_answers():
         2,
     )
     assert json.dumps(total)
+
+
+# ---- your own voice: simtest record checklists-ground / checklists-air ----
+def test_record_lists_the_checklists_and_their_answers():
+    from simtest import record
+
+    words = [p for p, _ in record.phrases("checklists-ground", list(tier1.FLEET))]
+    assert words == [
+        "before takeoff checklist",
+        "confirm",
+        "cancel",
+        "after landing checklist",
+        "approach checklist",
+        "after takeoff checklist",
+        "before landing checklist",
+        "shutdown checklist",
+    ]
+    air = [p for p, _ in record.phrases("checklists-air", ["737"])]
+    assert air[:2] == ["autopilot on", "auto throttle on"]  # hands off first
+    assert {"confirm", "cancel", "approach checklist"} <= set(air)
+    assert len(air) == len(set(air))
+
+
+def test_recorded_answers_are_played_for_the_offers(tmp_path):
+    # The runner's own say: a recorded "confirm" is what goes over the bridge.
+    sent = []
+
+    class Bridge:
+        def say_wav(self, wav, **_):
+            sent.append(Path(wav).name)
+            return {"ok": True, "heard": "confirm", "outcome": "executed", "replies": ["x"]}
+
+        def say_text(self, text, **_):
+            sent.append(text)
+            return {"ok": True, "outcome": "executed", "replies": ["x"]}
+
+    runner = scenario.Runner(Bridge(), voice=None, recordings={"confirm": tmp_path / "002.wav"})
+    problems: list = []
+    a = runner._reply(scenario.Follow("approach"), "landing lights", "confirm", problems)
+    assert sent == ["002.wav"] and a["heard_ok"] and problems == []
+    runner._reply(scenario.Follow("approach"), "landing lights", "cancel", problems)
+    assert sent[-1] == "cancel" and runner.results == []  # not recorded: sent as text

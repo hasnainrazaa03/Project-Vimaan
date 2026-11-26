@@ -98,7 +98,18 @@ def main(argv: list[str] | None = None) -> int:
     rn.add_argument("--quit", action="store_true", help="quit X-Plane at the end")
 
     rec = sub.add_parser("record", help="record your voice for each phrase of a checklist")
-    rec.add_argument("checklist", choices=("tier1", "tier2", "tier3", "tier4", "relative"))
+    rec.add_argument(
+        "checklist",
+        choices=(
+            "tier1",
+            "tier2",
+            "tier3",
+            "tier4",
+            "relative",
+            "checklists-ground",
+            "checklists-air",
+        ),
+    )
     rec.add_argument("aircraft", choices=(*tier1.SETUPS, "all", "new"))
     rec.add_argument(
         "--out", help="the folder (default ~/Vimaan_Logs/recordings/...); again to resume"

@@ -2,6 +2,7 @@
 ``python -m simtest run <checklist> <aircraft> --recordings <folder>``.
 
     python -m simtest record relative all
+    python -m simtest record checklists-ground all   # the six names, confirm, cancel
 
 Each phrase is shown in turn: Enter starts, Enter stops. The audio is 16 kHz
 mono 16-bit WAV, what Vimaan's recogniser takes, captured by the plugin's own
@@ -25,7 +26,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from . import relative, tier1, tier2, tier3, tier4
+from . import checklists, relative, tier1, tier2, tier3, tier4
 from .bridge import default_log_dir
 from .scenario import Step
 
@@ -44,21 +45,31 @@ CHECKLISTS: dict[str, Callable[[str], list[Step]]] = {
     "tier3": tier3.steps,
     "tier4": tier4.steps,
     "relative": relative.steps,
+    "checklists-ground": checklists.ground,
+    "checklists-air": checklists.air,
 }
+# A checklist's offers are answered aloud (scenario.Follow), and a hold the
+# confirm meets is cancelled: these are said too.
+CHECKLIST_ANSWERS = ("confirm", "cancel")
 
 
 def phrases(checklist: str, aircraft: Iterable[str]) -> list[tuple[str, bool]]:
     """Every phrase the checklist says on these aircraft, once each, in the
     order it first says them: (phrase, said on the question key). A step's
-    fallbacks (``abort``) are said only if it fails, but are recorded too."""
+    fallbacks (``abort``) are said only if it fails, but are recorded too, and
+    so are a checklist's answers ("confirm", "cancel")."""
     out: list[tuple[str, bool]] = []
     seen: set[str] = set()
 
     def walk(steps: Iterable[Step]) -> None:
         for step in steps:
-            if step.say and step.say not in seen:
-                seen.add(step.say)
-                out.append((step.say, step.ask))
+            said = [step.say] if step.say else []
+            if step.follow is not None:
+                said += CHECKLIST_ANSWERS
+            for phrase in said:
+                if phrase not in seen:
+                    seen.add(phrase)
+                    out.append((phrase, step.ask))
             if step.abort:
                 walk(step.abort)
 
