@@ -1958,6 +1958,48 @@ Python); the plugin reads the sim and dispatches the offers.
   override, the 737's first notch and RTO, the A330's "low", skips,
   shutdown with the engines running, suggestions).
 
+**L.4.6 The checklists in the sim (2026-11-26).** Two runs per aircraft
+(`simtest run checklists-ground` and `checklists-air`; docs/IN_SIM_TESTING.md
+"Checklists"). The runner follows each checklist in Vimaan's events and
+answers its offers. What each run must show follows from what was offered
+and how it was answered, not from a list per aircraft. Run with v28, main
+4a05e64 installed, in the generated voice (Daniel).
+
+| Run | Result |
+| --- | --- |
+| On the runway | 87 of 90: every confirm, cancel, offer left to run out, gear-up hold, stop and engine shutdown as wanted; 3 "asked again" checks failed (below) |
+| In the air | 91 of 91: the gear down where 10 kt under its limit speed (Baron, King Air, 737, MD-82, SF50; declined on the A330 and Citation X), speed brakes armed (737, A330, MD-82) |
+
+**What the runs found: four readings the checklist got wrong.** Each one is
+fixed and tested on the fake sim. They need an install, then the rerun.
+
+- **The 737's and A330's transponder** read "on" while reporting altitude.
+  Both modes' selector positions hold there, and "on" came first. So
+  before takeoff offered "Set the transponder to altitude?", and the command
+  said "already reporting altitude". The mode that does the most is now read
+  first, which also corrects the Tier 4 answer.
+- **The King Air's seat belt sign** couldn't be turned off after being
+  turned on: "Seat belt sign not set: it took too many clicks". Probed in
+  the sim, X-Plane's sign steps 0, 1, 2, 0 on its toggle. Its switch leaves
+  it at 1 going to OFF, and the one press the plan allowed gave 2. A button
+  can now cycle: it is pressed again each time it has moved, until it reads
+  what is wanted.
+- **The A330's taxi lights** read as neither on nor off at T.O, where the
+  nose light starts ("I can't read the taxi lights"). At T.O the taxi light
+  is lit too, so that now counts as on.
+- **The Citation X's fuel pumps** read as neither at NORM, where its boost
+  pumps start. NORM runs them when needed, so it now reads as auto, which
+  before takeoff counts as on. The command still takes only on or off.
+
+**The voice: "after" was never heard.** In the generated voice, "after
+takeoff checklist" and "after landing checklist" were heard as "to" or
+"two takeoff/landing checklist", 45 times out of 45. Vimaan answered "Which
+checklist?" and did nothing, and the runner redid each as text. Every other
+phrase was heard right: "confirm" 116 of 116, "cancel" 31 of 31, and the
+other four checklist names 90 of 90. L.4.2 measured
+the new words on Speech Commands, which has no "after", so the owner's
+voice is not measured yet.
+
 ### L.3 Two commands in one breath
 
 Started 2026-11-22. **What v27 did with two commands said together (typed,

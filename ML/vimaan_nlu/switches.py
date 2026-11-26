@@ -52,16 +52,27 @@ class Knob:
 
 @dataclass(frozen=True)
 class Button:
-    """Press ``command`` unless ``state`` already reads one of ``want``."""
+    """Press ``command`` unless ``state`` already reads one of ``want``:
+    once (a toggle pressed twice undoes itself), or with ``cycle`` until it
+    does, a press each time it has moved (a toggle stepping through three
+    values)."""
 
     state: str
     command: str
     want: tuple[float, ...]
+    cycle: bool
 
-    def __init__(self, state: str, command: str, want: float | tuple[float, ...]):
+    def __init__(
+        self,
+        state: str,
+        command: str,
+        want: float | tuple[float, ...],
+        cycle: bool = False,
+    ):
         object.__setattr__(self, "state", state)
         object.__setattr__(self, "command", command)
         object.__setattr__(self, "want", want if isinstance(want, tuple) else (float(want),))
+        object.__setattr__(self, "cycle", cycle)
 
 
 @dataclass(frozen=True)
@@ -301,7 +312,9 @@ B58: Plans = _frozen(
 # down SEAT BELT only (-1). Its position dataref is read-only (xlua
 # create_dataref without a handler), so it's clicked with its commands.
 # Its handler skips the sign when going up from -1 to 0, leaving the seat
-# belt sign lit: the toggle afterwards puts it out.
+# belt sign lit: the toggle afterwards puts it out. X-Plane's sign steps
+# 0, 1, 2, 0 on that toggle (probed 2026-11-26: left at 1, one press gave 2),
+# so it is pressed until it reads 0.
 C90_SIGNS = Knob(
     "laminar/c90/lighting/switch/no_smoke_fsb_pos",
     "laminar/c90/lighting/switch/no_smoke_fsb_dn",
@@ -351,7 +364,9 @@ C90: Plans = _frozen(
                 "off": (
                     Check(SW + "fasten_seat_belts", 0),
                     C90_SIGNS.at(0),
-                    Button(SW + "fasten_seat_belts", "sim/systems/seatbelt_sign_toggle", 0),
+                    Button(
+                        SW + "fasten_seat_belts", "sim/systems/seatbelt_sign_toggle", 0, cycle=True
+                    ),
                 ),
             }
         ),
@@ -605,10 +620,13 @@ A333: Plans = _frozen(
     {
         # One LAND switch, on the first landing light.
         "light:landing": _on_off(SW + "landing_lights_switch[0]", *_lights("landing_01_light")),
-        # No taxi light: "taxi lights" is the nose light at TAXI.
+        # No taxi light: "taxi lights" is the nose light at TAXI. At T.O (1)
+        # the taxi light is lit too: that is on (L.4.6: it read as neither).
         "light:taxi": _frozen(
             {
-                "on": (Button(A333_NOSE, "laminar/A333/switch/lighting/taxi_light_taxi", 0.5),),
+                "on": (
+                    Button(A333_NOSE, "laminar/A333/switch/lighting/taxi_light_taxi", (0.5, 1.0)),
+                ),
                 "off": (Button(A333_NOSE, "laminar/A333/switch/lighting/taxi_light_off", 0),),
             }
         ),
@@ -749,7 +767,8 @@ CITX_GEN_R = _citx_three(
     -1,
     1,
 )
-# Fuel boost pumps -1 NORM, 0 OFF, 1 ON.
+# Fuel boost pumps -1 NORM, 0 OFF, 1 ON. NORM runs them when needed: auto
+# (L.4.6: the checklist read NORM, where they start, as neither on nor off).
 CITX_BOOST_L = _citx_three(
     "fuel/boost_left", "fuel/cmd_boost_left_dwn", "fuel/cmd_boost_left_up", -1, 1
 )
@@ -826,8 +845,8 @@ CITX_PLANS: Plans = _frozen(
         ),
         "power:generator1": _three_on_off(CITX_GEN_L),
         "power:generator2": _three_on_off(CITX_GEN_R),
-        "fuel:left": _three_on_off(CITX_BOOST_L),
-        "fuel:right": _three_on_off(CITX_BOOST_R),
+        "fuel:left": _frozen({**_three_on_off(CITX_BOOST_L), "auto": (CITX_BOOST_L.at(-1),)}),
+        "fuel:right": _frozen({**_three_on_off(CITX_BOOST_R), "auto": (CITX_BOOST_R.at(-1),)}),
         # No armed position: its script puts a negative ratio back to 0 every
         # frame (CitX_speedbrakes: "PREVENT THE ARMED POSITION (CitX has
         # not)"); its spoilers deploy on touchdown by themselves.

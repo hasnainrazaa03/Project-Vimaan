@@ -245,10 +245,16 @@ C90 = (switches.C90_SIGNS.down, switches.C90_SIGNS.up)
 
 def king_air_signs(xp):
     """The C90's sign switch: 1 NO SMOKING + SEAT BELT, 0 OFF, -1 SEAT BELT.
-    Its handler forgets the seat belt sign going up from -1 to 0."""
+    Its handler forgets the seat belt sign going up from -1 to 0, and
+    X-Plane's seat belt toggle steps the sign 0, 1, 2, 0 (probed in the sim,
+    2026-11-26)."""
     pos = switches.C90_SIGNS.position
     turn = selector(xp, pos, switches.C90_SIGNS.up, switches.C90_SIGNS.down, -1, 1)
     last = [xp.datarefs[pos]]
+    belts = SW + "fasten_seat_belts"
+    xp.effects["sim/systems/seatbelt_sign_toggle"] = lambda x: x.datarefs.update(
+        {belts: (x.datarefs[belts] + 1) % 3}
+    )
 
     def apply():
         turn()
@@ -273,7 +279,10 @@ def test_king_air_seat_belt_sign_off_puts_out_what_its_switch_leaves_lit(sim):
     assert run(plugin, xp, signs) == ["Seat belt sign off"]
     assert xp.datarefs[switches.C90_SIGNS.position] == 0
     assert xp.datarefs[SW + "fasten_seat_belts"] == 0
-    assert xp.commands_fired[-1] == "sim/systems/seatbelt_sign_toggle"
+    # Left at 1 by the switch: pressed twice, through 2 (L.4.6: once gave 2,
+    # "Seat belt sign not set: it took too many clicks").
+    assert xp.commands_fired[-2:] == ["sim/systems/seatbelt_sign_toggle"] * 2
+    assert plugin._switch_now(["sign:seat belt"]) == "off"
 
 
 def test_king_air_no_smoking_sign_on_and_off(sim):
@@ -414,6 +423,22 @@ def load_a330(plugin, xp):
     xp.effects["sim/flight_controls/brakes_1_auto"] = button(3)
     xp.effects["sim/flight_controls/brakes_2_auto"] = button(4)
     xp.effects["sim/flight_controls/brakes_rto_auto"] = button(0, also=(5,))
+
+
+def test_a330_taxi_light_at_takeoff_is_on(sim):
+    # The nose light at T.O lights the taxi light too (L.4.6: it read as
+    # neither on nor off, "I can't read the taxi lights").
+    _, plugin, xp = sim
+    load_a330(plugin, xp)
+    nose = xp.datarefs[SW + "landing_lights_switch"]
+    for value, now in ((1.0, "on"), (0.5, "on"), (0.0, "off")):
+        nose[1] = value
+        assert plugin._switch_now(["light:taxi"]) == now
+    nose[1] = 1.0
+    assert say(plugin, "taxi lights on", "toggle_lights", {"light": "taxi", "switch": "on"}) == [
+        "Taxi lights already on"
+    ]
+    assert xp.commands_fired == []
 
 
 def test_a330_strobes_auto(sim):
@@ -854,6 +879,29 @@ def test_citation_x_strobes_turn_its_anti_collision_switch(sim):
     assert xp.datarefs[knob.position] == 1
     # It has no autobrake, and its fuel answers are in pounds.
     assert plugin.profile.settings["fuel_unit"] == "lb"
+
+
+def test_citation_x_boost_pumps_at_norm_are_auto(sim):
+    # -1 NORM (where they start: run when needed), 0 OFF, 1 ON. L.4.6: the
+    # checklist read NORM as neither ("I can't read the fuel pumps").
+    _, plugin, xp = sim
+    boost = (switches.CITX_BOOST_L, switches.CITX_BOOST_R)
+    commands = CITX_CMDS + tuple(c for k in boost for c in (k.down, k.up))
+    aircraft(plugin, xp, engine_type=JET, commands=commands)
+    turns = []
+    for knob in boost:
+        xp.datarefs[knob.position] = -1
+        turns.append(selector(xp, knob.position, knob.up, knob.down, -1, 1))
+    pumps = ["fuel:left", "fuel:right"]
+    assert plugin._switch_now(pumps) == "auto"
+    say(plugin, "fuel pumps off", "toggle_fuel_pump", {"switch": "off"})
+    assert run(plugin, xp, *turns) == ["Fuel pumps off"]
+    assert [xp.datarefs[k.position] for k in boost] == [0, 0]
+    assert plugin._switch_now(pumps) == "off"
+    # Read as auto only: the command still takes on or off.
+    assert say(plugin, "fuel pumps auto", "toggle_fuel_pump", {"switch": "auto"}) == [
+        "Fuel pumps on or off?"
+    ]
 
 
 def test_citation_x_seat_belt_and_no_smoking_share_one_switch(sim):

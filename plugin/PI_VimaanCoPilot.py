@@ -397,6 +397,8 @@ DREF_XPDR_IDENT = "sim/cockpit2/radios/indicators/transponder_id"
 XPDR_SETS = {"off": 0, "standby": 1, "on": 2, "alt": 3}
 XPDR_ALREADY = {"off": {0}, "standby": {1}, "on": {2, 3, 5, 6, 7}, "alt": {3, 6, 7}}
 XPDR_SPOKEN = {"off": "off", "standby": "standby", "on": "on", "alt": "altitude"}
+# A selector's modes as read, the one that does the most first (altitude is on too).
+XPDR_MOST_FIRST = ("alt", "on", "standby", "off")
 # X-Plane's transponder_mode as answered (5-7: its own test / mode S states).
 XPDR_MODE_SPOKEN = {
     0: "off",
@@ -4681,11 +4683,14 @@ class PythonInterface:
         """The transponder's mode as said ("altitude"), or None."""
         knobs = self.profile.settings.get("xpdr_knobs")
         if knobs:  # the 737's and A330's own selectors
+            # Reporting altitude is replying too ("on" holds as well), so the
+            # mode that does the most is read first (L.4.6: "Transponder on"
+            # where "transponder altitude" said "already reporting altitude").
             return next(
                 (
                     XPDR_SPOKEN[value]
-                    for value, steps in knobs.items()
-                    if steps and all(self._knob_at(k) for k in steps)
+                    for value in XPDR_MOST_FIRST
+                    if (steps := knobs.get(value)) and all(self._knob_at(k) for k in steps)
                 ),
                 None,
             )
@@ -4989,7 +4994,8 @@ class PythonInterface:
         """One action, then wait for the switch to show it before the next,
         so a click the aircraft handles a frame late can't overshoot. A
         selector is clicked until it is in range; a button is pressed and a
-        dataref written once (a toggle pressed twice would undo itself)."""
+        dataref written once (a toggle pressed twice would undo itself),
+        unless the button cycles: pressed again each time it has moved."""
         j = self._knob_step
         if j is None:
             return
@@ -5013,7 +5019,7 @@ class PythonInterface:
             return self._end_knob_steps(False, "it took too many clicks")
         if isinstance(step, switches.Knob):
             self._fire_command(step.up if value < step.low else step.down)
-        elif j["acted"]:
+        elif j["acted"] and not (isinstance(step, switches.Button) and step.cycle):
             return  # still moving (an A330 button reads 1.2 while pressed)
         elif isinstance(step, switches.Button):
             self._fire_command(step.command)

@@ -338,3 +338,34 @@ def test_a_suggestion_waits_for_a_callout(sim):
     plugin._flight_loop()
     assert xp.spoken[-1] == f"Before takeoff checklist? {TAIL}"
     assert say(plugin, "confirm") == ["Before takeoff checklist"]
+
+
+def test_the_737_transponder_reporting_altitude_is_checked(sim):
+    # L.4.6: the 737 and A330 selectors at altitude reporting were read as
+    # "on" (both hold), so before takeoff offered what "transponder
+    # altitude" called "already reporting altitude".
+    _, plugin, xp = sim
+    test_plugin.aircraft(plugin, xp, commands=test_plugin.B738_XPDR)
+    for position, mode in ((1, "standby"), (2, "on"), (3, "altitude"), (5, "altitude")):
+        xp.datarefs[test_plugin.B738_XPDR_POS] = position
+        assert plugin._transponder_mode() == mode
+    start(plugin, "before takeoff")
+    assert read(plugin, xp)[-1] == offer("Flaps up. Set the first notch of flaps?")
+    say(plugin, "cancel")
+    assert read(plugin, xp)[0] == "Transponder altitude, checked"
+
+
+def test_the_a330_transponder_reporting_altitude(sim):
+    _, plugin, xp = sim
+    k = test_plugin.A333_XPDR
+    test_plugin.aircraft(
+        plugin,
+        xp,
+        commands=test_plugin.A333_XPDR_COMMANDS,
+        **{k + "auto_on_knob_pos": 0, k + "alt_rpt_knob_pos": 1, k + "ta_ra_knob_pos": 2},
+    )
+    assert plugin._transponder_mode() == "altitude"
+    xp.datarefs[k + "alt_rpt_knob_pos"] = 0
+    assert plugin._transponder_mode() == "on"
+    xp.datarefs[k + "auto_on_knob_pos"] = -1
+    assert plugin._transponder_mode() == "standby"
