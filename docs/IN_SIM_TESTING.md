@@ -310,6 +310,17 @@ judge what it did. A phrase
 not recorded is sent as text too. The recordings stay in `~/Vimaan_Logs`: they
 measure, nothing is trained on them.
 
+The checklists record the same way. `record checklists-ground all` is eight
+phrases: the six checklist names, then "confirm" and "cancel", which answer
+the offers. `checklists-air` adds Tier 1's hands-off phrases. The generated
+voice's "after ... checklist" was heard as "to" or "two" every time (L.4.6),
+so these recordings show whether a real voice is heard better.
+
+```bash
+python -m simtest record checklists-ground all
+python -m simtest run checklists-ground all --recordings ~/Vimaan_Logs/recordings/checklists-ground-<date>
+```
+
 **Relative commands (phase L.1):**
 
 ```bash
