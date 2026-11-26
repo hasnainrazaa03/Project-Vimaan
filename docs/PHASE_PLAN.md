@@ -1780,7 +1780,51 @@ designs come later in this document.
     four readings were fixed (#109), 90 of 90 on the runway and 91 of 91 in
     the air. Open: the owner's voice on "after".
 - [ ] **L.5 Wake word:** hands-free, offline, a licence-clean model. The two
-  talk keys stay.
+  talk keys stay. Design and measurements: "L.5 Wake word", below.
+  - [x] L.5.1 The options and their licences; the one that needs no
+    download, measured (2026-11-26). Waiting for the owner's decisions.
+
+### L.5 Wake word
+
+Started 2026-11-26. Already decided: offline, a licence-clean model, Vosk
+stays the recogniser, nothing slower, and the two talk keys stay. The
+roadmap (R-14) names "Hey Vimaan".
+
+**The options.** Licence-clean depends on the model and what it was trained
+on, not only on the code.
+
+| Option | Wake phrase | Licence | What it needs |
+| --- | --- | --- | --- |
+| A. Vosk listening for one phrase (a grammar of the phrase or anything else), on the microphone stream the worker already keeps open | Words Vosk knows: "hey copilot". "Vimaan" isn't in its vocabulary | The model Vimaan already uses (Apache 2.0) | Nothing new. Measured below |
+| B. openWakeWord, with a "Hey Vimaan" model we train | Any, so "Hey Vimaan" | Its code and backbone (Google's speech embedding) are Apache 2.0. Its own models are CC BY-NC-SA 4.0, as is the negative data its training uses (ACAV100M). So we would train on licence-clean data: Piper's LibriTTS-R voices (CC BY 4.0) saying the phrase; Common Voice (CC0), Speech Commands and MUSAN (CC BY 4.0) as everything else; RIRS rooms (Apache 2.0) | Downloads (the owner's approval), a few hours of training, and onnxruntime added to X-Plane's Python |
+| C. sherpa-onnx keyword spotting | Any, with no training | The English model is labelled Apache 2.0 but was trained on GigaSpeech, whose audio is for non-commercial research. Not licence-clean | onnxruntime and sherpa-onnx |
+
+Left out: Porcupine (proprietary, needs an online access key), and Mycroft
+Precise and Snowboy (unmaintained).
+
+**Option A measured (2026-11-26, `~/Vimaan_Logs/measuring/l5`).** Each clip
+was decoded on its own by the installed Vosk model with the grammar
+[phrase, "[unk]"]. A wake is the phrase decoded.
+
+| Played to it | Clips | "hey copilot" | "okay copilot" | "copilot" |
+| --- | --- | --- | --- | --- |
+| Six macOS voices saying it, clean and with background noise (10 dB) | 12 per phrase | 12 found | 12 found | 12 found |
+| ATC transmissions (ATCOSIM, 4.4 h) | 4,000 | 0 false | 0 false | 1 false |
+| The owner's command recordings (0.9 h) | 1,883 | 0 false | 2 false | 4 false |
+| Speech Commands words (0.95 h) | 3,500 | 2 false | 0 false | 6 false |
+
+- **"hey copilot":** every real detection scored full confidence (1.000), and its two false ones scored 0.64 and 0.87 ("backward"). Kept only at 0.95 or more, it had no false wakes in the 6.3 hours.
+- **"copilot" alone can't be the wake word.** The owner's "autopilot on", "autopilot point" and "pilot" were heard as it at full confidence. "Okay copilot" fired once on "autopilot on".
+- **The cost:** listening for one phrase takes about 0.3 % of one core.
+- **Not measured yet:** the owner's own voice saying the wake phrase (only generated voices did), and listening without a break through a whole flight (each clip here was decoded on its own).
+
+**Decisions for the owner:**
+
+1. **Engine and phrase.** Either A, "hey copilot" with Vosk: nothing new to install, and measured above. Or B, a "Hey Vimaan" model trained on licence-clean data: downloads, training, and a new library in X-Plane's Python.
+2. **After the wake word.** Either Vimaan chimes and listens as if the talk key were pressed (the command within a few seconds, ending at a pause). Or the wake word and the command come in one breath ("hey copilot, gear down"). Both can work at once, with the listening starting right after the phrase.
+3. **When it listens.** Off unless switched on, by a command, as the callouts and checklist suggestions are. Never while Vimaan is speaking or a talk key is held.
+4. **What a false wake can do.** It opens the listening window, and what is heard in it goes through the same rules as a pressed key: one command, the safety holds, the refusals. The risk is ATC or cabin talk in that window heard as a command. Every wake would be logged, so false ones can be counted in flight.
+5. **How it's tested.** The owner records the wake phrase about 20 times, plus a stretch of ordinary cockpit talk (`simtest record`), and a simtest run checks the wake path in the sim.
 
 ### L.4 Checklists
 
