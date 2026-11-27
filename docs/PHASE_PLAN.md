@@ -1779,15 +1779,15 @@ designs come later in this document.
   - [x] L.4.6 Checklists in the sim on the nine aircraft (2026-11-26): after
     four readings were fixed (#109), 90 of 90 on the runway and 91 of 91 in
     the air. The owner's voice (2026-11-26): every phrase heard word for word.
-- [ ] **L.5 Wake word:** hands-free, offline, a licence-clean model. The two
+- [x] **L.5 Wake word:** hands-free, offline, a licence-clean model. The two
   talk keys stay. Design and measurements: "L.5 Wake word", below.
   - [x] L.5.1 The options and their licences; the one that needs no
     download, measured; the owner's decisions (2026-11-26).
   - [x] L.5.2 The wake word in the worker and the plugin, on the fake sim
     (2026-11-26). Not installed.
-  - [ ] L.5.3 In the sim, and the owner's voice saying it (2026-11-26): the
-    owner's voice 143 of 145 on all nine aircraft, talk without the wake word
-    never woke it. The one bug found is fixed; checked once installed.
+  - [x] L.5.3 In the sim, and the owner's voice saying it (2026-11-26): the
+    owner's voice 144 of 145 on all nine aircraft with the fix installed, talk
+    without the wake word never woke it.
 
 ### L.5 Wake word
 
@@ -1966,6 +1966,18 @@ it: 36 of 36. The failures:
 - **Fixed since:** nothing heard after the wake phrase, in one breath or
   after a pause, is now no command, said nothing about. The question grammar
   is tried first.
+
+**The owner's voice again, the fix installed (main 704a2d1): 144 of 145.**
+
+- Every command through the wake word was right on all nine aircraft, and
+  the question was answered on all nine.
+- Talk without the wake word never woke it (0 of 36).
+- "Hey copilot" alone was no command on eight, the MD-82 included. On the
+  SR22, a breath after the pause was heard "new", which is no command:
+  nothing done and nothing said, the same to the pilot. The step now takes
+  either.
+
+L.5 is closed.
 
 ### L.4 Checklists
 
