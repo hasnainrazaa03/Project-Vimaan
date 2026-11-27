@@ -540,6 +540,12 @@ def make_xp() -> types.ModuleType:
     xp.scheduleFlightLoop = lambda lid, interval, rel=1: None
     xp.destroyFlightLoop = lambda lid: None
     xp.speakString = xp.spoken.append
+    # Sound (the wake word's chime): what was played, as (bytes, rate).
+    xp.played = []
+    xp.AudioUI, xp.FMOD_SOUND_FORMAT_PCM16 = 5, 2
+    xp.playPCMOnBus = lambda buf, size, fmt, hz, ch, loop=0, bus=5, *a: xp.played.append(
+        (bytes(buf)[:size], hz)
+    )
     xp.log = lambda msg: None
     xp.getVersions = lambda: (124300, 420, 1)
     return xp
