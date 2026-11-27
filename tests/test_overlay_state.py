@@ -252,6 +252,22 @@ def test_not_heard_keeps_what_was_heard_in_the_history():
     assert s.history[-1]["text"] == '"PARKING THE MORE"'
 
 
+def test_no_confidence_bar_when_no_command_was_found():
+    # In the sim: the model 100% sure "parking the more" is not a command
+    # showed a full green bar beside "NONE, NOTHING CHANGED".
+    s = OverlayState(Clock())
+    command(
+        s,
+        text="parking the more",
+        intent="None",
+        slots={},
+        confidence=1.0,
+        outcome="non_actionable",
+    )
+    r = rows(s)
+    assert r["ACTION"].text == "NONE, NOTHING CHANGED" and "CONF" not in r
+
+
 def test_a_key_tap_leaves_no_history():
     s = OverlayState(Clock())
     run(
@@ -334,7 +350,7 @@ def test_describe_slots():
     ("intent", "slots", "text"),
     [
         ("set_autopilot_heading", {"degrees": "270"}, "HDG 270"),
-        ("set_autopilot_altitude", {"altitude": "6000"}, "ALT 6,000 FT"),
+        ("set_autopilot_altitude", {"altitude": "6000"}, "ALT 6000 FT"),  # no comma
         ("toggle_lights", {"light": "landing", "switch": "on"}, "LANDING LIGHTS ON"),
         ("set_com_frequency", {"com_port": "1", "frequency": "118.75"}, "COM1 118.75"),
         ("toggle_autopilot", {"state": "on"}, "AP ON"),
@@ -367,7 +383,7 @@ def test_answered_reply_shows_what_it_was_taken_as():
         {"kind": "command_done", "cmd": "c2", "outcome": "executed"},
     )
     r = rows(s)
-    assert r["ACTION"].text == "ALT 1,000 FT" and "CONF" not in r
+    assert r["ACTION"].text == "ALT 1000 FT" and "CONF" not in r
     assert tags(s)[0][0] == "DONE"
 
 
@@ -563,7 +579,7 @@ def test_working_until_the_plugin_says_it_is_done():
     assert "REPLY" not in rows(s)  # "Landing lights on": what ACTION says
     clock.now += HOLD_SEC + 0.1
     assert s.panel().tags[0].text != "DONE"
-    assert s.history[-1]["tag"] == "DONE"
+    assert (s.history[-1]["tag"], s.history[-1]["tone"]) == ("DONE", "ok")  # green, not cyan
 
 
 def test_working_never_holds_the_screen_forever():

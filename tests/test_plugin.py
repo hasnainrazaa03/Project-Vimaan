@@ -1748,6 +1748,44 @@ def test_log_report_summarises_clean_session(monkeypatch, tmp_path):
     assert "slot_rejected" in text  # the out-of-range altitude is a listed problem
 
 
+def test_log_report_counts_slow_overlay_draws(tmp_path):
+    events = tmp_path / "s.events.jsonl"
+    rows = [
+        {
+            "t": 0.1,
+            "kind": "overlay_start",
+            "backend": "imgui",
+            "mode": "auto",
+            "font": "B612Mono-Regular.ttf",
+        },
+        {
+            "t": 60.0,
+            "kind": "heartbeat",
+            "overlay_draw_ms_max": 2.071,
+            "overlay_draw_ms_minute": 0.4,
+            "overlay_draws": 21400,
+            "overlay_draws_over_1ms": 1,
+        },
+    ]
+    events.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    text = _report_module().report(events)
+    assert (
+        "Overlay: imgui (auto), worst draw 2.07 ms, font B612Mono-Regular.ttf; "
+        "1 of 21400 draws over 1 ms" in text
+    )
+
+
+def test_overlay_draw_stats_go_in_the_heartbeat(sim):
+    _, plugin, _ = sim
+    stats = plugin._overlay_draw_stats()
+    assert set(stats) == {
+        "overlay_draw_ms_max",
+        "overlay_draw_ms_minute",
+        "overlay_draws",
+        "overlay_draws_over_1ms",
+    }
+
+
 def test_frame_times_and_mac_usage_are_logged_and_reported(monkeypatch, tmp_path):
     NLU.clear()
     module, plugin, _ = _load_plugin(monkeypatch, tmp_path)

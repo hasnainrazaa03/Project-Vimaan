@@ -132,7 +132,6 @@ ACTIONS: dict[str, str] = {
     "toggle_electrical": "{power} {instance} {switch}",
     "toggle_fuel_pump": "FUEL PUMP {instance} {switch}",
 }
-THOUSANDS = frozenset({"altitude", "altitude_change", "vs"})  # 6000 -> 6,000
 _FIELD = re.compile(r"\{([a-z_|]+)\}")
 
 
@@ -227,9 +226,7 @@ def _slot_value(name: str, value: Any) -> str:
     text = str(value).strip()
     if re.fullmatch(r"[a-z]( [a-z])+", text):  # "r t o", as said
         text = text.replace(" ", "")
-    if name in THOUSANDS and text.isdigit():
-        text = f"{int(text):,}"
-    return text.upper()
+    return text.upper()  # no thousands commas: B612 Mono gives "," a whole cell
 
 
 def action_text(intent: str, slots: dict[str, Any]) -> str:
@@ -470,6 +467,8 @@ class OverlayState:
         if self.intent == "run_checklist" and self.outcome == "executed":
             return  # the checklist adds its own line when it ends
         text = self._history_text()
+        if self.outcome == "pending":
+            tone = "ok"  # done once it finishes (FAIL if it doesn't)
         self.entry = {"t": now, "cmd": self.cmd, "tag": tag, "tone": tone, "text": text}
         self.history.append(self.entry)
         del self.history[:-10]
@@ -835,7 +834,8 @@ class OverlayState:
             rows.append(Row("ACTION", "NONE, NOTHING CHANGED", "muted"))
         if listening:
             rows.append(Row("CONF", kind="conf", tone="muted", detail="--"))
-        elif self.confidence is not None:
+        elif self.confidence is not None and self.intent not in (None, "None"):
+            # (the model sure it is *not* a command is no confidence in an action)
             weak = self.confidence < self.floor
             tone = "warn" if weak else "ok"
             pct = f"{self.confidence:.0%}"
