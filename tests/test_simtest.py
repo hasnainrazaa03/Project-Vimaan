@@ -96,7 +96,26 @@ def test_generated_speech_is_16k_mono(tmp_path):
     path = voice.synthesize("gear up", voice.DEFAULT_VOICE, cache_dir=tmp_path)
     with wave.open(str(path)) as w:
         assert (w.getframerate(), w.getnchannels(), w.getsampwidth()) == (16000, 1, 2)
+        lead = w.readframes(16 * voice.LEAD_MS)
+    assert lead == b"\x00" * len(lead) and len(lead) == 32 * voice.LEAD_MS  # quiet first
     assert voice.synthesize("gear up", voice.DEFAULT_VOICE, cache_dir=tmp_path) == path  # cached
+    assert [p.name for p in tmp_path.iterdir()] == [path.name]  # say's own file removed
+
+
+def test_lead_silence_puts_quiet_before_the_words(tmp_path):
+    import wave
+
+    src, dst = tmp_path / "src.wav", tmp_path / "dst.wav"
+    with wave.open(str(src), "wb") as w:
+        w.setnchannels(1), w.setsampwidth(2), w.setframerate(16000)
+        w.writeframes(b"\x10\x00" * 1600)  # 0.1 s of words
+    voice.lead_silence(src, dst, 300)
+    with wave.open(str(dst)) as w:
+        assert (w.getframerate(), w.getnchannels(), w.getsampwidth()) == (16000, 1, 2)
+        assert w.getnframes() == 4800 + 1600
+        frames = w.readframes(w.getnframes())
+    assert frames[: 2 * 4800] == b"\x00" * (2 * 4800)
+    assert frames[2 * 4800 :] == b"\x10\x00" * 1600
 
 
 def test_voice_names_parse(monkeypatch):
