@@ -86,7 +86,10 @@ def steps(aircraft: str) -> list[Step]:
             "the wake word alone: no command",
             say="hey copilot",
             wake=True,
-            outcomes=("no_command",),
+            # Nothing done and nothing said either way: nothing heard after
+            # it, or a breath after the pause heard as a word that is no
+            # command ("new", the SR22, 2026-11-26).
+            outcomes=("no_command", "non_actionable"),
             sim=(equals("heading bug still 180", BUG, 180, tol=0.5),),
             **NO_CHANGE,
         ),
