@@ -570,6 +570,8 @@ class VoiceWorker:
             return
         t = self.clock()
         strip = wake_word.strip_wake if wake_stt is not None else (lambda s: s)
+        # A wake's command, in one breath or alone after a pause (phase L.5).
+        woken = bool(captured.get("wake"))
         try:
             if command_stt is not None:
                 if live:
@@ -581,26 +583,27 @@ class VoiceWorker:
             else:
                 text = strip(self.transcribe_audio(raw, rate))
         except Exception as exc:
-            if ask and question_stt is not None:
+            if (ask or woken) and question_stt is not None:
                 text = ""  # the question grammar may still hear it
-            elif wake_stt is not None:
+            elif woken:
                 text = ""  # nothing heard but the phrase, if that
             else:
                 self._stt_error(cmd, exc, t)
                 return
-        if wake_stt is not None and not text:
-            # The wake phrase alone (its last sound taken for speech after
-            # it): no command, said nothing about, as with a pause too long.
-            self.send({"type": "error", "cmd": cmd, "outcome": "no_command"})
-            return
         heard = None
         if question_stt is not None and (ask or not text or looks_like_question(text)):
             asked = strip(self._hear_question(raw, question_stt))
             if asked:
                 heard, text = text, asked
-            elif not text:
+            elif not text and not woken:
                 self._stt_error(cmd, UnknownValueError("no question words recognised"), t)
                 return
+        if woken and not text:
+            # Nothing after the wake phrase but its own last sound, a breath
+            # or the room (L.5.3: "hey copilot" alone after a pause was "not
+            # understood" on the MD-82): no command, said nothing about.
+            self.send({"type": "error", "cmd": cmd, "outcome": "no_command"})
+            return
         self._predict_and_reply(
             cmd,
             text,
