@@ -13,11 +13,15 @@ every real detection scored 1.000. Vosk ends a result at a pause, so in one
 breath ("hey copilot, gear down") the result holds the command too.
 
 **The command** follows "copilot" (its word time), at once or after a pause.
-It is handed on from the start of the wake phrase, to be decoded with the
-phrase's words in the grammar and the phrase then taken off the front
-(:func:`strip_wake`): cut at the word time instead, one breath lost the
-command's first word ("down" for "gear down", "pilot on" for "autopilot on",
-L.5.2), as Vosk's end of "copilot" runs into the next word.
+In one breath it is handed on from the start of the wake phrase, to be
+decoded with the phrase's words in the grammar and the phrase then taken off
+the front (:func:`strip_wake`): cut at the word time instead, one breath lost
+the command's first word ("down" for "gear down", "pilot on" for "autopilot
+on", L.5.2), as Vosk's end of "copilot" runs into the next word. After a
+pause (``PAUSE_SEC`` of quiet, then speech) the cut is clean: the command is
+handed on alone, from just before it starts, for the command grammar as on
+the talk key. Decoded from the phrase through the pause instead, the generated
+voice's "heading one eight zero" was heard "heading one h zero" (L.5.3).
 
 Vosk can't say when the command is over: its partial results come about once a
 second, and it didn't end an utterance of "[unk]" in 1.5 s of quiet. So it ends
@@ -66,6 +70,11 @@ SMOOTH_FRAMES = 5
 # The command keeps this much after its last speech (the recogniser wants
 # the word's tail).
 TAIL_SEC = 0.3
+# Quiet this long after "copilot", then speech: a pause. The command is then
+# handed on alone, from this much before its speech is first seen (the
+# loudness is judged over 100 ms, so it is seen a little late).
+PAUSE_SEC = 0.4
+LEAD_SEC = 0.5
 SAMPLE_WIDTH = 2
 
 
@@ -86,6 +95,9 @@ class Command:
     pcm: bytes
     seconds: float
     cut_off: bool  # stopped at COMMAND_MAX_SEC, not by a pause
+    # The wake phrase is in front (one breath): decode with wake_grammar,
+    # then strip_wake. False: the command alone, after a pause.
+    with_phrase: bool = True
 
 
 NO_COMMAND = "no_command"  # nothing said within COMMAND_START_SEC
@@ -193,6 +205,8 @@ class WakeSpotter:
             "woke": self._fed,
             "spoke": None,  # the end of its last speech frame
             "scanned": end,
+            "quiet": 0,  # samples of quiet since the last speech (or "copilot")
+            "after_pause": None,  # where speech first came after a pause
             "threshold": self._threshold(start),
         }
         out.append(Wake(round(conf, 3), one_breath=len(words) > first + len(PHRASE)))
@@ -218,7 +232,13 @@ class WakeSpotter:
             recent.append(frame_rms(self._slice(s, s + self.frame)))
             del recent[:-SMOOTH_FRAMES]
             if sum(recent) / len(recent) >= cmd["threshold"]:
+                pause = cmd["quiet"] >= PAUSE_SEC * self.sample_rate
+                if cmd["after_pause"] is None and cmd["spoke"] is None and pause:
+                    cmd["after_pause"] = s
                 cmd["spoke"] = s + self.frame
+                cmd["quiet"] = 0
+            else:
+                cmd["quiet"] += self.frame
             s += self.frame
         cmd["scanned"] = s
 
@@ -234,9 +254,14 @@ class WakeSpotter:
         cut_off = self._fed - cmd["from"] >= COMMAND_MAX_SEC * rate
         if cut_off or self._fed - cmd["spoke"] >= QUIET_END_SEC * rate:
             end = self._fed if cut_off else min(self._fed, cmd["spoke"] + int(TAIL_SEC * rate))
-            pcm = self._slice(cmd["phrase"], end)
+            after = cmd["after_pause"]
+            start = (
+                cmd["phrase"] if after is None else max(cmd["from"], after - int(LEAD_SEC * rate))
+            )
+            pcm = self._slice(start, end)
             self._command = None
-            out.append(Command(pcm, round(len(pcm) / (SAMPLE_WIDTH * rate), 2), cut_off))
+            seconds = round(len(pcm) / (SAMPLE_WIDTH * rate), 2)
+            out.append(Command(pcm, seconds, cut_off, with_phrase=after is None))
 
     def _sample(self, sec: Any) -> int:
         return min(self._fed, max(0, int(round(float(sec) * self.sample_rate))))

@@ -2292,7 +2292,15 @@ class PythonInterface:
         for result in self._say_results.finished(now, checking):
             sim_bridge.write_json(outbox / f"{result['id']}.json", result)
         heard = self._bridge_heard
-        if heard is not None and now > heard["until"]:
+        if heard is not None and heard["until"] is None and now >= self._speaking_until:
+            # Said once Vimaan is quiet, as a pilot would: a wake while it
+            # speaks is dropped.
+            if self.worker is None or not self.worker.send({"op": "hear", "path": heard["wav"]}):
+                self._bridge_heard = None
+                self._bridge_answer(heard["id"], ok=False, error="the worker is gone")
+            else:
+                heard["until"] = now + BRIDGE_HEAR_WAIT_SEC
+        elif heard is not None and heard["until"] is not None and now > heard["until"]:
             self._bridge_heard = None  # heard, and nothing woke
             sim_bridge.write_json(
                 outbox / f"{heard['id']}.json", {"id": heard["id"], "ok": True, "woke": False}
@@ -2383,10 +2391,8 @@ class PythonInterface:
             return "the wake word is off"
         if self._active is not None or self._say_results.busy or self._bridge_heard is not None:
             return "busy"
-        self._bridge_heard = {"id": req["id"], "until": time.perf_counter() + BRIDGE_HEAR_WAIT_SEC}
-        if not self.worker.send({"op": "hear", "path": req["wav"]}):
-            self._bridge_heard = None
-            return "the worker is gone"
+        # Handed to the worker once Vimaan is quiet (_service_bridge).
+        self._bridge_heard = {"id": req["id"], "wav": req["wav"], "until": None}
         if self._flight_loop_id:
             xp.scheduleFlightLoop(self._flight_loop_id, -1.0, 1)
         return None
@@ -3828,7 +3834,11 @@ class PythonInterface:
             taken=why is None,
             why=why,
         )
-        heard, self._bridge_heard = self._bridge_heard, None
+        heard = self._bridge_heard
+        if heard is not None and heard["until"] is None:
+            heard = None  # not played yet: this wake isn't the bridge's
+        else:
+            self._bridge_heard = None
         if why is not None:
             self.worker.send({"op": "wake_drop", "wake": n})
             if heard is not None:
