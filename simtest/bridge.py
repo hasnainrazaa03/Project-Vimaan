@@ -57,7 +57,11 @@ class Bridge:
         req = {"id": rid, "op": op, **fields}
         sim_bridge.write_json(self.inbox / f"{rid}.json", req)
         out = self.outbox / f"{rid}.json"
-        wait = timeout if timeout is not None else (SAY_WAIT_SEC if op == "say" else WAIT_SEC)
+        wait = (
+            timeout
+            if timeout is not None
+            else (SAY_WAIT_SEC if op in ("say", "hear") else WAIT_SEC)
+        )
         deadline = time.monotonic() + wait
         while time.monotonic() < deadline:
             if out.exists():
@@ -77,6 +81,11 @@ class Bridge:
 
     def say_wav(self, path: str | os.PathLike[str], ask: bool = False) -> dict[str, Any]:
         return self.request("say", wav=str(Path(path).resolve()), **({"ask": True} if ask else {}))
+
+    def hear_wav(self, path: str | os.PathLike[str]) -> dict[str, Any]:
+        """Heard on the open mic, as the wake word listens (phase L.5): a wake
+        taken answers as a say; nothing woken, ``{"woke": False}``."""
+        return self.request("hear", wav=str(Path(path).resolve()))
 
     def read(self, *datarefs: str) -> dict[str, Any]:
         return self.request("read", datarefs=list(datarefs))["values"]

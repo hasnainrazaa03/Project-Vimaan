@@ -3,6 +3,7 @@
 
     python -m simtest record relative all
     python -m simtest record checklists-ground all   # the six names, confirm, cancel
+    python -m simtest record wake all                # "hey copilot ..." ( ... a pause)
 
 Each phrase is shown in turn: Enter starts, Enter stops. The audio is 16 kHz
 mono 16-bit WAV, what Vimaan's recogniser takes, captured by the plugin's own
@@ -26,7 +27,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from . import checklists, relative, tier1, tier2, tier3, tier4
+from . import checklists, relative, tier1, tier2, tier3, tier4, wake
 from .bridge import default_log_dir
 from .scenario import Step
 
@@ -47,6 +48,7 @@ CHECKLISTS: dict[str, Callable[[str], list[Step]]] = {
     "relative": relative.steps,
     "checklists-ground": checklists.ground,
     "checklists-air": checklists.air,
+    "wake": wake.steps,
 }
 # A checklist's offers are answered aloud (scenario.Follow), and a hold the
 # confirm meets is cancelled: these are said too.
@@ -173,6 +175,8 @@ def record(
         log(f"Microphone: {manifest['device']} (the system's input; use the one you fly with)")
     log(f"{len(todo)} phrases for {checklist} on {', '.join(aircraft)}; {len(done)} recorded.")
     log("Say each one as you would in flight. Enter starts, Enter stops.")
+    if any(" ... " in phrase for phrase, _ in todo):
+        log('" ... " means pause for a second there, as you would after "hey copilot".')
     log("At the prompt: r = redo the one before, s = skip, q = stop for now.\n")
 
     def save() -> None:

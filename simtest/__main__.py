@@ -8,7 +8,19 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import checklists, flights, relative, scenario, tier1, tier2, tier3, tier4, voice, xplane
+from . import (
+    checklists,
+    flights,
+    relative,
+    scenario,
+    tier1,
+    tier2,
+    tier3,
+    tier4,
+    voice,
+    wake,
+    xplane,
+)
 from .bridge import Bridge, NoAnswer
 
 
@@ -85,6 +97,7 @@ def main(argv: list[str] | None = None) -> int:
             "tier4",
             "relative",
             "checklists-air",
+            "wake",
             *flights.FLIGHTS,
         ),
     )
@@ -111,6 +124,7 @@ def main(argv: list[str] | None = None) -> int:
             "relative",
             "checklists-ground",
             "checklists-air",
+            "wake",
         ),
     )
     rec.add_argument("aircraft", choices=(*tier1.SETUPS, "all", "new"))
@@ -237,6 +251,13 @@ def _model_lacks(checklist: str, state: dict) -> str | None:
     """Why the loaded model can't run this checklist, or None. A model from
     before Tier 2 would fail every step for not knowing the commands; Tier 4
     needs a question model (qN) beside the command model."""
+    if checklist == "wake":
+        if state.get("wake_word"):
+            return None
+        return (
+            "the wake word is off or can't listen here (install L.5.2 or later, "
+            "the offline recogniser, and switch it on: vimaan/toggle_wake_word)"
+        )
     if checklist == "tier4":
         if tier4.NEEDS_QUESTION_INTENT in (state.get("question_intents") or ()):
             return None
@@ -361,6 +382,8 @@ def _run(args: argparse.Namespace) -> int:
             results = runner.run(relative.steps(name))
         elif args.checklist == "checklists-air":
             results = runner.run(checklists.air(name))
+        elif args.checklist == "wake":
+            results = runner.run(wake.steps(name))
         else:
             results = runner.run(tier1.steps(name, vfe_full=limits.get("full")))
         total = scenario.summary(results)

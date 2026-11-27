@@ -17,6 +17,10 @@ A request is ``{"id": "...", "op": "...", ...}``:
                                                its read-backs are checked.
               [, "ask": true]                  said on the question key (Shift+Z),
                                                so it is only ever answered.
+    hear      {"wav": path}                    heard on the open mic, as the wake
+                                               word listens (phase L.5): a wake
+                                               taken answers as a say does;
+                                               nothing woken, {"woke": false}.
     read      {"datarefs": ["name", "name[2]"]}
     write     {"dataref": name, "value": v}
     command   {"name": ..., "phase": "once" | "begin" | "end"}
@@ -42,7 +46,7 @@ from typing import Any
 
 FLAG = "bridge.on"
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
-OPS = ("state", "say", "read", "write", "command", "place", "airport", "aircraft")
+OPS = ("state", "say", "hear", "read", "write", "command", "place", "airport", "aircraft")
 # How many requests to take per poll (a say waits for its command).
 TAKE_MAX = 20
 # A say result waits this long after the command for its read-backs.
@@ -140,6 +144,12 @@ def problem(req: dict[str, Any]) -> str | None:
         if wav and not (os.path.isabs(str(wav)) and str(wav).endswith(".wav")):
             return "wav must be an absolute path to a .wav file"
         if wav and not os.path.isfile(str(wav)):
+            return f"no such file: {wav}"
+    elif op == "hear":
+        wav = str(req.get("wav") or "")
+        if not (os.path.isabs(wav) and wav.endswith(".wav")):
+            return "hear needs an absolute path to a .wav file"
+        if not os.path.isfile(wav):
             return f"no such file: {wav}"
     elif op == "read":
         names = req.get("datarefs")
