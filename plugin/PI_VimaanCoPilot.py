@@ -65,7 +65,7 @@ if _ML_PATH not in sys.path:
 
 # Only light, stdlib-backed modules load into X-Plane; the heavy ones live in
 # the worker process.
-from vimaan_nlu import answers, checklists, probe, sim_bridge, switches  # noqa: E402
+from vimaan_nlu import answers, checklists, probe, sim_bridge, switches, wake_word  # noqa: E402
 from vimaan_nlu.aircraft import (  # noqa: E402
     AircraftInfo,
     absent_switches,
@@ -265,6 +265,12 @@ VERIFY_DELAY_SEC = 1.0
 # Phase L.4: a checklist item set on "confirm" is done once its switch steps
 # and read-backs are, waited for at most this long.
 CHECKLIST_SETTLE_MAX_SEC = 10.0
+# Phase L.5: the wake word ("hey copilot", vimaan_nlu.wake_word), on unless
+# VIMAAN_WAKE_WORD=0 or switched off with its command. A wake taken but with no
+# command from the worker after this long is ended (the worker ends its own
+# listening well before: no speech in 4 s, a command cut off at 8 s).
+WAKE_ENV = "VIMAAN_WAKE_WORD"
+WAKE_LISTEN_MAX_SEC = wake_word.COMMAND_START_SEC + wake_word.COMMAND_MAX_SEC + 5.0
 # A checklist suggested while Vimaan is speaking waits at most this long.
 SUGGEST_WAIT_SEC = 10.0
 # After a target or radio is set, record the aircraft this many seconds later:
@@ -614,6 +620,9 @@ class PythonInterface:
         "worker_error": "An error occurred",
         "timeout": "Voice engine timed out",
         "too_short": None,
+        # A wake with nothing said after it, or one a key press took over.
+        "no_command": None,
+        "wake_cancelled": None,
     }
 
     # ------------------------------------------------------------------
@@ -704,6 +713,19 @@ class PythonInterface:
         self._speaking_until = 0.0
         self._suggest_checklists = os.environ.get("VIMAAN_CHECKLISTS") == "1"
         self.suggestions = checklists.Suggestions()
+        # Phase L.5: the wake word, on by default (the owner's decision), and
+        # whether the worker can listen for it (Vosk, the mic open between
+        # presses): it says so when ready.
+        self._wake_on = os.environ.get(WAKE_ENV, "1").strip().lower() not in (
+            "0",
+            "off",
+            "false",
+            "no",
+        )
+        self._wake_available = False
+        self._wake_off_why: str | None = None
+        self._chime: bytes | None = None
+        self._chime_failed = False
         # Whether the loaded aircraft's own files use an autothrottle:
         # (acf path, True/False/None), scanned off the main thread.
         self._athr_scan: tuple[str, bool | None] | None = None
@@ -883,6 +905,11 @@ class PythonInterface:
             "vimaan/toggle_checklist_suggestions",
             "Vimaan: checklists suggested at phase changes on/off",
             self._on_checklist_suggestions_cmd,
+        )
+        self._register_command(
+            "vimaan/toggle_wake_word",
+            'Vimaan: the wake word ("hey copilot") on/off',
+            self._on_wake_word_cmd,
         )
         self._hook_off_commands()
         self._start_overlay()
@@ -1115,6 +1142,11 @@ class PythonInterface:
 
     def OnPressCallback(self, inRefcon, source="hotkey", ask=False):
         t_press = time.perf_counter()
+        active = self._active
+        if active is not None and active.get("source") == "wake" and active["t_release"] is None:
+            # The key wins over a wake still listening: the worker gives it
+            # up when the recording starts.
+            self._end_command("wake_cancelled")
         if self._active is not None:
             if self._active.get("t_release") is not None:
                 self.tel.event("ptt_ignored", reason="still_processing", source=source)
@@ -1203,6 +1235,13 @@ class PythonInterface:
                 and time.perf_counter() - active["t_release"] > WORKER_REPLY_TIMEOUT_SEC
             ):
                 self._end_command("timeout")
+            elif (
+                active is not None
+                and active.get("source") == "wake"
+                and active["t_release"] is None
+                and time.perf_counter() - active["t_press"] > WAKE_LISTEN_MAX_SEC
+            ):
+                self._end_command("timeout")
             self._service_cranks()
             self._service_apu()
             self._service_deferred()
@@ -1267,6 +1306,17 @@ class PythonInterface:
                 )
             boot = time.perf_counter() - (self._worker_started_at or time.perf_counter())
             self.tel.event("worker_ready", boot_sec=round(boot, 2), restarts=self._worker_restarts)
+            self._wake_available = bool(msg.get("wake"))
+            self._wake_off_why = msg.get("wake_off")
+            if self._wake_available:
+                self.worker.send({"op": "wake", "on": self._wake_on})
+            self.tel.event(
+                "wake_word_setting",
+                on=self._wake_on and self._wake_available,
+                available=self._wake_available,
+                why=self._wake_off_why,
+                phrase=msg.get("wake_phrase"),
+            )
             self._say("Vimaan AI CoPilot ready")
         elif kind == "fatal":
             self.tel.event("worker_fatal", logging.ERROR, **msg)
@@ -1276,7 +1326,18 @@ class PythonInterface:
             self.overlay_state.on_partial(cmd, msg.get("text", ""))
         elif kind == "recording" and mine:
             self.tel.event("mic_open", cmd=cmd, open_ms=msg.get("open_ms"))
+        elif kind == "wake":
+            self._on_wake(msg)
         elif kind == "captured" and active is not None and mine:
+            if active.get("source") == "wake" and active["t_release"] is None:
+                # The command after the wake word is over: as a key released.
+                active["t_release"] = time.perf_counter()
+                self.tel.event(
+                    "ptt_release",
+                    cmd=cmd,
+                    source="wake",
+                    held_ms=round((active["t_release"] - active["t_press"]) * 1000, 1),
+                )
             self.tel.event(
                 "stage",
                 stage="capture",
@@ -2004,6 +2065,9 @@ class PythonInterface:
         self.tel.event("speak", logging.DEBUG, cmd=self._current_cmd, text=text, **extra)
         now = time.perf_counter()
         self._speaking_until = max(self._speaking_until, now) + checklists.speaking_sec(text)
+        if self._wake_on and self._wake_available and self.worker is not None:
+            # Its own voice from the speakers isn't the pilot's (phase L.5).
+            self.worker.send({"op": "wake_mute", "sec": round(self._speaking_until - now, 2)})
         xp.speakString(text)
 
     @staticmethod
@@ -3703,6 +3767,84 @@ class PythonInterface:
             self.callouts.reset()
             self.tel.event("callouts_setting", enabled=self._callouts_enabled)
             self._say(f"Vimaan callouts {'on' if self._callouts_enabled else 'off'}")
+        return 1
+
+    # ------------------------------------------------------------------
+    # Phase L.5: the wake word ("hey copilot")
+    # ------------------------------------------------------------------
+    def _on_wake(self, msg):
+        """The worker heard the wake phrase: take it as a command, as a key
+        pressed, or drop it. Every wake is logged (taken or not), so false
+        ones can be counted in flight."""
+        n = msg.get("wake")
+        why = None
+        if not (self._wake_on and self._wake_available):
+            why = "off"
+        elif not self.ready:
+            why = "not_ready"
+        elif self._active is not None:
+            why = "busy"
+        elif time.perf_counter() < self._speaking_until:
+            why = "speaking"
+        self.tel.event(
+            "wake_word",
+            wake=n,
+            conf=msg.get("conf"),
+            one_breath=msg.get("one_breath"),
+            taken=why is None,
+            why=why,
+        )
+        if why is not None:
+            self.worker.send({"op": "wake_drop", "wake": n})
+            return
+        cmd = self.tel.new_command_id()
+        now = time.perf_counter()
+        self._active = {
+            "cmd": cmd,
+            "t_press": now,
+            "t_release": None,
+            "source": "wake",
+            "ask": False,
+        }
+        self.tel.event(
+            "ptt_press",
+            cmd=cmd,
+            source="wake",
+            wake=n,
+            conf=msg.get("conf"),
+            one_breath=msg.get("one_breath"),
+        )
+        self.worker.send({"op": "wake_take", "wake": n, "cmd": cmd})
+        self._play_chime()
+        if self._flight_loop_id:
+            xp.scheduleFlightLoop(self._flight_loop_id, -1.0, 1)
+
+    def _play_chime(self):
+        """A short chime on X-Plane's UI bus: heard, say the command."""
+        if self._chime_failed:
+            return
+        try:
+            if self._chime is None:
+                self._chime = wake_word.chime_pcm()
+            xp.playPCMOnBus(
+                self._chime, len(self._chime), xp.FMOD_SOUND_FORMAT_PCM16, 16000, 1, 0, xp.AudioUI
+            )
+        except Exception as exc:  # no sound: the wake still works, once said
+            self._chime_failed = True
+            self.tel.error("wake_chime_failed", exc)
+
+    def _on_wake_word_cmd(self, cmd_ref, phase, refcon):
+        if phase == xp.CommandBegin:
+            if not self._wake_available:
+                self.tel.event(
+                    "wake_word_setting", on=False, available=False, why=self._wake_off_why
+                )
+                self._say("The wake word needs the offline recogniser")
+                return 1
+            self._wake_on = not self._wake_on
+            self.worker.send({"op": "wake", "on": self._wake_on})
+            self.tel.event("wake_word_setting", on=self._wake_on, available=True)
+            self._say(f"Wake word {'on' if self._wake_on else 'off'}")
         return 1
 
     def _on_checklist_suggestions_cmd(self, cmd_ref, phase, refcon):

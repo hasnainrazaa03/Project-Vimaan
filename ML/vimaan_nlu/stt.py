@@ -124,6 +124,7 @@ class VoskStream:
             model = vosk.Model(model)
         args = (model, sample_rate) if words is None else (model, sample_rate, json.dumps(words))
         self._rec = vosk.KaldiRecognizer(*args)
+        self.model = model  # shared: the wake word listens with it too (phase L.5)
         self.sample_rate = sample_rate
         self.grammar = words is not None
         self.fed_bytes = 0

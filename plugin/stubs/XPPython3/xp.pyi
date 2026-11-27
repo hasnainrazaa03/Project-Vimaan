@@ -74,6 +74,22 @@ def destroyFlightLoop(loopID: int) -> None: ...
 
 # --- misc -------------------------------------------------------------------
 def speakString(text: str) -> None: ...
+
+# Sound (XPLMSound): the wake word's chime (phase L.5).
+AudioUI: int
+FMOD_SOUND_FORMAT_PCM16: int
+
+def playPCMOnBus(
+    audioBuffer: Any,
+    bufferSize: int,
+    soundFormat: int,
+    freqHz: int,
+    numChannels: int,
+    loop: int = ...,
+    audioType: int = ...,
+    callback: Callable[..., Any] | None = ...,
+    refCon: Any = ...,
+) -> Any: ...
 def log(message: str) -> None: ...
 def getVersions() -> tuple[int, int, int]: ...
 

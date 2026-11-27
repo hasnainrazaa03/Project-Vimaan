@@ -20,9 +20,20 @@ Requests (``op``):
     selftest {probes}    NLU on [text, expected] pairs; reply ``selftest``
     ping                 reply ``pong``
     quit                 exit
+  The wake word (phase L.5, vimaan_nlu.wake_word; needs the mic open between
+  presses and Vosk):
+    wake {on}            listen for "hey copilot" between presses, or stop
+    wake_mute {sec}      don't, for this long (Vimaan is speaking)
+    wake_take {wake, cmd}  the plugin takes wake ``wake`` as command ``cmd``:
+                         its ``captured`` / ``result`` (or ``error``
+                         ``no_command``) follow under that cmd
+    wake_drop {wake}     the plugin doesn't (it is busy): forget it
+    hear {path}          debug: a 16-bit mono WAV heard on the open mic
 Replies (``type``):
     ready, fatal, recording, partial, captured, result, error, selftest, pong, log,
-    usage (every --usage-every seconds: Mac CPU / memory / GPU, vimaan_nlu.usage)
+    usage (every --usage-every seconds: Mac CPU / memory / GPU, vimaan_nlu.usage),
+    wake {wake, conf, one_breath} (the wake phrase heard; ready says "wake": true
+    when it can be)
     (``partial`` = live transcript while recording, streaming backends only;
     ``result.to_reading`` = the command with one "two" read as "to", when the
     number is impossible as heard: see vimaan_nlu.ambiguity.to_reading)
@@ -44,6 +55,7 @@ import traceback
 from collections.abc import Callable
 from typing import Any
 
+from vimaan_nlu import wake_word
 from vimaan_nlu.ambiguity import to_reading
 from vimaan_nlu.audio_health import is_silent, rms_from_pcm16
 from vimaan_nlu.commands import command
@@ -76,6 +88,11 @@ LISTEN_POLL_SEC = 0.05
 # A recording played from a file (the test bridge) when there's no microphone
 # to take the rate from: what every recogniser here wants.
 FILE_SAMPLE_RATE = 16_000
+# A wake the plugin hasn't taken or dropped by then is forgotten (an older
+# plugin that doesn't know wakes).
+WAKE_DECISION_SEC = 3.0
+# A file heard by ``hear`` ends with this much quiet, so a command in it ends.
+HEAR_TAIL_SEC = 1.5
 
 
 class WavRecorder:
@@ -166,6 +183,9 @@ class VoiceWorker:
         predict_question: Callable[[str], dict[str, Any]] | None = None,
         audio_dir: str | None = None,
         audio_prefix: str = "",
+        wake: wake_word.WakeSpotter | None = None,
+        wake_stt: Any = None,
+        wake_question_stt: Any = None,
     ) -> None:
         self.send = send
         self.recorder = recorder
@@ -188,6 +208,19 @@ class VoiceWorker:
         self.audio_prefix = audio_prefix
         self._audio_dir_bytes = _dir_bytes(audio_dir) if audio_dir else 0
         self.rec: dict[str, Any] | None = None  # the recording in progress
+        # Phase L.5: the wake word. Off until the plugin switches it on.
+        self.wake = wake
+        # A wake's command is decoded with the phrase in front of it: the
+        # command (and question) grammars with the wake words added.
+        self.wake_stt = wake_stt
+        self.wake_question_stt = wake_question_stt
+        self.wake_on = False
+        self.wake_mute_until = 0.0
+        self._wake_n = 0
+        self._wake_muted = False
+        # The wake in hand: {"n", "cmd" (once taken), "done" (a Command or
+        # NO_COMMAND once over), "t"}.
+        self._wake: dict[str, Any] | None = None
 
     # ------------------------------------------------------------------
     def handle(self, msg: dict[str, Any]) -> bool:
@@ -197,6 +230,7 @@ class VoiceWorker:
         if op == "start":
             if self.rec is not None:
                 return True  # key auto-repeat
+            self._cancel_wake()  # the key wins over a wake still listening
             if self.recorder is None:
                 self.send(
                     {"type": "error", "cmd": cmd, "outcome": "mic_error", "error": "no microphone"}
@@ -250,6 +284,24 @@ class VoiceWorker:
             self.send({"type": "selftest", "results": results})
         elif op == "ping":
             self.send({"type": "pong"})
+        elif op == "wake":
+            self._set_wake(bool(msg.get("on")))
+        elif op == "wake_mute":
+            self.wake_mute_until = self.clock() + max(0.0, float(msg.get("sec") or 0.0))
+        elif op == "wake_take":
+            w = self._wake
+            if w is not None and w["n"] == msg.get("wake") and w["cmd"] is None:
+                w["cmd"] = cmd
+                if w["done"] is not None:
+                    self._finish_wake()
+        elif op == "wake_drop":
+            w = self._wake
+            if w is not None and w["n"] == msg.get("wake"):
+                self._wake = None
+                if self.wake is not None and self.wake.in_command:
+                    self.wake.reset()
+        elif op == "hear":
+            self._hear_file(msg.get("path") or "")
         elif op == "quit":
             return False
         return True
@@ -308,6 +360,8 @@ class VoiceWorker:
             return
         if self.listening:
             self.recorder.poll()
+            if self.wake_on:
+                self._listen_for_wake()
         err = getattr(self.recorder, "listen_error", None)
         if err is not None:
             self.recorder.listen_error = None
@@ -319,6 +373,109 @@ class VoiceWorker:
                     "the next press opens it again",
                 }
             )
+
+    # ------------------------------------------------------------------
+    # The wake word (phase L.5)
+    # ------------------------------------------------------------------
+    def _set_wake(self, on: bool) -> None:
+        on = on and self.wake is not None and bool(getattr(self.recorder, "keeps_open", False))
+        self.wake_on = on
+        if self.recorder is not None and hasattr(self.recorder, "hear_between"):
+            self.recorder.hear_between = on
+            self.recorder.take_heard()  # nothing from before
+        self._cancel_wake()
+        if self.wake is not None:
+            self.wake.reset()
+
+    def _listen_for_wake(self) -> None:
+        assert self.wake is not None
+        raw, gap = self.recorder.take_heard()
+        w = self._wake
+        if w is not None and w["cmd"] is None and self.clock() - w["t"] > WAKE_DECISION_SEC:
+            self._wake = None  # never taken: the plugin doesn't know wakes
+        if self.clock() < self.wake_mute_until:
+            # Vimaan is speaking: its own voice isn't the pilot's.
+            if self.wake.in_command:
+                self._cancel_wake()
+            self._wake_muted = True
+            return
+        if gap or self._wake_muted:
+            if self.wake.in_command:
+                self._cancel_wake()
+            self.wake.reset()
+            self._wake_muted = False
+        if raw:
+            self._on_wake_events(self.wake.feed(raw))
+
+    def _hear_file(self, path: str) -> None:
+        """A WAV heard on the open mic, then quiet (the test bridge)."""
+        if not self.wake_on or self.wake is None:
+            self.send({"type": "log", "level": "warning", "msg": "hear: the wake word is off"})
+            return
+        import wave
+
+        try:
+            with wave.open(path) as w:
+                if w.getsampwidth() != 2 or w.getnchannels() != 1:
+                    raise ValueError("need 16-bit mono PCM")
+                if w.getframerate() != self.wake.sample_rate:
+                    raise ValueError(
+                        f"sample rate {w.getframerate()}, need {self.wake.sample_rate}"
+                    )
+                raw = w.readframes(w.getnframes())
+        except (OSError, EOFError, ValueError, wave.Error) as exc:
+            self.send({"type": "log", "level": "warning", "msg": f"hear {path}: {exc}"})
+            return
+        raw += bytes(int(HEAR_TAIL_SEC * self.wake.sample_rate) * 2)
+        step = int(LISTEN_POLL_SEC * self.wake.sample_rate) * 2
+        for i in range(0, len(raw), step):
+            self._on_wake_events(self.wake.feed(raw[i : i + step]))
+
+    def _on_wake_events(self, events: list[Any]) -> None:
+        for ev in events:
+            if isinstance(ev, wake_word.Wake):
+                if self._wake is not None:
+                    continue  # one at a time: the last is still with the plugin
+                self._wake_n += 1
+                self._wake = {"n": self._wake_n, "cmd": None, "done": None, "t": self.clock()}
+                self.send(
+                    {
+                        "type": "wake",
+                        "wake": self._wake_n,
+                        "conf": ev.conf,
+                        "one_breath": ev.one_breath,
+                    }
+                )
+            elif self._wake is not None:  # its command, or none
+                self._wake["done"] = ev
+                if self._wake["cmd"] is not None:
+                    self._finish_wake()
+
+    def _finish_wake(self) -> None:
+        w, self._wake = self._wake, None
+        assert w is not None
+        done, cmd = w["done"], w["cmd"]
+        if isinstance(done, wake_word.Command):
+            rate = self.wake.sample_rate if self.wake is not None else FILE_SAMPLE_RATE
+            self._recognise(
+                cmd,
+                done.pcm,
+                rate,
+                live=False,
+                wake_stt=(self.wake_stt, self.wake_question_stt),
+                wake=True,
+                cut_off=done.cut_off,
+            )
+        else:
+            self.send({"type": "error", "cmd": cmd, "outcome": "no_command"})
+
+    def _cancel_wake(self) -> None:
+        """A wake still listening, given up (a press, Vimaan speaking)."""
+        w, self._wake = self._wake, None
+        if w is not None and w["cmd"] is not None:
+            self.send({"type": "error", "cmd": w["cmd"], "outcome": "wake_cancelled"})
+        if self.wake is not None and self.wake.in_command:
+            self.wake.reset()
 
     # ------------------------------------------------------------------
     def _finish(self, auto_stop: bool = False) -> None:
@@ -370,10 +527,24 @@ class VoiceWorker:
         self._recognise(cmd, raw, rate, live=False, ask=ask, source_file=path)
 
     def _recognise(
-        self, cmd: Any, raw: bytes, rate: int, *, live: bool, ask: bool = False, **captured: Any
+        self,
+        cmd: Any,
+        raw: bytes,
+        rate: int,
+        *,
+        live: bool,
+        ask: bool = False,
+        wake_stt: tuple[Any, Any] | None = None,
+        **captured: Any,
     ) -> None:
         """Recognise one recording, then predict and reply. ``live``: it came
-        from the microphone, and a streaming recogniser has been fed already."""
+        from the microphone, and a streaming recogniser has been fed already.
+        ``wake_stt``: a wake's command, the phrase in front (phase L.5): the
+        (command, question) recognisers that know its words, which are then
+        taken off the transcript."""
+        command_stt, question_stt = wake_stt if wake_stt is not None else (None, None)
+        command_stt = command_stt or self.stream_stt
+        question_stt = question_stt or self.question_stt
         audio_sec = len(raw) / (2 * rate)
         rms = rms_from_pcm16(raw)
         self.send(
@@ -394,25 +565,30 @@ class VoiceWorker:
             self.send({"type": "error", "cmd": cmd, "outcome": "silent_mic"})
             return
         t = self.clock()
+        strip = wake_word.strip_wake if wake_stt is not None else (lambda s: s)
         try:
-            if self.stream_stt is not None:
+            if command_stt is not None:
                 if live:
-                    self.stream_stt.feed(raw[self.stream_stt.fed_bytes :])  # the release tail
+                    command_stt.feed(raw[command_stt.fed_bytes :])  # the release tail
                 else:
-                    self.stream_stt.begin()
-                    self.stream_stt.feed(raw)
-                text = self.stream_stt.finish()
+                    command_stt.begin()
+                    command_stt.feed(raw)
+                text = strip(command_stt.finish())
             else:
-                text = self.transcribe_audio(raw, rate)
+                text = strip(self.transcribe_audio(raw, rate))
+            if wake_stt is not None and not text:  # only the wake phrase understood
+                raise UnknownValueError("nothing but the wake word recognised")
         except Exception as exc:
-            if ask and self.question_stt is not None:
+            if ask and question_stt is not None:
                 text = ""  # the question grammar may still hear it
+            elif wake_stt is not None and question_stt is not None:
+                text = ""  # nor may a wake's command: it could be a question
             else:
                 self._stt_error(cmd, exc, t)
                 return
         heard = None
-        if self.question_stt is not None and (ask or looks_like_question(text)):
-            asked = self._hear_question(raw)
+        if question_stt is not None and (ask or not text or looks_like_question(text)):
+            asked = strip(self._hear_question(raw, question_stt))
             if asked:
                 heard, text = text, asked
             elif not text:
@@ -427,13 +603,14 @@ class VoiceWorker:
             heard=heard,
         )
 
-    def _hear_question(self, raw: bytes) -> str:
+    def _hear_question(self, raw: bytes, stt: Any = None) -> str:
         """The recording decoded with the question grammar, or "" when it
         heard nothing it knows."""
+        stt = stt or self.question_stt
         try:
-            self.question_stt.begin()
-            self.question_stt.feed(raw)
-            return str(self.question_stt.finish())
+            stt.begin()
+            stt.feed(raw)
+            return str(stt.finish())
         except Exception:
             return ""
 
@@ -742,6 +919,9 @@ def main(argv: list[str] | None = None) -> int:
         "from before the key went down (0: open the mic on each press)",
     )
     parser.add_argument("--backend", default="torch", choices=("torch", "onnx"))
+    parser.add_argument(
+        "--no-wake-word", action="store_true", help='don\'t listen for "hey copilot" (phase L.5)'
+    )
     parser.add_argument("--no-quantize", action="store_true")
     parser.add_argument("--model-path", default=None)
     parser.add_argument(
@@ -818,6 +998,29 @@ def main(argv: list[str] | None = None) -> int:
             mic: dict[str, Any] = recorder.describe()
         except Exception as exc:
             recorder, mic = None, {"error": f"{type(exc).__name__}: {exc}"}
+        # The wake word: Vosk's model, already loaded, and the mic open
+        # between presses. Without either, the talk keys work as ever.
+        wake, wake_info, wake_stt, wake_question_stt = None, {}, None, None
+        model = getattr(stream_stt, "model", None)
+        if args.no_wake_word:
+            wake_info = {"wake_off": "--no-wake-word"}
+        elif model is None:
+            wake_info = {"wake_off": "needs the offline recogniser (vosk)"}
+        elif not getattr(recorder, "keeps_open", False):
+            wake_info = {"wake_off": "needs the mic open between presses (--preroll-ms)"}
+        else:
+            try:
+                from vimaan_nlu.stt import VoskStream
+                from vimaan_nlu.stt_vocabulary import grammar, question_grammar
+
+                wake = wake_word.vosk_spotter(model, getattr(recorder, "sample_rate", 16_000))
+                wake_stt = VoskStream(model, words=wake_word.wake_grammar(grammar()))
+                if question_stt is not None:
+                    wake_question_stt = VoskStream(
+                        model, words=wake_word.wake_grammar(question_grammar())
+                    )
+            except Exception as exc:
+                wake, wake_info = None, {"wake_off": f"{type(exc).__name__}: {exc}"}
     except Exception as exc:
         send(
             {
@@ -852,6 +1055,9 @@ def main(argv: list[str] | None = None) -> int:
             "stt": stt_info,
             "mic": mic,
             "audio_dir": args.save_audio_dir,
+            "wake": wake is not None,
+            "wake_phrase": " ".join(wake_word.PHRASE),
+            **wake_info,
         }
     )
     if recorder is not None and hasattr(recorder, "listen"):
@@ -868,6 +1074,9 @@ def main(argv: list[str] | None = None) -> int:
             predict_question=predict_question,
             audio_dir=args.save_audio_dir,
             audio_prefix=args.audio_prefix,
+            wake=wake,
+            wake_stt=wake_stt,
+            wake_question_stt=wake_question_stt,
         ).run(sys.stdin)
     finally:
         if recorder is not None and hasattr(recorder, "close"):

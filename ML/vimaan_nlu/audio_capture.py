@@ -23,8 +23,13 @@ frame hitch per command in-sim), so both run on a short-lived thread;
 Pre-roll (``preroll_sec`` > 0): the stream stays open between presses and
 :meth:`poll` keeps only the last ``preroll_sec`` of sound, in memory. A press
 starts with that sound, so the first word isn't cut by the ~85 ms open or by
-speaking as the key goes down. Nothing between presses is kept longer, saved
-or recognised. With 0 the stream opens on each press, as before.
+speaking as the key goes down. Nothing between presses is kept longer or
+saved. With 0 the stream opens on each press, as before.
+
+The wake word (phase L.5, ``hear_between``): the sound between presses is
+also handed to the owner (:meth:`take_heard`), which listens for "hey
+copilot" in it. It is held in memory only until taken (at most
+``HEARD_MAX_SEC``), and never saved.
 
 ``sd`` is injectable so this is testable without audio hardware.
 """
@@ -44,6 +49,8 @@ SAMPLE_WIDTH = 2  # int16
 # 0.1 -> 22 ms late but overflows if polls are >0.25 s apart; 0.2 survives
 # 0.25 s gaps. The flight loop polls every frame while recording.
 RING_BUFFER_SEC = 0.2
+# Sound heard between presses waits at most this long to be taken.
+HEARD_MAX_SEC = 2.0
 
 
 class PushToTalkRecorder:
@@ -82,6 +89,11 @@ class PushToTalkRecorder:
         # The mic failed between presses (device gone). The next press opens
         # it again, and it stays open from then on.
         self.listen_error: BaseException | None = None
+        # Phase L.5: the sound between presses, for the wake word.
+        self.hear_between = False
+        self._heard: collections.deque[bytes] = collections.deque()
+        self._heard_frames = 0
+        self._heard_gap = False  # some of it was lost (an overflow, a press)
 
     # ------------------------------------------------------------------
     def describe(self) -> dict[str, Any]:
@@ -163,6 +175,7 @@ class PushToTalkRecorder:
         if self._recording:
             return
         self.poll()  # the newest sound into the pre-roll
+        self._drop_heard()  # a press: what the listener had is cut off
         with self._lock:
             self._chunks, self._frames, self._taken = [], 0, 0
             preroll = self._take_preroll()
@@ -208,6 +221,33 @@ class PushToTalkRecorder:
         while self._ring and self._ring_frames - len(self._ring[0]) // SAMPLE_WIDTH >= keep:
             self._ring_frames -= len(self._ring.popleft()) // SAMPLE_WIDTH
 
+    def _keep_heard(self, data: bytes) -> None:
+        self._heard.append(data)
+        self._heard_frames += len(data) // SAMPLE_WIDTH
+        keep = int(HEARD_MAX_SEC * self.sample_rate)
+        if self._heard_frames > keep:  # not taken in time: only the newest waits
+            newest = b"".join(self._heard)[-keep * SAMPLE_WIDTH :]
+            self._heard.clear()
+            self._heard.append(newest)
+            self._heard_frames = keep
+            self._heard_gap = True
+
+    def _drop_heard(self) -> None:
+        if self._heard or self.hear_between:
+            self._heard_gap = True
+        self._heard.clear()
+        self._heard_frames = 0
+
+    def take_heard(self) -> tuple[bytes, bool]:
+        """The sound heard between presses since the last call, and whether
+        any was lost before it (an overflow, a press, or not taken in time):
+        the listener then starts afresh."""
+        raw, gap = b"".join(self._heard), self._heard_gap
+        self._heard.clear()
+        self._heard_frames = 0
+        self._heard_gap = False
+        return raw, gap
+
     def _take_preroll(self) -> bytes:
         keep = int(self.preroll_sec * self.sample_rate) * SAMPLE_WIDTH
         raw = b"".join(self._ring)[-keep:] if keep and self._ring else b""
@@ -221,6 +261,7 @@ class PushToTalkRecorder:
             stream, self._stream = self._stream, None
         self._ring.clear()
         self._ring_frames = 0
+        self._drop_heard()
         if self._recording:
             self.error = exc
         else:
@@ -251,8 +292,11 @@ class PushToTalkRecorder:
                 # it. Better no pre-roll than stale sound before the press.
                 self._ring.clear()
                 self._ring_frames = 0
+                self._drop_heard()
             elif self.keeps_open:
                 self._keep_preroll(bytes(data))
+                if self.hear_between:
+                    self._keep_heard(bytes(data))
             return available
         if overflowed:
             self.overflows += 1

@@ -239,6 +239,18 @@ Suggestions at phase changes ("Before takeoff checklist? Say confirm, or cancel.
 after an engine start) are off by default: bind **Vimaan: checklists suggested at phase changes
 on/off** (`vimaan/toggle_checklist_suggestions`) to a key, or set `VIMAAN_CHECKLISTS=1`.
 
+### Wake word
+
+Say **"hey copilot"** and then the command, in one breath ("hey copilot, gear down") or after a
+pause: a short chime says Vimaan heard it. The command goes through the same rules as one on the
+talk key: one command at a time, the safety holds, the refusals. The wake word is on by default
+and listens only between presses, never while Vimaan itself is speaking. Nothing said within 4 s
+of the wake is no command at all. Switch it off and on with **Vimaan: the wake word on/off**
+(`vimaan/toggle_wake_word`), or start with `VIMAAN_WAKE_WORD=0`. The talk keys work as before.
+It uses the offline recogniser (Vosk) and the microphone already open between presses, so it
+needs nothing more; every wake is logged, taken or not ([docs/PHASE_PLAN.md](docs/PHASE_PLAN.md),
+"L.5 Wake word").
+
 ---
 
 ## Prerequisites

@@ -1783,7 +1783,8 @@ designs come later in this document.
   talk keys stay. Design and measurements: "L.5 Wake word", below.
   - [x] L.5.1 The options and their licences; the one that needs no
     download, measured; the owner's decisions (2026-11-26).
-  - [ ] L.5.2 The wake word in the worker and the plugin, on the fake sim.
+  - [x] L.5.2 The wake word in the worker and the plugin, on the fake sim
+    (2026-11-26). Not installed.
   - [ ] L.5.3 In the sim, and the owner's voice saying it.
 
 ### L.5 Wake word
@@ -1837,6 +1838,65 @@ was decoded on its own by the installed Vosk model with the grammar
 5. **Testing as proposed:** the owner records the wake phrase about 20
    times, plus a stretch of ordinary cockpit talk, and a simtest run checks
    the wake path in the sim.
+
+**L.5.2 The wake word, built (2026-11-26; `vimaan_nlu/wake_word.py`).**
+
+- **Where it listens:** in the voice worker, on the microphone it already
+  keeps open between presses. The recorder hands over that sound when the
+  wake word is on, in memory only and never saved. Nothing listens while a
+  key is held, and the plugin mutes it for as long as Vimaan speaks.
+- **The wake:** Vosk, already loaded for commands, decodes that sound with
+  the grammar "hey copilot" or anything else. A wake is "hey" then "copilot",
+  side by side, each at 0.95 or more. The grammar also lets "copilot" come
+  alone ("autopilot on" was heard as "[unk] copilot").
+- **The command, in one breath or after a pause:**
+  - It is the sound from the wake phrase to the end of what is said. It is
+    decoded with the command grammar plus the wake words, then the phrase is
+    taken off the front.
+  - Cut at the end of "copilot" instead, one breath lost the command's
+    first word ("down" for "gear down", "pilot on" for "autopilot on"), as
+    Vosk's end of "copilot" runs into the next word.
+  - Questions go the same way, with the question grammar.
+- **When the command ends:** at loudness, since Vosk's partial results
+  come only about once a second. A frame is speech when its loudness over
+  100 ms is twice the background measured just before the phrase (and at
+  least 300). The command ends 0.7 s after the last speech. It is no command
+  if nothing is said within 4 s, and it is cut off at 8 s.
+- **The plugin takes it or drops it:**
+  - A wake taken is a command as if a key were pressed: source "wake" in
+    the log and the Flights tab, a short chime on X-Plane's UI bus, then the
+    same rules (one command, the safety holds, the refusals).
+  - It is dropped while a command is in hand or Vimaan is speaking. Every
+    wake is logged (`wake_word`), taken or not.
+  - A key pressed while it listens wins. Nothing said after it ends
+    quietly.
+  - On by default. `vimaan/toggle_wake_word` switches it off and on, and
+    `VIMAAN_WAKE_WORD=0` starts it off.
+
+**Measured on the finished spotter, fed as the worker feeds it (50 ms polls),
+on continuous streams (`~/Vimaan_Logs/measuring/l5`):**
+
+| Stream | Length | False wakes |
+| --- | --- | --- |
+| ATC transmissions (ATCOSIM, 4,000) | 4.95 h | 0 |
+| The owner's command recordings (1,883) | 1.19 h | 0 |
+| Speech Commands words (3,500) | 1.44 h | 0 |
+
+| Six macOS voices × five commands, in one breath and after a pause | Woken | Command right |
+| --- | --- | --- |
+| Clean | 58 of 60 | 52 of 60 |
+| With background noise 20 dB under the voice | 58 of 60 | 45 of 60 |
+| With background noise 10 dB under the voice | 59 of 60 | 46 of 60 |
+
+- **Missed wakes:** all five were "hey copilot autopilot on" in one breath
+  ("copilot autopilot" runs together).
+- **Wrong commands:** most are the generated voices heard wrong ("flaps
+  off", "set anti two seven zero"), as on the talk key.
+- **At 10 dB of noise** the end isn't found: 41 of 60 commands waited the
+  full 8 s. At 20 dB and clean, none did. The owner's microphone has about
+  60 dB between voice and quiet (frames of about 5,000 against 5).
+- **Listening costs** about 0.35 % of one core.
+- **Not measured yet:** the owner's voice saying it (L.5.3).
 
 ### L.4 Checklists
 
