@@ -1112,6 +1112,18 @@ class PythonInterface:
             self.tel.event("overlay_mode", mode=mode)
         return 1
 
+    def _overlay_draw_stats(self):
+        """The overlay's draw times, for the heartbeat (O.2: under 1 ms)."""
+        o = self.overlay
+        if o is None:
+            return {"overlay_draw_ms_max": None}
+        return {
+            "overlay_draw_ms_max": round(o.draw_ms_max, 3),
+            "overlay_draw_ms_minute": round(o.draw_ms_minute, 3),
+            "overlay_draws": o.draws,
+            "overlay_draws_over_1ms": o.draws_over_1ms,
+        }
+
     def _on_overlay_button(self, mode):
         """PIN or OFF clicked on the overlay (O.5). The toggle command brings
         it back from off."""
@@ -1293,9 +1305,7 @@ class PythonInterface:
             busy_ms=(time.perf_counter() - t0) * 1000,
             pending_verifications=len(self._verifications),
             paused=self._read_int(DREF_PAUSED),
-            overlay_draw_ms_max=None
-            if self.overlay is None
-            else round(self.overlay.draw_ms_max, 3),
+            **self._overlay_draw_stats(),
         )
         if (
             self._active is not None

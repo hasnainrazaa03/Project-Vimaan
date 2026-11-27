@@ -150,6 +150,13 @@ class Overlay:
         self._buttons: dict[str, tuple[float, float, float, float]] = {}
         self.draw_ms_max = 0.0
         self.draw_errors = 0
+        # Every draw counted, and the slow ones: one slow first frame (warm-up)
+        # is not a slow overlay.
+        self.draws = 0
+        self.draws_over_1ms = 0
+        self.draw_ms_minute = 0.0  # the worst draw in the last full minute
+        self._minute_max = 0.0
+        self._minute_start = time.monotonic()
         self._wanted_height: int | None = None  # measured by the last draw
         self._resize_errors = 0
 
@@ -218,7 +225,9 @@ class Overlay:
             if self._fonts is None:
                 imgui.get_io().font_global_scale = IMGUI_FONT_SCALE
             style = imgui.get_style()
-            style.window_padding = (PAD_X, PAD_TOP)
+            # No padding: ImGui clips drawing to the window less half its
+            # padding, which cut the border's sides. Everything is placed here.
+            style.window_padding = (0.0, 0.0)
             style.window_border_size = 0.0
             style.colors[imgui.COLOR_WINDOW_BACKGROUND] = PANEL_BG
         except Exception as exc:  # cosmetic only
@@ -316,7 +325,16 @@ class Overlay:
             self.draw_errors += 1
             if self.draw_errors <= 3:
                 self.log(f"overlay: draw failed ({type(exc).__name__}: {exc})")
-        self.draw_ms_max = max(self.draw_ms_max, (time.perf_counter() - t) * 1000)
+        ms = (time.perf_counter() - t) * 1000
+        self.draw_ms_max = max(self.draw_ms_max, ms)
+        self.draws += 1
+        if ms > 1.0:
+            self.draws_over_1ms += 1
+        now = time.monotonic()
+        if now - self._minute_start >= 60.0:
+            self.draw_ms_minute, self._minute_max = self._minute_max, 0.0
+            self._minute_start = now
+        self._minute_max = max(self._minute_max, ms)
 
     def _draw_imgui(self, window_id: Any, refcon: Any) -> None:
         self._timed(lambda: self._imgui_panel(self.state.panel()))

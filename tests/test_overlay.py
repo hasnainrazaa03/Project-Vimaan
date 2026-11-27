@@ -78,6 +78,42 @@ def test_draw_never_raises():
     assert overlay.draw_errors == 1 and "draw failed" in logs[-1]
 
 
+def test_draws_are_counted_and_the_slow_ones_too(monkeypatch):
+    from vimaan_nlu import overlay as overlay_module
+
+    clock = {"perf": 0.0, "mono": 0.0}
+    fake_time = types.SimpleNamespace(
+        perf_counter=lambda: clock["perf"], monotonic=lambda: clock["mono"]
+    )
+    monkeypatch.setattr(overlay_module, "time", fake_time)
+    xp = make_xp()
+    state = OverlayState(mode="pinned")
+    overlay = Overlay(xp, state, prefer_imgui=False)
+    overlay.start()
+    overlay.update()
+
+    def lines(cost_ms):
+        def slow():
+            clock["perf"] += cost_ms / 1000
+            return []
+
+        return slow
+
+    state.lines = lines(2.0)  # a slow first frame
+    xp.draw_windows()
+    state.lines = lines(0.3)
+    for _ in range(9):
+        xp.draw_windows()
+    assert (overlay.draws, overlay.draws_over_1ms) == (10, 1)
+    assert overlay.draw_ms_max == pytest.approx(2.0)
+    clock["mono"] += 61  # a minute on: its worst is kept, a new minute starts
+    xp.draw_windows()
+    assert overlay.draw_ms_minute == pytest.approx(2.0)
+    clock["mono"] += 61
+    xp.draw_windows()
+    assert overlay.draw_ms_minute == pytest.approx(0.3)
+
+
 def test_falls_back_to_native_without_imgui():
     xp = make_xp()
     logs = []
@@ -232,6 +268,7 @@ def test_imgui_loads_b612_mono_from_x_planes_fonts(tmp_path):
     assert sizes == [BODY_PX * FONT_OVERSAMPLE, SMALL_PX * FONT_OVERSAMPLE]
     assert refreshed == [1] and imgui.io.font_global_scale == pytest.approx(1 / FONT_OVERSAMPLE)
     assert imgui.style.window_border_size == 0.0 and imgui.style.colors
+    assert imgui.style.window_padding == (0.0, 0.0)  # padding clipped the border's sides
     draw()
     assert set(imgui.fonts_pushed) == {"font1", "font2"}
     overlay.stop()

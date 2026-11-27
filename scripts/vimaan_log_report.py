@@ -506,7 +506,13 @@ def report(path: Path, now: float | None = None) -> str:
             e["overlay_draw_ms_max"] for e in events if e.get("overlay_draw_ms_max") is not None
         ]
         worst = f"{max(draws):.2f} ms" if draws else "-"
-        w(f"Overlay: {overlay.get('backend')} ({overlay.get('mode')}), worst draw {worst}")
+        line = f"Overlay: {overlay.get('backend')} ({overlay.get('mode')}), worst draw {worst}"
+        if overlay.get("font"):
+            line += f", font {overlay['font']}"
+        last = next((e for e in reversed(events) if e.get("overlay_draws") is not None), None)
+        if last:
+            line += f"; {last['overlay_draws_over_1ms']} of {last['overlay_draws']} draws over 1 ms"
+        w(line)
     return "\n".join(out)
 
 

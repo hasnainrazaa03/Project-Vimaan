@@ -129,6 +129,21 @@ auto / pinned / off.
     buttons. Font: B612 Mono from X-Plane's Resources/fonts (nothing bundled),
     rasterised at 2x for Retina. Telemetry: `safety_hold.message`,
     `checklist_item.ask`, `overlay_start.font`, `overlay_mode.via`.
+  - In sim 2026-11-27 (#119 installed, Baron, generated voice through the
+    bridge): ImGui with B612 Mono; done, the parking-brake hold (12 s
+    countdown), the before landing checklist (gear offered, cancelled, "3
+    OPEN"), not heard, an answer, and the idle view with the history fading,
+    all as designed. X-Plane's window adds its title bar (drag, pop out,
+    close). Fixed in #120: the border's sides were clipped (ImGui clips to
+    the window less half its padding: padding now 0); "6,500" read as
+    "6, 500" (B612 Mono gives a comma a whole cell: no thousands commas); a
+    full green CONF bar beside "NONE, NOTHING CHANGED" when the model was
+    sure it was not a command (no bar then); a finished switch's history tag
+    was cyan, not green. Worst draw 2.07 ms, set on the first draw and never
+    raised by the hold or the checklist after; the heartbeat now also has
+    the draws over 1 ms and the worst draw per minute, and the log report
+    prints them. No stalls with the overlay up (82-88 fps, worst frame
+    24-30 ms; the session's 2 stalls were the aircraft loading).
 
 ---
 
