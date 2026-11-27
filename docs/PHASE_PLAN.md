@@ -1782,7 +1782,9 @@ designs come later in this document.
 - [ ] **L.5 Wake word:** hands-free, offline, a licence-clean model. The two
   talk keys stay. Design and measurements: "L.5 Wake word", below.
   - [x] L.5.1 The options and their licences; the one that needs no
-    download, measured (2026-11-26). Waiting for the owner's decisions.
+    download, measured; the owner's decisions (2026-11-26).
+  - [ ] L.5.2 The wake word in the worker and the plugin, on the fake sim.
+  - [ ] L.5.3 In the sim, and the owner's voice saying it.
 
 ### L.5 Wake word
 
@@ -1818,13 +1820,23 @@ was decoded on its own by the installed Vosk model with the grammar
 - **The cost:** listening for one phrase takes about 0.3 % of one core.
 - **Not measured yet:** the owner's own voice saying the wake phrase (only generated voices did), and listening without a break through a whole flight (each clip here was decoded on its own).
 
-**Decisions for the owner:**
+**Owner decisions (2026-11-26):**
 
-1. **Engine and phrase.** Either A, "hey copilot" with Vosk: nothing new to install, and measured above. Or B, a "Hey Vimaan" model trained on licence-clean data: downloads, training, and a new library in X-Plane's Python.
-2. **After the wake word.** Either Vimaan chimes and listens as if the talk key were pressed (the command within a few seconds, ending at a pause). Or the wake word and the command come in one breath ("hey copilot, gear down"). Both can work at once, with the listening starting right after the phrase.
-3. **When it listens.** Off unless switched on, by a command, as the callouts and checklist suggestions are. Never while Vimaan is speaking or a talk key is held.
-4. **What a false wake can do.** It opens the listening window, and what is heard in it goes through the same rules as a pressed key: one command, the safety holds, the refusals. The risk is ATC or cabin talk in that window heard as a command. Every wake would be logged, so false ones can be counted in flight.
-5. **How it's tested.** The owner records the wake phrase about 20 times, plus a stretch of ordinary cockpit talk (`simtest record`), and a simtest run checks the wake path in the sim.
+1. **"Hey copilot", with Vosk, for now.** If we train our own model later,
+   the wake word moves to "Hey Vimaan" then.
+2. **Either way after the wake word.** Listening starts right after the
+   phrase, so the command can follow in one breath ("hey copilot, gear
+   down"), or after a pause and the chime.
+3. **On by default.** A command switches it off (and on again). It never
+   listens while Vimaan is speaking or a talk key is held, and the two talk
+   keys stay.
+4. **The same rules as the talk key.** A false wake only opens the
+   listening window. What is heard in it goes through the same rules: one
+   command, the safety holds, the refusals. Every wake is logged, so false
+   ones can be counted in flight.
+5. **Testing as proposed:** the owner records the wake phrase about 20
+   times, plus a stretch of ordinary cockpit talk, and a simtest run checks
+   the wake path in the sim.
 
 ### L.4 Checklists
 
