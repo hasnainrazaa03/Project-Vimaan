@@ -15,7 +15,7 @@ Last updated 2026-11-21.
 | --- | --- | --- | --- |
 | 0 | In-sim readiness: worker process, verified bindings, telemetry | ✅ merged | #24 |
 | S | Offline speech recognition (Vosk), saved audio, benchmark | ✅ merged | #25 |
-| O | In-sim overlay (live transcript, meaning, outcome) | ✅ merged and flown (ImGui, worst draw 1.1 ms). O.5 redesign: design D chosen (owner, 2026-11-27), built; to fly | #26, #27, #119 |
+| O | In-sim overlay (live transcript, meaning, outcome) | ✅ merged and flown (ImGui, worst draw 1.1 ms). O.5 redesign: design D built and flown on the four aircraft (2026-11-27); the owner's check of PIN, OFF and dragging deferred (owner) | #26, #27, #119, #120 |
 | E0 | Command table: one source of truth (no behaviour change) | ✅ merged; smoke-flown on v11 | #28 |
 | E1 | Training data v2 + command families → **v17** | ✅ merged; flown twice | #29 |
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | ✅ closed 2026-11-12: Part C flown unattended (121/121 on four aircraft) and the owner's real-voice check passed | #30–#34, #38–#42 |
@@ -144,6 +144,16 @@ auto / pinned / off.
     the draws over 1 ms and the worst draw per minute, and the log report
     prints them. No stalls with the overlay up (82-88 fps, worst frame
     24-30 ms; the session's 2 stalls were the aircraft loading).
+  - #120 installed 2026-11-27 (main b420d94). Tier 1 in one X-Plane
+    session: Baron 28/28, King Air 28/28, 737 33/33, A330 34/34. In the
+    screenshots the hold's border has all four sides and the altitude reads
+    "ALT 6500 FT". Draws: 3 of 71,281 over 1 ms, the worst 3.29 ms. Two of
+    the three fell in the minutes the 737 and the A330 loaded, when X-Plane
+    itself froze for about 0.8 s; the third was 1.00 ms in flight. The Baron
+    alone: worst 0.65 ms, none of 12,927 over 1 ms. No frame over 50 ms
+    during a command; the session's four stalls were the aircraft loading.
+  - Left: the owner's check of PIN, OFF (and the toggle command bringing it
+    back) and dragging by the title bar; deferred by the owner (2026-11-27).
 
 ---
 
