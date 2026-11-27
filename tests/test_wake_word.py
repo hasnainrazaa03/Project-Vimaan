@@ -395,3 +395,15 @@ def test_a_wake_command_is_decoded_with_the_phrase_and_stripped():
     hear(worker, sd, *ONE_BREATH)
     worker.handle({"op": "wake_take", "wake": 1, "cmd": "c7"})
     assert out[-1] == {"type": "error", "cmd": "c7", "outcome": "no_command"}
+
+
+def test_nothing_heard_after_a_pause_is_no_command():
+    # "hey copilot", a pause, then a breath: decoded alone, it is nothing.
+    worker, out, sd, _ = make_worker((2.4, WAKE), transcript="")
+    worker.handle({"op": "wake", "on": True})
+    hear(worker, sd, quiet(1.0), speech(0.6), quiet(1.0))
+    worker.handle({"op": "wake_take", "wake": 1, "cmd": "c7"})
+    hear(worker, sd, speech(0.3, 2000), quiet(1.0))
+    assert out[-1] == {"type": "error", "cmd": "c7", "outcome": "no_command"}
+    captured = [m for m in out if m["type"] == "captured"][-1]
+    assert captured["after_pause"] is True

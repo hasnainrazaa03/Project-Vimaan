@@ -1785,8 +1785,9 @@ designs come later in this document.
     download, measured; the owner's decisions (2026-11-26).
   - [x] L.5.2 The wake word in the worker and the plugin, on the fake sim
     (2026-11-26). Not installed.
-  - [ ] L.5.3 In the sim, and the owner's voice saying it. The scenario and
-    the bridge's "hear" are built (2026-11-26); they run once installed.
+  - [ ] L.5.3 In the sim, and the owner's voice saying it (2026-11-26): the
+    owner's voice 143 of 145 on all nine aircraft, talk without the wake word
+    never woke it. The one bug found is fixed; checked once installed.
 
 ### L.5 Wake word
 
@@ -1938,6 +1939,33 @@ it: 36 of 36. The failures:
 - **The 180 offline cases** (six voices × five commands × both ways, clean
   and with noise): 146 right, against 143 before. Clean: 54 of 60, after a
   pause 28 of 30.
+
+**With those fixes installed (main df2486c), all nine aircraft:**
+
+| Voice | Steps passed | Talk without the wake word woke it |
+| --- | --- | --- |
+| Generated (Daniel) | 139 of 145 | 0 of 36 |
+| The owner's (21 recordings, EarPods microphone) | 143 of 145 | 0 of 36 |
+
+- **The generated voice:** no wake was dropped any more. Its "heading one
+  eight zero" after a pause was still heard "heading one h zero" on three
+  aircraft (737, A330, SR22), each with the step after it.
+  - Each time, the command had been decoded alone after the pause.
+  - Offline, the same recording decoded alone came out right 12 of 12 times,
+    against four room levels.
+  - The command recogniser in the sim has heard the session's earlier
+    commands. It is the talk key's own, so this isn't the wake word's.
+- **The owner's voice:**
+  - Every command through the wake word was right on all nine aircraft, in
+    one breath and after a pause.
+  - The question ("hey copilot what's our altitude") was answered on eight
+    of them, heard "what are altitude" or "what r altitude". On the SR22 it
+    was heard "heading number" (no change).
+  - "Hey copilot" alone was no command on eight. On the MD-82, a breath
+    after a pause decoded to nothing, and that was "not understood".
+- **Fixed since:** nothing heard after the wake phrase, in one breath or
+  after a pause, is now no command, said nothing about. The question grammar
+  is tried first.
 
 ### L.4 Checklists
 
