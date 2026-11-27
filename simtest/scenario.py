@@ -210,6 +210,10 @@ class Step:
     # that missed the glideslope turns back west, into the installed scenery).
     abort: tuple[Step, ...] | None = None
     follow: Follow | None = None  # the checklist ``say`` starts (Phase L.4)
+    # ``say`` is heard on the open mic, as the wake word listens (Phase L.5):
+    # "hey copilot gear down", " ... " a pause. Always as sound (generated or
+    # recorded), never as text, and never redone: hearing it is the test.
+    wake: bool = False
 
 
 class Tail:
@@ -315,7 +319,7 @@ class Runner:
             before = self._read(step.answer.datarefs) if step.answer is not None else None
             # A checklist's items come after its command's result: from here.
             tail = self._tail() if step.follow is not None else None
-            said = self._say(step.say, r, ask=step.ask)
+            said = self._say(step.say, r, ask=step.ask, wake=step.wake)
             r.update(
                 {
                     k: said.get(k)
@@ -386,7 +390,11 @@ class Runner:
         r["note"] = step.note
         return r
 
-    def _say(self, phrase: str, r: dict[str, Any], ask: bool = False) -> dict[str, Any]:
+    def _say(
+        self, phrase: str, r: dict[str, Any], ask: bool = False, wake: bool = False
+    ) -> dict[str, Any]:
+        if wake:
+            return self._hear(phrase, r)
         # The question key only when asked: the talk key's requests stay as they were.
         key = {"ask": True} if ask else {}
         wav: Path | str | None = None
@@ -416,6 +424,32 @@ class Runner:
             r["acted_as_heard"] = True
             return said
         return self.bridge.say_text(phrase, **key)
+
+    def _hear(self, phrase: str, r: dict[str, Any]) -> dict[str, Any]:
+        """``phrase`` heard on the open mic (the wake word). A wake taken
+        answers as a say; nothing woken has the outcome "no_wake". What was
+        heard is scored against the command alone (the phrase taken off)."""
+        wav: Path | str | None = None
+        if self.recordings is not None:
+            wav = self.recordings.get(phrase)
+            if wav is None:
+                r["not_recorded"] = True
+        if wav is None:
+            wav = voice_mod.synthesize(phrase, self.voice or voice_mod.DEFAULT_VOICE)
+        said = dict(self.bridge.hear_wav(wav))
+        if said.get("woke") is False:
+            said["outcome"] = said.get("outcome") or "no_wake"
+        command = wake_command(phrase)
+        r["heard"] = said.get("heard")
+        if command:
+            r["heard_ok"] = said.get("heard") == command
+            r["understood_ok"] = r["heard_ok"] or bool(
+                self.understood is not None
+                and said.get("ok", True)
+                and said.get("intent")
+                and self.understood(said, command)
+            )
+        return said
 
     def _answer(self, answer: Answer, replies: list[str], before: dict[str, Any]) -> dict[str, Any]:
         """The reply against the sim just after it, or just before the
@@ -607,6 +641,18 @@ class Runner:
             for item, result in last["offers"].items():
                 if result == "set" and now.get(item) != "checked":
                     problems.append(f"{item}: set last time, now {now.get(item) or 'not read'}")
+
+
+WAKE_PHRASE = "hey copilot"
+
+
+def wake_command(phrase: str) -> str:
+    """The command in a wake step's phrase: "hey copilot ... gear down" ->
+    "gear down"; "" when there is none (the wake word alone, or talk
+    without it)."""
+    words = phrase.replace(" ... ", " ").replace(",", " ").split()
+    wake = WAKE_PHRASE.split()
+    return " ".join(words[len(wake) :]) if words[: len(wake)] == wake else ""
 
 
 def _checklist_words() -> Any:

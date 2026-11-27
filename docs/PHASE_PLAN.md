@@ -1764,7 +1764,7 @@ designs come later in this document.
     breath", below.
   - [ ] L.3.2 Both done, each read back and through its own rules, on the
     same detector (owner: later).
-- [ ] **L.4 Checklists:** read out, and each item checked against the sim.
+- [x] **L.4 Checklists:** read out, and each item checked against the sim.
   Design and results: "L.4 Checklists", below.
   - [x] L.4.1 Design, the owner's decisions and the checklists, approved
     (2026-11-22).
@@ -1778,14 +1778,15 @@ designs come later in this document.
     (2026-11-22). Installed only together with v28.
   - [x] L.4.6 Checklists in the sim on the nine aircraft (2026-11-26): after
     four readings were fixed (#109), 90 of 90 on the runway and 91 of 91 in
-    the air. Open: the owner's voice on "after".
+    the air. The owner's voice (2026-11-26): every phrase heard word for word.
 - [ ] **L.5 Wake word:** hands-free, offline, a licence-clean model. The two
   talk keys stay. Design and measurements: "L.5 Wake word", below.
   - [x] L.5.1 The options and their licences; the one that needs no
     download, measured; the owner's decisions (2026-11-26).
   - [x] L.5.2 The wake word in the worker and the plugin, on the fake sim
     (2026-11-26). Not installed.
-  - [ ] L.5.3 In the sim, and the owner's voice saying it.
+  - [ ] L.5.3 In the sim, and the owner's voice saying it. The scenario and
+    the bridge's "hear" are built (2026-11-26); they run once installed.
 
 ### L.5 Wake word
 
@@ -1897,6 +1898,26 @@ on continuous streams (`~/Vimaan_Logs/measuring/l5`):**
   60 dB between voice and quiet (frames of about 5,000 against 5).
 - **Listening costs** about 0.35 % of one core.
 - **Not measured yet:** the owner's voice saying it (L.5.3).
+
+**L.5.3 The wake word in the sim (built 2026-11-26).**
+
+- **The bridge's `hear`** hands the plugin a WAV, and its worker feeds it to
+  the spotter as if heard on the open microphone. A wake taken answers as a
+  `say` does. Nothing woken within 3 s answers `"woke": false`, and a wake
+  dropped answers why.
+- **`simtest run wake`** (`simtest/wake.py`): Tier 1's air start, hands off,
+  then each step heard on the open mic, never pressed on the talk key and
+  never redone as text:
+  - in one breath: a heading, an altitude and the landing lights;
+  - after a pause: a heading, the altitude back and the landing lights off;
+  - the wake word alone (no command);
+  - four lines of talk without it, which may not wake: command words, a
+    radio call, "copilot" alone, and chat;
+  - a question after it.
+- **`simtest record wake all`** asks for 21 phrases: the 15 heard on the open
+  mic, and Tier 1's hands-off phrases. " ... " is a pause of about a second.
+- **Order:** this PR merged and installed, then the run in the generated
+  voice, then the owner's recordings and the run with them.
 
 ### L.4 Checklists
 
@@ -2137,6 +2158,16 @@ voice is not measured yet.
 - **The voice:** the same as the first run. "After ... checklist" was heard 0
   of 45 times; "confirm" 115 of 115, "cancel" 31 of 31, and the other four
   names 90 of 90.
+
+**The owner's voice (2026-11-26): every phrase heard word for word.** The
+owner recorded the eight phrases once each (`simtest record checklists-ground
+all`, EarPods microphone). Played on the runway run on all nine aircraft:
+
+- 90 of 90 steps passed.
+- The eight takes were heard word for word every time they were played (190
+  plays), "after takeoff checklist" and "after landing checklist" included.
+
+The generated voice's "after" was the generated voice's alone. L.4 is closed.
 
 ### L.3 Two commands in one breath
 

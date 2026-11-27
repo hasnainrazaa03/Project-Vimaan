@@ -74,6 +74,9 @@ def vosk_model_path() -> Path:
     raise FileNotFoundError(f"no Vosk model {name}; set VIMAAN_VOSK_MODEL")
 
 
+PAUSE_MS = 1000  # " ... " in a phrase
+
+
 def synthesize(
     text: str,
     voice: str = DEFAULT_VOICE,
@@ -86,6 +89,9 @@ def synthesize(
     folder = cache_dir or default_log_dir() / "test" / "voice"
     folder.mkdir(parents=True, exist_ok=True)
     key = hashlib.sha1(f"{voice}|{rate_wpm}|{text}".encode()).hexdigest()[:16]
+    # " ... " in a phrase is a pause of a second (the wake word, then the
+    # command): macOS say's own silence command.
+    text = text.replace(" ... ", f" [[slnc {PAUSE_MS}]] ")
     path = folder / f"{voice.split()[0].lower()}_{key}.wav"
     if not path.exists():
         cmd = ["say", "-v", voice, "-o", str(path), "--file-format=WAVE"]

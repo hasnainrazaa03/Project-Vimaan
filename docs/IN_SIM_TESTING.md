@@ -503,6 +503,35 @@ from what Vimaan offered and how it was answered.
 
 It needs a command model that knows the checklists (v28).
 
+**The wake word (Phase L.5.3):**
+
+```bash
+python -m simtest run wake all                       # generated voice
+python -m simtest record wake all                    # your voice: 21 phrases
+python -m simtest run wake all --recordings latest --launch --quit
+```
+
+Each step is heard on the open microphone, as the wake word listens: the
+bridge's `hear` hands the plugin a WAV, and its worker feeds it to the wake
+word's spotter. A wake taken answers as a `say` does; nothing woken answers
+`"woke": false` (the step's outcome `no_wake`). It is never pressed on the
+talk key and never redone as text: hearing it is the test. Tier 1's air
+start, hands off, then:
+
+- **In one breath:** a heading, an altitude and the landing lights. **After
+  a pause** (" ... " in a phrase is a second's pause): a heading, the
+  altitude back and the landing lights off. Each must set what it says.
+- **The wake word alone:** `no_command`, nothing done.
+- **Talk without it:** command words ("autopilot on, heading mode, gear
+  down"), a radio call, "copilot, check the flaps for me" ("copilot" alone)
+  and chat. None may wake.
+- **A question after it:** answered, nothing done.
+
+`record wake all` asks for 21 phrases: the 15 heard on the open mic, and
+Tier 1's hands-off phrases (said on the talk key). Say " ... " as a pause of
+about a second. It needs the wake word on (L.5.2 or later installed, with
+the offline recogniser).
+
 A flight that misses the glideslope turns back west and holds its altitude,
 and the rest of it isn't run: flying on east, it leaves the installed
 scenery (east of about 122° W), where X-Plane pauses under a "Missing

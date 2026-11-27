@@ -271,6 +271,8 @@ CHECKLIST_SETTLE_MAX_SEC = 10.0
 # listening well before: no speech in 4 s, a command cut off at 8 s).
 WAKE_ENV = "VIMAAN_WAKE_WORD"
 WAKE_LISTEN_MAX_SEC = wake_word.COMMAND_START_SEC + wake_word.COMMAND_MAX_SEC + 5.0
+# The test bridge's "hear": nothing woken by then is no wake.
+BRIDGE_HEAR_WAIT_SEC = 3.0
 # A checklist suggested while Vimaan is speaking waits at most this long.
 SUGGEST_WAIT_SEC = 10.0
 # After a target or radio is set, record the aircraft this many seconds later:
@@ -726,6 +728,7 @@ class PythonInterface:
         self._wake_off_why: str | None = None
         self._chime: bytes | None = None
         self._chime_failed = False
+        self._bridge_heard: dict[str, Any] | None = None  # a "hear" waiting for its wake
         # Whether the loaded aircraft's own files use an autothrottle:
         # (acf path, True/False/None), scanned off the main thread.
         self._athr_scan: tuple[str, bool | None] | None = None
@@ -2288,6 +2291,12 @@ class PythonInterface:
         checking = self._commands_working()
         for result in self._say_results.finished(now, checking):
             sim_bridge.write_json(outbox / f"{result['id']}.json", result)
+        heard = self._bridge_heard
+        if heard is not None and now > heard["until"]:
+            self._bridge_heard = None  # heard, and nothing woke
+            sim_bridge.write_json(
+                outbox / f"{heard['id']}.json", {"id": heard["id"], "ok": True, "woke": False}
+            )
         for req in sim_bridge.take_requests(inbox):
             result = self._bridge_request(req)
             if result is not None:  # a say answers when its command is done
@@ -2306,6 +2315,9 @@ class PythonInterface:
                 return {"ok": True, **self._bridge_state()}
             if op == "say":
                 error = self._bridge_say(req)
+                return None if error is None else {"ok": False, "error": error}
+            if op == "hear":
+                error = self._bridge_hear(req)
                 return None if error is None else {"ok": False, "error": error}
             if op == "read":
                 return {"ok": True, "values": {n: self._read_any(n) for n in req["datarefs"]}}
@@ -2357,6 +2369,24 @@ class PythonInterface:
         if not self.worker.send(msg):
             self._end_command("worker_error")
             return None  # the result reports the error
+        if self._flight_loop_id:
+            xp.scheduleFlightLoop(self._flight_loop_id, -1.0, 1)
+        return None
+
+    def _bridge_hear(self, req):
+        """A WAV heard on the open microphone, as the wake word listens: the
+        worker feeds it to its spotter. A wake taken answers as a say does
+        (_on_wake); none by BRIDGE_HEAR_WAIT_SEC answers "woke": false."""
+        if not self.ready or self.worker is None:
+            return "Vimaan is not ready"
+        if not (self._wake_on and self._wake_available):
+            return "the wake word is off"
+        if self._active is not None or self._say_results.busy or self._bridge_heard is not None:
+            return "busy"
+        self._bridge_heard = {"id": req["id"], "until": time.perf_counter() + BRIDGE_HEAR_WAIT_SEC}
+        if not self.worker.send({"op": "hear", "path": req["wav"]}):
+            self._bridge_heard = None
+            return "the worker is gone"
         if self._flight_loop_id:
             xp.scheduleFlightLoop(self._flight_loop_id, -1.0, 1)
         return None
@@ -2493,7 +2523,11 @@ class PythonInterface:
             "session": self.tel.session_id,
             "events": str(self.tel.events_path),
             "ready": self.ready,
-            "busy": self._active is not None or self._say_results.busy,
+            "busy": self._active is not None
+            or self._say_results.busy
+            or self._bridge_heard is not None,
+            # Phase L.5: whether it listens for "hey copilot" (a runner needs it on).
+            "wake_word": self._wake_on and self._wake_available,
             "probe": self._probe is not None,
             # What the loaded model knows (a runner refuses a checklist the
             # model wasn't trained for); None from a worker that doesn't say.
@@ -3794,11 +3828,16 @@ class PythonInterface:
             taken=why is None,
             why=why,
         )
+        heard, self._bridge_heard = self._bridge_heard, None
         if why is not None:
             self.worker.send({"op": "wake_drop", "wake": n})
+            if heard is not None:
+                self._bridge_answer(heard["id"], woke=True, taken=False, why=why)
             return
         cmd = self.tel.new_command_id()
         now = time.perf_counter()
+        if heard is not None:  # the test bridge's "hear": its say result
+            self._say_results.start(heard["id"], cmd, now)
         self._active = {
             "cmd": cmd,
             "t_press": now,
@@ -3818,6 +3857,10 @@ class PythonInterface:
         self._play_chime()
         if self._flight_loop_id:
             xp.scheduleFlightLoop(self._flight_loop_id, -1.0, 1)
+
+    def _bridge_answer(self, rid, **result):
+        _, _, outbox = sim_bridge.paths(self.tel.log_dir)
+        sim_bridge.write_json(outbox / f"{rid}.json", {"id": rid, "ok": True, **result})
 
     def _play_chime(self):
         """A short chime on X-Plane's UI bus: heard, say the command."""
