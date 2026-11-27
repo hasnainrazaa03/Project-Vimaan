@@ -15,7 +15,7 @@ Last updated 2026-11-21.
 | --- | --- | --- | --- |
 | 0 | In-sim readiness: worker process, verified bindings, telemetry | ✅ merged | #24 |
 | S | Offline speech recognition (Vosk), saved audio, benchmark | ✅ merged | #25 |
-| O | In-sim overlay (live transcript, meaning, outcome) | ✅ merged and flown (ImGui, worst draw 1.1 ms). O.5 redesign to a production look: planned, designs first (owner, 2026-11-21) | #26, #27 |
+| O | In-sim overlay (live transcript, meaning, outcome) | ✅ merged and flown (ImGui, worst draw 1.1 ms). O.5 redesign: design D chosen (owner, 2026-11-27), built; to fly | #26, #27, #119 |
 | E0 | Command table: one source of truth (no behaviour change) | ✅ merged; smoke-flown on v11 | #28 |
 | E1 | Training data v2 + command families → **v17** | ✅ merged; flown twice | #29 |
 | T1 | Tier 1: autopilot core (speed, V/S, modes, A/THR, altimeter, flap positions) + aircraft profiles → **v19** | ✅ closed 2026-11-12: Part C flown unattended (121/121 on four aircraft) and the owner's real-voice check passed | #30–#34, #38–#42 |
@@ -114,6 +114,21 @@ auto / pinned / off.
   through them and chooses before any of it is built. Done when the chosen
   design is built, flown on the four aircraft, and the draw time stays under
   1 ms with no stalls (as O.2).
+  - Designs (2026-11-26/27, Design canvas artifact): A refined panel, B
+    avionics, C minimal chips; the owner liked B and asked for a confidence
+    bar, a fading history and the top left. D = B with those: chosen
+    (2026-11-27, "go ahead with D"; the rest left to judgement).
+  - Built: top left (30 px in, 60 px down, below X-Plane's menu bar), 580 px
+    wide, growing downward; header tags (status, KEY / WAKE), HEARD / ACTION
+    (short avionics names, `overlay_state.ACTIONS`) / CONF (bar, mark at the
+    plugin's CONFIDENCE_FLOOR); a hold or a "which?" counts down its 12 s
+    window and never fades, then says it expired; WORKING until the plugin
+    has no work due for the command (`_overlay_working`); the checklist's
+    own view; amber callouts; history of 3 for 90 s, the last 20 s fading;
+    idle line: wake word, callouts, suggestions, phase of flight; PIN / OFF
+    buttons. Font: B612 Mono from X-Plane's Resources/fonts (nothing bundled),
+    rasterised at 2x for Retina. Telemetry: `safety_hold.message`,
+    `checklist_item.ask`, `overlay_start.font`, `overlay_mode.via`.
 
 ---
 

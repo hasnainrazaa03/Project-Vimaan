@@ -756,7 +756,14 @@ class PythonInterface:
         self.intent_to_command = self._setup_intent_handlers()
         # The overlay follows the telemetry stream: everything it shows is
         # also in events.jsonl (except live partial transcripts).
-        self.overlay_state = OverlayState(mode=self.OVERLAY_MODE)
+        self.overlay_state = OverlayState(
+            mode=self.OVERLAY_MODE,
+            floor=self.CONFIDENCE_FLOOR,
+            answer_sec=max(self.CONFIRM_WINDOW_SEC, self.QUESTION_WINDOW_SEC),
+            working=self._overlay_working,
+        )
+        self.overlay_state.callouts = self._callouts_enabled
+        self.overlay_state.suggestions = self._suggest_checklists
         self.tel.subscribe(self.overlay_state.on_event)
         self.tel.subscribe(self._say_results.on_event)
         self.overlay: Overlay | None = None
@@ -1085,14 +1092,16 @@ class PythonInterface:
         if self.overlay_state.mode == "off":
             self.tel.event("overlay_start", backend=None, mode="off")
             return
-        overlay = Overlay(xp, self.overlay_state, log=self.tel.log)
+        overlay = Overlay(xp, self.overlay_state, log=self.tel.log, on_mode=self._on_overlay_button)
         try:
             backend = overlay.start()
         except Exception as exc:
             self.tel.error("overlay_failed", exc)
             return
         self.overlay = overlay
-        self.tel.event("overlay_start", backend=backend, mode=self.overlay_state.mode)
+        self.tel.event(
+            "overlay_start", backend=backend, mode=self.overlay_state.mode, font=overlay.font
+        )
 
     def _on_overlay_cmd(self, cmd_ref, phase, refcon):
         if phase == xp.CommandBegin:
@@ -1102,6 +1111,22 @@ class PythonInterface:
             self.overlay_state.notice(f"Overlay {mode}")
             self.tel.event("overlay_mode", mode=mode)
         return 1
+
+    def _on_overlay_button(self, mode):
+        """PIN or OFF clicked on the overlay (O.5). The toggle command brings
+        it back from off."""
+        self.overlay_state.mode = mode
+        if mode != "off":
+            self.overlay_state.notice(f"Overlay {mode}")
+        self.tel.event("overlay_mode", mode=mode, via="button")
+
+    def _overlay_working(self):
+        """The commands the overlay shows as working: steps, read-backs and
+        deferred presses still due, an engine or the APU starting."""
+        working = self._commands_working() | {c["cmd"] for c in self._cranks.values()}
+        if self._apu is not None:
+            working.add(self._apu["cmd"])
+        return working
 
     def _register_command(self, name, description, handler):
         cmd_ref = xp.createCommand(name, description)
@@ -1965,6 +1990,7 @@ class PythonInterface:
                 logging.WARNING,
                 cmd=cmd,
                 rule=verdict.rule,
+                message=verdict.message,
                 fail_safe=verdict.fail_safe,
                 context=ctx.__dict__,
             )
@@ -4201,6 +4227,7 @@ class PythonInterface:
             state=state,
             result="checked" if result.ok else ("offered" if offer else "open"),
             said=said,
+            ask=offer[2] if offer is not None else None,
         )
         self._say(said)
         run["next_at"] = now + checklists.speaking_sec(said)

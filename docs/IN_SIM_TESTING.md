@@ -128,17 +128,27 @@ ignored). You can start speaking as you press: the mic stays open and each recor
 
 **No joystick?** Then X-Plane flies the aircraft with the mouse while its button is held in the 3-D view. To give X-Plane the keyboard for Z, click once and let go. On 2026-11-16 a drag pulled the yoke fully back: the autopilot dropped out ("Autopilot disconnected. Stick moved.") and the 737 climbed and slowed to 90 kt.
 
-**Overlay:** a bar at the bottom of the screen shows what Vimaan hears
-*while you talk* (Vosk), then what it heard, what it understood (command,
-values, confidence) and what happened, colour-coded: green done, amber
-confirm / repeat / rejected (with the reason), red errors or "did not
-respond". It appears when you press push-to-talk and fades ~6 s after the
-result. It's an ordinary X-Plane window: drag it, resize it, or pop it out to
-another monitor. Bind **Vimaan: overlay auto / pinned / off** (command
-`vimaan/toggle_overlay`) to cycle modes, or set `VIMAAN_OVERLAY=pinned|off`
-before launch. Drawn with ImGui (bundled with XPPython3), falling back to
-X-Plane's own text if ImGui can't load; the log report shows which, and the
-worst draw time per frame.
+**Overlay:** a panel at the top left of the screen (clear of the controls)
+shows what Vimaan hears *while you talk* (Vosk), then what it heard (HEARD),
+what it will do (ACTION), and how sure the model was (CONF: a bar with a mark
+at 55%, the line below which Vimaan does nothing and asks you to repeat;
+green above it, amber below). The tag at the top left says what happened:
+DONE, CAUTION (a safety hold: what to say and a countdown to when it
+expires), WHICH?, REPEAT, REFUSED, WORKING (a switch stepping or an engine
+starting), NOT HEARD, NO RESPONSE; next to it, KEY or WAKE says how the
+command started. A running checklist shows its items as they are read, the
+one being offered boxed. Under the panel, your last three commands stay for
+90 s, newest first, dimming as they age; then the panel goes. When idle (or
+pinned) the top line shows the wake word, callouts and checklist suggestions
+when they are on, and the phase of flight.
+
+Click **PIN** to keep it up, **OFF** to hide it. It's an ordinary X-Plane
+window: drag it or pop it out to another monitor. Bind **Vimaan: overlay auto
+/ pinned / off** (command `vimaan/toggle_overlay`) to cycle modes (and to bring
+it back after OFF), or set `VIMAAN_OVERLAY=pinned|off` before launch. Drawn
+with ImGui (bundled with XPPython3) in B612 Mono, the cockpit-display font
+X-Plane ships, falling back to X-Plane's own text if ImGui can't load; the
+log report shows which, and the worst draw time per frame.
 
 **Questions (Tier 4).** Hold **Shift+Z** (or bind **Vimaan: ask a question (hold)** to a button) to ask: whatever is said on it is only answered, never acted on. A command said there gets "I can't answer that". Questions are decoded with their own word list (`question_words.txt`); the talk key keeps the command word list, which never changes for questions (their words in it made commands worse: "flight level" heard as "light level").
 

@@ -269,14 +269,21 @@ def test_overlay_shows_the_command(sim):
     plugin._flight_loop()
     plugin._on_worker_message({"type": "partial", "cmd": plugin._active["cmd"], "text": "set head"})
     plugin._flight_loop()
-    assert xp.draw_windows() == ["REC", "set head"]
+    assert xp.draw_windows()[:3] == ["LISTEN", "HEARD", "set head_"]
     plugin.sd.streams[-1].feed(b"\x40\x1f\xc0\xe0" * 8000)
     plugin.OnReleaseCallback(None)
     plugin._flight_loop()
     screen = xp.draw_windows()
-    assert screen[:2] == ["HEARD", '"set heading two seven zero"']
-    assert "MEANT" in screen and "Heading   hdg 270" in screen
-    assert "DONE" in screen and "Heading two seven zero" in screen
+    assert screen[0] == "DONE" and screen[1].endswith(" MS")  # speech to action
+    assert screen[2:8] == [
+        "HEARD",
+        "set heading two seven zero",
+        "ACTION",
+        "HDG 270",
+        "CONF",
+        "99%",
+    ]
+    assert plugin.overlay_state.floor == plugin.CONFIDENCE_FLOOR
 
 
 def test_overlay_toggle_cycles_modes(sim):
@@ -286,12 +293,34 @@ def test_overlay_toggle_cycles_modes(sim):
     plugin._flight_loop()
     assert plugin.overlay_state.mode == "pinned" and xp.draw_windows() == [
         "VIMAAN",
-        "Overlay pinned",
+        "OVERLAY PINNED",
     ]
     handler(None, xp.CommandBegin, None)
     plugin._flight_loop()
     assert plugin.overlay_state.mode == "off" and xp.draw_windows() == []
     assert [e["mode"] for e in events(plugin, "overlay_mode")] == ["pinned", "off"]
+
+
+def test_overlay_buttons_set_the_mode(sim):
+    _, plugin, _ = sim
+    plugin._on_overlay_button("pinned")
+    assert plugin.overlay_state.mode == "pinned"
+    plugin._on_overlay_button("off")
+    assert plugin.overlay_state.mode == "off" and not plugin.overlay_state.visible
+    assert [(e["mode"], e["via"]) for e in events(plugin, "overlay_mode")] == [
+        ("pinned", "button"),
+        ("off", "button"),
+    ]
+
+
+def test_overlay_shows_a_switch_working_until_its_steps_end(sim):
+    _, plugin, _ = sim
+    plugin._knob_step = {"cmd": "c9"}
+    plugin._cranks["1"] = {"cmd": "c8"}
+    assert plugin._overlay_working() >= {"c9", "c8"}
+    plugin._knob_step = None
+    plugin._cranks.clear()
+    assert "c9" not in plugin._overlay_working()
 
 
 def test_overlay_can_be_disabled(monkeypatch, tmp_path):
