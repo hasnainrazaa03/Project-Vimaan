@@ -241,3 +241,55 @@ def test_recorded_answers_are_played_for_the_offers(tmp_path):
     assert sent == ["002.wav"] and a["heard_ok"] and problems == []
     runner._reply(scenario.Follow("approach"), "landing lights", "cancel", problems)
     assert sent[-1] == "cancel" and runner.results == []  # not recorded: sent as text
+
+
+def _recorded(root, name, checklist, mtime, phrases=("confirm",)):
+    folder = root / name
+    folder.mkdir(parents=True)
+    manifest = folder / "manifest.json"
+    entries = {p: {"file": f"{i:03d}.wav"} for i, p in enumerate(phrases, 1)}
+    manifest.write_text(json.dumps({"checklist": checklist, "recordings": entries}))
+    import os
+
+    os.utime(manifest, (mtime, mtime))
+    return folder
+
+
+def test_the_latest_recordings_of_a_checklist(tmp_path):
+    from simtest import record
+
+    root = tmp_path / "recordings"
+    _recorded(root, "checklists-ground-old", "checklists-ground", 1_000)
+    newest = _recorded(root, "mine", "checklists-ground", 3_000)  # any --out name
+    _recorded(root, "relative-x", "relative", 5_000)  # another checklist's
+    _recorded(root, "checklists-ground-empty", "checklists-ground", 9_000, phrases=())
+    (root / "broken").mkdir()
+    (root / "broken" / "manifest.json").write_text("{not json")
+    assert record.latest_folder("checklists-ground", root) == newest
+    with pytest.raises(FileNotFoundError, match="python -m simtest record checklists-air all"):
+        record.latest_folder("checklists-air", root)
+
+
+def test_run_latest_and_launch(monkeypatch, tmp_path, capsys):
+    from simtest import xplane
+
+    monkeypatch.setenv("VIMAAN_LOG_DIR", str(tmp_path))
+    args = ["--log-dir", str(tmp_path), "run", "checklists-ground", "baron"]
+    assert cli.main([*args, "--recordings", "latest"]) == 2
+    assert "no recordings for checklists-ground" in capsys.readouterr().err
+    _recorded(tmp_path / "recordings", "r1", "checklists-ground", 1_000)
+    started = []
+    monkeypatch.setattr(xplane, "running", lambda: bool(started))
+    monkeypatch.setattr(xplane, "launch", lambda: started.append(True))
+
+    def no_flight(body):
+        raise xplane.XPlaneError("stop here")
+
+    monkeypatch.setattr(xplane, "start_flight_recovering", no_flight)
+    assert cli.main([*args, "--recordings", "latest", "--launch"]) == 2
+    out = capsys.readouterr()
+    assert started == [True] and "Starting X-Plane" in out.out
+    assert f"recordings from {tmp_path / 'recordings' / 'r1'}" in out.out
+    assert "stop here" in out.err
+    assert cli.main([*args, "--launch", "--text"]) == 2  # already up: not started again
+    assert started == [True]
