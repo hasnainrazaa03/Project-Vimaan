@@ -126,6 +126,9 @@ def sim(monkeypatch, tmp_path):
     flag, _, outbox = sim_bridge.paths(plugin.tel.log_dir)
     flag.parent.mkdir(parents=True, exist_ok=True)
     flag.write_text("")
+    plugin._bridge_next = 0.0
+    plugin._service_bridge()  # the bridge on ("Test bridge on" said)
+    plugin._speaking_until = 0.0  # ...and over
     wav = tmp_path / "hey.wav"
     with wave.open(str(wav), "wb") as f:
         f.setnchannels(1)
@@ -144,6 +147,8 @@ def answer(outbox, rid):
 def test_a_wake_heard_through_the_bridge_answers_as_a_say(sim):
     _, plugin, xp, outbox, wav = sim
     assert plugin._bridge_request({"id": "r1", "op": "hear", "wav": str(wav)}) is None
+    plugin._bridge_next = 0.0
+    plugin._service_bridge()  # Vimaan is quiet: played at once
     assert plugin.worker.sent[-1] == {"op": "hear", "path": str(wav)}
     assert plugin._bridge_state()["busy"] and plugin._bridge_state()["wake_word"]
     plugin._on_worker_message({"type": "wake", "wake": 1, "conf": 1.0, "one_breath": True})
@@ -175,11 +180,14 @@ def test_nothing_woken_and_a_wake_dropped(sim, monkeypatch):
     module, plugin, _, outbox, wav = sim
     monkeypatch.setattr(module, "BRIDGE_HEAR_WAIT_SEC", 0.0)
     plugin._bridge_request({"id": "r2", "op": "hear", "wav": str(wav)})
-    plugin._bridge_next = 0.0
-    plugin._service_bridge()
+    for _ in range(2):  # played, then nothing woke
+        plugin._bridge_next = 0.0
+        plugin._service_bridge()
     assert answer(outbox, "r2") == {"id": "r2", "ok": True, "woke": False}
     monkeypatch.setattr(module, "BRIDGE_HEAR_WAIT_SEC", 30.0)
     plugin._bridge_request({"id": "r3", "op": "hear", "wav": str(wav)})
+    plugin._bridge_next = 0.0
+    plugin._service_bridge()
     plugin._speaking_until = 1e12  # Vimaan speaking: the wake is dropped
     plugin._on_worker_message({"type": "wake", "wake": 2, "conf": 1.0, "one_breath": True})
     assert answer(outbox, "r3") == {
@@ -189,6 +197,25 @@ def test_nothing_woken_and_a_wake_dropped(sim, monkeypatch):
         "taken": False,
         "why": "speaking",
     }
+
+
+def test_hear_waits_for_vimaan_to_be_quiet(sim):
+    # As a pilot would (L.5.3: the next phrase straight after a read-back was
+    # dropped, "speaking").
+    _, plugin, _, outbox, wav = sim
+    plugin._speaking_until = 1e12
+    plugin._bridge_request({"id": "r5", "op": "hear", "wav": str(wav)})
+    plugin._bridge_next = 0.0
+    plugin._service_bridge()
+    assert not [m for m in plugin.worker.sent if m.get("op") == "hear"]
+    # A wake from the room meanwhile isn't the bridge's.
+    plugin._speaking_until = 0.0
+    plugin._on_worker_message({"type": "wake", "wake": 9, "conf": 1.0, "one_breath": True})
+    assert plugin._bridge_heard["id"] == "r5" and answer(outbox, "r5") is None
+    plugin._active = None
+    plugin._bridge_next = 0.0
+    plugin._service_bridge()
+    assert plugin.worker.sent[-1] == {"op": "hear", "path": str(wav)}
 
 
 def test_hear_refused_with_the_wake_word_off(sim):

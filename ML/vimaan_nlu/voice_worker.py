@@ -457,14 +457,18 @@ class VoiceWorker:
         done, cmd = w["done"], w["cmd"]
         if isinstance(done, wake_word.Command):
             rate = self.wake.sample_rate if self.wake is not None else FILE_SAMPLE_RATE
+            # In one breath the phrase is in front (decoded with it, then taken
+            # off); after a pause the command comes alone, as on the talk key.
+            phrase = (self.wake_stt, self.wake_question_stt) if done.with_phrase else None
             self._recognise(
                 cmd,
                 done.pcm,
                 rate,
                 live=False,
-                wake_stt=(self.wake_stt, self.wake_question_stt),
+                wake_stt=phrase,
                 wake=True,
                 cut_off=done.cut_off,
+                after_pause=not done.with_phrase,
             )
         else:
             self.send({"type": "error", "cmd": cmd, "outcome": "no_command"})
@@ -576,16 +580,19 @@ class VoiceWorker:
                 text = strip(command_stt.finish())
             else:
                 text = strip(self.transcribe_audio(raw, rate))
-            if wake_stt is not None and not text:  # only the wake phrase understood
-                raise UnknownValueError("nothing but the wake word recognised")
         except Exception as exc:
             if ask and question_stt is not None:
                 text = ""  # the question grammar may still hear it
-            elif wake_stt is not None and question_stt is not None:
-                text = ""  # nor may a wake's command: it could be a question
+            elif wake_stt is not None:
+                text = ""  # nothing heard but the phrase, if that
             else:
                 self._stt_error(cmd, exc, t)
                 return
+        if wake_stt is not None and not text:
+            # The wake phrase alone (its last sound taken for speech after
+            # it): no command, said nothing about, as with a pause too long.
+            self.send({"type": "error", "cmd": cmd, "outcome": "no_command"})
+            return
         heard = None
         if question_stt is not None and (ask or not text or looks_like_question(text)):
             asked = strip(self._hear_question(raw, question_stt))

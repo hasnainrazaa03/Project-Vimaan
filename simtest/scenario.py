@@ -441,6 +441,7 @@ class Runner:
             said["outcome"] = said.get("outcome") or "no_wake"
         command = wake_command(phrase)
         r["heard"] = said.get("heard")
+        r["wake_step"] = True
         if command:
             r["heard_ok"] = said.get("heard") == command
             r["understood_ok"] = r["heard_ok"] or bool(
@@ -684,7 +685,8 @@ def line(r: dict[str, Any]) -> str:
     if r.get("acted_as_heard"):
         heard = f"  [misunderstood “{r.get('heard')}”, acted on as heard]"
     elif r.get("understood_ok") is False:
-        heard = f"  [misunderstood “{r.get('heard')}”, redone as text]"
+        redone = "" if r.get("wake_step") else ", redone as text"
+        heard = f"  [misunderstood “{r.get('heard')}”{redone}]"
     elif r.get("heard_ok") is False:
         heard = f"  [heard “{r.get('heard')}”, same meaning]"
     detail = "; ".join(r["problems"]) if r["problems"] else " / ".join(r.get("replies") or [])

@@ -71,6 +71,13 @@ def run(s, *pieces, step=0.05):
     return out
 
 
+def test_in_one_breath_the_phrase_comes_with_it():
+    # No pause after "copilot": decoded with the phrase, which comes off after.
+    s = spotter((2.6, [*WAKE, w("[unk]", 1.6, 2.4)]))
+    events = run(s, quiet(1.0), speech(1.4), quiet(2.0))
+    assert events[1][1].with_phrase is True
+
+
 def test_one_breath():
     # "hey copilot gear down": Vosk's result, at the pause, holds the command too.
     s = spotter((2.6, [*WAKE, w("[unk]", 1.6, 2.4)]))
@@ -89,7 +96,10 @@ def test_a_pause_then_the_command():
     events = run(s, quiet(1.0), speech(0.6), quiet(1.0), speech(1.5), quiet(2.0))
     assert [type(e).__name__ for _, e in events] == ["Wake", "Command"]
     assert events[0][1].one_breath is False
-    assert events[1][1].seconds == pytest.approx(3.4, abs=0.1)  # 1.0 s to 4.1 + 0.3 s
+    # After the pause the command comes alone: from 0.5 s before its speech
+    # (2.6 s) to the end of it (4.1 s) + 0.3 s.
+    cmd = events[1][1]
+    assert cmd.with_phrase is False and cmd.seconds == pytest.approx(2.3, abs=0.1)
 
 
 def test_nothing_said_after_it_is_no_command():
@@ -118,8 +128,8 @@ def test_a_long_command_is_cut_off():
     s = spotter((2.4, WAKE))
     events = run(s, quiet(1.0), speech(0.6), quiet(0.8), speech(10.0), quiet(1.0))
     cmd = events[1][1]
-    # 8 s after "copilot" ends, with the phrase (0.6 s) in front.
-    assert cmd.cut_off and cmd.seconds == pytest.approx(ww.COMMAND_MAX_SEC + 0.6, abs=0.06)
+    # 8 s after "copilot" ends (1.6 s), from 0.5 s before the speech after the pause (2.4 s).
+    assert cmd.cut_off and cmd.seconds == pytest.approx(1.6 + ww.COMMAND_MAX_SEC - 1.9, abs=0.06)
 
 
 def test_speech_is_loud_against_the_background():
@@ -151,7 +161,7 @@ def test_a_clatter_in_the_background_is_not_speech():
     events = run(s, quiet(1.0), speech(0.6), quiet(1.0), speech(1.0), (knock + gap) * 10)
     cmd = events[1][1]
     assert isinstance(cmd, ww.Command) and not cmd.cut_off
-    assert cmd.seconds == pytest.approx(3.6 + 0.3 - 1.0, abs=0.15)  # from the phrase at 1.0 s
+    assert cmd.seconds == pytest.approx(3.6 + 0.3 - 2.1, abs=0.15)  # from 0.5 s before 2.6 s
 
 
 def test_the_phrase_comes_off_the_front():
@@ -377,10 +387,11 @@ def test_a_wake_command_is_decoded_with_the_phrase_and_stripped():
     hear(worker, sd, *ONE_BREATH)
     worker.handle({"op": "wake_take", "wake": 1, "cmd": "c7"})
     assert out[-1]["type"] == "result" and out[-1]["text"] == "gear down"
-    # Only the phrase understood: not understood (something was said).
+    # Only the phrase heard (its last sound taken for speech after it): no
+    # command, quietly (L.5.3: "hey copilot" alone was "not understood").
     worker, out, sd, _ = make_worker((2.6, [*WAKE, w("[unk]", 1.6, 2.4)]))
     worker.wake_stt = Stream("hey copilot")
     worker.handle({"op": "wake", "on": True})
     hear(worker, sd, *ONE_BREATH)
     worker.handle({"op": "wake_take", "wake": 1, "cmd": "c7"})
-    assert out[-1]["type"] == "error" and out[-1]["outcome"] == "not_understood"
+    assert out[-1] == {"type": "error", "cmd": "c7", "outcome": "no_command"}

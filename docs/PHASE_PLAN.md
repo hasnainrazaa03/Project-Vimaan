@@ -1919,6 +1919,26 @@ on continuous streams (`~/Vimaan_Logs/measuring/l5`):**
 - **Order:** this PR merged and installed, then the run in the generated
   voice, then the owner's recordings and the run with them.
 
+**The first run in the sim (2026-11-26, main 556e677, generated voice):
+113 of 145 steps.** The four lines of talk without the wake word never woke
+it: 36 of 36. The failures:
+
+| Count | What | Fixed by |
+| --- | --- | --- |
+| 26 | Wakes dropped: the runner played the next phrase while Vimaan was still reading back the last one ("speaking"); 2 more failed after them (the heading bug left where a dropped step left it) | The bridge's `hear` now waits for Vimaan to be quiet, as a pilot would |
+| 2 | After a pause, "heading one eight zero" heard "heading one h zero" | After a pause, the command is decoded alone, from 0.5 s before its speech |
+| 1 | "Hey copilot" alone on the MD-82: "not understood" (the end of "copilot" taken for speech after it) | Nothing heard but the phrase is no command, said nothing about |
+| 1 | The SF50's question heard "want slower altitude" | (the generated voice) |
+
+- **The pause fix:** cut at the end of "copilot" or decoded from the phrase,
+  the pause case went wrong once each way. After a pause (0.4 s of quiet,
+  then speech) the cut falls in the quiet, so it is clean.
+- **The lead before the speech:** 0.25 s lost words at the edges ("flaps"
+  for "flaps up", "fuel down" for "gear down"). 0.5 s didn't.
+- **The 180 offline cases** (six voices × five commands × both ways, clean
+  and with noise): 146 right, against 143 before. Clean: 54 of 60, after a
+  pause 28 of 30.
+
 ### L.4 Checklists
 
 Started 2026-11-22. **Owner decisions (2026-11-22):**
