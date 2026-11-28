@@ -75,6 +75,12 @@ def vosk_model_path() -> Path:
 
 
 PAUSE_MS = 1000  # " ... " in a phrase
+# Quiet before the words, as after a key press. macOS say starts speaking at
+# the very first sample, and Vosk then drops the first words: "is the gear
+# down" was heard as "gear down", "tune com one to one two one decimal five"
+# as "decimal five" (every run since 2026-11-12). With 300 ms of quiet both
+# were heard whole (2026-11-27).
+LEAD_MS = 300
 
 
 def synthesize(
@@ -88,18 +94,34 @@ def synthesize(
         raise RuntimeError("macOS 'say' is not available here")
     folder = cache_dir or default_log_dir() / "test" / "voice"
     folder.mkdir(parents=True, exist_ok=True)
-    key = hashlib.sha1(f"{voice}|{rate_wpm}|{text}".encode()).hexdigest()[:16]
+    key = hashlib.sha1(f"{voice}|{rate_wpm}|{LEAD_MS}|{text}".encode()).hexdigest()[:16]
     # " ... " in a phrase is a pause of a second (the wake word, then the
     # command): macOS say's own silence command.
     text = text.replace(" ... ", f" [[slnc {PAUSE_MS}]] ")
     path = folder / f"{voice.split()[0].lower()}_{key}.wav"
     if not path.exists():
-        cmd = ["say", "-v", voice, "-o", str(path), "--file-format=WAVE"]
+        raw = path.with_name(path.stem + ".say.wav")
+        cmd = ["say", "-v", voice, "-o", str(raw), "--file-format=WAVE"]
         cmd += [f"--data-format=LEI16@{SAMPLE_RATE}"]
         if rate_wpm:
             cmd += ["-r", str(rate_wpm)]
         subprocess.run([*cmd, text], check=True, capture_output=True)
+        lead_silence(raw, path, LEAD_MS)
+        raw.unlink()
     return path
+
+
+def lead_silence(src: Path, dst: Path, ms: int) -> None:
+    """``src`` with ``ms`` of quiet before it, written to ``dst``."""
+    import wave
+
+    with wave.open(str(src)) as w:
+        params = w.getparams()
+        frames = w.readframes(w.getnframes())
+    quiet = b"\x00" * (params.sampwidth * params.nchannels * params.framerate * ms // 1000)
+    with wave.open(str(dst), "wb") as out:
+        out.setparams(params)
+        out.writeframes(quiet + frames)
 
 
 @lru_cache(maxsize=1)

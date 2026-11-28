@@ -101,11 +101,20 @@ def test_the_runner_says_a_wake_step_on_the_open_mic(monkeypatch, tmp_path):
 
 
 def test_a_pause_is_a_second_of_quiet_in_generated_speech(monkeypatch, tmp_path):
+    import wave
+
     from simtest import voice
 
     ran = []
+
+    def fake_say(cmd, **kw):
+        ran.append(cmd)
+        with wave.open(cmd[cmd.index("-o") + 1], "wb") as w:
+            w.setnchannels(1), w.setsampwidth(2), w.setframerate(16000)
+            w.writeframes(b"\x01\x00" * 160)
+
     monkeypatch.setattr(voice, "available", lambda: True)
-    monkeypatch.setattr(voice.subprocess, "run", lambda cmd, **kw: ran.append(cmd))
+    monkeypatch.setattr(voice.subprocess, "run", fake_say)
     voice.synthesize("hey copilot ... gear down", "Daniel", cache_dir=tmp_path)
     assert ran[-1][-1] == "hey copilot [[slnc 1000]] gear down"
 
